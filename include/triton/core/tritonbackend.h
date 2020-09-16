@@ -77,7 +77,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 0
-#define TRITONBACKEND_API_VERSION_MINOR 4
+#define TRITONBACKEND_API_VERSION_MINOR 5
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -91,6 +91,21 @@ struct TRITONBACKEND_ModelInstance;
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ApiVersion(
     uint32_t* major, uint32_t* minor);
+
+/// TRITONBACKEND_ArtifactType
+///
+/// The ways that the files that make up a backend or model are
+/// communicated to the backend.
+///
+///   TRITONBACKEND_ARTIFACT_FILESYSTEM: The model or backend
+///     artifacts are made available to Triton via a locally
+///     accessible filesystem. The backend can access these files
+///     using an appropriate system API.
+///
+typedef enum TRITONBACKEND_artifacttype_enum {
+  TRITONBACKEND_ARTIFACT_FILESYSTEM
+} TRITONBACKEND_ArtifactType;
+
 
 ///
 /// TRITONBACKEND_MemoryManager
@@ -577,6 +592,26 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error*
 TRITONBACKEND_BackendSetExecutionPolicy(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ExecutionPolicy policy);
 
+/// Get the location of the files that make up the backend
+/// implementation. This location contains the backend shared library
+/// and any other files located with the shared library. The
+/// 'location' communicated depends on how the backend is being
+/// communicated to Triton as indicated by 'artifact_type'.
+///
+///   TRITONBACKEND_ARTIFACT_FILESYSTEM: The backend artifacts are
+///     made available to Triton via the local filesytem. 'location'
+///     returns the full path to the directory containing this
+///     backend's artifacts. The returned string is owned by Triton,
+///     not the caller, and so should not be modified or freed.
+///
+/// \param backend The backend.
+/// \param artifact_type Returns the artifact type for the backend.
+/// \param path Returns the location.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendArtifacts(
+    TRITONBACKEND_Backend* backend, TRITONBACKEND_ArtifactType* artifact_type,
+    const char** location);
+
 /// Get the memory manager associated with a backend.
 ///
 /// \param backend The backend.
@@ -609,20 +644,6 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendSetState(
 /// Object representing a model implemented using the backend.
 ///
 
-/// TRITONBACKEND_ModelArtifactType
-///
-/// The ways that the files that make up a model are communicated to
-/// the backend.
-///
-///   TRITONBACKEND_ARTIFACT_FILESYSTEM: The model artifacts are made
-///     available to Triton via a locally accessible filesystem. The
-///     backend can access these files using an appropriate system
-///     API.
-///
-typedef enum TRITONBACKEND_modelartifacttype_enum {
-  TRITONBACKEND_ARTIFACT_FILESYSTEM
-} TRITONBACKEND_ModelArtifactType;
-
 /// Get the name of the model. The returned string is owned by the
 /// model object, not the caller, and so should not be modified or
 /// freed.
@@ -642,22 +663,22 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelVersion(
     TRITONBACKEND_Model* model, uint64_t* version);
 
 /// Get the location of the files that make up the model. The
-/// 'localtion' communicated depends on how the model is being
+/// 'location' communicated depends on how the model is being
 /// communicated to Triton as indicated by 'artifact_type'.
 ///
 ///   TRITONBACKEND_ARTIFACT_FILESYSTEM: The model artifacts are made
 ///     available to Triton via the local filesytem. 'location'
 ///     returns the full path to the directory in the model repository
 ///     that contains this model's artifacts. The returned string is
-///     owned by 'model', not the caller, and so should not be
-///     modified or freed.
+///     owned by Triton, not the caller, and so should not be modified
+///     or freed.
 ///
 /// \param model The model.
 /// \param artifact_type Returns the artifact type for the model.
 /// \param path Returns the location.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelRepository(
-    TRITONBACKEND_Model* model, TRITONBACKEND_ModelArtifactType* artifact_type,
+    TRITONBACKEND_Model* model, TRITONBACKEND_ArtifactType* artifact_type,
     const char** location);
 
 /// Get the model configuration. The caller takes ownership of the
