@@ -76,8 +76,8 @@ struct TRITONBACKEND_ModelInstance;
 ///       "triton backend API version does not support this backend");
 ///   }
 ///
-#define TRITONBACKEND_API_VERSION_MAJOR 0
-#define TRITONBACKEND_API_VERSION_MINOR 5
+#define TRITONBACKEND_API_VERSION_MAJOR 1
+#define TRITONBACKEND_API_VERSION_MINOR 0
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
