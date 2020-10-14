@@ -68,6 +68,7 @@ target_include_directories(
 # Stub library for libtritonserver.so that stubs Triton Server API and
 # Triton Backend API
 #
+if(NOT WIN32)
 add_custom_command(
   OUTPUT
     tritonserver_stub.cc
@@ -119,6 +120,7 @@ target_link_libraries(
   PRIVATE
     -Wl,-soname=libtritonserver.so
 )
+endif() # NOT WIN32
 
 #
 # Install
@@ -130,12 +132,22 @@ install(
   TARGETS
     triton-core-backendapi
     triton-core-serverapi
+  EXPORT
+    triton-core-targets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+if(NOT WIN32)
+install(
+  TARGETS
     triton-core-serverstub
   EXPORT
     triton-core-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+endif() # NOT WIN32
 
 install(
   DIRECTORY include/
