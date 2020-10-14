@@ -35,12 +35,20 @@
 extern "C" {
 #endif
 
-#if defined(_MSC_VER)
-#define TRITONSERVER_EXPORT __declspec(dllexport)
-#elif defined(__GNUC__)
-#define TRITONSERVER_EXPORT __attribute__((__visibility__("default")))
+#ifdef _COMPILING_TRITONSERVER
+  #if defined(_MSC_VER)
+    #define TRITONSERVER_DECLSPEC __declspec(dllexport)
+  #elif defined(__GNUC__)
+    #define TRITONSERVER_DECLSPEC __attribute__((__visibility__("default")))
+  #else
+    #define TRITONSERVER_DECLSPEC
+  #endif
 #else
-#define TRITONSERVER_EXPORT
+  #if defined(_MSC_VER)
+    #define TRITONSERVER_DECLSPEC __declspec(dllimport)
+  #else
+    #define TRITONSERVER_DECLSPEC
+  #endif
 #endif
 
 struct TRITONSERVER_Error;
@@ -92,7 +100,7 @@ struct TRITONSERVER_ServerOptions;
 /// \param minor Returns the TRITONSERVER API minor version supported
 /// by Triton.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ApiVersion(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
 /// TRITONSERVER_DataType
@@ -121,7 +129,7 @@ typedef enum TRITONSERVER_datatype_enum {
 ///
 /// \param datatype The data type.
 /// \return The string representation of the data type.
-TRITONSERVER_EXPORT const char* TRITONSERVER_DataTypeString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_DataTypeString(
     TRITONSERVER_DataType datatype);
 
 /// Get the Triton datatype corresponding to a string representation
@@ -130,7 +138,7 @@ TRITONSERVER_EXPORT const char* TRITONSERVER_DataTypeString(
 /// \param dtype The datatype string representation.
 /// \return The Triton data type or TRITONSERVER_TYPE_INVALID if the
 /// string does not represent a data type.
-TRITONSERVER_EXPORT TRITONSERVER_DataType
+TRITONSERVER_DECLSPEC TRITONSERVER_DataType
 TRITONSERVER_StringToDataType(const char* dtype);
 
 /// Get the size of a Triton datatype in bytes. Zero is returned for
@@ -139,7 +147,7 @@ TRITONSERVER_StringToDataType(const char* dtype);
 ///
 /// \param dtype The datatype.
 /// \return The size of the datatype.
-TRITONSERVER_EXPORT uint32_t
+TRITONSERVER_DECLSPEC uint32_t
 TRITONSERVER_DataTypeByteSize(TRITONSERVER_DataType datatype);
 
 /// TRITONSERVER_MemoryType
@@ -158,7 +166,7 @@ typedef enum TRITONSERVER_memorytype_enum {
 ///
 /// \param memtype The memory type.
 /// \return The string representation of the memory type.
-TRITONSERVER_EXPORT const char* TRITONSERVER_MemoryTypeString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_MemoryTypeString(
     TRITONSERVER_MemoryType memtype);
 
 /// TRITONSERVER_ParameterType
@@ -177,7 +185,7 @@ typedef enum TRITONSERVER_parametertype_enum {
 ///
 /// \param paramtype The parameter type.
 /// \return The string representation of the parameter type.
-TRITONSERVER_EXPORT const char* TRITONSERVER_ParameterTypeString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_ParameterTypeString(
     TRITONSERVER_ParameterType paramtype);
 
 /// TRITONSERVER_InstanceGroupKind
@@ -197,7 +205,7 @@ typedef enum TRITONSERVER_instancegroupkind_enum {
 ///
 /// \param kind The instance-group kind.
 /// \return The string representation of the kind.
-TRITONSERVER_EXPORT const char* TRITONSERVER_InstanceGroupKindString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_InstanceGroupKindString(
     TRITONSERVER_InstanceGroupKind kind);
 
 /// TRITONSERVER_Logging
@@ -215,7 +223,7 @@ typedef enum TRITONSERVER_loglevel_enum {
 ///
 /// \param level The log level.
 /// \return True if the log level is enabled, false if not enabled.
-TRITONSERVER_EXPORT bool TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level);
+TRITONSERVER_DECLSPEC bool TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level);
 
 /// Log a message at a given log level if that level is enabled.
 ///
@@ -224,7 +232,7 @@ TRITONSERVER_EXPORT bool TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level);
 /// \param line The line number of the log message.
 /// \param msg The log message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_LogMessage(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
     const char* msg);
 
@@ -257,19 +265,19 @@ typedef enum TRITONSERVER_errorcode_enum {
 /// \param code The error code.
 /// \param msg The error message.
 /// \return A new TRITONSERVER_Error object.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ErrorNew(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ErrorNew(
     TRITONSERVER_Error_Code code, const char* msg);
 
 /// Delete an error object.
 ///
 /// \param error The error object.
-TRITONSERVER_EXPORT void TRITONSERVER_ErrorDelete(TRITONSERVER_Error* error);
+TRITONSERVER_DECLSPEC void TRITONSERVER_ErrorDelete(TRITONSERVER_Error* error);
 
 /// Get the error code.
 ///
 /// \param error The error object.
 /// \return The error code.
-TRITONSERVER_EXPORT TRITONSERVER_Error_Code
+TRITONSERVER_DECLSPEC TRITONSERVER_Error_Code
 TRITONSERVER_ErrorCode(TRITONSERVER_Error* error);
 
 /// Get the string representation of an error code. The returned
@@ -279,7 +287,7 @@ TRITONSERVER_ErrorCode(TRITONSERVER_Error* error);
 ///
 /// \param error The error object.
 /// \return The string representation of the error code.
-TRITONSERVER_EXPORT const char* TRITONSERVER_ErrorCodeString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_ErrorCodeString(
     TRITONSERVER_Error* error);
 
 /// Get the error message. The returned string is not owned by the
@@ -289,7 +297,7 @@ TRITONSERVER_EXPORT const char* TRITONSERVER_ErrorCodeString(
 ///
 /// \param error The error object.
 /// \return The error message.
-TRITONSERVER_EXPORT const char* TRITONSERVER_ErrorMessage(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_ErrorMessage(
     TRITONSERVER_Error* error);
 
 /// TRITONSERVER_ResponseAllocator
@@ -419,7 +427,7 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
 /// invoked).
 
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocator** allocator,
     TRITONSERVER_ResponseAllocatorAllocFn_t alloc_fn,
     TRITONSERVER_ResponseAllocatorReleaseFn_t release_fn,
@@ -429,7 +437,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
 ///
 /// \param allocator The response allocator object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorDelete(
     TRITONSERVER_ResponseAllocator* allocator);
 
 /// TRITONSERVER_Message
@@ -443,7 +451,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorDelete(
 /// \param base The base of the serialized JSON.
 /// \param byte_size The size, in bytes, of the serialized message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MessageNewFromSerializedJson(
     TRITONSERVER_Message** message, const char* base, size_t byte_size);
 
@@ -451,7 +459,7 @@ TRITONSERVER_MessageNewFromSerializedJson(
 ///
 /// \param message The message object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_MessageDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MessageDelete(
     TRITONSERVER_Message* message);
 
 /// Get the base and size of the buffer containing the serialized
@@ -465,7 +473,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_MessageDelete(
 /// \param byte_size Returns the size, in bytes, of the serialized
 /// message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_MessageSerializeToJson(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MessageSerializeToJson(
     TRITONSERVER_Message* message, const char** base, size_t* byte_size);
 
 /// TRITONSERVER_Metrics
@@ -482,7 +490,7 @@ typedef enum tritonserver_metricformat_enum {
 ///
 /// \param metrics The metrics object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_MetricsDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricsDelete(
     TRITONSERVER_Metrics* metrics);
 
 /// Get a buffer containing the metrics in the specified format. For
@@ -505,7 +513,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_MetricsDelete(
 /// \param byte_size Returns the size, in bytes, of the formatted
 /// metrics.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_MetricsFormatted(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricsFormatted(
     TRITONSERVER_Metrics* metrics, TRITONSERVER_MetricFormat format,
     const char** base, size_t* byte_size);
 
@@ -527,7 +535,7 @@ typedef enum tritonserver_tracelevel_enum {
 ///
 /// \param level The trace level.
 /// \return The string representation of the trace level.
-TRITONSERVER_EXPORT const char* TRITONSERVER_InferenceTraceLevelString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceLevelString(
     TRITONSERVER_InferenceTraceLevel level);
 
 // Trace activities
@@ -547,7 +555,7 @@ typedef enum tritonserver_traceactivity_enum {
 ///
 /// \param activity The trace activity.
 /// \return The string representation of the trace activity.
-TRITONSERVER_EXPORT const char* TRITONSERVER_InferenceTraceActivityString(
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceActivityString(
     TRITONSERVER_InferenceTraceActivity activity);
 
 /// Type for trace activity callback function. This callback function
@@ -592,7 +600,7 @@ typedef void (*TRITONSERVER_InferenceTraceReleaseFn_t)(
 /// \param trace_userp User-provided pointer that is delivered to
 /// the activity and release callback functions.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
     uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
@@ -601,7 +609,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
 ///
 /// \param trace The trace object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceDelete(
     TRITONSERVER_InferenceTrace* trace);
 
 /// Get the id associated with a trace. Every trace is assigned an id
@@ -610,7 +618,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceDelete(
 /// \param trace The trace.
 /// \param id Returns the id associated with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceId(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceId(
     TRITONSERVER_InferenceTrace* trace, uint64_t* id);
 
 /// Get the parent id associated with a trace. The parent id indicates
@@ -620,7 +628,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceId(
 /// \param trace The trace.
 /// \param id Returns the parent id associated with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceParentId(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceParentId(
     TRITONSERVER_InferenceTrace* trace, uint64_t* parent_id);
 
 /// Get the name of the model associated with a trace. The caller does
@@ -631,7 +639,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceParentId(
 /// \param model_name Returns the name of the model associated with
 /// the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
     TRITONSERVER_InferenceTrace* trace, const char** model_name);
 
 /// Get the version of the model associated with a trace.
@@ -640,7 +648,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
 /// \param model_version Returns the version of the model associated
 /// with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelVersion(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version);
 
 /// TRITONSERVER_InferenceRequest
@@ -725,7 +733,7 @@ typedef void (*TRITONSERVER_InferenceResponseCompleteFn_t)(
 /// request. If -1 then the server will choose a version based on the
 /// model's policy.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestNew(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestNew(
     TRITONSERVER_InferenceRequest** inference_request,
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version);
@@ -734,7 +742,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestNew(
 ///
 /// \param inference_request The request object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestDelete(
     TRITONSERVER_InferenceRequest* inference_request);
 
 /// Get the ID for a request. The returned ID is owned by
@@ -744,7 +752,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestDelete(
 /// \param inference_request The request object.
 /// \param id Returns the ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestId(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestId(
     TRITONSERVER_InferenceRequest* inference_request, const char** id);
 
 /// Set the ID for a request.
@@ -752,7 +760,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestId(
 /// \param inference_request The request object.
 /// \param id The ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetId(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetId(
     TRITONSERVER_InferenceRequest* inference_request, const char* id);
 
 /// Get the flag(s) associated with a request. On return 'flags' holds
@@ -762,7 +770,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetId(
 /// \param inference_request The request object.
 /// \param flags Returns the flags.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* flags);
 
 /// Set the flag(s) associated with a request. 'flags' should holds a
@@ -772,7 +780,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
 /// \param inference_request The request object.
 /// \param flags The flags.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetFlags(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t flags);
 
 /// Get the correlation ID of the inference request. Default is 0,
@@ -785,7 +793,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetFlags(
 /// \param inference_request The request object.
 /// \param correlation_id Returns the correlation ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* correlation_id);
 
@@ -798,7 +806,7 @@ TRITONSERVER_InferenceRequestCorrelationId(
 /// \param inference_request The request object.
 /// \param correlation_id The correlation ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t correlation_id);
 
@@ -809,7 +817,7 @@ TRITONSERVER_InferenceRequestSetCorrelationId(
 /// \param inference_request The request object.
 /// \param priority Returns the priority level.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority);
 
 /// Set the priority for a request. The default is 0 indicating that
@@ -819,7 +827,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
 /// \param inference_request The request object.
 /// \param priority The priority level.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t priority);
 
@@ -829,7 +837,7 @@ TRITONSERVER_InferenceRequestSetPriority(
 /// \param inference_request The request object.
 /// \param timeout_us Returns the timeout, in microseconds.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestTimeoutMicroseconds(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* timeout_us);
 
@@ -839,7 +847,7 @@ TRITONSERVER_InferenceRequestTimeoutMicroseconds(
 /// \param inference_request The request object.
 /// \param timeout_us The timeout, in microseconds.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t timeout_us);
 
@@ -853,7 +861,7 @@ TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
 /// \param shape The shape of the input.
 /// \param dim_count The number of dimensions of 'shape'.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestAddInput(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestAddInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const TRITONSERVER_DataType datatype, const int64_t* shape,
     uint64_t dim_count);
@@ -863,7 +871,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceRequestAddInput(
 /// \param inference_request The request object.
 /// \param name The name of the input.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name);
 
@@ -871,7 +879,7 @@ TRITONSERVER_InferenceRequestRemoveInput(
 ///
 /// \param inference_request The request object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllInputs(
     TRITONSERVER_InferenceRequest* inference_request);
 
@@ -889,7 +897,7 @@ TRITONSERVER_InferenceRequestRemoveAllInputs(
 /// \param memory_type The memory type of the input data.
 /// \param memory_type_id The memory type id of the input data.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAppendInputData(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
@@ -901,7 +909,7 @@ TRITONSERVER_InferenceRequestAppendInputData(
 ///
 /// \param inference_request The request object.
 /// \param name The name of the input.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllInputData(
     TRITONSERVER_InferenceRequest* inference_request, const char* name);
 
@@ -910,7 +918,7 @@ TRITONSERVER_InferenceRequestRemoveAllInputData(
 /// \param inference_request The request object.
 /// \param name The name of the output.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAddRequestedOutput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name);
 
@@ -919,7 +927,7 @@ TRITONSERVER_InferenceRequestAddRequestedOutput(
 /// \param inference_request The request object.
 /// \param name The name of the output.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveRequestedOutput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name);
 
@@ -927,7 +935,7 @@ TRITONSERVER_InferenceRequestRemoveRequestedOutput(
 ///
 /// \param inference_request The request object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(
     TRITONSERVER_InferenceRequest* inference_request);
 
@@ -941,7 +949,7 @@ TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(
 /// \param request_release_userp User-provided pointer that is
 /// delivered to the 'request_release_fn' callback.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetReleaseCallback(
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceRequestReleaseFn_t request_release_fn,
@@ -963,7 +971,7 @@ TRITONSERVER_InferenceRequestSetReleaseCallback(
 /// \param response_userp User-provided pointer that is delivered to
 /// the 'response_fn' callback.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetResponseCallback(
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_ResponseAllocator* response_allocator,
@@ -982,7 +990,7 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
 ///
 /// \param inference_response The response object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseDelete(
     TRITONSERVER_InferenceResponse* inference_response);
 
 /// Return the error status of an inference response. Return a
@@ -993,7 +1001,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseDelete(
 /// \param inference_response The response object.
 /// \return a TRITONSERVER_Error indicating the success or failure
 /// status of the response.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseError(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseError(
     TRITONSERVER_InferenceResponse* inference_response);
 
 /// Get model used to produce a response. The caller does not own the
@@ -1006,7 +1014,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseError(
 /// \param model_version Returns the version of the model.
 /// this response.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseModel(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseModel(
     TRITONSERVER_InferenceResponse* inference_response, const char** model_name,
     int64_t* model_version);
 
@@ -1019,7 +1027,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseModel(
 /// \param request_id Returns the ID of the request corresponding to
 /// this response.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseId(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseId(
     TRITONSERVER_InferenceResponse* inference_response,
     const char** request_id);
 
@@ -1028,7 +1036,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseId(
 /// \param inference_response The response object.
 /// \param count Returns the number of parameters.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseParameterCount(
     TRITONSERVER_InferenceResponse* inference_response, uint32_t* count);
 
@@ -1063,7 +1071,7 @@ TRITONSERVER_InferenceResponseParameterCount(
 /// \param type Returns the type of the parameter.
 /// \param vvalue Returns a pointer to the parameter value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseParameter(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseParameter(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const char** name, TRITONSERVER_ParameterType* type, const void** vvalue);
 
@@ -1072,7 +1080,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseParameter(
 /// \param inference_response The response object.
 /// \param count Returns the number of output tensors.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputCount(
     TRITONSERVER_InferenceResponse* inference_response, uint32_t* count);
 
@@ -1098,7 +1106,7 @@ TRITONSERVER_InferenceResponseOutputCount(
 /// \param userp The user-specified value associated with the buffer
 /// in TRITONSERVER_ResponseAllocatorAllocFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseOutput(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseOutput(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const char** name, TRITONSERVER_DataType* datatype, const int64_t** shape,
     uint64_t* dim_count, const void** base, size_t* byte_size,
@@ -1118,7 +1126,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_InferenceResponseOutput(
 /// \param name Returns the label corresponding to 'class_index' or
 /// nullptr if no label.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputClassificationLabel(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const size_t class_index, const char** label);
@@ -1142,14 +1150,14 @@ typedef enum tritonserver_modelcontrolmode_enum {
 ///
 /// \param options Returns the new server options object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsNew(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsNew(
     TRITONSERVER_ServerOptions** options);
 
 /// Delete a server options object.
 ///
 /// \param options The server options object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsDelete(
     TRITONSERVER_ServerOptions* options);
 
 /// Set the textual ID for the server in a server options. The ID is a
@@ -1158,7 +1166,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsDelete(
 /// \param options The server options object.
 /// \param server_id The server identifier.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetServerId(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetServerId(
     TRITONSERVER_ServerOptions* options, const char* server_id);
 
 /// Set the model repository path in a server options. The path must be
@@ -1170,7 +1178,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetServerId(
 /// \param options The server options object.
 /// \param model_repository_path The full path to the model repository.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelRepositoryPath(
     TRITONSERVER_ServerOptions* options, const char* model_repository_path);
 
@@ -1194,7 +1202,7 @@ TRITONSERVER_ServerOptionsSetModelRepositoryPath(
 /// \param options The server options object.
 /// \param mode The mode to use for the model control.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelControlMode(
     TRITONSERVER_ServerOptions* options, TRITONSERVER_ModelControlMode mode);
 
@@ -1207,7 +1215,7 @@ TRITONSERVER_ServerOptionsSetModelControlMode(
 /// \param options The server options object.
 /// \param mode_name The name of the model to load on startup.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStartupModel(
     TRITONSERVER_ServerOptions* options, const char* model_name);
 
@@ -1218,7 +1226,7 @@ TRITONSERVER_ServerOptionsSetStartupModel(
 /// \param strict True to enable strict model configuration handling,
 /// false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     TRITONSERVER_ServerOptions* options, bool strict);
 
@@ -1230,7 +1238,7 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig(
 /// \param options The server options object.
 /// \param size The pinned memory pool byte size.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size);
 
@@ -1243,7 +1251,7 @@ TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
 /// \param gpu_device The GPU device to allocate the memory pool.
 /// \param size The CUDA memory pool byte size.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
 
@@ -1253,7 +1261,7 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
 /// \param options The server options object.
 /// \param cc The minimum CUDA compute capability.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
     TRITONSERVER_ServerOptions* options, double cc);
 
@@ -1263,7 +1271,7 @@ TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
 /// \param exit True to enable exiting on intialization error, false
 /// to continue.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetExitOnError(
     TRITONSERVER_ServerOptions* options, bool exit);
 
@@ -1273,7 +1281,7 @@ TRITONSERVER_ServerOptionsSetExitOnError(
 /// \param strict True to enable strict readiness handling, false to
 /// disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictReadiness(
     TRITONSERVER_ServerOptions* options, bool strict);
 
@@ -1283,7 +1291,7 @@ TRITONSERVER_ServerOptionsSetStrictReadiness(
 /// \param options The server options object.
 /// \param timeout The exit timeout, in seconds.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetExitTimeout(
     TRITONSERVER_ServerOptions* options, unsigned int timeout);
 
@@ -1292,7 +1300,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 /// \param options The server options object.
 /// \param log True to enable info logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogInfo(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogInfo(
     TRITONSERVER_ServerOptions* options, bool log);
 
 /// Enable or disable warning level logging.
@@ -1300,7 +1308,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogInfo(
 /// \param options The server options object.
 /// \param log True to enable warning logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogWarn(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogWarn(
     TRITONSERVER_ServerOptions* options, bool log);
 
 /// Enable or disable error level logging.
@@ -1308,7 +1316,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogWarn(
 /// \param options The server options object.
 /// \param log True to enable error logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
     TRITONSERVER_ServerOptions* options, bool log);
 
 /// Set verbose logging level. Level zero disables verbose logging.
@@ -1316,7 +1324,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
 /// \param options The server options object.
 /// \param level The verbose logging level.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogVerbose(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogVerbose(
     TRITONSERVER_ServerOptions* options, int level);
 
 /// Enable or disable metrics collection in a server options.
@@ -1324,7 +1332,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogVerbose(
 /// \param options The server options object.
 /// \param metrics True to enable metrics, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
     TRITONSERVER_ServerOptions* options, bool metrics);
 
 /// Enable or disable GPU metrics collection in a server options. GPU
@@ -1334,7 +1342,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
 /// \param options The server options object.
 /// \param gpu_metrics True to enable GPU metrics, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetGpuMetrics(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetGpuMetrics(
     TRITONSERVER_ServerOptions* options, bool gpu_metrics);
 
 /// Set the directory containing backend shared libraries. This
@@ -1346,7 +1354,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetGpuMetrics(
 /// \param options The server options object.
 /// \param backend_dir The full path of the backend directory.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendDirectory(
     TRITONSERVER_ServerOptions* options, const char* backend_dir);
 
@@ -1358,7 +1366,7 @@ TRITONSERVER_ServerOptionsSetBackendDirectory(
 /// \param setting The name of the setting.
 /// \param value The setting value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendConfig(
     TRITONSERVER_ServerOptions* options, const char* backend_name,
     const char* setting, const char* value);
@@ -1393,7 +1401,7 @@ typedef enum tritonserver_txn_property_flag_enum {
 /// \param server Returns the new inference server object.
 /// \param options The inference server options object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerNew(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerNew(
     TRITONSERVER_Server** server, TRITONSERVER_ServerOptions* options);
 
 /// Delete a server object. If server is not already stopped it is
@@ -1401,7 +1409,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerNew(
 ///
 /// \param server The inference server object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerDelete(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerDelete(
     TRITONSERVER_Server* server);
 
 /// Stop a server object. A server can't be restarted once it is
@@ -1409,7 +1417,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 ///
 /// \param server The inference server object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerStop(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerStop(
     TRITONSERVER_Server* server);
 
 /// Check the model repository for changes and update server state
@@ -1417,7 +1425,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerStop(
 ///
 /// \param server The inference server object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerPollModelRepository(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerPollModelRepository(
     TRITONSERVER_Server* server);
 
 /// Is the server live?
@@ -1425,7 +1433,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerPollModelRepository(
 /// \param server The inference server object.
 /// \param live Returns true if server is live, false otherwise.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerIsLive(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerIsLive(
     TRITONSERVER_Server* server, bool* live);
 
 /// Is the server ready?
@@ -1433,7 +1441,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerIsLive(
 /// \param server The inference server object.
 /// \param ready Returns true if server is ready, false otherwise.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
     TRITONSERVER_Server* server, bool* ready);
 
 /// Is the model ready?
@@ -1445,7 +1453,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
 /// model's policy.
 /// \param ready Returns true if server is ready, false otherwise.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, bool* ready);
 
@@ -1473,7 +1481,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
 /// \param voidp If non-nullptr, returns a point specific to the
 /// 'flags' value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelBatchProperties(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelBatchProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* flags, void** voidp);
 
@@ -1494,7 +1502,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelBatchProperties(
 /// model.
 /// \param voidp If non-nullptr, returns a point specific to the 'flags' value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelTransactionProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* txn_flags, void** voidp);
@@ -1506,7 +1514,7 @@ TRITONSERVER_ServerModelTransactionProperties(
 /// \param server The inference server object.
 /// \param server_metadata Returns the server metadata message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerMetadata(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerMetadata(
     TRITONSERVER_Server* server, TRITONSERVER_Message** server_metadata);
 
 /// Get the metadata of a model as a TRITONSERVER_Message
@@ -1520,7 +1528,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerMetadata(
 /// policy.
 /// \param model_metadata Returns the model metadata message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelMetadata(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelMetadata(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, TRITONSERVER_Message** model_metadata);
 
@@ -1536,7 +1544,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelMetadata(
 /// server will choose a version based on the model's policy.
 /// \param model_stats Returns the model statistics message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelStatistics(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelStatistics(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, TRITONSERVER_Message** model_stats);
 
@@ -1554,7 +1562,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelStatistics(
 /// be returned. Currently only version 1 is supported.
 /// \param model_config Returns the model config message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelConfig(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelConfig(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, const uint32_t config_version,
     TRITONSERVER_Message** model_config);
@@ -1574,7 +1582,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelConfig(
 /// \param model_index Return the model index message that holds the
 /// index of all models contained in the server's model repository(s).
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelIndex(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIndex(
     TRITONSERVER_Server* server, uint32_t flags,
     TRITONSERVER_Message** model_index);
 
@@ -1586,7 +1594,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerModelIndex(
 /// \param server The inference server object.
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
     TRITONSERVER_Server* server, const char* model_name);
 
 /// Unload the requested model. Unloading a model that is not loaded
@@ -1597,7 +1605,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
 /// \param server The inference server object.
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
     TRITONSERVER_Server* server, const char* model_name);
 
 /// Get the current metrics for the server. The caller takes ownership
@@ -1607,7 +1615,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
 /// \param server The inference server object.
 /// \param metrics Returns the metrics.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerMetrics(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerMetrics(
     TRITONSERVER_Server* server, TRITONSERVER_Metrics** metrics);
 
 /// Perform inference using the meta-data and inputs supplied by the
@@ -1631,7 +1639,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerMetrics(
 /// \param trace The trace object for this request, or nullptr if no
 /// tracing.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
     TRITONSERVER_Server* server,
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceTrace* trace);

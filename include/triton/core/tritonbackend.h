@@ -33,12 +33,20 @@
 extern "C" {
 #endif
 
-#if defined(_MSC_VER)
-#define TRITONBACKEND_EXPORT __declspec(dllexport)
-#elif defined(__GNUC__)
-#define TRITONBACKEND_EXPORT __attribute__((__visibility__("default")))
+#ifdef _COMPILING_TRITONBACKEND
+  #if defined(_MSC_VER)
+    #define TRITONBACKEND_DECLSPEC __declspec(dllexport)
+  #elif defined(__GNUC__)
+    #define TRITONBACKEND_DECLSPEC __attribute__((__visibility__("default")))
+  #else
+    #define TRITONBACKEND_DECLSPEC
+  #endif
 #else
-#define TRITONBACKEND_EXPORT
+  #if defined(_MSC_VER)
+    #define TRITONBACKEND_DECLSPEC __declspec(dllimport)
+  #else
+    #define TRITONBACKEND_DECLSPEC
+  #endif
 #endif
 
 struct TRITONBACKEND_MemoryManager;
@@ -89,7 +97,7 @@ struct TRITONBACKEND_ModelInstance;
 /// \param minor Returns the TRITONBACKEND API minor version supported
 /// by Triton.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ApiVersion(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
 /// TRITONBACKEND_ArtifactType
@@ -139,7 +147,7 @@ typedef enum TRITONBACKEND_artifacttype_enum {
 /// to allocate from.
 /// \param byte_size The size of memory to allocate, in bytes.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_MemoryManagerAllocate(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_MemoryManagerAllocate(
     TRITONBACKEND_MemoryManager* manager, void** buffer,
     const TRITONSERVER_MemoryType memory_type, const int64_t memory_type_id,
     const uint64_t byte_size);
@@ -155,7 +163,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_MemoryManagerAllocate(
 /// \param memory_type_id The ID associated with the memory type of
 /// the buffer.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_MemoryManagerFree(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_MemoryManagerFree(
     TRITONBACKEND_MemoryManager* manager, void* buffer,
     const TRITONSERVER_MemoryType memory_type, const int64_t memory_type_id);
 
@@ -185,7 +193,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_MemoryManagerFree(
 /// holding the contents of the tensor. These buffers are accessed
 /// using TRITONBACKEND_InputBuffer.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_InputProperties(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     TRITONBACKEND_Input* input, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
     uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
@@ -212,7 +220,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_InputProperties(
 /// gives the buffer memory type id preferred by the function caller.
 /// Returns the actual memory type id of 'buffer'.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
     TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
     uint64_t* buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id);
@@ -241,7 +249,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
 /// gives the buffer memory type id preferred by the caller. Returns
 /// the actual memory type id of 'buffer'.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
     TRITONBACKEND_Output* output, void** buffer,
     const uint64_t buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id);
@@ -259,7 +267,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
 /// \param request The inference request.
 /// \param id Returns the ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestId(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
     TRITONBACKEND_Request* request, const char** id);
 
 /// Get the correlation ID of the request. Zero indicates that the
@@ -268,7 +276,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestId(
 /// \param request The inference request.
 /// \param id Returns the correlation ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
 
 /// Get the number of input tensors specified in the request.
@@ -276,7 +284,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
 /// \param request The inference request.
 /// \param count Returns the number of input tensors.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInputCount(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestInputCount(
     TRITONBACKEND_Request* request, uint32_t* count);
 
 /// Get the name of an input tensor. The caller does not own
@@ -290,7 +298,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInputCount(
 /// \param input_name Returns the name of the input tensor
 /// corresponding to the index.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInputName(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestInputName(
     TRITONBACKEND_Request* request, const uint32_t index,
     const char** input_name);
 
@@ -302,7 +310,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInputName(
 /// \param name The name of the input.
 /// \param input Returns the input corresponding to the name.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInput(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestInput(
     TRITONBACKEND_Request* request, const char* name,
     TRITONBACKEND_Input** input);
 
@@ -322,7 +330,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInput(
 /// TRITONBACKEND_RequestInputCount.
 /// \param input Returns the input corresponding to the index.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInputByIndex(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestInputByIndex(
     TRITONBACKEND_Request* request, const uint32_t index,
     TRITONBACKEND_Input** input);
 
@@ -332,7 +340,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestInputByIndex(
 /// \param request The inference request.
 /// \param count Returns the number of output tensors.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestOutputCount(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestOutputCount(
     TRITONBACKEND_Request* request, uint32_t* count);
 
 /// Get the name of a requested output tensor. The caller does not own
@@ -346,7 +354,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestOutputCount(
 /// \param output_name Returns the name of the requested output tensor
 /// corresponding to the index.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestOutputName(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestOutputName(
     TRITONBACKEND_Request* request, const uint32_t index,
     const char** output_name);
 
@@ -365,7 +373,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestOutputName(
 /// should be performed. \see TRITONSERVER_RequestReleaseFlag. \see
 /// TRITONSERVER_InferenceRequestReleaseFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestRelease(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestRelease(
     TRITONBACKEND_Request* request, uint32_t release_flags);
 
 ///
@@ -384,14 +392,14 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_RequestRelease(
 /// \param factory Returns the new response factory.
 /// \param request The inference request.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseFactoryNew(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseFactoryNew(
     TRITONBACKEND_ResponseFactory** factory, TRITONBACKEND_Request* request);
 
 /// Destroy a response factory.
 ///
 /// \param factory The response factory.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseFactoryDelete(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseFactoryDelete(
     TRITONBACKEND_ResponseFactory* factory);
 
 /// Send response flags without a corresponding response.
@@ -401,7 +409,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseFactoryDelete(
 /// TRITONSERVER_ResponseCompleteFlag. \see
 /// TRITONSERVER_InferenceResponseCompleteFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseFactorySendFlags(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseFactorySendFlags(
     TRITONBACKEND_ResponseFactory* factory, const uint32_t send_flags);
 
 ///
@@ -436,7 +444,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseFactorySendFlags(
 /// \param response Returns the new response.
 /// \param request The request.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseNew(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseNew(
     TRITONBACKEND_Response** response, TRITONBACKEND_Request* request);
 
 /// Create a response using a factory.
@@ -444,7 +452,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseNew(
 /// \param response Returns the new response.
 /// \param factory The response factory.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseNewFromFactory(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseNewFromFactory(
     TRITONBACKEND_Response** response, TRITONBACKEND_ResponseFactory* factory);
 
 /// Destroy a response. It is not necessary to delete a response if
@@ -453,7 +461,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseNewFromFactory(
 ///
 /// \param response The response.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseDelete(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseDelete(
     TRITONBACKEND_Response* response);
 
 /// Set a string parameter in the response.
@@ -462,7 +470,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseDelete(
 /// \param name The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error*
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetStringParameter(
     TRITONBACKEND_Response* response, const char* name, const char* value);
 
@@ -472,7 +480,7 @@ TRITONBACKEND_ResponseSetStringParameter(
 /// \param name The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseSetIntParameter(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value);
 
 /// Set an boolean parameter in the response.
@@ -481,7 +489,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseSetIntParameter(
 /// \param name The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseSetBoolParameter(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value);
 
 /// Create an output tensor in the response. The lifetime of the
@@ -497,7 +505,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseSetBoolParameter(
 /// \param dims_count The number of dimensions in the output tensor
 /// shape.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
     TRITONBACKEND_Response* response, TRITONBACKEND_Output** output,
     const char* name, const TRITONSERVER_DataType datatype,
     const int64_t* shape, const uint32_t dims_count);
@@ -513,7 +521,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
 /// \param error The TRITONSERVER_Error to send if the response is an
 /// error, or nullptr if the response is successful.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
     TRITONSERVER_Error* error);
 
@@ -549,7 +557,7 @@ typedef enum TRITONBACKEND_execpolicy_enum {
 /// \param backend The backend.
 /// \param name Returns the name of the backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendName(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendName(
     TRITONBACKEND_Backend* backend, const char** name);
 
 /// Get the backend configuration.  The 'backend_config' message is
@@ -567,7 +575,7 @@ TRITONSERVER_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendName(
 /// \param backend The backend.
 /// \param backend_config Returns the backend configuration as a message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendConfig(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendConfig(
     TRITONBACKEND_Backend* backend, TRITONSERVER_Message** backend_config);
 
 /// Get the execution policy for this backend. By default the
@@ -576,7 +584,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendConfig(
 /// \param backend The backend.
 /// \param policy Returns the execution policy.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendExecutionPolicy(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendExecutionPolicy(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ExecutionPolicy* policy);
 
 /// Set the execution policy for this backend. By default the
@@ -588,7 +596,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendExecutionPolicy(
 /// \param backend The backend.
 /// \param policy The execution policy.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error*
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendSetExecutionPolicy(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ExecutionPolicy policy);
 
@@ -608,7 +616,7 @@ TRITONBACKEND_BackendSetExecutionPolicy(
 /// \param artifact_type Returns the artifact type for the backend.
 /// \param path Returns the location.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendArtifacts(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendArtifacts(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ArtifactType* artifact_type,
     const char** location);
 
@@ -617,7 +625,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendArtifacts(
 /// \param backend The backend.
 /// \param manager Returns the memory manager.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendMemoryManager(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendMemoryManager(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_MemoryManager** manager);
 
 /// Get the user-specified state associated with the backend. The
@@ -626,7 +634,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendMemoryManager(
 /// \param backend The backend.
 /// \param state Returns the user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendState(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendState(
     TRITONBACKEND_Backend* backend, void** state);
 
 /// Set the user-specified state associated with the backend. The
@@ -635,7 +643,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendState(
 /// \param backend The backend.
 /// \param state The user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendSetState(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendSetState(
     TRITONBACKEND_Backend* backend, void* state);
 
 ///
@@ -651,7 +659,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_BackendSetState(
 /// \param model The model.
 /// \param name Returns the model name.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelName(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelName(
     TRITONBACKEND_Model* model, const char** name);
 
 /// Get the version of the model.
@@ -659,7 +667,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelName(
 /// \param model The model.
 /// \param version Returns the model version.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelVersion(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelVersion(
     TRITONBACKEND_Model* model, uint64_t* version);
 
 /// Get the location of the files that make up the model. The
@@ -677,7 +685,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelVersion(
 /// \param artifact_type Returns the artifact type for the model.
 /// \param path Returns the location.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelRepository(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelRepository(
     TRITONBACKEND_Model* model, TRITONBACKEND_ArtifactType* artifact_type,
     const char** location);
 
@@ -696,7 +704,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelRepository(
 /// be returned. Currently only version 1 is supported.
 /// \param model_config Returns the model configuration as a message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelConfig(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelConfig(
     TRITONBACKEND_Model* model, const uint32_t config_version,
     TRITONSERVER_Message** model_config);
 
@@ -710,7 +718,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelConfig(
 /// \param auto_complete_config Returns whether the backend should auto-complete
 /// the model configuration.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelAutoCompleteConfig(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config);
 
 /// Set the model configuration in Triton server. Only the inputs, outputs,
@@ -727,7 +735,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelAutoCompleteConfig(
 /// then an error will be returned. Currently only version 1 is supported.
 /// \param model_config The updated model configuration as a message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelSetConfig(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelSetConfig(
     TRITONBACKEND_Model* model, const uint32_t config_version,
     TRITONSERVER_Message* model_config);
 
@@ -737,7 +745,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelSetConfig(
 /// \param model The model.
 /// \param server Returns the server.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelServer(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelServer(
     TRITONBACKEND_Model* model, TRITONSERVER_Server** server);
 
 /// Get the backend used by the model.
@@ -745,7 +753,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelServer(
 /// \param model The model.
 /// \param model Returns the backend object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelBackend(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelBackend(
     TRITONBACKEND_Model* model, TRITONBACKEND_Backend** backend);
 
 /// Get the user-specified state associated with the model. The
@@ -754,7 +762,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelBackend(
 /// \param model The model.
 /// \param state Returns the user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelState(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelState(
     TRITONBACKEND_Model* model, void** state);
 
 /// Set the user-specified state associated with the model. The
@@ -763,7 +771,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelState(
 /// \param model The model.
 /// \param state The user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
     TRITONBACKEND_Model* model, void* state);
 
 ///
@@ -780,7 +788,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
 /// \param instance The model instance.
 /// \param name Returns the instance name.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceName(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceName(
     TRITONBACKEND_ModelInstance* instance, const char** name);
 
 /// Get the kind of the model instance.
@@ -788,7 +796,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceName(
 /// \param instance The model instance.
 /// \param kind Returns the instance kind.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
     TRITONBACKEND_ModelInstance* instance,
     TRITONSERVER_InstanceGroupKind* kind);
 
@@ -797,7 +805,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
 /// \param instance The model instance.
 /// \param device_id Returns the instance device ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
     TRITONBACKEND_ModelInstance* instance, int32_t* device_id);
 
 /// Get the model associated with a model instance.
@@ -805,7 +813,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
 /// \param instance The model instance.
 /// \param backend Returns the model object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceModel(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceModel(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Model** model);
 
 /// Get the user-specified state associated with the model
@@ -815,7 +823,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceModel(
 /// \param instance The model instance.
 /// \param state Returns the user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceState(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceState(
     TRITONBACKEND_ModelInstance* instance, void** state);
 
 /// Set the user-specified state associated with the model
@@ -825,7 +833,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceState(
 /// \param instance The model instance.
 /// \param state The user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
     TRITONBACKEND_ModelInstance* instance, void* state);
 
 /// Record statistics for an inference request.
@@ -873,7 +881,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
 /// computations.
 /// \param exec_end_ns Timestamp for the end of execution.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error*
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportStatistics(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request* request,
     const bool success, const uint64_t exec_start_ns,
@@ -905,7 +913,7 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 /// computations.
 /// \param exec_end_ns Timestamp for the end of execution.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error*
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportBatchStatistics(
     TRITONBACKEND_ModelInstance* instance, const uint64_t batch_size,
     const uint64_t exec_start_ns, const uint64_t compute_start_ns,
@@ -926,7 +934,7 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
 ///
 /// \param backend The backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_Initialize(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
     TRITONBACKEND_Backend* backend);
 
 /// Finalize for a backend. This function is optional, a backend is
@@ -937,7 +945,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_Initialize(
 ///
 /// \param backend The backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_Finalize(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
     TRITONBACKEND_Backend* backend);
 
 /// Initialize for a model. This function is optional, a backend is
@@ -950,7 +958,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_Finalize(
 ///
 /// \param model The model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
     TRITONBACKEND_Model* model);
 
 /// Finalize for a model. This function is optional, a backend is not
@@ -962,7 +970,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
 ///
 /// \param model The model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
     TRITONBACKEND_Model* model);
 
 /// Initialize for a model instance. This function is optional, a
@@ -972,7 +980,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceInitialize(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceInitialize(
     TRITONBACKEND_ModelInstance* instance);
 
 /// Finalize for a model instance. This function is optional, a
@@ -984,7 +992,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceInitialize(
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
     TRITONBACKEND_ModelInstance* instance);
 
 /// Execute a batch of one or more requests on a model instance. This
@@ -1005,7 +1013,7 @@ TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
 /// \param requests The requests.
 /// \param request_count The number of requests in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_EXPORT TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
 

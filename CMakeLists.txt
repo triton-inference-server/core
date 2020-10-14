@@ -65,6 +65,62 @@ target_include_directories(
 )
 
 #
+# Stub library for libtritonserver.so that stubs Triton Server API and
+# Triton Backend API
+#
+add_custom_command(
+  OUTPUT
+    tritonserver_stub.cc
+    COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/triton/core/tritonserver.h tritonserver_stubpp
+    COMMAND sed -i '/\#/d' tritonserver_stubpp
+    COMMAND sed -i '/\\//d' tritonserver_stubpp
+    COMMAND sed -i '/Fn_t/d' tritonserver_stubpp
+    COMMAND sed -i -r 's/.*\(TRITONSERVER_[^\(]+\)\\\(.*/void \\1\(\)\{\}/g\;t\;d' tritonserver_stubpp
+    COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/triton/core/tritonbackend.h tritonbackend_stubpp
+    COMMAND sed -i '/\#/d' tritonbackend_stubpp
+    COMMAND sed -i '/\\//d' tritonbackend_stubpp
+    COMMAND sed -i '/Fn_t/d' tritonbackend_stubpp
+    COMMAND sed -i -r 's/.*\(TRITONBACKEND_[^\(]+\)\\\(.*/void \\1\(\)\{\}/g\;t\;d' tritonbackend_stubpp
+    COMMAND sed -i '/Initialize\(/d' tritonbackend_stubpp
+    COMMAND sed -i '/Finalize\(/d' tritonbackend_stubpp
+    COMMAND sed -i '/ModelInstanceExecute\(/d' tritonbackend_stubpp
+    COMMAND echo 'extern \"C\" {' > tritonserver_stub.cc
+    COMMAND cat tritonserver_stubpp >> tritonserver_stub.cc
+    COMMAND cat tritonbackend_stubpp >> tritonserver_stub.cc
+    COMMAND echo '} /* extern \"C\" */' >> tritonserver_stub.cc
+)
+
+add_library(
+  triton-core-serverstub SHARED
+  ${CMAKE_CURRENT_BINARY_DIR}/tritonserver_stub.cc
+)
+
+add_library(
+  TritonCore::triton-core-serverstub ALIAS triton-core-serverstub
+)
+
+target_compile_features(triton-core-serverstub PRIVATE cxx_std_11)
+target_compile_options(
+  triton-core-serverstub
+  PRIVATE
+    -Wall -Wextra -Wno-unused-parameter -Werror
+)
+
+set_target_properties(
+  triton-core-serverstub
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    NO_SONAME ON
+    OUTPUT_NAME tritonserver_stub
+)
+
+target_link_libraries(
+  triton-core-serverstub
+  PRIVATE
+    -Wl,-soname=libtritonserver.so
+)
+
+#
 # Install
 #
 include(GNUInstallDirs)
@@ -74,6 +130,7 @@ install(
   TARGETS
     triton-core-backendapi
     triton-core-serverapi
+    triton-core-serverstub
   EXPORT
     triton-core-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
