@@ -1147,6 +1147,12 @@ typedef enum tritonserver_modelcontrolmode_enum {
   TRITONSERVER_MODEL_CONTROL_EXPLICIT
 } TRITONSERVER_ModelControlMode;
 
+/// Rate limit modes
+typedef enum tritonserver_ratelimitmode_enum {
+  TRITONSERVER_RATE_LIMIT_OFF,
+  TRITONSERVER_RATE_LIMIT_EXEC_COUNT
+} TRITONSERVER_RateLimitMode;
+
 /// Create a new server options object. The caller takes ownership of
 /// the TRITONSERVER_ServerOptions object and must call
 /// TRITONSERVER_ServerOptionsDelete to release the object.
@@ -1232,6 +1238,23 @@ TRITONSERVER_ServerOptionsSetStartupModel(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     TRITONSERVER_ServerOptions* options, bool strict);
+
+/// Set the rate limit mode in a server options.
+///
+///   TRITONSERVER_RATE_LIMIT_OFF: The rate limiting is turned off and the
+///   inference gets executed whenever an instance is available.
+///
+///   TRITONSERVER_RATE_LIMIT_EXEC_COUNT: The rate limiting prioritizes the
+///   inference execution using the number of times each instance has got a
+///   chance to run. The execution gets to run only when its resource
+///   constraints are satisfied.
+///
+/// \param options The server options object.
+/// \param mode The mode to use for the rate limiting.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetRateLimitMode(
+    TRITONSERVER_ServerOptions* options, TRITONSERVER_RateLimitMode mode);
 
 /// Set the total pinned memory byte size that the server can allocate
 /// in a server options. The pinned memory pool will be shared across
