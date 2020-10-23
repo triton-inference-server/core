@@ -1256,6 +1256,20 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetRateLimitMode(
     TRITONSERVER_ServerOptions* options, TRITONSERVER_RateLimitMode mode);
 
+/// Add resource count for rate limiting.
+///
+/// \param options The server options object.
+/// \param device The device identifier for the resource. The resource
+/// is assumed to be present per device if empty. "global" sets this
+/// resource to be shared among all the devices in the system.
+/// \param name The name of the resource.
+/// \param count The count of the resource.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsAddRateLimitResource(
+    TRITONSERVER_ServerOptions* options, const char* device,
+    const char* resource_name, const size_t resource_count);
+
 /// Set the total pinned memory byte size that the server can allocate
 /// in a server options. The pinned memory pool will be shared across
 /// Triton itself and the backends that use
