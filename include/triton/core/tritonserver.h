@@ -36,19 +36,19 @@ extern "C" {
 #endif
 
 #ifdef _COMPILING_TRITONSERVER
-  #if defined(_MSC_VER)
-    #define TRITONSERVER_DECLSPEC __declspec(dllexport)
-  #elif defined(__GNUC__)
-    #define TRITONSERVER_DECLSPEC __attribute__((__visibility__("default")))
-  #else
-    #define TRITONSERVER_DECLSPEC
-  #endif
+#if defined(_MSC_VER)
+#define TRITONSERVER_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONSERVER_DECLSPEC __attribute__((__visibility__("default")))
 #else
-  #if defined(_MSC_VER)
-    #define TRITONSERVER_DECLSPEC __declspec(dllimport)
-  #else
-    #define TRITONSERVER_DECLSPEC
-  #endif
+#define TRITONSERVER_DECLSPEC
+#endif
+#else
+#if defined(_MSC_VER)
+#define TRITONSERVER_DECLSPEC __declspec(dllimport)
+#else
+#define TRITONSERVER_DECLSPEC
+#endif
 #endif
 
 struct TRITONSERVER_Error;
@@ -223,7 +223,8 @@ typedef enum TRITONSERVER_loglevel_enum {
 ///
 /// \param level The log level.
 /// \return True if the log level is enabled, false if not enabled.
-TRITONSERVER_DECLSPEC bool TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level);
+TRITONSERVER_DECLSPEC bool TRITONSERVER_LogIsEnabled(
+    TRITONSERVER_LogLevel level);
 
 /// Log a message at a given log level if that level is enabled.
 ///
@@ -648,7 +649,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
 /// \param model_version Returns the version of the model associated
 /// with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelVersion(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version);
 
 /// TRITONSERVER_InferenceRequest
@@ -1071,7 +1073,8 @@ TRITONSERVER_InferenceResponseParameterCount(
 /// \param type Returns the type of the parameter.
 /// \param vvalue Returns a pointer to the parameter value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceResponseParameter(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceResponseParameter(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const char** name, TRITONSERVER_ParameterType* type, const void** vvalue);
 
@@ -1324,7 +1327,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
 /// \param options The server options object.
 /// \param level The verbose logging level.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogVerbose(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogVerbose(
     TRITONSERVER_ServerOptions* options, int level);
 
 /// Enable or disable metrics collection in a server options.
@@ -1342,7 +1346,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
 /// \param options The server options object.
 /// \param gpu_metrics True to enable GPU metrics, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetGpuMetrics(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetGpuMetrics(
     TRITONSERVER_ServerOptions* options, bool gpu_metrics);
 
 /// Set the directory containing backend shared libraries. This
@@ -1425,8 +1430,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerStop(
 ///
 /// \param server The inference server object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerPollModelRepository(
-    TRITONSERVER_Server* server);
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server);
 
 /// Is the server live?
 ///
@@ -1481,7 +1486,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
 /// \param voidp If non-nullptr, returns a point specific to the
 /// 'flags' value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelBatchProperties(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelBatchProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* flags, void** voidp);
 

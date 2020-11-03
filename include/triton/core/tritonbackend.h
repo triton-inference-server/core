@@ -34,19 +34,19 @@ extern "C" {
 #endif
 
 #ifdef _COMPILING_TRITONBACKEND
-  #if defined(_MSC_VER)
-    #define TRITONBACKEND_DECLSPEC __declspec(dllexport)
-  #elif defined(__GNUC__)
-    #define TRITONBACKEND_DECLSPEC __attribute__((__visibility__("default")))
-  #else
-    #define TRITONBACKEND_DECLSPEC
-  #endif
+#if defined(_MSC_VER)
+#define TRITONBACKEND_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONBACKEND_DECLSPEC __attribute__((__visibility__("default")))
 #else
-  #if defined(_MSC_VER)
-    #define TRITONBACKEND_DECLSPEC __declspec(dllimport)
-  #else
-    #define TRITONBACKEND_DECLSPEC
-  #endif
+#define TRITONBACKEND_DECLSPEC
+#endif
+#else
+#if defined(_MSC_VER)
+#define TRITONBACKEND_DECLSPEC __declspec(dllimport)
+#else
+#define TRITONBACKEND_DECLSPEC
+#endif
 #endif
 
 struct TRITONBACKEND_MemoryManager;
@@ -409,7 +409,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseFactoryDelete(
 /// TRITONSERVER_ResponseCompleteFlag. \see
 /// TRITONSERVER_InferenceResponseCompleteFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseFactorySendFlags(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseFactorySendFlags(
     TRITONBACKEND_ResponseFactory* factory, const uint32_t send_flags);
 
 ///
@@ -480,7 +481,8 @@ TRITONBACKEND_ResponseSetStringParameter(
 /// \param name The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSetIntParameter(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value);
 
 /// Set an boolean parameter in the response.
@@ -489,7 +491,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSetIntParameter
 /// \param name The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSetBoolParameter(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value);
 
 /// Create an output tensor in the response. The lifetime of the
@@ -718,7 +721,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelConfig(
 /// \param auto_complete_config Returns whether the backend should auto-complete
 /// the model configuration.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelAutoCompleteConfig(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config);
 
 /// Set the model configuration in Triton server. Only the inputs, outputs,
@@ -980,8 +984,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceInitialize(
-    TRITONBACKEND_ModelInstance* instance);
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 
 /// Finalize for a model instance. This function is optional, a
 /// backend is not required to implement it. This function is called
