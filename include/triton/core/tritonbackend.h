@@ -845,8 +845,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
 /// Set 'success' true to indicate that the inference request
 /// completed successfully. In this case all timestamps should be
 /// non-zero values reported in nanoseconds and should be collected
-/// using clock_gettime(CLOCK_MONOTONIC, &ts) or the equivalent. Set
-/// 'success' to false to indicate that the inference request failed
+/// using std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+/// Set 'success' to false to indicate that the inference request failed
 /// to complete successfully. In this case all timestamps values are
 /// ignored.
 ///
@@ -896,9 +896,10 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 /// inference requests.
 ///
 /// All timestamps should be non-zero values reported in nanoseconds
-/// and should be collected using clock_gettime(CLOCK_MONOTONIC, &ts)
-/// or the equivalent. See TRITONBACKEND_ModelInstanceReportStatistics
-/// for more information about the timestamps.
+/// and should be collected using
+/// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+/// See TRITONBACKEND_ModelInstanceReportStatistics for more information about
+/// the timestamps.
 ///
 /// 'batch_size' is the sum of the batch sizes for the individual
 /// requests that were delivered together in the call to
