@@ -84,27 +84,35 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 		  "to corresponding value.")
   set(CMAKE_CXX_FLAGS "/W4 /D_WIN32_WINNT=0x0A00 /EHsc")
   set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+
+  set_target_properties(
+    triton-core-serverstub
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      NO_SONAME ON
+      OUTPUT_NAME tritonserver
+  )
 else()
   target_compile_options(
     triton-core-serverstub
     PRIVATE
       -Wall -Wextra -Wno-unused-parameter -Werror
   )
+  set_target_properties(
+    triton-core-serverstub
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      NO_SONAME ON
+      OUTPUT_NAME tritonserver_stub
+  )
+
+  target_link_libraries(
+    triton-core-serverstub
+    PRIVATE
+      -Wl,-soname=libtritonserver.so
+  )
 endif()
 
-set_target_properties(
-  triton-core-serverstub
-  PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    NO_SONAME ON
-    OUTPUT_NAME tritonserver_stub
-)
-
-target_link_libraries(
-  triton-core-serverstub
-  PRIVATE
-    -Wl,-soname=libtritonserver.so
-)
 
 #
 # Install
