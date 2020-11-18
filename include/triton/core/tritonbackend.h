@@ -36,21 +36,21 @@ extern "C" {
 #ifdef _COMPILING_TRITONBACKEND
 #if defined(_MSC_VER)
 #define TRITONBACKEND_DECLSPEC __declspec(dllexport)
-#define TRITONBACKENDLIBRARY_DECLSPEC __declspec(dllimport)
+#define TRITONBACKEND_ISPEC __declspec(dllimport)
 #elif defined(__GNUC__)
 #define TRITONBACKEND_DECLSPEC __attribute__((__visibility__("default")))
-#define TRITONBACKENDLIBRARY_DECLSPEC
+#define TRITONBACKEND_ISPEC
 #else
 #define TRITONBACKEND_DECLSPEC
-#define TRITONBACKENDLIBRARY_DECLSPEC
+#define TRITONBACKEND_ISPEC
 #endif
 #else
 #if defined(_MSC_VER)
 #define TRITONBACKEND_DECLSPEC __declspec(dllimport)
-#define TRITONBACKENDLIBRARY_DECLSPEC __declspec(dllexport)
+#define TRITONBACKEND_ISPEC __declspec(dllexport)
 #else
 #define TRITONBACKEND_DECLSPEC
-#define TRITONBACKENDLIBRARY_DECLSPEC
+#define TRITONBACKEND_ISPEC
 #endif
 #endif
 
@@ -944,7 +944,7 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
 ///
 /// \param backend The backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
     TRITONBACKEND_Backend* backend);
 
 /// Finalize for a backend. This function is optional, a backend is
@@ -955,7 +955,7 @@ TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
 ///
 /// \param backend The backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
     TRITONBACKEND_Backend* backend);
 
 /// Initialize for a model. This function is optional, a backend is
@@ -968,7 +968,7 @@ TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
 ///
 /// \param model The model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
     TRITONBACKEND_Model* model);
 
 /// Finalize for a model. This function is optional, a backend is not
@@ -980,7 +980,7 @@ TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
 ///
 /// \param model The model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
     TRITONBACKEND_Model* model);
 
 /// Initialize for a model instance. This function is optional, a
@@ -990,7 +990,7 @@ TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 
 /// Finalize for a model instance. This function is optional, a
@@ -1002,7 +1002,7 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
 
 /// Execute a batch of one or more requests on a model instance. This
@@ -1023,7 +1023,7 @@ TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
 /// \param requests The requests.
 /// \param request_count The number of requests in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
