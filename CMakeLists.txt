@@ -68,32 +68,9 @@ target_include_directories(
 # Stub library for libtritonserver.so that stubs Triton Server API and
 # Triton Backend API
 #
-if(NOT WIN32)
-add_custom_command(
-  OUTPUT
-    tritonserver_stub.cc
-    COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/triton/core/tritonserver.h tritonserver_stubpp
-    COMMAND sed -i '/\#/d' tritonserver_stubpp
-    COMMAND sed -i '/\\//d' tritonserver_stubpp
-    COMMAND sed -i '/Fn_t/d' tritonserver_stubpp
-    COMMAND sed -i -r 's/.*\(TRITONSERVER_[^\(]+\)\\\(.*/void \\1\(\)\{\}/g\;t\;d' tritonserver_stubpp
-    COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/include/triton/core/tritonbackend.h tritonbackend_stubpp
-    COMMAND sed -i '/\#/d' tritonbackend_stubpp
-    COMMAND sed -i '/\\//d' tritonbackend_stubpp
-    COMMAND sed -i '/Fn_t/d' tritonbackend_stubpp
-    COMMAND sed -i -r 's/.*\(TRITONBACKEND_[^\(]+\)\\\(.*/void \\1\(\)\{\}/g\;t\;d' tritonbackend_stubpp
-    COMMAND sed -i '/Initialize\(/d' tritonbackend_stubpp
-    COMMAND sed -i '/Finalize\(/d' tritonbackend_stubpp
-    COMMAND sed -i '/ModelInstanceExecute\(/d' tritonbackend_stubpp
-    COMMAND echo 'extern \"C\" {' > tritonserver_stub.cc
-    COMMAND cat tritonserver_stubpp >> tritonserver_stub.cc
-    COMMAND cat tritonbackend_stubpp >> tritonserver_stub.cc
-    COMMAND echo '} /* extern \"C\" */' >> tritonserver_stub.cc
-)
-
 add_library(
   triton-core-serverstub SHARED
-  ${CMAKE_CURRENT_BINARY_DIR}/tritonserver_stub.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tritonserver_stub.cc
 )
 
 add_library(
@@ -101,26 +78,44 @@ add_library(
 )
 
 target_compile_features(triton-core-serverstub PRIVATE cxx_std_11)
-target_compile_options(
-  triton-core-serverstub
-  PRIVATE
-    -Wall -Wextra -Wno-unused-parameter -Werror
-)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  message("Using MSVC as compiler, default target on Windows 10. "
+		  "If the target system is not Windows 10, please update _WIN32_WINNT "
+		  "to corresponding value.")
+  target_compile_options(
+    triton-core-serverstub
+    PRIVATE
+      /Wall /D_WIN32_WINNT=0x0A00 /EHsc
+  )
 
-set_target_properties(
-  triton-core-serverstub
-  PROPERTIES
-    POSITION_INDEPENDENT_CODE ON
-    NO_SONAME ON
-    OUTPUT_NAME tritonserver_stub
-)
+  set_target_properties(
+    triton-core-serverstub
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      NO_SONAME ON
+      OUTPUT_NAME tritonserver
+  )
+else()
+  target_compile_options(
+    triton-core-serverstub
+    PRIVATE
+      -Wall -Wextra -Wno-unused-parameter -Werror
+  )
+  set_target_properties(
+    triton-core-serverstub
+    PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      NO_SONAME ON
+      OUTPUT_NAME tritonserver_stub
+  )
 
-target_link_libraries(
-  triton-core-serverstub
-  PRIVATE
-    -Wl,-soname=libtritonserver.so
-)
-endif() # NOT WIN32
+  target_link_libraries(
+    triton-core-serverstub
+    PRIVATE
+      -Wl,-soname=libtritonserver.so
+  )
+endif()
+
 
 #
 # Install
@@ -138,7 +133,6 @@ install(
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
-if(NOT WIN32)
 install(
   TARGETS
     triton-core-serverstub
@@ -147,7 +141,6 @@ install(
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
-endif() # NOT WIN32
 
 install(
   DIRECTORY include/

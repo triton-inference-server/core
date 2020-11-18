@@ -36,16 +36,21 @@ extern "C" {
 #ifdef _COMPILING_TRITONBACKEND
 #if defined(_MSC_VER)
 #define TRITONBACKEND_DECLSPEC __declspec(dllexport)
+#define TRITONBACKEND_ISPEC __declspec(dllimport)
 #elif defined(__GNUC__)
 #define TRITONBACKEND_DECLSPEC __attribute__((__visibility__("default")))
+#define TRITONBACKEND_ISPEC
 #else
 #define TRITONBACKEND_DECLSPEC
+#define TRITONBACKEND_ISPEC
 #endif
 #else
 #if defined(_MSC_VER)
 #define TRITONBACKEND_DECLSPEC __declspec(dllimport)
+#define TRITONBACKEND_ISPEC __declspec(dllexport)
 #else
 #define TRITONBACKEND_DECLSPEC
+#define TRITONBACKEND_ISPEC
 #endif
 #endif
 
@@ -845,8 +850,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
 /// Set 'success' true to indicate that the inference request
 /// completed successfully. In this case all timestamps should be
 /// non-zero values reported in nanoseconds and should be collected
-/// using clock_gettime(CLOCK_MONOTONIC, &ts) or the equivalent. Set
-/// 'success' to false to indicate that the inference request failed
+/// using std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+/// Set 'success' to false to indicate that the inference request failed
 /// to complete successfully. In this case all timestamps values are
 /// ignored.
 ///
@@ -896,9 +901,10 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 /// inference requests.
 ///
 /// All timestamps should be non-zero values reported in nanoseconds
-/// and should be collected using clock_gettime(CLOCK_MONOTONIC, &ts)
-/// or the equivalent. See TRITONBACKEND_ModelInstanceReportStatistics
-/// for more information about the timestamps.
+/// and should be collected using
+/// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+/// See TRITONBACKEND_ModelInstanceReportStatistics for more information about
+/// the timestamps.
 ///
 /// 'batch_size' is the sum of the batch sizes for the individual
 /// requests that were delivered together in the call to
@@ -938,7 +944,7 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
 ///
 /// \param backend The backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
     TRITONBACKEND_Backend* backend);
 
 /// Finalize for a backend. This function is optional, a backend is
@@ -949,7 +955,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Initialize(
 ///
 /// \param backend The backend.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
     TRITONBACKEND_Backend* backend);
 
 /// Initialize for a model. This function is optional, a backend is
@@ -962,7 +968,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_Finalize(
 ///
 /// \param model The model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
     TRITONBACKEND_Model* model);
 
 /// Finalize for a model. This function is optional, a backend is not
@@ -974,7 +980,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInitialize(
 ///
 /// \param model The model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
     TRITONBACKEND_Model* model);
 
 /// Initialize for a model instance. This function is optional, a
@@ -984,7 +990,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 
 /// Finalize for a model instance. This function is optional, a
@@ -996,8 +1002,8 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
-    TRITONBACKEND_ModelInstance* instance);
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
 
 /// Execute a batch of one or more requests on a model instance. This
 /// function is required. Triton will not perform multiple
@@ -1017,7 +1023,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
 /// \param requests The requests.
 /// \param request_count The number of requests in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
 
