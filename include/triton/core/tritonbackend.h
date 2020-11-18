@@ -1002,8 +1002,8 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
-    TRITONBACKEND_ModelInstance* instance);
+TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
 
 /// Execute a batch of one or more requests on a model instance. This
 /// function is required. Triton will not perform multiple
@@ -1023,7 +1023,8 @@ TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFin
 /// \param requests The requests.
 /// \param request_count The number of requests in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
+TRITONBACKENDLIBRARY_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
 

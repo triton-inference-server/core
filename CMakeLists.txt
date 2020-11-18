@@ -70,7 +70,7 @@ target_include_directories(
 #
 add_library(
   triton-core-serverstub SHARED
-  ${CMAKE_CURRENT_SOURCE_DIR}/tritonserver_stub.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/tritonserver_stub.cc
 )
 
 add_library(
@@ -82,8 +82,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
 		  "to corresponding value.")
-  set(CMAKE_CXX_FLAGS "/W4 /D_WIN32_WINNT=0x0A00 /EHsc")
-  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+  target_compile_options(
+    triton-core-serverstub
+    PRIVATE
+      /Wall /D_WIN32_WINNT=0x0A00 /EHsc
+  )
 
   set_target_properties(
     triton-core-serverstub
