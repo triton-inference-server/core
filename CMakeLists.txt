@@ -24,9 +24,64 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.18)
 
 project(tritoncore LANGUAGES C CXX)
+
+include(ExternalProject)
+
+#
+# Get the protobuf and grpc source
+#
+ExternalProject_Add(grpc-repo
+  PREFIX grpc-repo
+  GIT_REPOSITORY "https://github.com/grpc/grpc.git"
+  GIT_TAG "v1.25.0"
+  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/grpc-repo/src/grpc"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND ""
+  INSTALL_COMMAND ""
+  TEST_COMMAND ""
+)
+
+#
+# Build protobuf project from grpc-repo
+#
+# Use -DCMAKE_BUILD_TYPE:STRING=RELEASE to workaround the protobuf build issue
+# described in https://stackoverflow.com/a/60218066/2091555
+ExternalProject_Add(protobuf
+  PREFIX protobuf
+  SOURCE_DIR "${CMAKE_CURRENT_BINARY_DIR}/grpc-repo/src/grpc/third_party/protobuf/cmake"
+  DOWNLOAD_COMMAND ""
+  CMAKE_CACHE_ARGS
+    -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+    -Dprotobuf_BUILD_TESTS:BOOL=OFF
+    -Dprotobuf_WITH_ZLIB:BOOL=OFF
+    -Dprotobuf_MSVC_STATIC_RUNTIME:BOOL=OFF
+    -DCMAKE_BUILD_TYPE:STRING=RELEASE
+    -DCMAKE_INSTALL_PREFIX:PATH=${CMAKE_CURRENT_BINARY_DIR}/protobuf
+  DEPENDS grpc-repo
+)
+
+SET(DEPENDENCIES ${DEPENDENCIES} protobuf)
+
+# Location where protobuf-config.cmake will be installed varies by
+# platform
+if (WIN32)
+  set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${CMAKE_CURRENT_BINARY_DIR}/protobuf/cmake")
+else()
+  set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${CMAKE_CURRENT_BINARY_DIR}/protobuf/${CMAKE_INSTALL_LIBDIR}/cmake/protobuf")
+endif()
+set(Protobuf_DIR ${_FINDPACKAGE_PROTOBUF_CONFIG_DIR})
+message(STATUS "Using Protobuf_DIR:  ${Protobuf_DIR}")
+
+#
+# Protobuf
+#
+set(protobuf_MODULE_COMPATIBLE TRUE CACHE BOOL "protobuf_MODULE_COMPATIBLE" FORCE)
+find_package(Protobuf CONFIG REQUIRED)
+message(STATUS "Using protobuf ${Protobuf_VERSION}")
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS model_config.proto)
 
 #
 # Triton Server API
