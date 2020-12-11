@@ -1298,6 +1298,14 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetExitTimeout(
     TRITONSERVER_ServerOptions* options, unsigned int timeout);
 
+/// Set the number of threads used in buffer manager in a server options.
+///
+/// \param thread_count The number of threads.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+    TRITONSERVER_ServerOptions* options, unsigned int thread_count);
+
 /// Enable or disable info level logging.
 ///
 /// \param options The server options object.
