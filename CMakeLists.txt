@@ -65,6 +65,24 @@ target_include_directories(
 )
 
 #
+# Triton RepoAgent API
+#
+add_library(
+  triton-core-repoagentapi INTERFACE
+)
+
+add_library(
+  TritonCore::triton-core-repoagentapi ALIAS triton-core-repoagentapi
+)
+
+target_include_directories(
+  triton-core-repoagentapi
+  INTERFACE
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+#
 # Stub library for libtritonserver.so that stubs Triton Server API and
 # Triton Backend API
 #
@@ -126,6 +144,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonCore)
 install(
   TARGETS
     triton-core-backendapi
+    triton-core-repoagentapi
     triton-core-serverapi
   EXPORT
     triton-core-targets
