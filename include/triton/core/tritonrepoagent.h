@@ -116,16 +116,33 @@ typedef enum TRITONREPOAGENT_artifacttype_enum {
 /// TRITONREPOAGENT_ActionType
 ///
 /// Types of repository actions that can be handled by an agent.
+/// The lifecycle of a TRITONREPOAGENT_AgentModel begins with a call to
+/// TRITONREPOAGENT_ModelInitialize and ends with a call to
+/// TRITONREPOAGENT_ModelFinalize. Between those calls the current lifecycle
+/// state of the model is communicated by calls to TRITONREPOAGENT_ModelAction.
+/// Possible lifecycles are:
 ///
-///   TRITONREPOAGENT_ACTION_LOAD: A not-currently-loaded model is
-///     being loaded.
+/// LOAD -> LOAD_COMPLETE -> UNLOAD -> UNLOAD_COMPLETE
+/// LOAD -> LOAD_FAIL
 ///
-///   TRITONREPOAGENT_ACTION_RELOAD: A currently loaded model is
-///     being reloaded.
+///   TRITONREPOAGENT_ACTION_LOAD: A model is being loaded.
+///
+///   TRITONREPOAGENT_ACTION_LOAD_COMPLETE: The model load completed
+///     successfully and the model is now loaded.
+///
+///   TRITONREPOAGENT_ACTION_LOAD_FAIL: The model load did not complete
+///     successfully. The model is not loaded.
+///
+///   TRITONREPOAGENT_ACTION_UNLOAD: The model is being unloaded.
+///
+///   TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE: The model unload is complete.
 ///
 typedef enum TRITONREPOAGENT_actiontype_enum {
   TRITONREPOAGENT_ACTION_LOAD,
-  TRITONREPOAGENT_ACTION_RELOAD
+  TRITONREPOAGENT_ACTION_LOAD_COMPLETE,
+  TRITONREPOAGENT_ACTION_LOAD_FAIL,
+  TRITONREPOAGENT_ACTION_UNLOAD,
+  TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE
 } TRITONREPOAGENT_ActionType;
 
 /// Get the location of the files that make up the model. The
@@ -277,6 +294,30 @@ TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_Initialize(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_Finalize(
     TRITONREPOAGENT_Agent* agent);
+
+/// Initialize a model associated with an agent. This function is optional.
+/// This function is called once when an agent model's lifecycle begins to allow
+/// the agent model to initialize any state associated with it. An agent model
+/// has a single state that is shared across all the lifecycle of the agent
+/// model.
+///
+/// \param agent The agent to be associated with the model.
+/// \param model The model.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelInitialize(
+    TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model);
+
+/// Finalize for a model. This function is optional. This function is
+/// called once, just before the end of the agent model's lifecycle. All state
+/// associated with the agent model should be freed and any threads created
+/// for the agent model should be exited/joined before returning from this
+/// function.
+///
+/// \param agent The agent associated with the model.
+/// \param model The model.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelFinalize(
+    TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model);
 
 /// Handle an action for a specified model. This function is
 /// required. Triton will not perform multiple simultaneous calls to
