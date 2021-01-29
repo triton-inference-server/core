@@ -389,13 +389,13 @@ TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelFinalize(
 /// If the agent does not handle the action the agent should
 /// immediately return success (nullptr).
 ///
-/// To modify the model's repository the agent must use
-/// TRITONREPOAGENT_ModelRepositoryLocationAcquire and
-/// TRITONREPOAGENT_ModelRepositoryLocationCommit and then return
+/// To modify the model's repository the agent must either acquire a mutable
+/// location via TRITONREPOAGENT_ModelReopsitroyLocationAcquire
+/// or its own managed location, report the location to Triton via
+/// TRITONREPOAGENT_ModelRepositoryUpdate, and then return
 /// success (nullptr). If the agent does not need to make any changes
 /// to the model repository it should not call
-/// TRITONREPOAGENT_ModelRepositoryLocationCommit and then return
-/// success.
+/// TRITONREPOAGENT_ModelRepositoryUpdate and then return success.
 ///
 /// \param agent The agent.
 /// \param model The model that is the target of the action.
