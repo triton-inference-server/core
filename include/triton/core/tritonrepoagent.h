@@ -109,8 +109,14 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ApiVersion(
 ///     accessible filesystem. The agent can access these files using
 ///     an appropriate filesystem API.
 ///
+///   TRITONREPOAGENT_ARTIFACT_REMOTE_FILESYSTEM: The model artifacts are
+///     communicated to and from the repository agent via a remote filesystem.
+///     The remote filesystem path follows the same convention as is used for
+///     repository paths, for example, "s3://" prefix indicates an S3 path.
+///
 typedef enum TRITONREPOAGENT_artifacttype_enum {
-  TRITONREPOAGENT_ARTIFACT_FILESYSTEM
+  TRITONREPOAGENT_ARTIFACT_FILESYSTEM,
+  TRITONREPOAGENT_ARTIFACT_REMOTE_FILESYSTEM
 } TRITONREPOAGENT_ArtifactType;
 
 /// TRITONREPOAGENT_ActionType
@@ -157,9 +163,18 @@ typedef enum TRITONREPOAGENT_actiontype_enum {
 ///     not the caller, and so should not be modified or freed. The
 ///     contents of the directory are owned by Triton, not the agent,
 ///     and so the agent should not delete or modify the contents. Use
-///     TRITONREPOAGENT_RepositoryAcquire and
-///     TRITONREPOAGENT_RepositoryCommit to get a location that can be
+///     TRITONREPOAGENT_RepositoryAcquire to get a location that can be
 ///     used to modify the model repository contents.
+///
+///   TRITONREPOAGENT_ARTIFACT_REMOTE_FILESYSTEM: The model artifacts are
+///     made available to the agent via a remote filesystem.
+///     'location' returns the full path to the remote directory that contains
+///     the model's artifacts. The returned location string is owned by Triton,
+///     not the caller, and so should not be modified or freed. The contents of
+///     the remote directory are owned by Triton, not the agent,
+///     and so the agent should not delete or modify the contents.
+///     Use TRITONREPOAGENT_ModelRepositoryLocationAcquire to get a location
+///     that can be used to write updated model repository contents.
 ///
 /// \param agent The agent.
 /// \param model The model.
@@ -172,13 +187,12 @@ TRITONREPOAGENT_ModelRepositoryLocation(
     TRITONREPOAGENT_ArtifactType* artifact_type, const char** location);
 
 /// Acquire a location where the agent can produce a new version of
-/// the model repository files. The agent takes ownership of the
-/// location until it is released by calling
-/// TRITONREPOAGENT_ModelRepositoryLocationCommit or
-/// TRITONREPOAGENT_ModelRepositoryLocationDelete. Initially the
+/// the model repository files. This is a convenience method to create
+/// a temporary directory for the agent. The agent is responsible for
+/// calling TRITONREPOAGENT_ModelRepositoryLocationDelete in
+/// TRITONREPOAGENT_ModelFinalize to delete the location. Initially the
 /// acquired location is empty. The 'location' communicated depends on
-/// how the model is being communicated to the agent as indicated by
-/// 'artifact_type'.
+/// the requested 'artifact_type'.
 ///
 ///   TRITONREPOAGENT_ARTIFACT_FILESYSTEM: The location is a directory
 ///     on the local filesystem. 'location' returns the full path to
@@ -188,28 +202,13 @@ TRITONREPOAGENT_ModelRepositoryLocation(
 ///
 /// \param agent The agent.
 /// \param model The model.
-/// \param artifact_type Returns the artifact type for the location.
+/// \param artifact_type The artifact type for the location.
 /// \param path Returns the location.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelRepositoryLocationAcquire(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
-    TRITONREPOAGENT_ArtifactType* artifact_type, const char** location);
-
-/// Commit a previously acquired location as the new model repository
-/// for a model. The agent releases ownership of the location with
-/// this call and so must not access or modify the location or its
-/// contents after this call. The agent must not call
-/// TRITONREPOAGENT_ModelRepositoryLocationDelete after this call.
-///
-/// \param agent The agent.
-/// \param model The model.
-/// \param path The location to commit.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error*
-TRITONREPOAGENT_ModelRepositoryLocationCommit(
-    TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
-    const char* location);
+    const TRITONREPOAGENT_ArtifactType artifact_type, const char** location);
 
 /// Discard and release ownership of a previously acquired location
 /// and its contents. The agent must not access or modify the location
@@ -223,6 +222,37 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelRepositoryLocationDelete(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const char* location);
+
+/// Inform Triton that the specified repository location should be used for
+/// the model in place of the original model repository. The 'location'
+/// communicated depends on how the repository is being
+/// communicated to Triton as indicated by 'artifact_type'.
+///
+///   TRITONREPOAGENT_ARTIFACT_FILESYSTEM: The model artifacts are
+///     made available to Triton via the local filesytem. 'location' returns
+///     the full path to the directory. Ownership of the contents of the
+///     returned directory are transferred to Triton and the agent should not
+///     modified or freed the contents until TRITONREPOAGENT_ModelFinalize.
+///     The local filesystem directory can be created using
+///     TRITONREPOAGENT_ModelReopsitroyLocationAcquire or the agent can use
+///     its own local filesystem API.
+///
+///   TRITONREPOAGENT_ARTIFACT_REMOTE_FILESYSTEM: The model artifacts are
+///     made available to Triton via a remote filesystem. 'location' returns
+///     the full path to the remote filesystem directory. Ownership of the
+///     contents of the returned directory are transferred to Triton and
+///     the agent should not modified or freed the contents until
+///     TRITONREPOAGENT_ModelFinalize.
+///
+/// \param agent The agent.
+/// \param model The model.
+/// \param artifact_type The artifact type for the location.
+/// \param path Returns the location.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error*
+TRITONREPOAGENT_ModelRepositoryUpdate(
+    TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
+    const TRITONREPOAGENT_ArtifactType artifact_type, const char* location);
 
 /// Get the number of agent parameters defined for a model.
 ///
@@ -267,6 +297,38 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelParameter(
 TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelConfig(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const uint32_t config_version, TRITONSERVER_Message** model_config);
+
+/// Get the user-specified state associated with the model.
+///
+/// \param model The agent model.
+/// \param state Returns the user state, or nullptr if no user state.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelState(
+    TRITONREPOAGENT_AgentModel* model, void** state);
+
+/// Set the user-specified state associated with the model.
+///
+/// \param model The agent model.
+/// \param state The user state, or nullptr if no user state.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelSetState(
+    TRITONREPOAGENT_AgentModel* model, void* state);
+
+/// Get the user-specified state associated with the agent.
+///
+/// \param agent The agent.
+/// \param state Returns the user state, or nullptr if no user state.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentState(
+    TRITONREPOAGENT_Agent* model, void** state);
+
+/// Set the user-specified state associated with the agent.
+///
+/// \param agent The agent.
+/// \param state The user state, or nullptr if no user state.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentSetState(
+    TRITONREPOAGENT_Agent* model, void* state);
 
 ///
 /// The following functions can be implemented by an agent. Functions
