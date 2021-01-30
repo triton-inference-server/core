@@ -320,7 +320,7 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelSetState(
 /// \param state Returns the user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentState(
-    TRITONREPOAGENT_Agent* model, void** state);
+    TRITONREPOAGENT_Agent* agent, void** state);
 
 /// Set the user-specified state associated with the agent.
 ///
@@ -328,7 +328,7 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentState(
 /// \param state The user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentSetState(
-    TRITONREPOAGENT_Agent* model, void* state);
+    TRITONREPOAGENT_Agent* agent, void* state);
 
 ///
 /// The following functions can be implemented by an agent. Functions
