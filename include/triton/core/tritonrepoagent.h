@@ -219,12 +219,14 @@ TRITONREPOAGENT_ModelRepositoryLocationAcquire(
 /// \param path The location to release.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error*
-TRITONREPOAGENT_ModelRepositoryLocationDelete(
+TRITONREPOAGENT_ModelRepositoryLocationRelease(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const char* location);
 
 /// Inform Triton that the specified repository location should be used for
-/// the model in place of the original model repository. The 'location'
+/// the model in place of the original model repository. This method can only be
+/// called when TRITONREPOAGENT_ModelAction is invoked with
+/// TRITONREPOAGENT_ACTION_LOAD. The 'location' The 'location'
 /// communicated depends on how the repository is being
 /// communicated to Triton as indicated by 'artifact_type'.
 ///
@@ -319,7 +321,7 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelSetState(
 /// \param agent The agent.
 /// \param state Returns the user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentState(
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_State(
     TRITONREPOAGENT_Agent* agent, void** state);
 
 /// Set the user-specified state associated with the agent.
@@ -327,7 +329,7 @@ TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentState(
 /// \param agent The agent.
 /// \param state The user state, or nullptr if no user state.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_AgentSetState(
+TRITONREPOAGENT_DECLSPEC TRITONSERVER_Error* TRITONREPOAGENT_SetState(
     TRITONREPOAGENT_Agent* agent, void* state);
 
 ///
@@ -373,7 +375,9 @@ TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelInitialize(
 /// called once, just before the end of the agent model's lifecycle. All state
 /// associated with the agent model should be freed and any threads created
 /// for the agent model should be exited/joined before returning from this
-/// function.
+/// function. If the model acquired a model location using
+/// TRITONREPOAGENT_ModelRepositoryLocationAcquire, it must call
+/// TRITONREPOAGENT_ModelRepositoryLocationRelease to release that location.
 ///
 /// \param agent The agent associated with the model.
 /// \param model The model.
@@ -389,6 +393,8 @@ TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelFinalize(
 /// If the agent does not handle the action the agent should
 /// immediately return success (nullptr).
 ///
+/// Any modification to the model's repository must be made when 'action_type'
+/// is TRITONREPOAGENT_ACTION_LOAD.
 /// To modify the model's repository the agent must either acquire a mutable
 /// location via TRITONREPOAGENT_ModelReopsitroyLocationAcquire
 /// or its own managed location, report the location to Triton via
