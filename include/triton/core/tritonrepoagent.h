@@ -402,6 +402,7 @@ TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelFinalize(
 /// success (nullptr). If the agent does not need to make any changes
 /// to the model repository it should not call
 /// TRITONREPOAGENT_ModelRepositoryUpdate and then return success.
+/// To indicate that a model load should fail return a non-success status.
 ///
 /// \param agent The agent.
 /// \param model The model that is the target of the action.
