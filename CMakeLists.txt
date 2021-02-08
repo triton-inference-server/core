@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -59,6 +59,24 @@ add_library(
 
 target_include_directories(
   triton-core-backendapi
+  INTERFACE
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+#
+# Triton RepoAgent API
+#
+add_library(
+  triton-core-repoagentapi INTERFACE
+)
+
+add_library(
+  TritonCore::triton-core-repoagentapi ALIAS triton-core-repoagentapi
+)
+
+target_include_directories(
+  triton-core-repoagentapi
   INTERFACE
     $<INSTALL_INTERFACE:include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -126,6 +144,7 @@ set(INSTALL_CONFIGDIR ${CMAKE_INSTALL_LIBDIR}/cmake/TritonCore)
 install(
   TARGETS
     triton-core-backendapi
+    triton-core-repoagentapi
     triton-core-serverapi
   EXPORT
     triton-core-targets
