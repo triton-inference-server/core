@@ -354,6 +354,10 @@ TRITONSERVER_ServerOptionsSetBackendDirectory()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetRepoAgentDirectory()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetBackendConfig()
 {
 }
