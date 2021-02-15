@@ -1371,6 +1371,18 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendDirectory(
     TRITONSERVER_ServerOptions* options, const char* backend_dir);
 
+/// Set the directory containing repository agent shared libraries. This
+/// directory is searched when looking for the repository agent shared
+/// library for a model. If the backend is named 'ra' the directory
+/// searched is 'repoagent_dir'/ra/libtritonrepoagent_ra.so.
+///
+/// \param options The server options object.
+/// \param repoagent_dir The full path of the repository agent directory.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
+    TRITONSERVER_ServerOptions* options, const char* repoagent_dir);
+
 /// Set a configuration setting for a named backend in a server
 /// options.
 ///
