@@ -1149,8 +1149,8 @@ typedef enum tritonserver_modelcontrolmode_enum {
 
 /// Rate limit modes
 typedef enum tritonserver_ratelimitmode_enum {
-  TRITONSERVER_RATE_LIMIT_OFF,
-  TRITONSERVER_RATE_LIMIT_EXEC_COUNT
+  TRITONSERVER_RATE_LIMIT_EXEC_COUNT,
+  TRITONSERVER_RATE_LIMIT_OFF
 } TRITONSERVER_RateLimitMode;
 
 /// Create a new server options object. The caller takes ownership of
@@ -1241,16 +1241,17 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig(
 
 /// Set the rate limit mode in a server options.
 ///
-///   TRITONSERVER_RATE_LIMIT_OFF: The rate limiting is turned off and the
-///   inference gets executed whenever an instance is available.
-///
 ///   TRITONSERVER_RATE_LIMIT_EXEC_COUNT: The rate limiting prioritizes the
 ///   inference execution using the number of times each instance has got a
 ///   chance to run. The execution gets to run only when its resource
 ///   constraints are satisfied.
 ///
+///   TRITONSERVER_RATE_LIMIT_OFF: The rate limiting is turned off and the
+///   inference gets executed whenever an instance is available.
+///
 /// \param options The server options object.
-/// \param mode The mode to use for the rate limiting.
+/// \param mode The mode to use for the rate limiting. By default, execution
+/// count is used to determine the priorities.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetRateLimitMode(
@@ -1259,16 +1260,16 @@ TRITONSERVER_ServerOptionsSetRateLimitMode(
 /// Add resource count for rate limiting.
 ///
 /// \param options The server options object.
-/// \param device The device identifier for the resource. The resource
-/// is assumed to be present per device if empty. "global" sets this
-/// resource to be shared among all the devices in the system.
 /// \param name The name of the resource.
 /// \param count The count of the resource.
+/// \param device The device identifier for the resource. A value of -1
+/// indicates that the specified number of resources are available on every
+/// device. Ignored for a global resource.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsAddRateLimitResource(
-    TRITONSERVER_ServerOptions* options, const char* device,
-    const char* resource_name, const size_t resource_count);
+    TRITONSERVER_ServerOptions* options, const char* resource_name,
+    const size_t resource_count, const int device);
 
 /// Set the total pinned memory byte size that the server can allocate
 /// in a server options. The pinned memory pool will be shared across
@@ -1339,8 +1340,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.
