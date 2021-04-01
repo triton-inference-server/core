@@ -396,7 +396,7 @@ TRITONREPOAGENT_ISPEC TRITONSERVER_Error* TRITONREPOAGENT_ModelFinalize(
 /// Any modification to the model's repository must be made when 'action_type'
 /// is TRITONREPOAGENT_ACTION_LOAD.
 /// To modify the model's repository the agent must either acquire a mutable
-/// location via TRITONREPOAGENT_ModelReopsitroyLocationAcquire
+/// location via TRITONREPOAGENT_ModelRepositoryLocationAcquire
 /// or its own managed location, report the location to Triton via
 /// TRITONREPOAGENT_ModelRepositoryUpdate, and then return
 /// success (nullptr). If the agent does not need to make any changes
