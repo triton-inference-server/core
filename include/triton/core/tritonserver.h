@@ -1625,7 +1625,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
 
 /// Unload the requested model. Unloading a model that is not loaded
 /// on server has no affect and success code will be returned.
-/// The function does not return until the model is unloaded or fails to unload.
+/// The function does not wait for the requested model to be fully unload
+/// and success code will be returned.
 /// Returned error indicates if model unloaded successfully or not.
 ///
 /// \param server The inference server object.
@@ -1634,16 +1635,18 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
     TRITONSERVER_Server* server, const char* model_name);
 
-/// Unload the requested model, and also unload the models that only be used
-/// by the requested model. Unloading a model that is not loaded
+/// Unload the requested model, and also unload any dependent model that
+/// was loaded along with the requested model (for example, the models composing
+/// an ensemble). Unloading a model that is not loaded
 /// on server has no affect and success code will be returned.
-/// The function does not return until the model is unloaded or fails to unload.
+/// The function does not wait for the requested model and all dependent
+/// models to be fully unload and success code will be returned.
 /// Returned error indicates if model unloaded successfully or not.
 ///
 /// \param server The inference server object.
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerCascadingUnloadModel(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModelAndDependents(
     TRITONSERVER_Server* server, const char* model_name);
 
 /// Get the current metrics for the server. The caller takes ownership

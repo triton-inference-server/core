@@ -426,7 +426,7 @@ TRITONSERVER_ServerUnloadModel()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_ServerCascadingUnloadModel()
+TRITONSERVER_ServerUnloadModelAndDependents()
 {
 }
 TRITONAPI_DECLSPEC void
