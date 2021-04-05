@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 0
+#define TRITONSERVER_API_VERSION_MINOR 1
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -580,7 +580,7 @@ typedef void (*TRITONSERVER_InferenceTraceReleaseFn_t)(
 
 /// Create a new inference trace object. The caller takes ownership of
 /// the TRITONSERVER_InferenceTrace object and must call
-/// TRITONSERVER_TraceDelete to release the object.
+/// TRITONSERVER_InferenceTraceDelete to release the object.
 ///
 /// The activity callback function will be called to report activity
 /// for 'trace' as well as for any child traces that are spawned by
@@ -1625,13 +1625,28 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
 
 /// Unload the requested model. Unloading a model that is not loaded
 /// on server has no affect and success code will be returned.
-/// The function does not return until the model is unloaded or fails to unload.
+/// The function does not wait for the requested model to be fully unload
+/// and success code will be returned.
 /// Returned error indicates if model unloaded successfully or not.
 ///
 /// \param server The inference server object.
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
+    TRITONSERVER_Server* server, const char* model_name);
+
+/// Unload the requested model, and also unload any dependent model that
+/// was loaded along with the requested model (for example, the models composing
+/// an ensemble). Unloading a model that is not loaded
+/// on server has no affect and success code will be returned.
+/// The function does not wait for the requested model and all dependent
+/// models to be fully unload and success code will be returned.
+/// Returned error indicates if model unloaded successfully or not.
+///
+/// \param server The inference server object.
+/// \param model_name The name of the model.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModelAndDependents(
     TRITONSERVER_Server* server, const char* model_name);
 
 /// Get the current metrics for the server. The caller takes ownership

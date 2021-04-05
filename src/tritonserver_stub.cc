@@ -426,6 +426,10 @@ TRITONSERVER_ServerUnloadModel()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerUnloadModelAndDependents()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerMetrics()
 {
 }
