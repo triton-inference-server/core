@@ -90,7 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 0
+#define TRITONBACKEND_API_VERSION_MINOR 1
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -554,8 +554,24 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
 ///     been sent and all requests have been released. This is the
 ///     default execution policy.
 ///
+///   TRITONBACKEND_EXECUTION_DEVICE_BLOCKING: An instance, A, of the
+///     model blocks in TRITONBACKEND_ModelInstanceExecute if the
+///     device associated with the instance is unable to handle
+///     another inference. Even if another instance, B, associated
+///     with the device, is available and ready to perform an
+///     inference, Triton will not invoke
+///     TRITONBACKEND_ModeInstanceExecute for B until A returns from
+///     TRITONBACKEND_ModelInstanceExecute. Triton will not be blocked
+///     from calling TRITONBACKEND_ModelInstanceExecute for instance
+///     C, which is associated with a different device than A and B,
+///     even if A or B has not returned from
+///     TRITONBACKEND_ModelInstanceExecute. This execution policy is
+///     typically used by a backend that can cooperatively execute
+///     multiple model instances on the same device.
+///
 typedef enum TRITONBACKEND_execpolicy_enum {
-  TRITONBACKEND_EXECUTION_BLOCKING
+  TRITONBACKEND_EXECUTION_BLOCKING,
+  TRITONBACKEND_EXECUTION_DEVICE_BLOCKING
 } TRITONBACKEND_ExecutionPolicy;
 
 /// Get the name of the backend. The caller does not own the returned
