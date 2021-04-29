@@ -90,11 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-<<<<<<< HEAD
 #define TRITONBACKEND_API_VERSION_MINOR 5
-=======
-#define TRITONBACKEND_API_VERSION_MINOR 3
->>>>>>> Add RateLimiter APIs to the server (#22)
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
