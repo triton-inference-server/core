@@ -214,6 +214,10 @@ TRITONSERVER_InferenceRequestAppendInputData()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestAppendInputDataForDevice()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestRemoveAllInputData()
 {
 }
