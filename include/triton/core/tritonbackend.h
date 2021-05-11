@@ -90,7 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 0
+#define TRITONBACKEND_API_VERSION_MINOR 1
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -816,6 +816,14 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
     TRITONBACKEND_ModelInstance* instance, int32_t* device_id);
+
+/// Whether the model instance is passive.
+///
+/// \param instance The model instance.
+/// \param is_passive Returns true if the instance is passive, false otherwise
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceIsPassive(
+    TRITONBACKEND_ModelInstance* instance, bool* is_passive);
 
 /// Get the model associated with a model instance.
 ///
