@@ -626,6 +626,10 @@ TRITONBACKEND_ModelInstanceDeviceId()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceIsPassive()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceModel()
 {
 }
