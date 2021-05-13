@@ -825,6 +825,29 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceIsPassive(
     TRITONBACKEND_ModelInstance* instance, bool* is_passive);
 
+/// Get the number of optimization profiles to be loaded for the instance. 
+///
+/// \param instance The model instance.
+/// \param count Returns the number of optimization profiles.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceProfileCount(
+    TRITONBACKEND_ModelInstance* instance, uint32_t* count);
+
+/// Get the name of optimization profile. The caller does not own
+/// the returned string and must not modify or delete it. The lifetime
+/// of the returned string extends only as long as 'instance'.
+///
+/// \param instance The model instance.
+/// \param index The index of the optimization profile. Must be 0
+/// <= index < count, where count is the value returned by
+/// TRITONBACKEND_ModelInstanceProfileCount.
+/// \param profile_name Returns the name of the optimization profile
+/// corresponding to the index.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceProfileName(
+    TRITONBACKEND_ModelInstance* instance, const uint32_t index,
+    const char** profile_name);
+
 /// Get the model associated with a model instance.
 ///
 /// \param instance The model instance.
