@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 1
+#define TRITONSERVER_API_VERSION_MINOR 2
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1395,6 +1395,21 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendConfig(
     TRITONSERVER_ServerOptions* options, const char* backend_name,
     const char* setting, const char* value);
+
+/// Set a NUMA configuration setting for a given device.
+///
+/// \param options The server options object.
+/// \param device_kind The device kind of the given device.
+/// \param device_id The device id of the given device.
+/// \param numa_node_idx The NUMA node id that the given device associates with.
+/// \param cpu_set The set of CPUs assigned to the given device.
+/// \param set_count The number of items in 'cpu_set'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetNumaConfig(
+    TRITONSERVER_ServerOptions* options,
+    TRITONSERVER_InstanceGroupKind device_kind, const int device_id,
+    const int32_t numa_node_idx, const int* cpu_set, const size_t set_count);
 
 /// TRITONSERVER_Server
 ///
