@@ -1147,6 +1147,12 @@ typedef enum tritonserver_modelcontrolmode_enum {
   TRITONSERVER_MODEL_CONTROL_EXPLICIT
 } TRITONSERVER_ModelControlMode;
 
+/// Rate limit modes
+typedef enum tritonserver_ratelimitmode_enum {
+  TRITONSERVER_RATE_LIMIT_EXEC_COUNT,
+  TRITONSERVER_RATE_LIMIT_OFF
+} TRITONSERVER_RateLimitMode;
+
 /// Create a new server options object. The caller takes ownership of
 /// the TRITONSERVER_ServerOptions object and must call
 /// TRITONSERVER_ServerOptionsDelete to release the object.
@@ -1233,6 +1239,42 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     TRITONSERVER_ServerOptions* options, bool strict);
 
+/// Set the rate limit mode in a server options.
+///
+///   TRITONSERVER_RATE_LIMIT_EXEC_COUNT: The rate limiting prioritizes the
+///   inference execution using the number of times each instance has got a
+///   chance to run. The execution gets to run only when its resource
+///   constraints are satisfied.
+///
+///   TRITONSERVER_RATE_LIMIT_OFF: The rate limiting is turned off and the
+///   inference gets executed whenever an instance is available.
+///
+/// \param options The server options object.
+/// \param mode The mode to use for the rate limiting. By default, execution
+/// count is used to determine the priorities.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetRateLimiterMode(
+    TRITONSERVER_ServerOptions* options, TRITONSERVER_RateLimitMode mode);
+
+/// Add resource count for rate limiting.
+///
+/// \param options The server options object.
+/// \param name The name of the resource.
+/// \param count The count of the resource.
+/// \param device The device identifier for the resource. A value of -1
+/// indicates that the specified number of resources are available on every
+/// device. The specification is ignored for a global resource. The server
+/// will use the rate limiter configuration specified for instance groups
+/// in model config to determine whether resource is global. In case of
+/// conflicting resource type in different model configurations, server
+/// will raise an appropriate error.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsAddRateLimiterResource(
+    TRITONSERVER_ServerOptions* options, const char* resource_name,
+    const size_t resource_count, const int device);
+
 /// Set the total pinned memory byte size that the server can allocate
 /// in a server options. The pinned memory pool will be shared across
 /// Triton itself and the backends that use
@@ -1302,8 +1344,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.
@@ -1646,7 +1687,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
 /// \param server The inference server object.
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModelAndDependents(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerUnloadModelAndDependents(
     TRITONSERVER_Server* server, const char* model_name);
 
 /// Get the current metrics for the server. The caller takes ownership
