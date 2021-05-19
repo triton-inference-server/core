@@ -90,7 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 2
+#define TRITONBACKEND_API_VERSION_MINOR 3
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -816,6 +816,14 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
     TRITONBACKEND_ModelInstance* instance, int32_t* device_id);
+
+/// Get the NUMA ID of the model instance.
+///
+/// \param instance The model instance.
+/// \param numa_id Returns the instance NUMA ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceNumaId(
+    TRITONBACKEND_ModelInstance* instance, int32_t* numa_id);
 
 /// Whether the model instance is passive.
 ///
