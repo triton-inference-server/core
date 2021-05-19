@@ -1264,11 +1264,11 @@ TRITONSERVER_ServerOptionsSetRateLimiterMode(
 /// \param count The count of the resource.
 /// \param device The device identifier for the resource. A value of -1
 /// indicates that the specified number of resources are available on every
-/// device. The specification is ignored for a global resource. The server
+/// device. The device value is ignored for a global resource. The server
 /// will use the rate limiter configuration specified for instance groups
 /// in model config to determine whether resource is global. In case of
 /// conflicting resource type in different model configurations, server
-/// will raise an appropriate error.
+/// will raise an appropriate error while loading model.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsAddRateLimiterResource(
