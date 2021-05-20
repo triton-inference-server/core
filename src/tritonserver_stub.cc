@@ -450,6 +450,10 @@ TRITONBACKEND_MemoryManagerAllocate()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_MemoryManagerDeviceAllocate()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_MemoryManagerFree()
 {
 }

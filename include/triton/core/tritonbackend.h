@@ -157,6 +157,27 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_MemoryManagerAllocate(
     const TRITONSERVER_MemoryType memory_type, const int64_t memory_type_id,
     const uint64_t byte_size);
 
+/// [WIP] Update backend / backend utils to use this locality aware version
+/// Same as TRITONBACKEND_MemoryManagerAllocate, except that the function
+/// accepts additonal arguments that sepcify the device that the memory
+/// allocation should be close to, if possible.
+///
+/// \param manager The memory manager.
+/// \param buffer Returns the allocated memory.
+/// \param memory_type The type of memory to allocate.
+/// \param memory_type_id The ID associated with the memory type to
+/// allocate. For GPU memory this indicates the device ID of the GPU
+/// to allocate from.
+/// \param kind The kind of the device.
+/// \param numa_id The NUMA id of the device.
+/// \param byte_size The size of memory to allocate, in bytes.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_MemoryManagerDeviceAllocate(
+    TRITONBACKEND_MemoryManager* manager, void** buffer,
+    const TRITONSERVER_MemoryType memory_type, const int64_t memory_type_id,
+    const uint64_t byte_size, const TRITONSERVER_InstanceGroupKind kind,
+    const int numa_id);
+
 /// Free a buffer that was previously allocated with
 /// TRITONBACKEND_MemoryManagerAllocate. The call must provide the
 /// same values for 'memory_type' and 'memory_type_id' as were used
