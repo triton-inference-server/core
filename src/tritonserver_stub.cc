@@ -450,10 +450,6 @@ TRITONBACKEND_MemoryManagerAllocate()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_MemoryManagerDeviceAllocate()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONBACKEND_MemoryManagerFree()
 {
 }
@@ -643,6 +639,10 @@ TRITONBACKEND_ModelInstanceProfileCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceProfileName()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void
