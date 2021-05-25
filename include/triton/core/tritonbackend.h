@@ -838,13 +838,24 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
     TRITONBACKEND_ModelInstance* instance, int32_t* device_id);
 
-/// Get the NUMA ID of the model instance.
+/// Get the host policy setting.  The 'host_policy' message is
+/// owned by Triton and should not be modified or freed by the caller.
+///
+/// The host policy setting, as JSON, is:
+///
+///   {
+///     "<host_policy>" : {
+///       "<setting>" : "<value>",
+///       ...
+///     }
+///   }
 ///
 /// \param instance The model instance.
-/// \param numa_id Returns the instance NUMA ID.
+/// \param host_policy Returns the host policy setting as a message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceNumaId(
-    TRITONBACKEND_ModelInstance* instance, int32_t* numa_id);
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceHostPolicy(
+    TRITONBACKEND_ModelInstance* instance, TRITONSERVER_Message** host_policy);
 
 /// Whether the model instance is passive.
 ///

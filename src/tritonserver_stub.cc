@@ -362,7 +362,7 @@ TRITONSERVER_ServerOptionsSetBackendConfig()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_ServerOptionsSetNumaConfig()
+TRITONSERVER_ServerOptionsSetHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void

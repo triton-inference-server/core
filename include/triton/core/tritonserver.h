@@ -1396,20 +1396,17 @@ TRITONSERVER_ServerOptionsSetBackendConfig(
     TRITONSERVER_ServerOptions* options, const char* backend_name,
     const char* setting, const char* value);
 
-/// Set a NUMA configuration setting for a given device.
+/// Set a host policy setting for a given policy name in a server options.
 ///
 /// \param options The server options object.
-/// \param device_kind The device kind of the given device.
-/// \param device_id The device id of the given device.
-/// \param numa_node_idx The NUMA node id that the given device associates with.
-/// \param cpu_set The set of CPUs assigned to the given device.
-/// \param set_count The number of items in 'cpu_set'.
+/// \param policy_name The name of the policy.
+/// \param setting The name of the setting.
+/// \param value The setting value.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetNumaConfig(
-    TRITONSERVER_ServerOptions* options,
-    TRITONSERVER_InstanceGroupKind device_kind, const int device_id,
-    const int32_t numa_node_idx, const int* cpu_set, const size_t set_count);
+TRITONSERVER_ServerOptionsSetHostPolicy(
+    TRITONSERVER_ServerOptions* options, const char* policy_name,
+    const char* setting, const char* value);
 
 /// TRITONSERVER_Server
 ///
