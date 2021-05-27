@@ -362,6 +362,10 @@ TRITONSERVER_ServerOptionsSetBackendConfig()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetHostPolicy()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerNew()
 {
 }
@@ -635,6 +639,10 @@ TRITONBACKEND_ModelInstanceProfileCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceProfileName()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void

@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 1
+#define TRITONSERVER_API_VERSION_MINOR 2
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1394,6 +1394,18 @@ TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendConfig(
     TRITONSERVER_ServerOptions* options, const char* backend_name,
+    const char* setting, const char* value);
+
+/// Set a host policy setting for a given policy name in a server options.
+///
+/// \param options The server options object.
+/// \param policy_name The name of the policy.
+/// \param setting The name of the setting.
+/// \param value The setting value.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetHostPolicy(
+    TRITONSERVER_ServerOptions* options, const char* policy_name,
     const char* setting, const char* value);
 
 /// TRITONSERVER_Server

@@ -90,7 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 2
+#define TRITONBACKEND_API_VERSION_MINOR 3
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -816,6 +816,25 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceKind(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceDeviceId(
     TRITONBACKEND_ModelInstance* instance, int32_t* device_id);
+
+/// Get the host policy setting.  The 'host_policy' message is
+/// owned by Triton and should not be modified or freed by the caller.
+///
+/// The host policy setting, as JSON, is:
+///
+///   {
+///     "<host_policy>" : {
+///       "<setting>" : "<value>",
+///       ...
+///     }
+///   }
+///
+/// \param instance The model instance.
+/// \param host_policy Returns the host policy setting as a message.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceHostPolicy(
+    TRITONBACKEND_ModelInstance* instance, TRITONSERVER_Message** host_policy);
 
 /// Whether the model instance is passive.
 ///
