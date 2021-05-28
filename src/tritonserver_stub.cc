@@ -462,7 +462,15 @@ TRITONBACKEND_InputProperties()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_InputPropertiesForHostPolicy()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_InputBuffer()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_InputBufferForHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void
