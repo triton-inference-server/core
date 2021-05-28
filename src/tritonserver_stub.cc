@@ -213,7 +213,7 @@ TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestAppendInputData()
 {
 }
-TRITONAPI_DECLSPEC void*
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy()
 {
 }

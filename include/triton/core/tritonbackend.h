@@ -204,10 +204,13 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
 
 /// Get the name and properties of an input tensor associated with a given
-/// host policy. The returned strings and other properties are owned by the
-/// input, not the caller, and so should not be modified or freed.
+/// host policy. If there are no input buffers for the specified  host policy, the
+/// properties of the fallback input buffers are returned. The returned strings 
+/// and other properties are owned by the input, not the caller, and so should 
+/// not be modified or freed.
 ///
 /// \param input The input tensor.
+/// \param host_policy_name The host policy name.
 /// \param name If non-nullptr, returns the tensor name.
 /// \param datatype If non-nullptr, returns the tensor datatype.
 /// \param shape If non-nullptr, returns the tensor shape.
@@ -221,16 +224,13 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
 /// sizes appropriately.
 /// \param buffer_count If non-nullptr, returns the number of buffers
 /// holding the contents of the tensor. These buffers are accessed
-/// using TRITONBACKEND_InputBuffer.
-/// \param host_policy_name Host policy name associated with the buffer
-///  requested.
+/// using TRITONBACKEND_InputBufferForHostPolicy.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputPropertiesForHostPolicy(
-    TRITONBACKEND_Input* input, const char** name,
+    TRITONBACKEND_Input* input, const char* host_policy_name, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
-    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count,
-    const char* host_policy_name);
+    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
 
 /// Get a buffer holding (part of) the tensor data for an input. For a
 /// given input the number of buffers composing the input are found
@@ -260,18 +260,20 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
     int64_t* memory_type_id);
 
 /// Get a buffer holding (part of) the tensor data for an input for a specific
-/// host policy.
+/// host policy. If there are no input buffers specified for this host policy,
+/// the fallback input buffer is returned.
 /// For a given input the number of buffers composing the input are found
-/// from 'buffer_count' returned by TRITONBACKEND_InputProperties. The
-/// returned buffer is owned by the input and so should not be
-/// modified or freed by the caller. The lifetime of the buffer
-/// matches that of the input and so the buffer should not be accessed
-/// after the input tensor object is released.
+/// from 'buffer_count' returned by TRITONBACKEND_InputPropertiesForHostPolicy.
+/// The returned buffer is owned by the input and so should not be modified or
+/// freed by the caller. The lifetime of the buffer matches that of the input
+/// and so the buffer should not be accessed after the input tensor object is
+/// released.
 ///
 /// \param input The input tensor.
+/// \param host_policy_name The host policy name.
 /// \param index The index of the buffer. Must be 0 <= index <
 /// buffer_count, where buffer_count is the value returned by
-/// TRITONBACKEND_InputProperties.
+/// TRITONBACKEND_InputPropertiesForHostPolicy.
 /// \param buffer Returns a pointer to a contiguous block of data for
 /// the named input.
 /// \param buffer_byte_size Returns the size, in bytes, of 'buffer'.
@@ -281,14 +283,12 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
 /// \param memory_type_id Acts as both input and output. On input
 /// gives the buffer memory type id preferred by the function caller.
 /// Returns the actual memory type id of 'buffer'.
-/// \param host_policy_name Host policy name associated with the buffer
-///  requested.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputBufferForHostPolicy(
-    TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
-    uint64_t* buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id, const char* host_policy_name);
+    TRITONBACKEND_Input* input, const char* host_policy_name,
+    const uint32_t index, const void** buffer, uint64_t* buffer_byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 ///
 /// TRITONBACKEND_Output
