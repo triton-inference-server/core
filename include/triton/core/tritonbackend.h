@@ -90,7 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 3
+#define TRITONBACKEND_API_VERSION_MINOR 4
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -203,6 +203,35 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     TRITONSERVER_DataType* datatype, const int64_t** shape,
     uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
 
+/// Get the name and properties of an input tensor associated with a given
+/// host policy. If there are no input buffers for the specified  host policy, the
+/// properties of the fallback input buffers are returned. The returned strings 
+/// and other properties are owned by the input, not the caller, and so should 
+/// not be modified or freed.
+///
+/// \param input The input tensor.
+/// \param host_policy_name The host policy name.
+/// \param name If non-nullptr, returns the tensor name.
+/// \param datatype If non-nullptr, returns the tensor datatype.
+/// \param shape If non-nullptr, returns the tensor shape.
+/// \param dim_count If non-nullptr, returns the number of dimensions
+/// in the tensor shape.
+/// \param byte_size If non-nullptr, returns the size of the available
+/// data for the tensor, in bytes. This size reflects the actual data
+/// available, and does not necessarily match what is
+/// expected/required for the tensor given its shape and datatype. It
+/// is the responsibility of the backend to handle mismatches in these
+/// sizes appropriately.
+/// \param buffer_count If non-nullptr, returns the number of buffers
+/// holding the contents of the tensor. These buffers are accessed
+/// using TRITONBACKEND_InputBufferForHostPolicy.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InputPropertiesForHostPolicy(
+    TRITONBACKEND_Input* input, const char* host_policy_name, const char** name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
+
 /// Get a buffer holding (part of) the tensor data for an input. For a
 /// given input the number of buffers composing the input are found
 /// from 'buffer_count' returned by TRITONBACKEND_InputProperties. The
@@ -229,6 +258,37 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
     TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
     uint64_t* buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id);
+
+/// Get a buffer holding (part of) the tensor data for an input for a specific
+/// host policy. If there are no input buffers specified for this host policy,
+/// the fallback input buffer is returned.
+/// For a given input the number of buffers composing the input are found
+/// from 'buffer_count' returned by TRITONBACKEND_InputPropertiesForHostPolicy.
+/// The returned buffer is owned by the input and so should not be modified or
+/// freed by the caller. The lifetime of the buffer matches that of the input
+/// and so the buffer should not be accessed after the input tensor object is
+/// released.
+///
+/// \param input The input tensor.
+/// \param host_policy_name The host policy name.
+/// \param index The index of the buffer. Must be 0 <= index <
+/// buffer_count, where buffer_count is the value returned by
+/// TRITONBACKEND_InputPropertiesForHostPolicy.
+/// \param buffer Returns a pointer to a contiguous block of data for
+/// the named input.
+/// \param buffer_byte_size Returns the size, in bytes, of 'buffer'.
+/// \param memory_type Acts as both input and output. On input gives
+/// the buffer memory type preferred by the function caller.  Returns
+/// the actual memory type of 'buffer'.
+/// \param memory_type_id Acts as both input and output. On input
+/// gives the buffer memory type id preferred by the function caller.
+/// Returns the actual memory type id of 'buffer'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InputBufferForHostPolicy(
+    TRITONBACKEND_Input* input, const char* host_policy_name,
+    const uint32_t index, const void** buffer, uint64_t* buffer_byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 ///
 /// TRITONBACKEND_Output
@@ -844,12 +904,13 @@ TRITONBACKEND_ModelInstanceHostPolicy(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceIsPassive(
     TRITONBACKEND_ModelInstance* instance, bool* is_passive);
 
-/// Get the number of optimization profiles to be loaded for the instance. 
+/// Get the number of optimization profiles to be loaded for the instance.
 ///
 /// \param instance The model instance.
 /// \param count Returns the number of optimization profiles.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceProfileCount(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceProfileCount(
     TRITONBACKEND_ModelInstance* instance, uint32_t* count);
 
 /// Get the name of optimization profile. The caller does not own
@@ -863,7 +924,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceProfileCou
 /// \param profile_name Returns the name of the optimization profile
 /// corresponding to the index.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceProfileName(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceProfileName(
     TRITONBACKEND_ModelInstance* instance, const uint32_t index,
     const char** profile_name);
 
@@ -1040,8 +1102,8 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelFinalize(
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_ISPEC TRITONSERVER_Error*
-TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceInitialize(
+    TRITONBACKEND_ModelInstance* instance);
 
 /// Finalize for a model instance. This function is optional, a
 /// backend is not required to implement it. This function is called
@@ -1052,8 +1114,8 @@ TRITONBACKEND_ModelInstanceInitialize(TRITONBACKEND_ModelInstance* instance);
 ///
 /// \param instance The model instance.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_ISPEC TRITONSERVER_Error*
-TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
+    TRITONBACKEND_ModelInstance* instance);
 
 /// Execute a batch of one or more requests on a model instance. This
 /// function is required. Triton will not perform multiple
@@ -1073,8 +1135,7 @@ TRITONBACKEND_ModelInstanceFinalize(TRITONBACKEND_ModelInstance* instance);
 /// \param requests The requests.
 /// \param request_count The number of requests in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_ISPEC TRITONSERVER_Error*
-TRITONBACKEND_ModelInstanceExecute(
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
 

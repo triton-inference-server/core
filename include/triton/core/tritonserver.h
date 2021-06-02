@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 2
+#define TRITONSERVER_API_VERSION_MINOR 3
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -905,10 +905,35 @@ TRITONSERVER_InferenceRequestAppendInputData(
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id);
 
+/// Assign a buffer of data to an input for execution on all model instances
+/// with the specified host policy. The buffer will be appended to any existing
+/// buffers for that input on all devices with this host policy. The
+/// 'inference_request' object takes ownership of the buffer and so the caller
+/// should not modify or free the buffer until that ownership is released by
+/// 'inference_request' being deleted or by the input being removed from
+/// 'inference_request'. If the execution is scheduled on a device that does not
+/// have a input buffer specified using this function, then the input buffer
+/// specified with TRITONSERVER_InferenceRequestAppendInputData will be used so a 
+/// non-host policy specific version of data must be added using that API.
+/// \param inference_request The request object.
+/// \param name The name of the input.
+/// \param base The base address of the input data.
+/// \param byte_size The size, in bytes, of the input data.
+/// \param memory_type The memory type of the input data.
+/// \param memory_type_id The memory type id of the input data.
+/// \param host_policy_name All model instances executing with this host_policy
+/// will use this input buffer for execution.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
+    TRITONSERVER_InferenceRequest* inference_request, const char* name,
+    const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id, const char* host_policy_name);
+
 /// Clear all input data from an input, releasing ownership of the
 /// buffer(s) that were appended to the input with
-/// TRITONSERVER_InferenceRequestAppendInputData.
-///
+/// TRITONSERVER_InferenceRequestAppendInputData or
+/// TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy
 /// \param inference_request The request object.
 /// \param name The name of the input.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
@@ -1302,8 +1327,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.
@@ -1658,7 +1682,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
 /// \param server The inference server object.
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModelAndDependents(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerUnloadModelAndDependents(
     TRITONSERVER_Server* server, const char* model_name);
 
 /// Get the current metrics for the server. The caller takes ownership
