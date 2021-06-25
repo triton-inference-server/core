@@ -913,8 +913,8 @@ TRITONSERVER_InferenceRequestAppendInputData(
 /// 'inference_request' being deleted or by the input being removed from
 /// 'inference_request'. If the execution is scheduled on a device that does not
 /// have a input buffer specified using this function, then the input buffer
-/// specified with TRITONSERVER_InferenceRequestAppendInputData will be used so a 
-/// non-host policy specific version of data must be added using that API.
+/// specified with TRITONSERVER_InferenceRequestAppendInputData will be used so
+/// a non-host policy specific version of data must be added using that API.
 /// \param inference_request The request object.
 /// \param name The name of the input.
 /// \param base The base address of the input data.
