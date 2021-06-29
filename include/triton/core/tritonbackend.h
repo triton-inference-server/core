@@ -204,13 +204,14 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
 
 /// Get the name and properties of an input tensor associated with a given
-/// host policy. If there are no input buffers for the specified  host policy, the
-/// properties of the fallback input buffers are returned. The returned strings 
-/// and other properties are owned by the input, not the caller, and so should 
-/// not be modified or freed.
+/// host policy. If there are no input buffers for the specified  host policy,
+/// the properties of the fallback input buffers are returned. The returned
+/// strings and other properties are owned by the input, not the caller, and so
+/// should not be modified or freed.
 ///
 /// \param input The input tensor.
-/// \param host_policy_name The host policy name.
+/// \param host_policy_name The host policy name. Fallback input properties
+/// will be return if nullptr is provided.
 /// \param name If non-nullptr, returns the tensor name.
 /// \param datatype If non-nullptr, returns the tensor datatype.
 /// \param shape If non-nullptr, returns the tensor shape.
@@ -270,7 +271,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBuffer(
 /// released.
 ///
 /// \param input The input tensor.
-/// \param host_policy_name The host policy name.
+/// \param host_policy_name The host policy name. Fallback input buffer
+/// will be return if nullptr is provided.
 /// \param index The index of the buffer. Must be 0 <= index <
 /// buffer_count, where buffer_count is the value returned by
 /// TRITONBACKEND_InputPropertiesForHostPolicy.
