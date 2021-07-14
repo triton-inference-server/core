@@ -1174,8 +1174,8 @@ typedef enum tritonserver_modelcontrolmode_enum {
 
 /// Rate limit modes
 typedef enum tritonserver_ratelimitmode_enum {
-  TRITONSERVER_RATE_LIMIT_EXEC_COUNT,
-  TRITONSERVER_RATE_LIMIT_OFF
+  TRITONSERVER_RATE_LIMIT_OFF,
+  TRITONSERVER_RATE_LIMIT_EXEC_COUNT
 } TRITONSERVER_RateLimitMode;
 
 /// Create a new server options object. The caller takes ownership of
