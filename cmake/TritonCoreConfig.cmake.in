@@ -33,5 +33,5 @@ get_filename_component(
 list(APPEND CMAKE_MODULE_PATH ${TRITONCORE_CMAKE_DIR})
 
 if(NOT TARGET TritonCore::triton-core-serverapi)
-  include("${TRITONCORE_CMAKE_DIR}/TritonCore.cmake")
+  include("${TRITONCORE_CMAKE_DIR}/TritonCoreTargets.cmake")
 endif()
