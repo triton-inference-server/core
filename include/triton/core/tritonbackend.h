@@ -1131,7 +1131,13 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
 ///
 /// If success is returned, ownership of the request objects is
 /// transferred to the backend and it is then responsible for creating
-/// responses and releasing the request objects.
+/// responses and releasing the request objects. Note that even though
+/// ownership of the request objects is transferred to the backend, the
+/// ownership of the buffer holding request pointers is returned back
+/// to Triton upon return from TRITONBACKEND_ModelInstanceExecute. If
+/// any request objects need to be maintained beyond 
+/// TRITONBACKEND_ModelInstanceExecute, then the pointers must be copied
+/// out of the array within TRITONBACKEND_ModelInstanceExecute.
 ///
 /// \param instance The model instance.
 /// \param requests The requests.
