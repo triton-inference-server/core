@@ -947,6 +947,31 @@ TRITONBACKEND_ModelInstanceProfileName(
     TRITONBACKEND_ModelInstance* instance, const uint32_t index,
     const char** profile_name);
 
+/// Get the number of secondary devices configured for the instance.
+///
+/// \param instance The model instance.
+/// \param count Returns the number of secondary devices.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceSecondaryDeviceCount(
+    TRITONBACKEND_ModelInstance* instance, uint32_t* count);
+
+/// Get the properties of indexed secondary device. The returned
+/// strings and other properties are owned by the instance, not the
+/// caller, and so should not be modified or freed.
+///
+/// \param instance The model instance.
+/// \param index The index of the secondary device. Must be 0
+/// <= index < count, where count is the value returned by
+/// TRITONBACKEND_ModelInstanceSecondaryDeviceCount.
+/// \param kind Returns the kind of secondary device corresponding
+/// to the index.
+/// \param id Returns the id of secondary device corresponding to the index.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
+    TRITONBACKEND_ModelInstance* instance, uint32_t index, const char** kind,
+    int64_t* id);
+
 /// Get the model associated with a model instance.
 ///
 /// \param instance The model instance.
@@ -1151,7 +1176,7 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
 /// ownership of the request objects is transferred to the backend, the
 /// ownership of the buffer holding request pointers is returned back
 /// to Triton upon return from TRITONBACKEND_ModelInstanceExecute. If
-/// any request objects need to be maintained beyond 
+/// any request objects need to be maintained beyond
 /// TRITONBACKEND_ModelInstanceExecute, then the pointers must be copied
 /// out of the array within TRITONBACKEND_ModelInstanceExecute.
 ///
