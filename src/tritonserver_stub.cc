@@ -654,6 +654,14 @@ TRITONBACKEND_ModelInstanceProfileName()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceSecondaryDeviceCount()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceSecondaryDeviceProperties()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceHostPolicy()
 {
 }
