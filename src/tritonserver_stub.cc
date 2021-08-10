@@ -306,6 +306,14 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetRateLimiterMode()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsAddRateLimiterResource()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize()
 {
 }
