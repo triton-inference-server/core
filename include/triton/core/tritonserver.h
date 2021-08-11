@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 3
+#define TRITONSERVER_API_VERSION_MINOR 4
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
