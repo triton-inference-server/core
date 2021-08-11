@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -303,6 +303,14 @@ TRITONSERVER_ServerOptionsSetStartupModel()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetStrictModelConfig()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetRateLimiterMode()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsAddRateLimiterResource()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -651,6 +659,14 @@ TRITONBACKEND_ModelInstanceProfileCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceProfileName()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceSecondaryDeviceCount()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceSecondaryDeviceProperties()
 {
 }
 TRITONAPI_DECLSPEC void

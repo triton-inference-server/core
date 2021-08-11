@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -90,7 +90,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 4
+#define TRITONBACKEND_API_VERSION_MINOR 5
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -616,8 +616,24 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
 ///     been sent and all requests have been released. This is the
 ///     default execution policy.
 ///
+///   TRITONBACKEND_EXECUTION_DEVICE_BLOCKING: An instance, A, of the
+///     model blocks in TRITONBACKEND_ModelInstanceExecute if the
+///     device associated with the instance is unable to handle
+///     another inference. Even if another instance, B, associated
+///     with the device, is available and ready to perform an
+///     inference, Triton will not invoke
+///     TRITONBACKEND_ModeInstanceExecute for B until A returns from
+///     TRITONBACKEND_ModelInstanceExecute. Triton will not be blocked
+///     from calling TRITONBACKEND_ModelInstanceExecute for instance
+///     C, which is associated with a different device than A and B,
+///     even if A or B has not returned from
+///     TRITONBACKEND_ModelInstanceExecute. This execution policy is
+///     typically used by a backend that can cooperatively execute
+///     multiple model instances on the same device.
+///
 typedef enum TRITONBACKEND_execpolicy_enum {
-  TRITONBACKEND_EXECUTION_BLOCKING
+  TRITONBACKEND_EXECUTION_BLOCKING,
+  TRITONBACKEND_EXECUTION_DEVICE_BLOCKING
 } TRITONBACKEND_ExecutionPolicy;
 
 /// Get the name of the backend. The caller does not own the returned
@@ -931,6 +947,31 @@ TRITONBACKEND_ModelInstanceProfileName(
     TRITONBACKEND_ModelInstance* instance, const uint32_t index,
     const char** profile_name);
 
+/// Get the number of secondary devices configured for the instance.
+///
+/// \param instance The model instance.
+/// \param count Returns the number of secondary devices.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceSecondaryDeviceCount(
+    TRITONBACKEND_ModelInstance* instance, uint32_t* count);
+
+/// Get the properties of indexed secondary device. The returned
+/// strings and other properties are owned by the instance, not the
+/// caller, and so should not be modified or freed.
+///
+/// \param instance The model instance.
+/// \param index The index of the secondary device. Must be 0
+/// <= index < count, where count is the value returned by
+/// TRITONBACKEND_ModelInstanceSecondaryDeviceCount.
+/// \param kind Returns the kind of secondary device corresponding
+/// to the index.
+/// \param id Returns the id of secondary device corresponding to the index.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
+    TRITONBACKEND_ModelInstance* instance, uint32_t index, const char** kind,
+    int64_t* id);
+
 /// Get the model associated with a model instance.
 ///
 /// \param instance The model instance.
@@ -1135,7 +1176,7 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceFinalize(
 /// ownership of the request objects is transferred to the backend, the
 /// ownership of the buffer holding request pointers is returned back
 /// to Triton upon return from TRITONBACKEND_ModelInstanceExecute. If
-/// any request objects need to be maintained beyond 
+/// any request objects need to be maintained beyond
 /// TRITONBACKEND_ModelInstanceExecute, then the pointers must be copied
 /// out of the array within TRITONBACKEND_ModelInstanceExecute.
 ///
