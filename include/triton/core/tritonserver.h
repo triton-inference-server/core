@@ -1424,6 +1424,16 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetGpuMetrics(
     TRITONSERVER_ServerOptions* options, bool gpu_metrics);
 
+/// Set the interval for metrics collection in a server options.
+///
+/// \param options The server options object.
+/// \param metrics_interval The time interval in seconds between
+/// successive metrics updates.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetMetricsInterval(
+    TRITONSERVER_ServerOptions* options, float metrics_interval);
+
 /// Set the directory containing backend shared libraries. This
 /// directory is searched last after the version and model directory
 /// in the model repository when looking for the backend shared
