@@ -534,6 +534,18 @@ TRITONBACKEND_RequestOutputCount()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestStateNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_StateOutputBuffer()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestUpdateState()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestOutputName()
 {
 }

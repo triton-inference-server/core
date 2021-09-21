@@ -57,6 +57,7 @@ extern "C" {
 struct TRITONBACKEND_MemoryManager;
 struct TRITONBACKEND_Input;
 struct TRITONBACKEND_Output;
+struct TRITONBACKEND_State;
 struct TRITONBACKEND_Request;
 struct TRITONBACKEND_ResponseFactory;
 struct TRITONBACKEND_Response;
@@ -320,6 +321,28 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
     TRITONBACKEND_Output* output, void** buffer,
     const uint64_t buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id);
+
+/// Get a buffer to use to hold the tensor data for the state output. The
+/// returned buffer is owned by the output and so should not be freed by the
+/// caller. The caller can and should fill the buffer with the output state. The
+/// buffer will no longer be accesible to the backend after
+/// TRITONBACKEND_RequestStateUpdate is called. The caller should fill the
+/// buffer before calling TRITONBACKEND_RequestStateUpdate.
+///
+/// \param buffer Returns a pointer to a buffer where the contents of
+/// the output tensor should be placed.
+/// \param buffer_byte_size The size, in bytes, of the buffer required
+/// by the caller.
+/// \param memory_type Acts as both input and output. On input gives
+/// the buffer memory type preferred by the caller.  Returns the
+/// actual memory type of 'buffer'.
+/// \param memory_type_id Acts as both input and output. On input
+/// gives the buffer memory type id preferred by the caller. Returns
+/// the actual memory type id of 'buffer'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateOutputBuffer(
+    TRITONBACKEND_State* state, void** buffer, const uint64_t buffer_byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 ///
 /// TRITONBACKEND_Request
@@ -590,6 +613,39 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
     TRITONBACKEND_Response* response, TRITONBACKEND_Output** output,
     const char* name, const TRITONSERVER_DataType datatype,
     const int64_t* shape, const uint32_t dims_count);
+
+/// Create an output state tensor. The returned state object is only valid
+/// before the TRITONBACKEND_RequestStateUpdate is called. The state should not
+/// be freed by the caller.
+///
+/// \param response The request.
+/// \param state Returns the new response output state.
+/// \param name The name of the output tensor.
+/// \param datatype The datatype of the output tensor.
+/// \param shape The shape of the output tensor.
+/// \param dims_count The number of dimensions in the output tensor
+/// shape.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestStateNew(
+    TRITONBACKEND_Request* request, TRITONBACKEND_State** state,
+    const char* name, const TRITONSERVER_DataType datatype,
+    const int64_t* shape, const uint32_t dims_count);
+
+/// Update the implicit state stored for each sequence. If the number of state
+/// outputs provided by the backend is incorrect or the name of the output state
+/// tensors does not match the model configuration an error will be returned.
+/// Otherwise, the new state will replace the old state.
+///
+/// \param response The response.
+/// \param state Returns the new response output state.
+/// \param name The name of the output tensor.
+/// \param datatype The datatype of the output tensor.
+/// \param shape The shape of the output tensor.
+/// \param dims_count The number of dimensions in the output tensor
+/// shape.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestUpdateState(
+    TRITONBACKEND_Request* request);
 
 /// Send a response. Calling this function transfers ownership of the
 /// response object to Triton. The caller must not access or delete
