@@ -785,8 +785,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t flags);
 
-/// Get the correlation ID of the inference request. Default is 0,
-/// which indictes that the request has no correlation ID. The
+/// Get the correlation ID of the inference request as an unsigned int. 
+/// Default is 0, which indicates that the request has no correlation ID. The
 /// correlation ID is used to indicate two or more inference request
 /// are related to each other. How this relationship is handled by the
 /// inference server is determined by the model's scheduling
@@ -799,11 +799,25 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* correlation_id);
 
-/// Set the correlation ID of the inference request. Default is 0, which
-/// indictes that the request has no correlation ID. The correlation ID
-/// is used to indicate two or more inference request are related to
-/// each other. How this relationship is handled by the inference
-/// server is determined by the model's scheduling policy.
+/// Get the correlation ID of the inference request as a string.
+/// Default is empty "", which indicates that the request has no correlation ID. 
+/// The correlation ID is used to indicate two or more inference request
+/// are related to each other. How this relationship is handled by the
+/// inference server is determined by the model's scheduling
+/// policy.
+///
+/// \param inference_request The request object.
+/// \param correlation_id Returns the correlation ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestCorrelationIdString(
+    TRITONSERVER_InferenceRequest* inference_request, const char** correlation_id);
+
+/// Set the correlation ID of the inference request to be an unsigned int. 
+/// Default is 0, which indicates that the request has no correlation ID.
+/// The correlation ID is used to indicate two or more inference request 
+/// are related to each other. How this relationship is handled by the 
+/// inference server is determined by the model's scheduling policy.
 ///
 /// \param inference_request The request object.
 /// \param correlation_id The correlation ID.
@@ -811,6 +825,19 @@ TRITONSERVER_InferenceRequestCorrelationId(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t correlation_id);
+
+/// Set the correlation ID of the inference request to be a string. 
+/// The correlation ID is used to indicate two or more inference 
+/// request are related to each other. How this relationship is 
+/// handled by the inference server is determined by the model's 
+/// scheduling policy.
+///
+/// \param inference_request The request object.
+/// \param correlation_id The correlation ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetCorrelationIdString(
+    TRITONSERVER_InferenceRequest* inference_request, const char* correlation_id);
 
 /// Get the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
