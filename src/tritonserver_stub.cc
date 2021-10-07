@@ -218,6 +218,10 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetResponseCacheByteSize()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestRemoveAllInputData()
 {
 }

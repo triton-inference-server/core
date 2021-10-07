@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 4
+#define TRITONSERVER_API_VERSION_MINOR 5
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -935,7 +935,7 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
 /// across all models.
 ///
 /// \param options The server options object.
-/// \param size The response cache total byte size.
+/// \param size The total response cache byte size.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
