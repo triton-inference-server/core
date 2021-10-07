@@ -930,17 +930,6 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id, const char* host_policy_name);
 
-/// Set the total response cache byte size that the server can allocate in CPU
-/// memory. The response cache will be shared across all inference requests and
-/// across all models.
-///
-/// \param options The server options object.
-/// \param size The total response cache byte size.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
-    TRITONSERVER_ServerOptions* options, uint64_t size);
-
 /// Clear all input data from an input, releasing ownership of the
 /// buffer(s) that were appended to the input with
 /// TRITONSERVER_InferenceRequestAppendInputData or
@@ -1335,6 +1324,17 @@ TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
+
+/// Set the total response cache byte size that the server can allocate in CPU
+/// memory. The response cache will be shared across all inference requests and
+/// across all models.
+///
+/// \param options The server options object.
+/// \param size The total response cache byte size.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
+    TRITONSERVER_ServerOptions* options, uint64_t size);
 
 /// Set the minimum support CUDA compute capability in a server
 /// options.
