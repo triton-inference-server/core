@@ -337,14 +337,25 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
     TRITONBACKEND_Request* request, const char** id);
 
-/// Get the correlation ID of the request. Zero indicates that the
-/// request does not have a correlation ID.
+/// Get the correlation ID of the request if it is an unsigned integer. 
+/// Zero indicates that the request does not have a correlation ID. 
+/// Returns failure if correlation ID for given request is not an unsigned integer.
 ///
 /// \param request The inference request.
 /// \param id Returns the correlation ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
+
+/// Get the correlation ID of the request if it is a string. 
+/// Empty string indicates that the request does not have a correlation ID. 
+/// Returns error if correlation ID for given request is not a string.
+///
+/// \param request The inference request.
+/// \param id Returns the correlation ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationIdString(
+    TRITONBACKEND_Request* request, const char** id);
 
 /// Get the number of input tensors specified in the request.
 ///
