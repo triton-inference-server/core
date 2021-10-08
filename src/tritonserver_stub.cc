@@ -178,7 +178,15 @@ TRITONSERVER_InferenceRequestCorrelationId()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestCorrelationIdString()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestSetCorrelationId()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestSetCorrelationIdString()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -366,6 +374,10 @@ TRITONSERVER_ServerOptionsSetGpuMetrics()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetMetricsInterval()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetBackendDirectory()
 {
 }
@@ -495,6 +507,10 @@ TRITONBACKEND_RequestId()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestCorrelationId()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestCorrelationIdString()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -701,7 +717,6 @@ TRITONAPI_DECLSPEC void
 TRITONREPOAGENT_ApiVersion()
 {
 }
-
 TRITONAPI_DECLSPEC void
 TRITONREPOAGENT_ModelRepositoryLocation()
 {
