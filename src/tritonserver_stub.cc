@@ -322,6 +322,10 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetResponseCacheByteSize()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability()
 {
 }
