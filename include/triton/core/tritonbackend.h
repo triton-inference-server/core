@@ -57,6 +57,7 @@ extern "C" {
 struct TRITONBACKEND_MemoryManager;
 struct TRITONBACKEND_Input;
 struct TRITONBACKEND_Output;
+struct TRITONBACKEND_State;
 struct TRITONBACKEND_Request;
 struct TRITONBACKEND_ResponseFactory;
 struct TRITONBACKEND_Response;
@@ -605,6 +606,71 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
     TRITONSERVER_Error* error);
+
+///
+/// TRITONBACKEND_State
+///
+/// Object representing a state.
+///
+
+/// Create a state in the request. The returned state object is only valid
+/// before the TRITONBACKEND_UpdateState is called. The state should not be
+/// freed by the caller. If TRITONBACKEND_UpdateState is not called, the
+/// lifetime of the state matches the lifetime of the request. If the state name
+/// does not exist in the "state" section of the model configuration, the state
+/// will not be created and an error will be returned. If this function is
+/// called when sequence batching is not enabled or there is no 'states' section
+/// in the sequence batching section of the model configuration, this call will
+/// return an error.
+///
+/// \param state Returns the new state.
+/// \param request The request.
+/// \param name The name of the state.
+/// \param datatype The datatype of the state.
+/// \param shape The shape of the state.
+/// \param dims_count The number of dimensions in the state shape.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateNew(
+    TRITONBACKEND_State** state, TRITONBACKEND_Request* request,
+    const char* name, const TRITONSERVER_DataType datatype,
+    const int64_t* shape, const uint32_t dims_count);
+
+/// Update the state for the sequence. Calling this function will replace the
+/// state stored for this seqeunce in Triton with 'state' provided in the
+/// function argument. If this function is called when sequence batching is not
+/// enabled or there is no 'states' section in the sequence batching section of
+/// the model configuration, this call will return an error. The backend is not
+/// required to call this function. If the backend doesn't call
+/// TRITONBACKEND_StateUpdate function, this particular state for the sequence
+/// will not be updated and the next inference request in the sequence will use
+/// the same state as the current inference request.
+///
+/// \param state The state.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateUpdate(
+    TRITONBACKEND_State* state);
+
+/// Get a buffer to use to hold the tensor data for the state. The returned
+/// buffer is owned by the state and so should not be freed by the caller. The
+/// caller can and should fill the buffer with the state data. The buffer must
+/// not be accessed by the backend after TRITONBACKEND_UpdateState is called.
+/// The caller should fill the buffer before calling TRITONBACKEND_UpdateState.
+///
+/// \param state The state.
+/// \param buffer Returns a pointer to a buffer where the contents of the state
+/// should be placed.
+/// \param buffer_byte_size The size, in bytes, of the buffer required
+/// by the caller.
+/// \param memory_type Acts as both input and output. On input gives
+/// the buffer memory type preferred by the caller.  Returns the
+/// actual memory type of 'buffer'.
+/// \param memory_type_id Acts as both input and output. On input
+/// gives the buffer memory type id preferred by the caller. Returns
+/// the actual memory type id of 'buffer'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBuffer(
+    TRITONBACKEND_State* state, void** buffer, const uint64_t buffer_byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 ///
 /// TRITONBACKEND_Backend
