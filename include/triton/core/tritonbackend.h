@@ -757,9 +757,9 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendExecutionPolicy(
 /// the backend's execution policy after calling
 /// TRITONBACKEND_Initialize, so to be recognized changes to the
 /// execution policy must be made in TRITONBACKEND_Initialize.
-/// Also, note that if loading a Sequence Model in the backend,
-/// Triton will use TRITONBACKEND_EXECUTION_BLOCKING policy
-/// irrespective to which policy is specified by this setter function.
+/// Also, note that if sequence batcher for the model, Triton will use
+/// TRITONBACKEND_EXECUTION_BLOCKING policy irrespective to which policy
+/// is specified by this setter function.
 ///
 /// \param backend The backend.
 /// \param policy The execution policy.
