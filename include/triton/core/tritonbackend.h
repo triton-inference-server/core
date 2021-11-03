@@ -338,9 +338,10 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
     TRITONBACKEND_Request* request, const char** id);
 
-/// Get the correlation ID of the request if it is an unsigned integer. 
-/// Zero indicates that the request does not have a correlation ID. 
-/// Returns failure if correlation ID for given request is not an unsigned integer.
+/// Get the correlation ID of the request if it is an unsigned integer.
+/// Zero indicates that the request does not have a correlation ID.
+/// Returns failure if correlation ID for given request is not an unsigned
+/// integer.
 ///
 /// \param request The inference request.
 /// \param id Returns the correlation ID.
@@ -348,14 +349,15 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
 
-/// Get the correlation ID of the request if it is a string. 
-/// Empty string indicates that the request does not have a correlation ID. 
+/// Get the correlation ID of the request if it is a string.
+/// Empty string indicates that the request does not have a correlation ID.
 /// Returns error if correlation ID for given request is not a string.
 ///
 /// \param request The inference request.
 /// \param id Returns the correlation ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationIdString(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_RequestCorrelationIdString(
     TRITONBACKEND_Request* request, const char** id);
 
 /// Get the number of input tensors specified in the request.
@@ -755,6 +757,9 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendExecutionPolicy(
 /// the backend's execution policy after calling
 /// TRITONBACKEND_Initialize, so to be recognized changes to the
 /// execution policy must be made in TRITONBACKEND_Initialize.
+/// Also, note that if loading a Sequence Model in the backend,
+/// Triton will use TRITONBACKEND_EXECUTION_BLOCKING policy
+/// irrespective to which policy is specified by this setter function.
 ///
 /// \param backend The backend.
 /// \param policy The execution policy.
