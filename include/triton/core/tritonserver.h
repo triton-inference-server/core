@@ -426,7 +426,6 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
 /// subsequent 'alloc_fn' calls are for a new response. This callback
 /// is optional (use nullptr to indicate that it should not be
 /// invoked).
-
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocator** allocator,
@@ -785,7 +784,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t flags);
 
-/// Get the correlation ID of the inference request as an unsigned integer. 
+/// Get the correlation ID of the inference request as an unsigned integer.
 /// Default is 0, which indicates that the request has no correlation ID.
 /// If the correlation id associated with the inference request is a string,
 /// this function will return a failure. The correlation ID is used
@@ -801,7 +800,7 @@ TRITONSERVER_InferenceRequestCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* correlation_id);
 
 /// Get the correlation ID of the inference request as a string.
-/// Default is empty "", which indicates that the request has no correlation ID. 
+/// Default is empty "", which indicates that the request has no correlation ID.
 /// If the correlation id associated with the inference request is an unsigned
 /// integer, then this function will return a failure. The correlation ID
 /// is used to indicate two or more inference request are related to each other.
@@ -817,8 +816,8 @@ TRITONSERVER_InferenceRequestCorrelationIdString(
 
 /// Set the correlation ID of the inference request to be an unsigned integer.
 /// Default is 0, which indicates that the request has no correlation ID.
-/// The correlation ID is used to indicate two or more inference request 
-/// are related to each other. How this relationship is handled by the 
+/// The correlation ID is used to indicate two or more inference request
+/// are related to each other. How this relationship is handled by the
 /// inference server is determined by the model's scheduling policy.
 ///
 /// \param inference_request The request object.
@@ -829,9 +828,9 @@ TRITONSERVER_InferenceRequestSetCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t correlation_id);
 
 /// Set the correlation ID of the inference request to be a string.
-/// The correlation ID is used to indicate two or more inference 
-/// request are related to each other. How this relationship is 
-/// handled by the inference server is determined by the model's 
+/// The correlation ID is used to indicate two or more inference
+/// request are related to each other. How this relationship is
+/// handled by the inference server is determined by the model's
 /// scheduling policy.
 ///
 /// \param inference_request The request object.
