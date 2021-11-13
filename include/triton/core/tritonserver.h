@@ -454,8 +454,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorDelete(
 /// \param byte_size The size, in bytes, of the serialized message.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_MessageNewFromSerializedJson(
-    TRITONSERVER_Message** message, const char* base, size_t byte_size);
+TRITONSERVER_MessageNewFromSerializedJson(TRITONSERVER_Message** message,
+                                          const char* base, size_t byte_size);
 
 /// Delete a message object.
 ///
@@ -696,8 +696,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
 /// with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceTraceModelVersion(
-    TRITONSERVER_InferenceTrace* trace, int64_t* model_version);
+TRITONSERVER_InferenceTraceModelVersion(TRITONSERVER_InferenceTrace* trace,
+                                        int64_t* model_version);
 
 /// TRITONSERVER_InferenceRequest
 ///
@@ -1326,8 +1326,8 @@ TRITONSERVER_ServerOptionsSetModelControlMode(
 /// \param mode_name The name of the model to load on startup.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetStartupModel(
-    TRITONSERVER_ServerOptions* options, const char* model_name);
+TRITONSERVER_ServerOptionsSetStartupModel(TRITONSERVER_ServerOptions* options,
+                                          const char* model_name);
 
 /// Enable or disable strict model configuration handling in a server
 /// options.
@@ -1429,8 +1429,8 @@ TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
 /// to continue.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetExitOnError(
-    TRITONSERVER_ServerOptions* options, bool exit);
+TRITONSERVER_ServerOptionsSetExitOnError(TRITONSERVER_ServerOptions* options,
+                                         bool exit);
 
 /// Enable or disable strict readiness handling in a server options.
 ///
@@ -1449,8 +1449,8 @@ TRITONSERVER_ServerOptionsSetStrictReadiness(
 /// \param timeout The exit timeout, in seconds.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetExitTimeout(
-    TRITONSERVER_ServerOptions* options, unsigned int timeout);
+TRITONSERVER_ServerOptionsSetExitTimeout(TRITONSERVER_ServerOptions* options,
+                                         unsigned int timeout);
 
 /// Set the number of threads used in buffer manager in a server options.
 ///
@@ -1489,8 +1489,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
 /// \param level The verbose logging level.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetLogVerbose(
-    TRITONSERVER_ServerOptions* options, int level);
+TRITONSERVER_ServerOptionsSetLogVerbose(TRITONSERVER_ServerOptions* options,
+                                        int level);
 
 /// Enable or disable metrics collection in a server options.
 ///
@@ -1508,8 +1508,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
 /// \param gpu_metrics True to enable GPU metrics, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetGpuMetrics(
-    TRITONSERVER_ServerOptions* options, bool gpu_metrics);
+TRITONSERVER_ServerOptionsSetGpuMetrics(TRITONSERVER_ServerOptions* options,
+                                        bool gpu_metrics);
 
 /// Set the interval for metrics collection in a server options.
 /// This is 2000 milliseconds by default.
@@ -1556,9 +1556,10 @@ TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
 /// \param value The setting value.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetBackendConfig(
-    TRITONSERVER_ServerOptions* options, const char* backend_name,
-    const char* setting, const char* value);
+TRITONSERVER_ServerOptionsSetBackendConfig(TRITONSERVER_ServerOptions* options,
+                                           const char* backend_name,
+                                           const char* setting,
+                                           const char* value);
 
 /// Set a host policy setting for a given policy name in a server options.
 ///
@@ -1568,9 +1569,9 @@ TRITONSERVER_ServerOptionsSetBackendConfig(
 /// \param value The setting value.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetHostPolicy(
-    TRITONSERVER_ServerOptions* options, const char* policy_name,
-    const char* setting, const char* value);
+TRITONSERVER_ServerOptionsSetHostPolicy(TRITONSERVER_ServerOptions* options,
+                                        const char* policy_name,
+                                        const char* setting, const char* value);
 
 /// TRITONSERVER_Server
 ///
@@ -1683,9 +1684,10 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
 /// 'flags' value.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerModelBatchProperties(
-    TRITONSERVER_Server* server, const char* model_name,
-    const int64_t model_version, uint32_t* flags, void** voidp);
+TRITONSERVER_ServerModelBatchProperties(TRITONSERVER_Server* server,
+                                        const char* model_name,
+                                        const int64_t model_version,
+                                        uint32_t* flags, void** voidp);
 
 /// Get the transaction policy of the model. The policy is
 /// communicated by a flags value.
@@ -1705,9 +1707,11 @@ TRITONSERVER_ServerModelBatchProperties(
 /// \param voidp If non-nullptr, returns a point specific to the 'flags' value.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerModelTransactionProperties(
-    TRITONSERVER_Server* server, const char* model_name,
-    const int64_t model_version, uint32_t* txn_flags, void** voidp);
+TRITONSERVER_ServerModelTransactionProperties(TRITONSERVER_Server* server,
+                                              const char* model_name,
+                                              const int64_t model_version,
+                                              uint32_t* txn_flags,
+                                              void** voidp);
 
 /// Get the metadata of the server as a TRITONSERVER_Message object.
 /// The caller takes ownership of the message object and must call
@@ -1823,8 +1827,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
 /// \param model_name The name of the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerUnloadModelAndDependents(
-    TRITONSERVER_Server* server, const char* model_name);
+TRITONSERVER_ServerUnloadModelAndDependents(TRITONSERVER_Server* server,
+                                            const char* model_name);
 
 /// Get the current metrics for the server. The caller takes ownership
 /// of the metrics object and must call TRITONSERVER_MetricsDelete to
