@@ -30,7 +30,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
 #include <string>
 
 #ifdef __cplusplus
@@ -549,7 +548,8 @@ typedef enum tritonserver_traceactivity_enum {
   TRITONSERVER_TRACE_COMPUTE_OUTPUT_START = 4,
   TRITONSERVER_TRACE_COMPUTE_END = 5,
   TRITONSERVER_TRACE_REQUEST_END = 6,
-  TRITONSERVER_TRACE_TENSOR = 7
+  TRITONSERVER_TRACE_TENSOR_INPUT = 7,
+  TRITONSERVER_TRACE_TENSOR_OUTPUT = 8
 } TRITONSERVER_InferenceTraceActivity;
 
 /// Get the string representation of a trace activity. The returned
@@ -577,7 +577,7 @@ typedef void (*TRITONSERVER_InferenceTraceActivityFn_t)(
 /// does not take ownership of 'trace' and so any information needed
 /// from that object must be copied before returning. The 'userp' data
 /// is the same as what is supplied in the call to
-/// TRITONSERVER_InferenceTraceNew.
+/// TRITONSERVER_InferenceTraceTensorNew.
 typedef void (*TRITONSERVER_InferenceTraceTensorActivityFn_t)(
     TRITONSERVER_InferenceTrace* trace,
     TRITONSERVER_InferenceTraceActivity activity, const std::string& name,
@@ -642,9 +642,11 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
 /// \param activity_fn The callback function where timeline activity for the
 /// trace is reported.
 /// \param tensor_activity_fn The callback function where tensor activity for
-/// the trace is reported. \param release_fn The callback function called when
-/// all activity is complete for the trace. \param trace_userp User-provided
-/// pointer that is delivered to the activity and release callback functions.
+/// the trace is reported. 
+/// \param release_fn The callback function called when all activity
+/// is complete for the trace.
+/// \param trace_userp User-provided pointer that is delivered to
+/// the activity and release callback functions.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceTensorNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
