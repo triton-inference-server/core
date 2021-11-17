@@ -30,7 +30,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string>
 
 #ifdef __cplusplus
 extern "C" {
@@ -584,7 +583,6 @@ typedef void (*TRITONSERVER_InferenceTraceTensorActivityFn_t)(
     TRITONSERVER_DataType datatype, const void* base, size_t byte_size,
     const int64_t* shape, uint64_t dim_count,
     TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
-    const std::string& detail,  // detail information of the tensor
     void* userp);
 
 /// Type for trace release callback function. This callback function
