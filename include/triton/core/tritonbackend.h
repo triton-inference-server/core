@@ -594,6 +594,28 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
     const char* name, const TRITONSERVER_DataType datatype,
     const int64_t* shape, const uint32_t dims_count);
 
+/// Query the response allocator for the preferred memory type and memory
+/// type ID, which will be the attributes of the allocated
+/// buffers if explicitly requested in the sequential call of
+/// TRITONBACKEND_OutputBuffer. 'byte_size' is an optional parameter to
+/// provide more information to the allocator. Note that if 'byte_size' is not
+/// provided, the returned values may not match the attributes of the allocated
+/// buffer even if explicitly requested, as the allocator may allocate
+/// buffers differently based on the requested byte size.
+///
+/// \param response The response.
+/// \param byte_size The expected size of the buffer. This is optional
+/// and it should be set to nullptr to indicate that the byte size has
+/// not determined.
+/// \param memory_type The allocator preferred type of memory.
+/// \param memory_type_id The allocator preferred ID of the memory.
+/// \return a TRITONSERVER_Error object if a failure occurs.
+/// A TRITONSERVER_ERROR_UNAVAILABLE error indicates that the allocator
+/// doesn't provide query functionality.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseAllocatorQuery(
+    TRITONBACKEND_Response* response, size_t* byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
+
 /// Send a response. Calling this function transfers ownership of the
 /// response object to Triton. The caller must not access or delete
 /// the response object after calling this function.

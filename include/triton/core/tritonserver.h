@@ -378,6 +378,29 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorReleaseFn_t)(
 typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, void* userp);
 
+/// Type for function that is called to query the allocator's preferred memory
+/// type and memory type ID, which will be the attributes of the allocated
+/// buffers if explicitly requested. 'byte_size' is an optional parameter to
+/// provide more information to the allocator. Note that if 'byte_size' is not
+/// provided, the returned values may not match the attributes of the allocated
+/// buffer even if explicitly requested, as the allocator may allocate
+/// buffers differently based on the requested byte size.
+///
+/// \param allocator The allocator that is provided in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param buffer_userp The user-specified value associated
+/// with the buffer in TRITONSERVER_ResponseAllocatorAllocFn_t.
+/// \param byte_size The expected size of the buffer. This is optional
+/// and it should be set to nullptr to indicate that the byte size has
+/// not determined.
+/// \param memory_type The preferred type of memory.
+/// \param memory_type_id The preferred ID of the memory.
+/// \return a TRITONSERVER_Error object if a failure occurs.
+typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
+    TRITONSERVER_ResponseAllocator* allocator, void* buffer_userp,
+    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+    int64_t* memory_type_id);
+
 /// Create a new response allocator object.
 ///
 /// The response allocator object is used by Triton to allocate
@@ -432,6 +455,28 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocatorAllocFn_t alloc_fn,
     TRITONSERVER_ResponseAllocatorReleaseFn_t release_fn,
     TRITONSERVER_ResponseAllocatorStartFn_t start_fn);
+
+/// Set the query function to a response allocator object. Usually the
+/// function will be called before alloc_fn to understand what is the
+/// allocator's preferred memory type and memory type ID at the current
+/// situation to make different execution decision.
+///
+/// The thread-safy requirement for query_fn is the same as other allocator
+/// callbacks.
+///
+/// \param allocator Returns the new response allocator object.
+/// \param alloc_fn The function to call to allocate buffers for result
+/// tensors.
+/// \param release_fn The function to call when the server no longer
+/// holds a reference to an allocated buffer.
+/// \param start_fn The function to call to indicate that the
+/// subsequent 'alloc_fn' calls are for a new response. This callback
+/// is optional (use nullptr to indicate that it should not be
+/// invoked).
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorSetQueryFunction(
+    TRITONSERVER_ResponseAllocator** allocator,
+    TRITONSERVER_ResponseAllocatorQueryFn_t query_fn);
 
 /// Delete a response allocator.
 ///
