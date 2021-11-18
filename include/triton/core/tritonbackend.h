@@ -604,6 +604,9 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
 /// buffers differently based on the requested byte size.
 ///
 /// \param response The response.
+/// \param name The name of the output tensor. This is optional
+/// and it should be set to nullptr to indicate that the tensor name has
+/// not determined.
 /// \param byte_size The expected size of the buffer. This is optional
 /// and it should be set to nullptr to indicate that the byte size has
 /// not determined.
@@ -613,7 +616,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
 /// A TRITONSERVER_ERROR_UNAVAILABLE error indicates that the allocator
 /// doesn't provide query functionality.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseAllocatorQuery(
-    TRITONBACKEND_Response* response, size_t* byte_size,
+    TRITONBACKEND_Response* response, const char* name,  size_t* byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 /// Send a response. Calling this function transfers ownership of the

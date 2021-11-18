@@ -380,16 +380,18 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
 
 /// Type for function that is called to query the allocator's preferred memory
 /// type and memory type ID, which will be the attributes of the allocated
-/// buffers if explicitly requested. 'byte_size' is an optional parameter to
-/// provide more information to the allocator. Note that if 'byte_size' is not
-/// provided, the returned values may not match the attributes of the allocated
-/// buffer even if explicitly requested, as the allocator may allocate
-/// buffers differently based on the requested byte size.
+/// buffers if explicitly requested. 'tensor_name' and 'byte_size' are optional
+/// parameters for the allocator. Note that if 'tensor_name' or 'byte_size' is
+/// not provided, the returned values may not match the attributes of the
+/// allocated buffer even if explicitly requested, as the allocator may allocate
+/// buffers differently based on the requested paramters.
 ///
 /// \param allocator The allocator that is provided in the call to
 /// TRITONSERVER_InferenceRequestSetResponseCallback.
 /// \param buffer_userp The user-specified value associated
-/// with the buffer in TRITONSERVER_ResponseAllocatorAllocFn_t.
+/// \param tensor_name The name of the output tensor. This is optional
+/// and it should be set to nullptr to indicate that the tensor name has
+/// not determined.
 /// \param byte_size The expected size of the buffer. This is optional
 /// and it should be set to nullptr to indicate that the byte size has
 /// not determined.
@@ -398,8 +400,8 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
 /// \return a TRITONSERVER_Error object if a failure occurs.
 typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, void* buffer_userp,
-    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id);
+     const char* tensor_name, size_t* byte_size,
+     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 /// Create a new response allocator object.
 ///
