@@ -344,6 +344,33 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
     TRITONSERVER_MemoryType* actual_memory_type,
     int64_t* actual_memory_type_id);
 
+/// Type for function that is called to query the allocator's preferred memory
+/// type and memory type ID. As much as possible, the allocator should attempt
+/// to return the same memory_type and memory_type_id values that will be
+/// returned by the subsequent call to TRITONSERVER_ResponseAllocatorAllocFn_t.
+/// But the allocator is not required to do so.
+///
+/// \param allocator The allocator that is provided in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param buffer_userp The user-specified value associated
+/// \param tensor_name The name of the output tensor. This is optional
+/// and it should be set to nullptr to indicate that the tensor name has
+/// not determined.
+/// \param byte_size The expected size of the buffer. This is optional
+/// and it should be set to nullptr to indicate that the byte size has
+/// not determined.
+/// \param memory_type Acts as both input and output. On input gives
+/// the memory type preferred by the caller. Returns memory type preferred
+/// by the allocator taken account to the caller preferred type.
+/// \param memory_type_id Acts as both input and output. On input gives
+/// the memory type ID preferred by the caller. Returns memory type ID preferred
+/// by the allocator taken account to the caller preferred type ID.
+/// \return a TRITONSERVER_Error object if a failure occurs.
+typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
+    TRITONSERVER_ResponseAllocator* allocator, void* buffer_userp,
+    const char* tensor_name, size_t* byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
+
 /// Type for function that is called when the server no longer holds
 /// any reference to a buffer allocated by
 /// TRITONSERVER_ResponseAllocatorAllocFn_t. In practice this function
@@ -377,31 +404,6 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorReleaseFn_t)(
 /// \return a TRITONSERVER_Error object if a failure occurs.
 typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, void* userp);
-
-/// Type for function that is called to query the allocator's preferred memory
-/// type and memory type ID, which will be the attributes of the allocated
-/// buffers if explicitly requested. 'tensor_name' and 'byte_size' are optional
-/// parameters for the allocator. Note that if 'tensor_name' or 'byte_size' is
-/// not provided, the returned values may not match the attributes of the
-/// allocated buffer even if explicitly requested, as the allocator may allocate
-/// buffers differently based on the requested paramters.
-///
-/// \param allocator The allocator that is provided in the call to
-/// TRITONSERVER_InferenceRequestSetResponseCallback.
-/// \param buffer_userp The user-specified value associated
-/// \param tensor_name The name of the output tensor. This is optional
-/// and it should be set to nullptr to indicate that the tensor name has
-/// not determined.
-/// \param byte_size The expected size of the buffer. This is optional
-/// and it should be set to nullptr to indicate that the byte size has
-/// not determined.
-/// \param memory_type The preferred type of memory.
-/// \param memory_type_id The preferred ID of the memory.
-/// \return a TRITONSERVER_Error object if a failure occurs.
-typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
-    TRITONSERVER_ResponseAllocator* allocator, void* buffer_userp,
-     const char* tensor_name, size_t* byte_size,
-     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 /// Create a new response allocator object.
 ///
@@ -466,17 +468,12 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
 /// The thread-safy requirement for query_fn is the same as other allocator
 /// callbacks.
 ///
-/// \param allocator Returns the new response allocator object.
-/// \param alloc_fn The function to call to allocate buffers for result
-/// tensors.
-/// \param release_fn The function to call when the server no longer
-/// holds a reference to an allocated buffer.
-/// \param start_fn The function to call to indicate that the
-/// subsequent 'alloc_fn' calls are for a new response. This callback
-/// is optional (use nullptr to indicate that it should not be
-/// invoked).
+/// \param allocator The response allocator object.
+/// \param query_fn The function to call to query allocator's preferred memory
+/// type and memory type ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorSetQueryFunction(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ResponseAllocatorSetQueryFunction(
     TRITONSERVER_ResponseAllocator** allocator,
     TRITONSERVER_ResponseAllocatorQueryFn_t query_fn);
 
@@ -859,7 +856,8 @@ TRITONSERVER_InferenceRequestCorrelationId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationIdString(
-    TRITONSERVER_InferenceRequest* inference_request, const char** correlation_id);
+    TRITONSERVER_InferenceRequest* inference_request,
+    const char** correlation_id);
 
 /// Set the correlation ID of the inference request to be an unsigned integer.
 /// Default is 0, which indicates that the request has no correlation ID.
@@ -885,7 +883,8 @@ TRITONSERVER_InferenceRequestSetCorrelationId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationIdString(
-    TRITONSERVER_InferenceRequest* inference_request, const char* correlation_id);
+    TRITONSERVER_InferenceRequest* inference_request,
+    const char* correlation_id);
 
 /// Get the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
