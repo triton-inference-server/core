@@ -452,8 +452,12 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestOutputName(
 /// \param byte_size The expected size of the buffer. This is optional
 /// and it should be set to nullptr to indicate that the byte size has
 /// not determined.
-/// \param memory_type Triton preferred type of memory.
-/// \param memory_type_id Triton preferred ID of the memory.
+/// \param memory_type Acts as both input and output. On input gives
+/// the memory type preferred by the caller. Returns memory type preferred
+/// by Triton, taken account of the caller preferred type.
+/// \param memory_type_id Acts as both input and output. On input gives
+/// the memory type ID preferred by the caller. Returns memory type ID preferred
+/// by Triton, taken account of the caller preferred type ID.
 /// \return a TRITONSERVER_Error object if a failure occurs.
 /// A TRITONSERVER_ERROR_UNAVAILABLE error indicates that the properties are not
 /// available, other error codes indicate an error.

@@ -352,7 +352,9 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
 ///
 /// \param allocator The allocator that is provided in the call to
 /// TRITONSERVER_InferenceRequestSetResponseCallback.
-/// \param buffer_userp The user-specified value associated
+/// \param userp The user data pointer that is provided as
+/// 'response_allocator_userp' in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
 /// \param tensor_name The name of the output tensor. This is optional
 /// and it should be set to nullptr to indicate that the tensor name has
 /// not determined.
@@ -361,13 +363,13 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
 /// not determined.
 /// \param memory_type Acts as both input and output. On input gives
 /// the memory type preferred by the caller. Returns memory type preferred
-/// by the allocator taken account to the caller preferred type.
+/// by the allocator, taken account of the caller preferred type.
 /// \param memory_type_id Acts as both input and output. On input gives
 /// the memory type ID preferred by the caller. Returns memory type ID preferred
-/// by the allocator taken account to the caller preferred type ID.
+/// by the allocator, taken account of the caller preferred type ID.
 /// \return a TRITONSERVER_Error object if a failure occurs.
 typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
-    TRITONSERVER_ResponseAllocator* allocator, void* buffer_userp,
+    TRITONSERVER_ResponseAllocator* allocator, void* userp,
     const char* tensor_name, size_t* byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
@@ -474,7 +476,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorSetQueryFunction(
-    TRITONSERVER_ResponseAllocator** allocator,
+    TRITONSERVER_ResponseAllocator* allocator,
     TRITONSERVER_ResponseAllocatorQueryFn_t query_fn);
 
 /// Delete a response allocator.
