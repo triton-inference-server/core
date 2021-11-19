@@ -94,6 +94,10 @@ TRITONSERVER_ResponseAllocatorNew()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ResponseAllocatorSetQueryFunction()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ResponseAllocatorDelete()
 {
 }
@@ -535,6 +539,10 @@ TRITONBACKEND_RequestOutputCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestOutputName()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestOutputBufferProperties()
 {
 }
 TRITONAPI_DECLSPEC void
