@@ -579,11 +579,10 @@ typedef void (*TRITONSERVER_InferenceTraceActivityFn_t)(
 /// TRITONSERVER_InferenceTraceTensorNew.
 typedef void (*TRITONSERVER_InferenceTraceTensorActivityFn_t)(
     TRITONSERVER_InferenceTrace* trace,
-    TRITONSERVER_InferenceTraceActivity activity, const std::string& name,
+    TRITONSERVER_InferenceTraceActivity activity, const char* name,
     TRITONSERVER_DataType datatype, const void* base, size_t byte_size,
     const int64_t* shape, uint64_t dim_count,
-    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
-    void* userp);
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id, void* userp);
 
 /// Type for trace release callback function. This callback function
 /// is called when all activity for the trace has completed. The
@@ -640,7 +639,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
 /// \param activity_fn The callback function where timeline activity for the
 /// trace is reported.
 /// \param tensor_activity_fn The callback function where tensor activity for
-/// the trace is reported. 
+/// the trace is reported.
 /// \param release_fn The callback function called when all activity
 /// is complete for the trace.
 /// \param trace_userp User-provided pointer that is delivered to
