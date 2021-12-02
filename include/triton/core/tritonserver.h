@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 5
+#define TRITONSERVER_API_VERSION_MINOR 6
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -344,6 +344,35 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
     TRITONSERVER_MemoryType* actual_memory_type,
     int64_t* actual_memory_type_id);
 
+/// Type for function that is called to query the allocator's preferred memory
+/// type and memory type ID. As much as possible, the allocator should attempt
+/// to return the same memory_type and memory_type_id values that will be
+/// returned by the subsequent call to TRITONSERVER_ResponseAllocatorAllocFn_t.
+/// But the allocator is not required to do so.
+///
+/// \param allocator The allocator that is provided in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param userp The user data pointer that is provided as
+/// 'response_allocator_userp' in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param tensor_name The name of the output tensor. This is optional
+/// and it should be set to nullptr to indicate that the tensor name has
+/// not determined.
+/// \param byte_size The expected size of the buffer. This is optional
+/// and it should be set to nullptr to indicate that the byte size has
+/// not determined.
+/// \param memory_type Acts as both input and output. On input gives
+/// the memory type preferred by the caller. Returns memory type preferred
+/// by the allocator, taken account of the caller preferred type.
+/// \param memory_type_id Acts as both input and output. On input gives
+/// the memory type ID preferred by the caller. Returns memory type ID preferred
+/// by the allocator, taken account of the caller preferred type ID.
+/// \return a TRITONSERVER_Error object if a failure occurs.
+typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
+    TRITONSERVER_ResponseAllocator* allocator, void* userp,
+    const char* tensor_name, size_t* byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
+
 /// Type for function that is called when the server no longer holds
 /// any reference to a buffer allocated by
 /// TRITONSERVER_ResponseAllocatorAllocFn_t. In practice this function
@@ -432,6 +461,23 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocatorAllocFn_t alloc_fn,
     TRITONSERVER_ResponseAllocatorReleaseFn_t release_fn,
     TRITONSERVER_ResponseAllocatorStartFn_t start_fn);
+
+/// Set the query function to a response allocator object. Usually the
+/// function will be called before alloc_fn to understand what is the
+/// allocator's preferred memory type and memory type ID at the current
+/// situation to make different execution decision.
+///
+/// The thread-safy requirement for query_fn is the same as other allocator
+/// callbacks.
+///
+/// \param allocator The response allocator object.
+/// \param query_fn The function to call to query allocator's preferred memory
+/// type and memory type ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ResponseAllocatorSetQueryFunction(
+    TRITONSERVER_ResponseAllocator* allocator,
+    TRITONSERVER_ResponseAllocatorQueryFn_t query_fn);
 
 /// Delete a response allocator.
 ///
@@ -812,7 +858,8 @@ TRITONSERVER_InferenceRequestCorrelationId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationIdString(
-    TRITONSERVER_InferenceRequest* inference_request, const char** correlation_id);
+    TRITONSERVER_InferenceRequest* inference_request,
+    const char** correlation_id);
 
 /// Set the correlation ID of the inference request to be an unsigned integer.
 /// Default is 0, which indicates that the request has no correlation ID.
@@ -838,7 +885,8 @@ TRITONSERVER_InferenceRequestSetCorrelationId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationIdString(
-    TRITONSERVER_InferenceRequest* inference_request, const char* correlation_id);
+    TRITONSERVER_InferenceRequest* inference_request,
+    const char* correlation_id);
 
 /// Get the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
