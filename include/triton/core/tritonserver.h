@@ -1845,8 +1845,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerMetrics(
 ///
 /// The function unconditionally takes ownership of 'trace' and so the
 /// caller must not access it in any way after this call (except in
-/// the trace id callback) until ownership is returned via the trace's
-/// release_fn callback.
+/// the trace activity callbacks) until ownership is returned via the
+/// trace's release_fn callback.
 ///
 /// Responses produced for this request are returned using the
 /// allocator and callback registered with the request by
