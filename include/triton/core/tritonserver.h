@@ -568,11 +568,28 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricsFormatted(
 /// Object that represents tracing for an inference request.
 ///
 
-/// Trace levels
+/// Trace levels. The trace level controls the type of trace
+/// activities that are reported for an inference request.
+///
+/// Trace level values are power-of-2 and can be combined to trace
+/// multiple types of activities. For example, use
+/// (TRITONSERVER_TRACE_LEVEL_TIMESTAMPS |
+/// TRITONSERVER_TRACE_LEVEL_TENSORS) to trace both timestamps and
+/// tensors for an inference request.
+///
+/// TRITONSERVER_TRACE_LEVEL_MIN and TRITONSERVER_TRACE_LEVEL_MAX are
+/// deprecated and should not be used.
 typedef enum tritonserver_tracelevel_enum {
-  TRITONSERVER_TRACE_LEVEL_DISABLED,
-  TRITONSERVER_TRACE_LEVEL_MIN,
-  TRITONSERVER_TRACE_LEVEL_MAX
+  /// Tracing disabled. No trace activities are reported.
+  TRITONSERVER_TRACE_LEVEL_DISABLED = 0,
+  /// Deprecated. Use TRITONSERVER_TRACE_LEVEL_TIMESTAMPS.
+  TRITONSERVER_TRACE_LEVEL_MIN = 1,
+  /// Deprecated. Use TRITONSERVER_TRACE_LEVEL_TIMESTAMPS.
+  TRITONSERVER_TRACE_LEVEL_MAX = 2,
+  /// Record timestamps for the inference request.
+  TRITONSERVER_TRACE_LEVEL_TIMESTAMPS = 0x4,
+  /// Record input and output tensor values for the inference request.
+  TRITONSERVER_TRACE_LEVEL_TENSORS = 0x8
 } TRITONSERVER_InferenceTraceLevel;
 
 /// Get the string representation of a trace level. The returned
@@ -584,7 +601,7 @@ typedef enum tritonserver_tracelevel_enum {
 TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceLevelString(
     TRITONSERVER_InferenceTraceLevel level);
 
-// Trace activities
+/// Trace activities
 typedef enum tritonserver_traceactivity_enum {
   TRITONSERVER_TRACE_REQUEST_START = 0,
   TRITONSERVER_TRACE_QUEUE_START = 1,
