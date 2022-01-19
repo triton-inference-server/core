@@ -820,7 +820,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetId(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* flags);
 
-/// Set the flag(s) associated with a request. 'flags' should holds a
+/// Set the flag(s) associated with a request. 'flags' should hold a
 /// bitwise-or of all flag values, see TRITONSERVER_RequestFlag for
 /// available flags.
 ///

@@ -91,7 +91,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 7
+#define TRITONBACKEND_API_VERSION_MINOR 8
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -348,6 +348,16 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
+
+/// Get the flag(s) associated with a request. On return 'flags' holds
+/// a bitwise-or of all flag values, see TRITONSERVER_RequestFlag for
+/// available flags.
+///
+/// \param request The inference request.
+/// \param id Returns the correlation ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
+    TRITONBACKEND_Request* request, uint32_t* flags);
 
 /// Get the correlation ID of the request if it is a string.
 /// Empty string indicates that the request does not have a correlation ID.
