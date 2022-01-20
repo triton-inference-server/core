@@ -354,7 +354,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
 /// available flags.
 ///
 /// \param request The inference request.
-/// \param id Returns the correlation ID.
+/// \param flags Returns the flags.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
     TRITONBACKEND_Request* request, uint32_t* flags);
