@@ -643,8 +643,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
 ///
 
 /// Create a state in the request. The returned state object is only valid
-/// before the TRITONBACKEND_UpdateState is called. The state should not be
-/// freed by the caller. If TRITONBACKEND_UpdateState is not called, the
+/// before the TRITONBACKEND_StateUpdate is called. The state should not be
+/// freed by the caller. If TRITONBACKEND_StateUpdate is not called, the
 /// lifetime of the state matches the lifetime of the request. If the state name
 /// does not exist in the "state" section of the model configuration, the state
 /// will not be created and an error will be returned. If this function is
@@ -682,8 +682,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateUpdate(
 /// Get a buffer to use to hold the tensor data for the state. The returned
 /// buffer is owned by the state and so should not be freed by the caller. The
 /// caller can and should fill the buffer with the state data. The buffer must
-/// not be accessed by the backend after TRITONBACKEND_UpdateState is called.
-/// The caller should fill the buffer before calling TRITONBACKEND_UpdateState.
+/// not be accessed by the backend after TRITONBACKEND_StateUpdate is called.
+/// The caller should fill the buffer before calling TRITONBACKEND_StateUpdate.
 ///
 /// \param state The state.
 /// \param buffer Returns a pointer to a buffer where the contents of the state
