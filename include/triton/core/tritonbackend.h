@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -91,7 +91,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 7
+#define TRITONBACKEND_API_VERSION_MINOR 8
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -348,6 +348,16 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
+
+/// Get the flag(s) associated with a request. On return 'flags' holds
+/// a bitwise-or of all flag values, see TRITONSERVER_RequestFlag for
+/// available flags.
+///
+/// \param request The inference request.
+/// \param flags Returns the flags.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
+    TRITONBACKEND_Request* request, uint32_t* flags);
 
 /// Get the correlation ID of the request if it is a string.
 /// Empty string indicates that the request does not have a correlation ID.
@@ -643,8 +653,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
 ///
 
 /// Create a state in the request. The returned state object is only valid
-/// before the TRITONBACKEND_UpdateState is called. The state should not be
-/// freed by the caller. If TRITONBACKEND_UpdateState is not called, the
+/// before the TRITONBACKEND_StateUpdate is called. The state should not be
+/// freed by the caller. If TRITONBACKEND_StateUpdate is not called, the
 /// lifetime of the state matches the lifetime of the request. If the state name
 /// does not exist in the "state" section of the model configuration, the state
 /// will not be created and an error will be returned. If this function is
@@ -682,8 +692,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateUpdate(
 /// Get a buffer to use to hold the tensor data for the state. The returned
 /// buffer is owned by the state and so should not be freed by the caller. The
 /// caller can and should fill the buffer with the state data. The buffer must
-/// not be accessed by the backend after TRITONBACKEND_UpdateState is called.
-/// The caller should fill the buffer before calling TRITONBACKEND_UpdateState.
+/// not be accessed by the backend after TRITONBACKEND_StateUpdate is called.
+/// The caller should fill the buffer before calling TRITONBACKEND_StateUpdate.
 ///
 /// \param state The state.
 /// \param buffer Returns a pointer to a buffer where the contents of the state
