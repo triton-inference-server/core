@@ -87,7 +87,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 6
+#define TRITONSERVER_API_VERSION_MINOR 7
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -568,11 +568,28 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricsFormatted(
 /// Object that represents tracing for an inference request.
 ///
 
-/// Trace levels
+/// Trace levels. The trace level controls the type of trace
+/// activities that are reported for an inference request.
+///
+/// Trace level values are power-of-2 and can be combined to trace
+/// multiple types of activities. For example, use
+/// (TRITONSERVER_TRACE_LEVEL_TIMESTAMPS |
+/// TRITONSERVER_TRACE_LEVEL_TENSORS) to trace both timestamps and
+/// tensors for an inference request.
+///
+/// TRITONSERVER_TRACE_LEVEL_MIN and TRITONSERVER_TRACE_LEVEL_MAX are
+/// deprecated and should not be used.
 typedef enum tritonserver_tracelevel_enum {
-  TRITONSERVER_TRACE_LEVEL_DISABLED,
-  TRITONSERVER_TRACE_LEVEL_MIN,
-  TRITONSERVER_TRACE_LEVEL_MAX
+  /// Tracing disabled. No trace activities are reported.
+  TRITONSERVER_TRACE_LEVEL_DISABLED = 0,
+  /// Deprecated. Use TRITONSERVER_TRACE_LEVEL_TIMESTAMPS.
+  TRITONSERVER_TRACE_LEVEL_MIN = 1,
+  /// Deprecated. Use TRITONSERVER_TRACE_LEVEL_TIMESTAMPS.
+  TRITONSERVER_TRACE_LEVEL_MAX = 2,
+  /// Record timestamps for the inference request.
+  TRITONSERVER_TRACE_LEVEL_TIMESTAMPS = 0x4,
+  /// Record input and output tensor values for the inference request.
+  TRITONSERVER_TRACE_LEVEL_TENSORS = 0x8
 } TRITONSERVER_InferenceTraceLevel;
 
 /// Get the string representation of a trace level. The returned
@@ -584,7 +601,7 @@ typedef enum tritonserver_tracelevel_enum {
 TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceLevelString(
     TRITONSERVER_InferenceTraceLevel level);
 
-// Trace activities
+/// Trace activities
 typedef enum tritonserver_traceactivity_enum {
   TRITONSERVER_TRACE_REQUEST_START = 0,
   TRITONSERVER_TRACE_QUEUE_START = 1,
@@ -592,7 +609,10 @@ typedef enum tritonserver_traceactivity_enum {
   TRITONSERVER_TRACE_COMPUTE_INPUT_END = 3,
   TRITONSERVER_TRACE_COMPUTE_OUTPUT_START = 4,
   TRITONSERVER_TRACE_COMPUTE_END = 5,
-  TRITONSERVER_TRACE_REQUEST_END = 6
+  TRITONSERVER_TRACE_REQUEST_END = 6,
+  TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT = 7,
+  TRITONSERVER_TRACE_TENSOR_BACKEND_INPUT = 8,
+  TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT = 9
 } TRITONSERVER_InferenceTraceActivity;
 
 /// Get the string representation of a trace activity. The returned
@@ -604,7 +624,7 @@ typedef enum tritonserver_traceactivity_enum {
 TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceActivityString(
     TRITONSERVER_InferenceTraceActivity activity);
 
-/// Type for trace activity callback function. This callback function
+/// Type for trace timeline activity callback function. This callback function
 /// is used to report activity occurring for a trace. This function
 /// does not take ownership of 'trace' and so any information needed
 /// from that object must be copied before returning. The 'userp' data
@@ -614,6 +634,19 @@ typedef void (*TRITONSERVER_InferenceTraceActivityFn_t)(
     TRITONSERVER_InferenceTrace* trace,
     TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns,
     void* userp);
+
+/// Type for trace tensor activity callback function. This callback function
+/// is used to report tensor activity occurring for a trace. This function
+/// does not take ownership of 'trace' and so any information needed
+/// from that object must be copied before returning. The 'userp' data
+/// is the same as what is supplied in the call to
+/// TRITONSERVER_InferenceTraceTensorNew.
+typedef void (*TRITONSERVER_InferenceTraceTensorActivityFn_t)(
+    TRITONSERVER_InferenceTrace* trace,
+    TRITONSERVER_InferenceTraceActivity activity, const char* name,
+    TRITONSERVER_DataType datatype, const void* base, size_t byte_size,
+    const int64_t* shape, uint64_t dim_count,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id, void* userp);
 
 /// Type for trace release callback function. This callback function
 /// is called when all activity for the trace has completed. The
@@ -649,6 +682,37 @@ typedef void (*TRITONSERVER_InferenceTraceReleaseFn_t)(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
     uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
+    TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
+
+/// Create a new inference trace object. The caller takes ownership of
+/// the TRITONSERVER_InferenceTrace object and must call
+/// TRITONSERVER_InferenceTraceDelete to release the object.
+///
+/// The timeline and tensor activity callback function will be called to report
+/// activity for 'trace' as well as for any child traces that are spawned by
+/// 'trace', and so the activity callback must check the trace object
+/// to determine specifically what activity is being reported.
+///
+/// The release callback is called for both 'trace' and for any child
+/// traces spawned by 'trace'.
+///
+/// \param trace Returns the new inference trace object.
+/// \param level The tracing level.
+/// \param parent_id The parent trace id for this trace. A value of 0
+/// indicates that there is not parent trace.
+/// \param activity_fn The callback function where timeline activity for the
+/// trace is reported.
+/// \param tensor_activity_fn The callback function where tensor activity for
+/// the trace is reported.
+/// \param release_fn The callback function called when all activity
+/// is complete for the trace.
+/// \param trace_userp User-provided pointer that is delivered to
+/// the activity and release callback functions.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceTensorNew(
+    TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
+    uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
+    TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
 /// Delete a trace object.
@@ -1234,7 +1298,6 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputClassificationLabel(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const size_t class_index, const char** label);
-
 
 /// TRITONSERVER_ServerOptions
 ///
@@ -1861,7 +1924,6 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
     TRITONSERVER_Server* server,
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceTrace* trace);
-
 
 #ifdef __cplusplus
 }
