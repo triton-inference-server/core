@@ -58,6 +58,14 @@ TRITONSERVER_ParameterTypeString()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ParameterNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ParameterDelete()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InstanceGroupKindString()
 {
 }
@@ -455,6 +463,10 @@ TRITONSERVER_ServerModelIndex()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerLoadModel()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerLoadModelWithParameters()
 {
 }
 TRITONAPI_DECLSPEC void

@@ -1894,7 +1894,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
 /// \param parameters The array of load parameters.
 /// \param parameter_count The number of parameters.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerLoadModelWithParameters(
     TRITONSERVER_Server* server, const char* model_name,
     const TRITONSERVER_Parameter** parameters, const uint64_t parameter_count);
 
