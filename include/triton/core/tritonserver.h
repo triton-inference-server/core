@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -57,6 +57,7 @@ struct TRITONSERVER_InferenceResponse;
 struct TRITONSERVER_InferenceTrace;
 struct TRITONSERVER_Message;
 struct TRITONSERVER_Metrics;
+struct TRITONSERVER_Parameter;
 struct TRITONSERVER_ResponseAllocator;
 struct TRITONSERVER_Server;
 struct TRITONSERVER_ServerOptions;
@@ -87,7 +88,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 7
+#define TRITONSERVER_API_VERSION_MINOR 8
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -187,6 +188,23 @@ typedef enum TRITONSERVER_parametertype_enum {
 /// \return The string representation of the parameter type.
 TRITONSERVER_DECLSPEC const char* TRITONSERVER_ParameterTypeString(
     TRITONSERVER_ParameterType paramtype);
+
+/// Create a new parameter object. The caller takes ownership of the
+/// TRITONSERVER_Parameter object and must call TRITONSERVER_ParameterDelete to
+/// release the object. The object will maintain its own copy of the 'value'
+///
+/// \param name The parameter name.
+/// \param type The parameter type.
+/// \param value The pointer to the value.
+/// \return A new TRITONSERVER_Error object.
+TRITONSERVER_DECLSPEC TRITONSERVER_Parameter* TRITONSERVER_ParameterNew(
+    const char* name, const TRITONSERVER_ParameterType type, const void* value);
+
+/// Delete an parameter object.
+///
+/// \param parameter The parameter object.
+TRITONSERVER_DECLSPEC void TRITONSERVER_ParameterDelete(
+    TRITONSERVER_Parameter* parameter);
 
 /// TRITONSERVER_InstanceGroupKind
 ///
@@ -1861,6 +1879,25 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIndex(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
     TRITONSERVER_Server* server, const char* model_name);
+
+/// Load the requested model or reload the model if it is already
+/// loaded, with load parameters provided. The function does not return until
+/// the model is loaded or fails to load. Returned error indicates if model
+/// loaded successfully or not.
+/// Currently the below parameter names are recognized:
+/// - "config" : string parameter that contains a JSON representation of the
+/// model configuration. This config will be used for loading the model instead
+/// of the one in the model directory.
+///
+/// \param server The inference server object.
+/// \param model_name The name of the model.
+/// \param parameters The array of load parameters.
+/// \param parameter_count The number of parameters.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerLoadModelWithParameters(
+    TRITONSERVER_Server* server, const char* model_name,
+    const TRITONSERVER_Parameter** parameters, const uint64_t parameter_count);
 
 /// Unload the requested model. Unloading a model that is not loaded
 /// on server has no affect and success code will be returned.

@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -55,6 +55,14 @@ TRITONSERVER_MemoryTypeString()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ParameterTypeString()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ParameterNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ParameterDelete()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -455,6 +463,10 @@ TRITONSERVER_ServerModelIndex()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerLoadModel()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerLoadModelWithParameters()
 {
 }
 TRITONAPI_DECLSPEC void
