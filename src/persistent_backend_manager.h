@@ -26,10 +26,10 @@
 #pragma once
 
 #include <list>
-#include "src/backends/backend/triton_backend_manager.h"
-#include "src/core/constants.h"
-#include "src/core/model_config.h"
-#include "src/core/status.h"
+#include "triton_backend_manager.h"
+#include "constants.h"
+#include "model_config.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

@@ -24,15 +24,15 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/infer_request.h"
+#include "infer_request.h"
 
 #include <algorithm>
 #include <deque>
-#include "src/core/logging.h"
-#include "src/core/model.h"
-#include "src/core/server.h"
+#include "logging.h"
+#include "model.h"
+#include "server.h"
 #ifdef TRITON_ENABLE_TRACING
-#include "src/core/cuda_utils.h"
+#include "cuda_utils.h"
 #endif  // TRITON_ENABLE_TRACING
 
 namespace nvidia { namespace inferenceserver {

@@ -29,7 +29,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include "src/core/status.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

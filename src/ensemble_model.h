@@ -26,9 +26,9 @@
 #pragma once
 
 #include "model_config.pb.h"
-#include "src/core/model.h"
-#include "src/core/scheduler.h"
-#include "src/core/status.h"
+#include "model.h"
+#include "scheduler.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

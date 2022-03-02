@@ -31,11 +31,11 @@
 #include <string>
 #include <thread>
 #include "model_config.pb.h"
-#include "src/core/constants.h"
-#include "src/core/memory.h"
-#include "src/core/metric_model_reporter.h"
-#include "src/core/server_message.h"
-#include "src/core/status.h"
+#include "constants.h"
+#include "memory.h"
+#include "metric_model_reporter.h"
+#include "server_message.h"
+#include "status.h"
 #include "triton/common/sync_queue.h"
 
 namespace nvidia { namespace inferenceserver {

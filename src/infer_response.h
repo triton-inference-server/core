@@ -29,13 +29,13 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include "src/core/constants.h"
-#include "src/core/infer_parameter.h"
-#include "src/core/infer_trace.h"
-#include "src/core/model_config.h"
-#include "src/core/response_allocator.h"
-#include "src/core/status.h"
-#include "src/core/tritonserver_apis.h"
+#include "constants.h"
+#include "infer_parameter.h"
+#include "infer_trace.h"
+#include "model_config.h"
+#include "response_allocator.h"
+#include "status.h"
+#include "tritonserver_apis.h"
 
 namespace nvidia { namespace inferenceserver {
 

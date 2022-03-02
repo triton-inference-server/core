@@ -32,11 +32,11 @@
 #include <vector>
 
 #include "model_config.pb.h"
-#include "src/backends/backend/triton_model.h"
-#include "src/backends/backend/triton_model_instance.h"
-#include "src/core/instance_queue.h"
-#include "src/core/payload.h"
-#include "src/core/status.h"
+#include "triton_model.h"
+#include "triton_model_instance.h"
+#include "instance_queue.h"
+#include "payload.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

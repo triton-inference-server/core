@@ -24,10 +24,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/sequence_state.h"
+#include "sequence_state.h"
 
 #include "memory.h"
-#include "src/core/logging.h"
+#include "logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

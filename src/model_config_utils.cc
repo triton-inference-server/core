@@ -24,16 +24,16 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/model_config_utils.h"
+#include "model_config_utils.h"
 
 #include <google/protobuf/util/json_util.h>
 #include <deque>
 #include <mutex>
 #include <set>
-#include "src/core/constants.h"
-#include "src/core/cuda_utils.h"
-#include "src/core/filesystem.h"
-#include "src/core/logging.h"
+#include "constants.h"
+#include "cuda_utils.h"
+#include "filesystem.h"
+#include "logging.h"
 
 #define TRITONJSON_STATUSTYPE nvidia::inferenceserver::Status
 #define TRITONJSON_STATUSRETURN(M)        \

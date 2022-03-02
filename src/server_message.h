@@ -26,7 +26,7 @@
 #pragma once
 
 #include <string>
-#include "src/core/status.h"
+#include "status.h"
 
 #define TRITONJSON_STATUSTYPE nvidia::inferenceserver::Status
 #define TRITONJSON_STATUSRETURN(M)        \

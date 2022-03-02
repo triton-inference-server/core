@@ -24,12 +24,12 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/backends/backend/triton_backend_manager.h"
+#include "triton_backend_manager.h"
 
-#include "src/backends/backend/triton_memory_manager.h"
-#include "src/core/logging.h"
-#include "src/core/server_message.h"
-#include "src/core/shared_library.h"
+#include "triton_memory_manager.h"
+#include "logging.h"
+#include "server_message.h"
+#include "shared_library.h"
 
 namespace nvidia { namespace inferenceserver {
 

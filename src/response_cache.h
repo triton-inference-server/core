@@ -30,10 +30,10 @@
 #include <string>
 #include <unordered_map>
 
-#include "src/core/infer_request.h"
-#include "src/core/infer_response.h"
-#include "src/core/model.h"
-#include "src/core/status.h"
+#include "infer_request.h"
+#include "infer_response.h"
+#include "model.h"
+#include "status.h"
 
 #include <boost/functional/hash.hpp>
 #include <boost/interprocess/managed_external_buffer.hpp>

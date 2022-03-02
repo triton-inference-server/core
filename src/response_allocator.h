@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "src/core/tritonserver_apis.h"
+#include "tritonserver_apis.h"
 
 namespace nvidia { namespace inferenceserver {
 

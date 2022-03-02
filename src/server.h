@@ -34,13 +34,13 @@
 #include <vector>
 
 #include "model_config.pb.h"
-#include "src/core/infer_parameter.h"
-#include "src/core/model_config.h"
-#include "src/core/model_repository_manager.h"
-#include "src/core/persistent_backend_manager.h"
-#include "src/core/rate_limiter.h"
-#include "src/core/response_cache.h"
-#include "src/core/status.h"
+#include "infer_parameter.h"
+#include "model_config.h"
+#include "model_repository_manager.h"
+#include "persistent_backend_manager.h"
+#include "rate_limiter.h"
+#include "response_cache.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

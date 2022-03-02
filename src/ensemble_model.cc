@@ -24,13 +24,13 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/backends/ensemble/ensemble_model.h"
+#include "ensemble_model.h"
 
 #include <stdint.h>
-#include "src/core/constants.h"
-#include "src/core/ensemble_scheduler.h"
-#include "src/core/logging.h"
-#include "src/core/model_config_utils.h"
+#include "constants.h"
+#include "ensemble_scheduler.h"
+#include "logging.h"
+#include "model_config_utils.h"
 
 namespace nvidia { namespace inferenceserver {
 

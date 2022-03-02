@@ -32,9 +32,9 @@
 #include <queue>
 #include <vector>
 
-#include "src/backends/backend/triton_model_instance.h"
-#include "src/core/infer_request.h"
-#include "src/core/status.h"
+#include "triton_model_instance.h"
+#include "infer_request.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

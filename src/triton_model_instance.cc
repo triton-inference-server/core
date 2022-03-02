@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/backends/backend/triton_model_instance.h"
+#include "triton_model_instance.h"
 
 #ifndef _WIN32
 #include <sys/resource.h>
@@ -32,12 +32,12 @@
 #include <unistd.h>
 #endif
 #include "model_config.pb.h"
-#include "src/backends/backend/triton_model.h"
-#include "src/core/logging.h"
-#include "src/core/metrics.h"
-#include "src/core/numa_utils.h"
-#include "src/core/server.h"
-#include "src/core/shared_library.h"
+#include "triton_model.h"
+#include "logging.h"
+#include "metrics.h"
+#include "numa_utils.h"
+#include "server.h"
+#include "shared_library.h"
 #include "triton/common/nvtx.h"
 
 namespace nvidia { namespace inferenceserver {

@@ -28,9 +28,9 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
-#include "src/core/constants.h"
-#include "src/core/status.h"
-#include "src/core/tritonserver_apis.h"
+#include "constants.h"
+#include "status.h"
+#include "tritonserver_apis.h"
 
 namespace nvidia { namespace inferenceserver {
 

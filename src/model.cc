@@ -24,15 +24,15 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/model.h"
+#include "model.h"
 
 #include <chrono>
 #include <future>
-#include "src/core/constants.h"
-#include "src/core/filesystem.h"
-#include "src/core/infer_request.h"
-#include "src/core/logging.h"
-#include "src/core/model_config_utils.h"
+#include "constants.h"
+#include "filesystem.h"
+#include "infer_request.h"
+#include "logging.h"
+#include "model_config_utils.h"
 
 namespace nvidia { namespace inferenceserver {
 

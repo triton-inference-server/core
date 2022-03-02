@@ -29,7 +29,7 @@
 #include <numa.h>
 #include <numaif.h>
 #endif
-#include "src/core/logging.h"
+#include "logging.h"
 
 namespace nvidia { namespace inferenceserver {
 
