@@ -26,14 +26,14 @@
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 
-#include "src/core/ensemble_scheduler.h"
+#include "ensemble_scheduler.h"
 
 #include <mutex>
-#include "src/core/cuda_utils.h"
-#include "src/core/logging.h"
-#include "src/core/metrics.h"
-#include "src/core/model.h"
-#include "src/core/server.h"
+#include "cuda_utils.h"
+#include "logging.h"
+#include "metrics.h"
+#include "model.h"
+#include "server.h"
 
 namespace nvidia { namespace inferenceserver {
 

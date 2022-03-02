@@ -28,9 +28,9 @@
 #include <map>
 #include <thread>
 #include <vector>
-#include "src/core/model_config.h"
-#include "src/core/status.h"
-#include "src/core/tritonserver_apis.h"
+#include "model_config.h"
+#include "status.h"
+#include "tritonserver_apis.h"
 
 namespace nvidia { namespace inferenceserver {
 

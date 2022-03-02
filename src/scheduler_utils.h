@@ -27,7 +27,7 @@
 
 #include <deque>
 #include <unordered_map>
-#include "src/core/scheduler.h"
+#include "scheduler.h"
 
 namespace nvidia { namespace inferenceserver {
 

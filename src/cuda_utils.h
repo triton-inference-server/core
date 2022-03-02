@@ -26,7 +26,7 @@
 #pragma once
 
 #include <set>
-#include "src/core/status.h"
+#include "status.h"
 #include "triton/common/sync_queue.h"
 
 #ifdef TRITON_ENABLE_GPU

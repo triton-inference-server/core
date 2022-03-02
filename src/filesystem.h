@@ -27,7 +27,7 @@
 
 #include <string>
 #include "google/protobuf/message.h"
-#include "src/core/status.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

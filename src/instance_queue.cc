@@ -24,9 +24,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/instance_queue.h"
+#include "instance_queue.h"
 
-#include "src/core/logging.h"
+#include "logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

@@ -24,13 +24,13 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
-#include "src/core/cuda_memory_manager.h"
+#include "cuda_memory_manager.h"
 
 #include <cnmem.h>
 #include <string.h>
 #include <set>
-#include "src/core/cuda_utils.h"
-#include "src/core/logging.h"
+#include "cuda_utils.h"
+#include "logging.h"
 
 namespace {
 

@@ -25,28 +25,28 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "src/core/model_repository_manager.h"
+#include "model_repository_manager.h"
 
 #include <algorithm>
 #include <deque>
 #include <future>
 #include <stdexcept>
 #include <thread>
-#include "src/core/constants.h"
-#include "src/core/ensemble_utils.h"
-#include "src/core/filesystem.h"
-#include "src/core/logging.h"
-#include "src/core/model.h"
-#include "src/core/model_config_utils.h"
-#include "src/core/triton_repo_agent.h"
+#include "constants.h"
+#include "ensemble_utils.h"
+#include "filesystem.h"
+#include "logging.h"
+#include "model.h"
+#include "model_config_utils.h"
+#include "triton_repo_agent.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif
 
-#include "src/backends/backend/triton_model.h"
+#include "triton_model.h"
 #ifdef TRITON_ENABLE_ENSEMBLE
-#include "src/backends/ensemble/ensemble_model.h"
+#include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
 
 namespace nvidia { namespace inferenceserver {

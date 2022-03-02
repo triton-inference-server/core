@@ -25,14 +25,14 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "src/core/tritonserver_apis.h"
+#include "tritonserver_apis.h"
 
 #include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include "src/core/constants.h"
-#include "src/core/model_config_utils.h"
+#include "constants.h"
+#include "model_config_utils.h"
 
 namespace nvidia { namespace inferenceserver {
 

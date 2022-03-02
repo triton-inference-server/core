@@ -24,12 +24,12 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/triton_repo_agent.h"
+#include "triton_repo_agent.h"
 
 #include <string>
-#include "src/core/filesystem.h"
-#include "src/core/logging.h"
-#include "src/core/shared_library.h"
+#include "filesystem.h"
+#include "logging.h"
+#include "shared_library.h"
 
 namespace nvidia { namespace inferenceserver {
 

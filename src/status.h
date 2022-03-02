@@ -26,7 +26,7 @@
 #pragma once
 
 #include <string>
-#include "src/core/tritonserver_apis.h"
+#include "tritonserver_apis.h"
 #include "triton/common/error.h"
 
 namespace nvidia { namespace inferenceserver {

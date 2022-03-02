@@ -27,8 +27,8 @@
 
 #include <memory>
 #include <string>
-#include "src/core/constants.h"
-#include "src/core/status.h"
+#include "constants.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

@@ -30,9 +30,9 @@
 #include <deque>
 #include <unordered_map>
 #include "model_config.pb.h"
-#include "src/core/model_config.h"
-#include "src/core/model_repository_manager.h"
-#include "src/core/status.h"
+#include "model_config.h"
+#include "model_repository_manager.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

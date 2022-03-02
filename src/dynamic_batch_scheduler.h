@@ -35,13 +35,13 @@
 #include <set>
 #include <thread>
 #include "model_config.pb.h"
-#include "src/backends/backend/triton_model.h"
-#include "src/backends/backend/triton_model_instance.h"
-#include "src/core/model_config.h"
-#include "src/core/rate_limiter.h"
-#include "src/core/scheduler.h"
-#include "src/core/scheduler_utils.h"
-#include "src/core/status.h"
+#include "triton_model.h"
+#include "triton_model_instance.h"
+#include "model_config.h"
+#include "rate_limiter.h"
+#include "scheduler.h"
+#include "scheduler_utils.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

@@ -26,10 +26,10 @@
 #pragma once
 
 #include "model_config.pb.h"
-#include "src/core/infer_stats.h"
-#include "src/core/label_provider.h"
-#include "src/core/scheduler.h"
-#include "src/core/status.h"
+#include "infer_stats.h"
+#include "label_provider.h"
+#include "scheduler.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

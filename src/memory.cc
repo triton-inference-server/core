@@ -24,14 +24,14 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/memory.h"
+#include "memory.h"
 
-#include "src/core/logging.h"
-#include "src/core/pinned_memory_manager.h"
+#include "logging.h"
+#include "pinned_memory_manager.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
-#include "src/core/cuda_memory_manager.h"
+#include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 
 namespace nvidia { namespace inferenceserver {

@@ -25,11 +25,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-#include "src/core/pinned_memory_manager.h"
+#include "pinned_memory_manager.h"
 
 #include <sstream>
-#include "src/core/logging.h"
-#include "src/core/numa_utils.h"
+#include "logging.h"
+#include "numa_utils.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>

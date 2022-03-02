@@ -28,11 +28,11 @@
 #include <memory>
 #include <string>
 #include "model_config.pb.h"
-#include "src/backends/backend/triton_backend_manager.h"
-#include "src/core/filesystem.h"
-#include "src/core/infer_request.h"
-#include "src/core/model.h"
-#include "src/core/status.h"
+#include "triton_backend_manager.h"
+#include "filesystem.h"
+#include "infer_request.h"
+#include "model.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

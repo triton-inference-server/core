@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/logging.h"
+#include "logging.h"
 #ifdef _WIN32
 // suppress the min and max definitions in Windef.h.
 #define NOMINMAX

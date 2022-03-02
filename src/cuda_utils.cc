@@ -24,9 +24,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/cuda_utils.h"
+#include "cuda_utils.h"
 
-#include "src/core/model_config_utils.h"
+#include "model_config_utils.h"
 #include "triton/common/nvtx.h"
 
 namespace nvidia { namespace inferenceserver {

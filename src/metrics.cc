@@ -27,12 +27,12 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
-#include "src/core/metrics.h"
+#include "metrics.h"
 
 #include <thread>
 #include "prometheus/detail/utils.h"
-#include "src/core/constants.h"
-#include "src/core/logging.h"
+#include "constants.h"
+#include "logging.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <cuda_runtime_api.h>

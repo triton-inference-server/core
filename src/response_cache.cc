@@ -24,9 +24,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/response_cache.h"
-#include "src/core/infer_stats.h"
-#include "src/core/logging.h"
+#include "response_cache.h"
+#include "infer_stats.h"
+#include "logging.h"
 
 namespace {
 

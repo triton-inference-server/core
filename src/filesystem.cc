@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/filesystem.h"
+#include "filesystem.h"
 
 #ifdef _WIN32
 // suppress the min and max definitions in Windef.h.
@@ -72,9 +72,9 @@
 #include <sys/types.h>
 #include <cerrno>
 #include <fstream>
-#include "src/core/constants.h"
-#include "src/core/logging.h"
-#include "src/core/status.h"
+#include "constants.h"
+#include "logging.h"
+#include "status.h"
 
 #ifdef _WIN32
 // <sys/stat.h> in Windows doesn't define S_ISDIR macro

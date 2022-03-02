@@ -24,22 +24,22 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/backends/backend/triton_model.h"
+#include "triton_model.h"
 
 #include <vector>
-#include "src/backends/backend/triton_backend_config.h"
-#include "src/backends/backend/triton_model_instance.h"
-#include "src/core/dynamic_batch_scheduler.h"
-#include "src/core/filesystem.h"
-#include "src/core/logging.h"
-#include "src/core/model_config_utils.h"
-#include "src/core/numa_utils.h"
-#include "src/core/sequence_batch_scheduler.h"
-#include "src/core/sequence_state.h"
-#include "src/core/server.h"
-#include "src/core/server_message.h"
-#include "src/core/shared_library.h"
-#include "src/core/tritonserver_apis.h"
+#include "triton_backend_config.h"
+#include "triton_model_instance.h"
+#include "dynamic_batch_scheduler.h"
+#include "filesystem.h"
+#include "logging.h"
+#include "model_config_utils.h"
+#include "numa_utils.h"
+#include "sequence_batch_scheduler.h"
+#include "sequence_state.h"
+#include "server.h"
+#include "server_message.h"
+#include "shared_library.h"
+#include "tritonserver_apis.h"
 
 namespace nvidia { namespace inferenceserver {
 

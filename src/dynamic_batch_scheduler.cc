@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/dynamic_batch_scheduler.h"
+#include "dynamic_batch_scheduler.h"
 
 #ifndef _WIN32
 #include <sys/resource.h>

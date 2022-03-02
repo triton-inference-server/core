@@ -30,8 +30,8 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include "src/core/model_config.h"
-#include "src/core/status.h"
+#include "model_config.h"
+#include "status.h"
 
 namespace nvidia { namespace inferenceserver {
 

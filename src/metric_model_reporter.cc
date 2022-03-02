@@ -24,12 +24,12 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/core/metric_model_reporter.h"
+#include "metric_model_reporter.h"
 
 #ifdef TRITON_ENABLE_METRICS
 
-#include "src/core/constants.h"
-#include "src/core/metrics.h"
+#include "constants.h"
+#include "metrics.h"
 
 namespace nvidia { namespace inferenceserver {
 
