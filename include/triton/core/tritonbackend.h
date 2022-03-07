@@ -64,7 +64,6 @@ struct TRITONBACKEND_Response;
 struct TRITONBACKEND_Backend;
 struct TRITONBACKEND_Model;
 struct TRITONBACKEND_ModelInstance;
-struct TRITONBACKEND_BufferAttributes;
 
 ///
 /// TRITONBACKEND API Version
@@ -294,14 +293,13 @@ TRITONBACKEND_InputBufferForHostPolicy(
     const uint32_t index, const void** buffer, uint64_t* buffer_byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
-/// Get the buffer attributes associated with the given input buffer. The
-/// returned 'buffer_attributes' is owned by the input so should not be freed by
-/// the caller. For a given input the number of buffers composing the input are
-/// found from 'buffer_count' returned by TRITONBACKEND_InputProperties.  The
-/// returned 'buffer_attributes' is owned by the input and so should not be
-/// modified or freed by the caller. The lifetime of the 'buffer_attributes'
-/// matches that of the input and so the 'buffer_attributes' should not be
-/// accessed after the input tensor object is released.
+/// Get the buffer attributes associated with the given input buffer. For a
+/// given input the number of buffers composing the input are found from
+/// 'buffer_count' returned by TRITONBACKEND_InputProperties. The returned
+/// 'buffer_attributes' is owned by the input and so should not be modified or
+/// freed by the caller. The lifetime of the 'buffer_attributes' matches that of
+/// the input and so the 'buffer_attributes' should not be accessed after the
+/// input tensor object is released.
 ///
 /// \param input The input tensor.
 /// \param index The index of the buffer. Must be 0 <= index < buffer_count,
@@ -310,7 +308,7 @@ TRITONBACKEND_InputBufferForHostPolicy(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBufferAttributes(
     TRITONBACKEND_Input* input, const uint32_t index,
-    TRITONBACKEND_BufferAttributes* buffer_attributes);
+    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 ///
 /// TRITONBACKEND_Output
@@ -352,7 +350,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBufferAttributes(
     TRITONBACKEND_Output* output,
-    TRITONBACKEND_BufferAttributes* buffer_attributes);
+    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 ///
 /// TRITONBACKEND_Request
@@ -753,10 +751,10 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBuffer(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBufferAttributes(
     TRITONBACKEND_State* state,
-    TRITONBACKEND_BufferAttributes* buffer_attributes);
+    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 ///
-/// TRITONBACKEND_BufferAttributes
+/// TRITONSERVER_BufferAttributes
 ///
 /// Object representing the attributes associated with an input, output, or
 /// state buffer. The API supports accessing the memory_type, memory_type_id,
@@ -770,7 +768,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBufferAttributes(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BufferAttributesMemoryType(
-    TRITONBACKEND_BufferAttributes* buffer_attributes,
+    TRITONSERVER_BufferAttributes* buffer_attributes,
     TRITONSERVER_MemoryType* memory_type);
 
 /// Get the memory type id associated with the buffer.
@@ -780,7 +778,7 @@ TRITONBACKEND_BufferAttributesMemoryType(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BufferAttributesMemoryTypeId(
-    TRITONBACKEND_BufferAttributes* buffer_attributes, int64_t* memory_type_id);
+    TRITONSERVER_BufferAttributes* buffer_attributes, int64_t* memory_type_id);
 
 /// Get the byte size associated with the buffer.
 ///
@@ -789,7 +787,7 @@ TRITONBACKEND_BufferAttributesMemoryTypeId(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BufferAttributesByteSize(
-    TRITONBACKEND_BufferAttributes* buffer_attributes, size_t* byte_size);
+    TRITONSERVER_BufferAttributes* buffer_attributes, size_t* byte_size);
 
 /// Get the cudaIpcHandle associated with the buffer. If the cudaIpcHandle does
 /// not exist for the given buffer, the handle will contain nullptr.  The
@@ -802,7 +800,7 @@ TRITONBACKEND_BufferAttributesByteSize(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BufferAttributesCudaIpcHandle(
-    TRITONBACKEND_BufferAttributes* buffer_attributes, void** handle);
+    TRITONSERVER_BufferAttributes* buffer_attributes, void** handle);
 
 ///
 /// TRITONBACKEND_Backend
