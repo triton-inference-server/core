@@ -574,6 +574,26 @@ TRITONBACKEND_StateUpdate()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_StateBufferAttributes()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_BufferAttributesMemoryType()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_BufferAttributesMemoryTypeId()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_BufferAttributesCudaIpcHandle()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_BufferAttributesByteSize()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ResponseFactoryNew()
 {
 }

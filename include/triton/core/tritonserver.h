@@ -51,6 +51,7 @@ extern "C" {
 #endif
 #endif
 
+struct TRITONSERVER_BufferAttributes;
 struct TRITONSERVER_Error;
 struct TRITONSERVER_InferenceRequest;
 struct TRITONSERVER_InferenceResponse;
@@ -88,7 +89,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 8
+#define TRITONSERVER_API_VERSION_MINOR 9
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -362,6 +363,35 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
     TRITONSERVER_MemoryType* actual_memory_type,
     int64_t* actual_memory_type_id);
 
+/// Type for allocation function that allocates a buffer to hold an
+/// output tensor with buffer attributes.
+///
+/// \param allocator The allocator that is provided in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param tensor_name The name of the output tensor to allocate for.
+/// \param userp The user data pointer that is provided as
+/// 'response_allocator_userp' in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param preferred_buffer_attributes The buffer attributes that the caller
+/// prefers for the buffer.
+/// \param actual_buffer_attributes Returns the buffer attributes associated
+/// with the allocated buffer.
+/// \param buffer Returns a pointer to the allocated memory.
+/// \param buffer_userp Returns a user-specified value to associate with the
+/// buffer, or nullptr if no user-specified value should be associated with the
+/// buffer. This value will be provided in the call to
+/// TRITONSERVER_ResponseAllocatorBufferAttributesReleaseFn_t when the buffer is
+/// released and will also be returned by TRITONSERVER_InferenceResponseOutput.
+/// \return a TRITONSERVER_Error object if a failure occurs while
+/// attempting an allocation. If an error is returned all other return
+/// values will be ignored.
+typedef TRITONSERVER_Error* (
+    *TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t)(
+    TRITONSERVER_ResponseAllocator* allocator, const char* tensor_name,
+    TRITONSERVER_BufferAttributes* preferred_buffer_attributes,
+    TRITONSERVER_BufferAttributes** actual_buffer_attributes, void* userp,
+    void** buffer, void** buffer_userp);
+
 /// Type for function that is called to query the allocator's preferred memory
 /// type and memory type ID. As much as possible, the allocator should attempt
 /// to return the same memory_type and memory_type_id values that will be
@@ -412,6 +442,26 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorReleaseFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, void* buffer, void* buffer_userp,
     size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id);
+
+/// Type for function that is called when the server no longer holds
+/// any reference to a buffer allocated by
+/// TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t. In practice this
+/// function is typically called when the response object associated with the
+/// buffer is deleted by TRITONSERVER_InferenceResponseDelete.
+///
+/// \param allocator The allocator that is provided in the call to
+/// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param buffer Pointer to the buffer to be freed.
+/// \param buffer_userp The user-specified value associated
+/// with the buffer in TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t.
+/// \param buffer_attributes Buffer attributes associated with this buffer.
+/// \return a TRITONSERVER_Error object if a failure occurs while
+/// attempting the release. If an error is returned Triton will not
+/// attempt to release the buffer again.
+typedef TRITONSERVER_Error* (
+    *TRITONSERVER_ResponseAllocatorBufferAttributesReleaseFn_t)(
+    TRITONSERVER_ResponseAllocator* allocator, void* buffer, void* buffer_userp,
+    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 /// Type for function that is called to indicate that subsequent
 /// allocation requests will refer to a new response.
@@ -478,6 +528,62 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocator** allocator,
     TRITONSERVER_ResponseAllocatorAllocFn_t alloc_fn,
     TRITONSERVER_ResponseAllocatorReleaseFn_t release_fn,
+    TRITONSERVER_ResponseAllocatorStartFn_t start_fn);
+
+/// Create a new response allocator object with buffer attributes.
+///
+/// The response allocator object is used by Triton to allocate
+/// buffers to hold the output tensors in inference responses. Most
+/// models generate a single response for each inference request
+/// (TRITONSERVER_TXN_ONE_TO_ONE). For these models the order of
+/// callbacks will be:
+///
+///   TRITONSERVER_ServerInferAsync called
+///    - start_fn : optional (and typically not required)
+///    - alloc_fn : called once for each output tensor in response
+///   TRITONSERVER_InferenceResponseDelete called
+///    - release_fn: called once for each output tensor in response
+///
+/// For models that generate multiple responses for each inference
+/// request (TRITONSERVER_TXN_DECOUPLED), the start_fn callback can be
+/// used to determine sets of alloc_fn callbacks that belong to the
+/// same response:
+///
+///   TRITONSERVER_ServerInferAsync called
+///    - start_fn
+///    - alloc_fn : called once for each output tensor in response
+///    - start_fn
+///    - alloc_fn : called once for each output tensor in response
+///      ...
+///   For each response, TRITONSERVER_InferenceResponseDelete called
+///    - release_fn: called once for each output tensor in the response
+///
+/// In all cases the start_fn, alloc_fn and release_fn callback
+/// functions must be thread-safe. Typically making these functions
+/// thread-safe does not require explicit locking. The recommended way
+/// to implement these functions is to have each inference request
+/// provide a 'response_allocator_userp' object that is unique to that
+/// request with TRITONSERVER_InferenceRequestSetResponseCallback. The
+/// callback functions then operate only on this unique state. Locking
+/// is required only when the callback function needs to access state
+/// that is shared across inference requests (for example, a common
+/// allocation pool).
+///
+/// \param allocator Returns the new response allocator object.
+/// \param alloc_fn The function to call to allocate buffers for result
+/// tensors.
+/// \param release_fn The function to call when the server no longer
+/// holds a reference to an allocated buffer.
+/// \param start_fn The function to call to indicate that the
+/// subsequent 'alloc_fn' calls are for a new response. This callback
+/// is optional (use nullptr to indicate that it should not be
+/// invoked).
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ResponseAllocatorNewWithBufferAttributes(
+    TRITONSERVER_ResponseAllocator** allocator,
+    TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t alloc_fn,
+    TRITONSERVER_ResponseAllocatorBufferAttributesReleaseFn_t release_fn,
     TRITONSERVER_ResponseAllocatorStartFn_t start_fn);
 
 /// Set the query function to a response allocator object. Usually the
@@ -1088,6 +1194,23 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id, const char* host_policy_name);
 
+/// Assign a buffer of data to an input. The buffer will be appended
+/// to any existing buffers for that input. The 'inference_request'
+/// object takes ownership of the buffer and so the caller should not
+/// modify or free the buffer until that ownership is released by
+/// 'inference_request' being deleted or by the input being removed
+/// from 'inference_request'.
+///
+/// \param inference_request The request object.
+/// \param name The name of the input.
+/// \param base The base address of the input data.
+/// \param buffer_attributes The buffer attrubutes of the input.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes(
+    TRITONSERVER_InferenceRequest* inference_request, const char* name,
+    const void* base, TRITONSERVER_BufferAttributes* buffer_attributes);
+
 /// Clear all input data from an input, releasing ownership of the
 /// buffer(s) that were appended to the input with
 /// TRITONSERVER_InferenceRequestAppendInputData or
@@ -1316,6 +1439,108 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputClassificationLabel(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const size_t class_index, const char** label);
+
+/// TRITONSERVER_BufferAttributes
+///
+/// API to create, modify, or retrieve attributes associated with a buffer.
+///
+
+/// Create a new buffer attributes object. The caller takes ownership of
+/// the TRITONSERVER_BufferAttributes object and must call
+/// TRITONSERVER_BufferAttributesDelete to release the object.
+///
+/// \param buffer_attributes Returns the new buffer attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_BufferAttributesNew(
+    TRITONSERVER_BufferAttributes** buffer_attributes);
+
+/// Delete a buffer attributes object.
+///
+/// \param buffer_attributes The buffer_attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_BufferAttributesDelete(
+    TRITONSERVER_BufferAttributes* buffer_attributes);
+
+/// Set the memory type id field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param memory_type_id Memory type id to assign to the buffer attributes
+/// object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesSetMemoryTypeId(
+    TRITONSERVER_BufferAttributes* buffer_attributes, int64_t memory_type_id);
+
+/// Set the memory type field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param memory_type Memory type to assign to the buffer attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesSetMemoryType(
+    TRITONSERVER_BufferAttributes* buffer_attributes,
+    TRITONSERVER_MemoryType memory_type);
+
+/// Set the CudaIpcHandle field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param cuda_ipc_handle The CudaIpcHandle to assign to the buffer attributes
+/// object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesSetCudaIpcHandle(
+    TRITONSERVER_BufferAttributes* buffer_attributes, void* cuda_ipc_handle);
+
+/// Set the byte size field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param byte_size Byte size to assign to the buffer attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesSetByteSize(
+    TRITONSERVER_BufferAttributes* buffer_attributes, size_t byte_size);
+
+/// Get the memory type id field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param memory_type_id Returns the memory type id associated with the buffer
+/// attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesMemoryTypeId(
+    TRITONSERVER_BufferAttributes* buffer_attributes, int64_t* memory_type_id);
+
+/// Get the memory type field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param memory_type Returns the memory type associated with the buffer
+/// attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesMemoryType(
+    TRITONSERVER_BufferAttributes* buffer_attributes,
+    TRITONSERVER_MemoryType* memory_type);
+
+/// Get the CudaIpcHandle field of the buffer attributes object.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param cuda_ipc_handle Returns the memory type associated with the buffer
+/// attributes object. If the cudaIpcHandle does not exist for the buffer,
+/// nullptr will be returned.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesCudaIpcHandle(
+    TRITONSERVER_BufferAttributes* buffer_attributes, void** cuda_ipc_handle);
+
+/// Get the byte size field of the buffer attributes.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param byte_size Returns the byte size associated with the buffer attributes
+/// object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_BufferAttributesByteSize(
+    TRITONSERVER_BufferAttributes* buffer_attributes, size_t* byte_size);
+
 
 /// TRITONSERVER_ServerOptions
 ///

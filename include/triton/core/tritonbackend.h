@@ -782,6 +782,15 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BufferAttributesMemoryTypeId(
     TRITONBACKEND_BufferAttributes* buffer_attributes, int64_t* memory_type_id);
 
+/// Get the byte size associated with the buffer.
+///
+/// \param buffer_attributes The buffer attributes object.
+/// \param byte_size Returns the byte size of the buffer.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BufferAttributesByteSize(
+    TRITONBACKEND_BufferAttributes* buffer_attributes, size_t* byte_size);
+
 /// Get the cudaIpcHandle associated with the buffer. If the cudaIpcHandle does
 /// not exist for the given buffer, the handle will contain nullptr.  The
 /// returned 'handle' is owned by the 'buffer_attributes' and so should not be
