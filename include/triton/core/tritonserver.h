@@ -364,35 +364,24 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
     int64_t* actual_memory_type_id);
 
 /// Type for allocation function that allocates a buffer to hold an
-/// output tensor with buffer attributes.
+/// output tensor with buffer attributes. The callback function must fill in the
+/// appropriate buffer attributes information related to this buffer.
 ///
 /// \param allocator The allocator that is provided in the call to
 /// TRITONSERVER_InferenceRequestSetResponseCallback.
 /// \param tensor_name The name of the output tensor to allocate for.
+/// \param buffer_attributes The buffer attributes associated with the buffer.
+/// \param buffer Returns a pointer to the allocated memory.
 /// \param userp The user data pointer that is provided as
 /// 'response_allocator_userp' in the call to
 /// TRITONSERVER_InferenceRequestSetResponseCallback.
-/// \param preferred_buffer_attributes The buffer attributes that the caller
-/// prefers for the buffer.
-/// \param actual_buffer_attributes Returns the buffer attributes associated
-/// with the allocated buffer. The caller takes ownership of the
-/// TRITONSERVER_BufferAttributes object and must call
-/// TRITONSERVER_BufferAttributesDelete to release the object.
-/// \param buffer Returns a pointer to the allocated memory.
-/// \param buffer_userp Returns a user-specified value to associate with the
-/// buffer, or nullptr if no user-specified value should be associated with the
-/// buffer. This value will be provided in the call to
-/// TRITONSERVER_ResponseAllocatorBufferAttributesReleaseFn_t when the buffer is
-/// released and will also be returned by TRITONSERVER_InferenceResponseOutput.
 /// \return a TRITONSERVER_Error object if a failure occurs while
 /// attempting an allocation. If an error is returned all other return
 /// values will be ignored.
 typedef TRITONSERVER_Error* (
-    *TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t)(
+    *TRITONSERVER_ResponseAllocatorBufferAttributesFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, const char* tensor_name,
-    TRITONSERVER_BufferAttributes* preferred_buffer_attributes,
-    TRITONSERVER_BufferAttributes** actual_buffer_attributes, void* userp,
-    void** buffer, void** buffer_userp);
+    TRITONSERVER_BufferAttributes* buffer_attributes, void* userp);
 
 /// Type for function that is called to query the allocator's preferred memory
 /// type and memory type ID. As much as possible, the allocator should attempt
@@ -444,26 +433,6 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorReleaseFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, void* buffer, void* buffer_userp,
     size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id);
-
-/// Type for function that is called when the server no longer holds
-/// any reference to a buffer allocated by
-/// TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t. In practice this
-/// function is typically called when the response object associated with the
-/// buffer is deleted by TRITONSERVER_InferenceResponseDelete.
-///
-/// \param allocator The allocator that is provided in the call to
-/// TRITONSERVER_InferenceRequestSetResponseCallback.
-/// \param buffer Pointer to the buffer to be freed.
-/// \param buffer_userp The user-specified value associated
-/// with the buffer in TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t.
-/// \param buffer_attributes Buffer attributes associated with this buffer.
-/// \return a TRITONSERVER_Error object if a failure occurs while
-/// attempting the release. If an error is returned Triton will not
-/// attempt to release the buffer again.
-typedef TRITONSERVER_Error* (
-    *TRITONSERVER_ResponseAllocatorBufferAttributesReleaseFn_t)(
-    TRITONSERVER_ResponseAllocator* allocator, void* buffer, void* buffer_userp,
-    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 /// Type for function that is called to indicate that subsequent
 /// allocation requests will refer to a new response.
@@ -532,61 +501,21 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocatorReleaseFn_t release_fn,
     TRITONSERVER_ResponseAllocatorStartFn_t start_fn);
 
-/// Create a new response allocator object with buffer attributes.
+/// Set the buffer attributes function for a response allocator object.
+/// The function will be called after alloc_fn to set the buffer attributes
+/// associated with the output buffer.
 ///
-/// The response allocator object is used by Triton to allocate
-/// buffers to hold the output tensors in inference responses. Most
-/// models generate a single response for each inference request
-/// (TRITONSERVER_TXN_ONE_TO_ONE). For these models the order of
-/// callbacks will be:
+/// The thread-safy requirement for buffer_attributes_fn is the same as other allocator
+/// callbacks.
 ///
-///   TRITONSERVER_ServerInferAsync called
-///    - start_fn : optional (and typically not required)
-///    - alloc_fn : called once for each output tensor in response
-///   TRITONSERVER_InferenceResponseDelete called
-///    - release_fn: called once for each output tensor in response
-///
-/// For models that generate multiple responses for each inference
-/// request (TRITONSERVER_TXN_DECOUPLED), the start_fn callback can be
-/// used to determine sets of alloc_fn callbacks that belong to the
-/// same response:
-///
-///   TRITONSERVER_ServerInferAsync called
-///    - start_fn
-///    - alloc_fn : called once for each output tensor in response
-///    - start_fn
-///    - alloc_fn : called once for each output tensor in response
-///      ...
-///   For each response, TRITONSERVER_InferenceResponseDelete called
-///    - release_fn: called once for each output tensor in the response
-///
-/// In all cases the start_fn, alloc_fn and release_fn callback
-/// functions must be thread-safe. Typically making these functions
-/// thread-safe does not require explicit locking. The recommended way
-/// to implement these functions is to have each inference request
-/// provide a 'response_allocator_userp' object that is unique to that
-/// request with TRITONSERVER_InferenceRequestSetResponseCallback. The
-/// callback functions then operate only on this unique state. Locking
-/// is required only when the callback function needs to access state
-/// that is shared across inference requests (for example, a common
-/// allocation pool).
-///
-/// \param allocator Returns the new response allocator object.
-/// \param alloc_fn The function to call to allocate buffers for result
-/// tensors.
-/// \param release_fn The function to call when the server no longer
-/// holds a reference to an allocated buffer.
-/// \param start_fn The function to call to indicate that the
-/// subsequent 'alloc_fn' calls are for a new response. This callback
-/// is optional (use nullptr to indicate that it should not be
-/// invoked).
+/// \param allocator The response allocator object.
+/// \param buffer_attributes_fn The function to call to get the buffer attributes information
+/// for an allocated buffer.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ResponseAllocatorNewWithBufferAttributes(
-    TRITONSERVER_ResponseAllocator** allocator,
-    TRITONSERVER_ResponseAllocatorBufferAttributesAllocFn_t alloc_fn,
-    TRITONSERVER_ResponseAllocatorBufferAttributesReleaseFn_t release_fn,
-    TRITONSERVER_ResponseAllocatorStartFn_t start_fn);
+TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
+    TRITONSERVER_ResponseAllocator* allocator,
+    TRITONSERVER_ResponseAllocatorBufferAttributesFn_t buffer_attributes_fn);
 
 /// Set the query function to a response allocator object. Usually the
 /// function will be called before alloc_fn to understand what is the
@@ -1201,7 +1130,10 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
 /// object takes ownership of the buffer and so the caller should not
 /// modify or free the buffer until that ownership is released by
 /// 'inference_request' being deleted or by the input being removed
-/// from 'inference_request'.
+/// from 'inference_request'. After calling this function, the ownership
+/// of buffer attributes will be transferred to the input and the caller should
+/// not modify or free the buffer attributes. Additionally, the caller should
+/// not use the same buffer attributes object with multiple inputs.
 ///
 /// \param inference_request The request object.
 /// \param name The name of the input.

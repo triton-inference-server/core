@@ -295,10 +295,10 @@ TRITONBACKEND_InputBufferForHostPolicy(
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
 /// Get the buffer attributes associated with the given input buffer. The
-/// returned 'buffer_attributes' is owned by the caller and should not be freed.
-/// For a given input the number of buffers composing the input are found
-/// from 'buffer_count' returned by TRITONBACKEND_InputProperties.
-/// The returned 'buffer_attributes' is owned by the input and so should not be
+/// returned 'buffer_attributes' is owned by the input so should not be freed by
+/// the caller. For a given input the number of buffers composing the input are
+/// found from 'buffer_count' returned by TRITONBACKEND_InputProperties.  The
+/// returned 'buffer_attributes' is owned by the input and so should not be
 /// modified or freed by the caller. The lifetime of the 'buffer_attributes'
 /// matches that of the input and so the 'buffer_attributes' should not be
 /// accessed after the input tensor object is released.
@@ -798,7 +798,7 @@ TRITONBACKEND_BufferAttributesByteSize(
 /// of the 'buffer_attributes'.
 ///
 /// \param buffer_attributes The buffer attributes object.
-/// \param handle Returns the memory type id of the buffer.
+/// \param handle Returns the cuda ipc handle of the buffer.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BufferAttributesCudaIpcHandle(
