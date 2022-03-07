@@ -375,7 +375,9 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
 /// \param preferred_buffer_attributes The buffer attributes that the caller
 /// prefers for the buffer.
 /// \param actual_buffer_attributes Returns the buffer attributes associated
-/// with the allocated buffer.
+/// with the allocated buffer. The caller takes ownership of the
+/// TRITONSERVER_BufferAttributes object and must call
+/// TRITONSERVER_BufferAttributesDelete to release the object.
 /// \param buffer Returns a pointer to the allocated memory.
 /// \param buffer_userp Returns a user-specified value to associate with the
 /// buffer, or nullptr if no user-specified value should be associated with the
