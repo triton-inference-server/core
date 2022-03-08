@@ -31,7 +31,7 @@
 #include "triton_model_instance.h"
 #include "dynamic_batch_scheduler.h"
 #include "filesystem.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "model_config_utils.h"
 #include "numa_utils.h"
 #include "sequence_batch_scheduler.h"

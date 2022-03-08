@@ -29,7 +29,7 @@
 #include <functional>
 #include <string>
 #include <vector>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "infer_parameter.h"
 #include "infer_trace.h"
 #include "model_config.h"

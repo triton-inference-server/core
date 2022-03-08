@@ -30,7 +30,7 @@
 
 #include <mutex>
 #include "cuda_utils.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "metrics.h"
 #include "model.h"
 #include "server.h"

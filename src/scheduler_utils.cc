@@ -27,8 +27,8 @@
 #include "scheduler_utils.h"
 
 #include <cassert>
-#include "constants.h"
-#include "logging.h"
+#include "triton/common/constants.h"
+#include "triton/common/logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

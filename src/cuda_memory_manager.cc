@@ -30,7 +30,7 @@
 #include <string.h>
 #include <set>
 #include "cuda_utils.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace {
 

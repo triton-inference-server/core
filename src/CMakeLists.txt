@@ -132,7 +132,6 @@ set(
   infer_trace.cc
   instance_queue.cc
   label_provider.cc
-  logging.cc
   memory.cc
   metric_model_reporter.cc
   metrics.cc
@@ -163,7 +162,6 @@ set(
 
 set(
   SERVER_HDRS
-  constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h
   ensemble_scheduler.h
@@ -176,7 +174,6 @@ set(
   infer_trace.h
   instance_queue.h
   label_provider.h
-  logging.h
   memory.h
   metric_model_reporter.h
   metrics.h
@@ -580,7 +577,9 @@ target_link_libraries(
   PRIVATE
     proto-library                    # from repo-common
     triton-common-async-work-queue   # from repo-common
+    triton-common-constants          # from repo-common
     triton-common-error              # from repo-common
+    triton-common-logging            # from repo-common
     triton-common-json               # from repo-common
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf

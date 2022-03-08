@@ -26,7 +26,7 @@
 
 #include "infer_response.h"
 
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "model.h"
 #include "server.h"
 

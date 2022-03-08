@@ -28,7 +28,7 @@
 
 #include <string>
 #include "filesystem.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "shared_library.h"
 
 namespace nvidia { namespace inferenceserver {

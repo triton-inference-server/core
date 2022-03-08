@@ -29,7 +29,7 @@
 #include <numa.h>
 #include <numaif.h>
 #endif
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

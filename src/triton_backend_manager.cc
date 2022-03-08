@@ -27,7 +27,7 @@
 #include "triton_backend_manager.h"
 
 #include "triton_memory_manager.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "server_message.h"
 #include "shared_library.h"
 

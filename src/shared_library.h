@@ -27,7 +27,7 @@
 
 #include <memory>
 #include <string>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "status.h"
 
 namespace nvidia { namespace inferenceserver {

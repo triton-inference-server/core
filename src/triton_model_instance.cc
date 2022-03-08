@@ -33,7 +33,7 @@
 #endif
 #include "model_config.pb.h"
 #include "triton_model.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "metrics.h"
 #include "numa_utils.h"
 #include "server.h"

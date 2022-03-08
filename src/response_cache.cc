@@ -26,7 +26,7 @@
 
 #include "response_cache.h"
 #include "infer_stats.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace {
 

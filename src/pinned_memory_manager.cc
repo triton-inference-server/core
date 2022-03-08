@@ -28,7 +28,7 @@
 #include "pinned_memory_manager.h"
 
 #include <sstream>
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "numa_utils.h"
 
 #ifdef TRITON_ENABLE_GPU
