@@ -754,55 +754,6 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBufferAttributes(
     TRITONSERVER_BufferAttributes* buffer_attributes);
 
 ///
-/// TRITONSERVER_BufferAttributes
-///
-/// Object representing the attributes associated with an input, output, or
-/// state buffer. The API supports accessing the memory_type, memory_type_id,
-/// and CUDA IPC handle.
-///
-
-/// Get the memory type associated with the buffer.
-///
-/// \param buffer_attributes The buffer attributes object.
-/// \param memory_type Returns the memory type of the buffer.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BufferAttributesMemoryType(
-    TRITONSERVER_BufferAttributes* buffer_attributes,
-    TRITONSERVER_MemoryType* memory_type);
-
-/// Get the memory type id associated with the buffer.
-///
-/// \param buffer_attributes The buffer attributes object.
-/// \param memory_type_id Returns the memory type id of the buffer.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BufferAttributesMemoryTypeId(
-    TRITONSERVER_BufferAttributes* buffer_attributes, int64_t* memory_type_id);
-
-/// Get the byte size associated with the buffer.
-///
-/// \param buffer_attributes The buffer attributes object.
-/// \param byte_size Returns the byte size of the buffer.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BufferAttributesByteSize(
-    TRITONSERVER_BufferAttributes* buffer_attributes, size_t* byte_size);
-
-/// Get the cudaIpcHandle associated with the buffer. If the cudaIpcHandle does
-/// not exist for the given buffer, the handle will contain nullptr.  The
-/// returned 'handle' is owned by the 'buffer_attributes' and so should not be
-/// modified or freed by the caller. The lifetime of the 'handle' matches that
-/// of the 'buffer_attributes'.
-///
-/// \param buffer_attributes The buffer attributes object.
-/// \param handle Returns the cuda ipc handle of the buffer.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BufferAttributesCudaIpcHandle(
-    TRITONSERVER_BufferAttributes* buffer_attributes, void** handle);
-
-///
 /// TRITONBACKEND_Backend
 ///
 /// Object representing a backend.

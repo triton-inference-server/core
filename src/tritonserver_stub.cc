@@ -106,6 +106,10 @@ TRITONSERVER_ResponseAllocatorSetQueryFunction()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ResponseAllocatorDelete()
 {
 }
@@ -406,10 +410,6 @@ TRITONSERVER_ServerOptionsSetHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_ResponseAllocatorNewWithBufferAttributes()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes()
 {
 }
@@ -423,10 +423,6 @@ TRITONSERVER_BufferAttributesDelete()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_BufferAttributesSetMemoryTypeId()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONSERVER_BufferAttributesSetMemoryType()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -630,19 +626,11 @@ TRITONBACKEND_StateBufferAttributes()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_BufferAttributesMemoryType()
+TRITONBACKEND_InputBufferAttributes()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_BufferAttributesMemoryTypeId()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_BufferAttributesCudaIpcHandle()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_BufferAttributesByteSize()
+TRITONBACKEND_OutputBufferAttributes()
 {
 }
 TRITONAPI_DECLSPEC void
