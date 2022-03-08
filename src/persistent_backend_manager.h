@@ -27,7 +27,7 @@
 
 #include <list>
 #include "triton_backend_manager.h"
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "model_config.h"
 #include "status.h"
 

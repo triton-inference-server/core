@@ -28,10 +28,10 @@
 
 #include <chrono>
 #include <future>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "filesystem.h"
 #include "infer_request.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "model_config_utils.h"
 
 namespace nvidia { namespace inferenceserver {

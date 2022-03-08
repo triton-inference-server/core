@@ -72,8 +72,8 @@
 #include <sys/types.h>
 #include <cerrno>
 #include <fstream>
-#include "constants.h"
-#include "logging.h"
+#include "triton/common/constants.h"
+#include "triton/common/logging.h"
 #include "status.h"
 
 #ifdef _WIN32

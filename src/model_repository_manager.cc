@@ -32,10 +32,10 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "ensemble_utils.h"
 #include "filesystem.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "triton_repo_agent.h"

@@ -30,10 +30,10 @@
 #include <deque>
 #include <mutex>
 #include <set>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "cuda_utils.h"
 #include "filesystem.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 
 #define TRITONJSON_STATUSTYPE nvidia::inferenceserver::Status
 #define TRITONJSON_STATUSRETURN(M)        \

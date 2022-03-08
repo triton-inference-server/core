@@ -30,7 +30,7 @@
 #include <mutex>
 #include "triton_backend_config.h"
 #include "filesystem.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

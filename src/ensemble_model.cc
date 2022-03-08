@@ -27,9 +27,9 @@
 #include "ensemble_model.h"
 
 #include <stdint.h>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "ensemble_scheduler.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "model_config_utils.h"
 
 namespace nvidia { namespace inferenceserver {

@@ -26,7 +26,7 @@
 
 #include "model_config.h"
 
-#include "constants.h"
+#include "triton/common/constants.h"
 
 namespace nvidia { namespace inferenceserver {
 

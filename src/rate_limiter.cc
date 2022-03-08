@@ -26,7 +26,7 @@
 
 #include "rate_limiter.h"
 
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

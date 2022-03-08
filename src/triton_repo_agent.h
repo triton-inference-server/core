@@ -31,7 +31,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "model_config_utils.h"
 
 namespace nvidia { namespace inferenceserver {

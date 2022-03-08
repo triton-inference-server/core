@@ -26,7 +26,7 @@
 #pragma once
 
 #include <vector>
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "status.h"
 
 namespace nvidia { namespace inferenceserver {

@@ -28,7 +28,7 @@
 
 #include "mutex"
 #include "filesystem.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 
 #ifdef _WIN32
 // suppress the min and max definitions in Windef.h.

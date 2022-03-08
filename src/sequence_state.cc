@@ -27,7 +27,7 @@
 #include "sequence_state.h"
 
 #include "memory.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

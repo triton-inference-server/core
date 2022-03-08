@@ -28,7 +28,7 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
-#include "constants.h"
+#include "triton/common/constants.h"
 #include "metrics.h"
 
 namespace nvidia { namespace inferenceserver {

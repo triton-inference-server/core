@@ -26,7 +26,7 @@
 
 #include "instance_queue.h"
 
-#include "logging.h"
+#include "triton/common/logging.h"
 
 namespace nvidia { namespace inferenceserver {
 

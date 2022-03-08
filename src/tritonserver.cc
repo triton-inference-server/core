@@ -31,7 +31,7 @@
 #include "infer_request.h"
 #include "infer_response.h"
 #include "infer_stats.h"
-#include "logging.h"
+#include "triton/common/logging.h"
 #include "metrics.h"
 #include "model.h"
 #include "model_config.h"
