@@ -365,23 +365,31 @@ typedef TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorAllocFn_t)(
 
 /// Type for allocation function that allocates a buffer to hold an
 /// output tensor with buffer attributes. The callback function must fill in the
-/// appropriate buffer attributes information related to this buffer.
+/// appropriate buffer attributes information related to this buffer. If set,
+/// this function is always called after TRITONSERVER_ResponseAllocatorAllocFn_t
+/// function.
 ///
 /// \param allocator The allocator that is provided in the call to
 /// TRITONSERVER_InferenceRequestSetResponseCallback.
 /// \param tensor_name The name of the output tensor to allocate for.
 /// \param buffer_attributes The buffer attributes associated with the buffer.
-/// \param buffer Returns a pointer to the allocated memory.
 /// \param userp The user data pointer that is provided as
 /// 'response_allocator_userp' in the call to
 /// TRITONSERVER_InferenceRequestSetResponseCallback.
+/// \param buffer_userp Returns a user-specified value to associate
+/// with the buffer, or nullptr if no user-specified value should be
+/// associated with the buffer. This value will be provided in the
+/// call to TRITONSERVER_ResponseAllocatorReleaseFn_t when the buffer
+/// is released and will also be returned by
+/// TRITONSERVER_InferenceResponseOutput.
 /// \return a TRITONSERVER_Error object if a failure occurs while
 /// attempting an allocation. If an error is returned all other return
 /// values will be ignored.
 typedef TRITONSERVER_Error* (
     *TRITONSERVER_ResponseAllocatorBufferAttributesFn_t)(
     TRITONSERVER_ResponseAllocator* allocator, const char* tensor_name,
-    TRITONSERVER_BufferAttributes* buffer_attributes, void* userp);
+    TRITONSERVER_BufferAttributes* buffer_attributes, void* userp,
+    void* buffer_userp);
 
 /// Type for function that is called to query the allocator's preferred memory
 /// type and memory type ID. As much as possible, the allocator should attempt
@@ -505,13 +513,13 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
 /// The function will be called after alloc_fn to set the buffer attributes
 /// associated with the output buffer.
 ///
-/// The thread-safy requirement for buffer_attributes_fn is the same as other allocator
-/// callbacks.
+/// The thread-safy requirement for buffer_attributes_fn is the same as other
+/// allocator callbacks.
 ///
 /// \param allocator The response allocator object.
-/// \param buffer_attributes_fn The function to call to get the buffer attributes information
-/// for an allocated buffer.
-/// \return a TRITONSERVER_Error indicating success or failure.
+/// \param buffer_attributes_fn The function to call to get the buffer
+/// attributes information for an allocated buffer. \return a TRITONSERVER_Error
+/// indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
     TRITONSERVER_ResponseAllocator* allocator,
@@ -1130,10 +1138,7 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
 /// object takes ownership of the buffer and so the caller should not
 /// modify or free the buffer until that ownership is released by
 /// 'inference_request' being deleted or by the input being removed
-/// from 'inference_request'. After calling this function, the ownership
-/// of buffer attributes will be transferred to the input and the caller should
-/// not modify or free the buffer attributes. Additionally, the caller should
-/// not use the same buffer attributes object with multiple inputs.
+/// from 'inference_request'.
 ///
 /// \param inference_request The request object.
 /// \param name The name of the input.

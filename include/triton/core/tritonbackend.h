@@ -304,11 +304,13 @@ TRITONBACKEND_InputBufferForHostPolicy(
 /// \param input The input tensor.
 /// \param index The index of the buffer. Must be 0 <= index < buffer_count,
 /// where buffer_count is the value returned by TRITONBACKEND_InputProperties.
+/// \param buffer Returns a pointer to a contiguous block of data for
+/// the named input.
 /// \param buffer_attributes Returns the attributes for the given buffer.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBufferAttributes(
-    TRITONBACKEND_Input* input, const uint32_t index,
-    TRITONSERVER_BufferAttributes* buffer_attributes);
+    TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
+    TRITONSERVER_BufferAttributes** buffer_attributes);
 
 ///
 /// TRITONBACKEND_Output
@@ -339,18 +341,20 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
     const uint64_t buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id);
 
-/// Get the buffer attributes associated with the given output buffer.
-/// The returned 'buffer_attributes' is owned by the output and so should not be
+/// Get the buffer attributes associated with the given output buffer. The
+/// returned 'buffer_attributes' is owned by the output and so should not be
 /// modified or freed by the caller. The lifetime of the 'buffer_attributes'
 /// matches that of the output and so the 'buffer_attributes' should not be
-/// accessed after the output tensor object is released.
+/// accessed after the output tensor object is released. This function must be
+/// called after the TRITONBACKEND_OutputBuffer otherwise it might contain
+/// incorrect data.
 ///
 /// \param output The output tensor.
 /// \param buffer_attributes Returns the attributes for the output buffer.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBufferAttributes(
     TRITONBACKEND_Output* output,
-    TRITONSERVER_BufferAttributes* buffer_attributes);
+    TRITONSERVER_BufferAttributes** buffer_attributes);
 
 ///
 /// TRITONBACKEND_Request
@@ -751,7 +755,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBuffer(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBufferAttributes(
     TRITONBACKEND_State* state,
-    TRITONSERVER_BufferAttributes* buffer_attributes);
+    TRITONSERVER_BufferAttributes** buffer_attributes);
 
 ///
 /// TRITONBACKEND_Backend
