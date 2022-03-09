@@ -665,3 +665,8 @@ install(
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+# Currently unit tests do not build for windows...
+if (NOT WIN32)
+  add_subdirectory(test test)
+endif() # NOT WIN32
