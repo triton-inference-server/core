@@ -518,8 +518,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
 ///
 /// \param allocator The response allocator object.
 /// \param buffer_attributes_fn The function to call to get the buffer
-/// attributes information for an allocated buffer. \return a TRITONSERVER_Error
-/// indicating success or failure.
+/// attributes information for an allocated buffer.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
     TRITONSERVER_ResponseAllocator* allocator,
