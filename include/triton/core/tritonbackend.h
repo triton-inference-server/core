@@ -383,16 +383,6 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
 
-/// Get the flag(s) associated with a request. On return 'flags' holds
-/// a bitwise-or of all flag values, see TRITONSERVER_RequestFlag for
-/// available flags.
-///
-/// \param request The inference request.
-/// \param flags Returns the flags.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
-    TRITONBACKEND_Request* request, uint32_t* flags);
-
 /// Get the correlation ID of the request if it is a string.
 /// Empty string indicates that the request does not have a correlation ID.
 /// Returns error if correlation ID for given request is not a string.
@@ -403,6 +393,16 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestCorrelationIdString(
     TRITONBACKEND_Request* request, const char** id);
+
+/// Get the flag(s) associated with a request. On return 'flags' holds
+/// a bitwise-or of all flag values, see TRITONSERVER_RequestFlag for
+/// available flags.
+///
+/// \param request The inference request.
+/// \param flags Returns the flags.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
+    TRITONBACKEND_Request* request, uint32_t* flags);
 
 /// Get the number of input tensors specified in the request.
 ///
@@ -1133,7 +1133,7 @@ TRITONBACKEND_ModelInstanceSecondaryDeviceCount(
 /// to the index.
 /// \param id Returns the id of secondary device corresponding to the index.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
     TRITONBACKEND_ModelInstance* instance, uint32_t index, const char** kind,
     int64_t* id);
 
