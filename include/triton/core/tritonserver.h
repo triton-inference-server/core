@@ -61,6 +61,8 @@ struct TRITONSERVER_Parameter;
 struct TRITONSERVER_ResponseAllocator;
 struct TRITONSERVER_Server;
 struct TRITONSERVER_ServerOptions;
+struct TRITONSERVER_Metric;
+struct TRITONSERVER_MetricFamily;
 
 ///
 /// TRITONSERVER API Version
@@ -1961,6 +1963,15 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
     TRITONSERVER_Server* server,
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceTrace* trace);
+
+/// TRITONSERVER_MetricKind
+///
+/// Types of metrics recognized by TRITONSERVER.
+///
+typedef enum TRITONSERVER_metrickind_enum {
+  TRITONSERVER_METRIC_COUNTER,
+  TRITONSERVER_METRIC_GAUGE
+} TRITONSERVER_MetricKind;
 
 #ifdef __cplusplus
 }
