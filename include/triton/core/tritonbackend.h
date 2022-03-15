@@ -91,7 +91,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 8
+#define TRITONBACKEND_API_VERSION_MINOR 9
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -293,6 +293,25 @@ TRITONBACKEND_InputBufferForHostPolicy(
     const uint32_t index, const void** buffer, uint64_t* buffer_byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
+/// Get the buffer attributes associated with the given input buffer. For a
+/// given input the number of buffers composing the input are found from
+/// 'buffer_count' returned by TRITONBACKEND_InputProperties. The returned
+/// 'buffer_attributes' is owned by the input and so should not be modified or
+/// freed by the caller. The lifetime of the 'buffer_attributes' matches that of
+/// the input and so the 'buffer_attributes' should not be accessed after the
+/// input tensor object is released.
+///
+/// \param input The input tensor.
+/// \param index The index of the buffer. Must be 0 <= index < buffer_count,
+/// where buffer_count is the value returned by TRITONBACKEND_InputProperties.
+/// \param buffer Returns a pointer to a contiguous block of data for
+/// the named input.
+/// \param buffer_attributes Returns the attributes for the given buffer.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputBufferAttributes(
+    TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
+    TRITONSERVER_BufferAttributes** buffer_attributes);
+
 ///
 /// TRITONBACKEND_Output
 ///
@@ -321,6 +340,21 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBuffer(
     TRITONBACKEND_Output* output, void** buffer,
     const uint64_t buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id);
+
+/// Get the buffer attributes associated with the given output buffer. The
+/// returned 'buffer_attributes' is owned by the output and so should not be
+/// modified or freed by the caller. The lifetime of the 'buffer_attributes'
+/// matches that of the output and so the 'buffer_attributes' should not be
+/// accessed after the output tensor object is released. This function must be
+/// called after the TRITONBACKEND_OutputBuffer otherwise it might contain
+/// incorrect data.
+///
+/// \param output The output tensor.
+/// \param buffer_attributes Returns the attributes for the output buffer.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBufferAttributes(
+    TRITONBACKEND_Output* output,
+    TRITONSERVER_BufferAttributes** buffer_attributes);
 
 ///
 /// TRITONBACKEND_Request
@@ -710,6 +744,18 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateUpdate(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBuffer(
     TRITONBACKEND_State* state, void** buffer, const uint64_t buffer_byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
+
+/// Get the buffer attributes associated with the given state buffer.
+/// The returned 'buffer_attributes' is owned by the state and so should not be
+/// modified or freed by the caller. The lifetime of the 'buffer_attributes'
+/// matches that of the state.
+///
+/// \param state The state.
+/// \param buffer_attributes Returns the buffer attributes for the given state.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateBufferAttributes(
+    TRITONBACKEND_State* state,
+    TRITONSERVER_BufferAttributes** buffer_attributes);
 
 ///
 /// TRITONBACKEND_Backend
