@@ -1974,23 +1974,23 @@ typedef enum TRITONSERVER_metrickind_enum {
 } TRITONSERVER_MetricKind;
 
 /// Create a new metric family object. The caller takes ownership of the
-/// TRITONSERVER_MetricFamily object and must call TRITONSERVER_MetricFamilyDelete to
-/// release the object.
+/// TRITONSERVER_MetricFamily object and must call
+/// TRITONSERVER_MetricFamilyDelete to release the object.
 ///
 /// \param family Returns the new family object.
 /// \param kind The TRITONSERVER_MetricKind type of MetricFamily to create.
-/// \param name The name of the metric family seen when calling the metrics endpoint.
-/// \param description The description of the metric family seen when calling the metrics endpoint.
-/// \return A new TRITONSERVER_Error object.
+/// \param name The name of the metric family seen when calling the metrics
+/// endpoint. \param description The description of the metric family seen when
+/// calling the metrics endpoint. \return A new TRITONSERVER_Error object.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
-    TRITONSERVER_MetricFamily **family, const TRITONSERVER_MetricKind kind,
+    TRITONSERVER_MetricFamily** family, const TRITONSERVER_MetricKind kind,
     const char* name, const char* description);
 
 /// Delete a metric family object.
 ///
 /// \param family The metric family object.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
-    TRITONSERVER_MetricFamily *family);
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete(
+    TRITONSERVER_MetricFamily* family);
 
 #ifdef __cplusplus
 }
