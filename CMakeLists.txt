@@ -111,35 +111,20 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     PRIVATE
       /Wall /D_WIN32_WINNT=0x0A00 /EHsc
   )
-
-  set_target_properties(
-    triton-core-serverstub
-    PROPERTIES
-      POSITION_INDEPENDENT_CODE ON
-      NO_SONAME ON
-      OUTPUT_NAME tritonserver
-  )
 else()
   target_compile_options(
     triton-core-serverstub
     PRIVATE
       -Wall -Wextra -Wno-unused-parameter -Werror
   )
-  set_target_properties(
-    triton-core-serverstub
-    PROPERTIES
-      POSITION_INDEPENDENT_CODE ON
-      NO_SONAME ON
-      OUTPUT_NAME tritonserver_stub
-  )
-
-  target_link_libraries(
-    triton-core-serverstub
-    PRIVATE
-      -Wl,-soname=libtritonserver.so
-  )
 endif()
 
+set_target_properties(
+  triton-core-serverstub
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME tritonserver
+)
 
 #
 # Shared library implementing Triton Server API
@@ -384,11 +369,19 @@ install(
     triton-core-backendapi
     triton-core-repoagentapi
     triton-core-serverapi
-    triton-core-serverstub
   EXPORT
     triton-core-targets
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(
+  TARGETS
+    triton-core-serverstub
+  EXPORT
+    triton-core-targets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/stubs
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}/stubs
 )
 
 install(
