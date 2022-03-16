@@ -267,11 +267,6 @@ else()
       LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtritonserver.ldscript
       LINK_FLAGS "-Wl,--version-script libtritonserver.ldscript"
   )
-  target_link_libraries(
-    triton-core
-    PRIVATE
-      -Wl,-soname=libtritonserver.so
-  )
 endif()
 
 set_target_properties(
