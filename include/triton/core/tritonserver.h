@@ -1969,8 +1969,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
 /// Types of metrics recognized by TRITONSERVER.
 ///
 typedef enum TRITONSERVER_metrickind_enum {
-  TRITONSERVER_METRIC_COUNTER,
-  TRITONSERVER_METRIC_GAUGE
+  TRITONSERVER_METRIC_KIND_COUNTER,
+  TRITONSERVER_METRIC_KIND_GAUGE
 } TRITONSERVER_MetricKind;
 
 /// Create a new metric family object. The caller takes ownership of the
