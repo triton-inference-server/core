@@ -72,11 +72,13 @@ set(
 #
 set(
   MEMORY_SRCS
+  ../buffer_attributes.cc
   ../memory.cc
 )
 
 set(
   MEMORY_HDRS
+  ../buffer_attributes.h
   ../memory.h
 )
 
