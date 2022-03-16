@@ -120,6 +120,7 @@ configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
   SERVER_SRCS
+  buffer_attributes.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
   ensemble_scheduler.cc
@@ -162,6 +163,7 @@ set(
 
 set(
   SERVER_HDRS
+  buffer_attributes.h
   cuda_utils.h
   dynamic_batch_scheduler.h
   ensemble_scheduler.h
