@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -39,6 +39,19 @@
 #include "server.h"
 #include "shared_library.h"
 #include "triton/common/nvtx.h"
+#include "tritonserver_apis.h"
+
+// For unknown reason, windows will not export the TRITONBACKEND_*
+// functions declared with dllexport in tritonbackend.h. To get those
+// functions exported it is (also?) necessary to mark the definitions
+// in this file with dllexport as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
 
 namespace nvidia { namespace inferenceserver {
 
@@ -695,7 +708,7 @@ TritonModelInstance::TritonBackendThread::BackendThread(
 
 extern "C" {
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceName(
     TRITONBACKEND_ModelInstance* instance, const char** name)
 {
@@ -704,7 +717,7 @@ TRITONBACKEND_ModelInstanceName(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceKind(
     TRITONBACKEND_ModelInstance* instance, TRITONSERVER_InstanceGroupKind* kind)
 {
@@ -713,7 +726,7 @@ TRITONBACKEND_ModelInstanceKind(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceDeviceId(
     TRITONBACKEND_ModelInstance* instance, int32_t* device_id)
 {
@@ -722,7 +735,7 @@ TRITONBACKEND_ModelInstanceDeviceId(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceHostPolicy(
     TRITONBACKEND_ModelInstance* instance, TRITONSERVER_Message** host_policy)
 {
@@ -732,7 +745,7 @@ TRITONBACKEND_ModelInstanceHostPolicy(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceProfileCount(
     TRITONBACKEND_ModelInstance* instance, uint32_t* count)
 {
@@ -741,7 +754,7 @@ TRITONBACKEND_ModelInstanceProfileCount(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceProfileName(
     TRITONBACKEND_ModelInstance* instance, const uint32_t index,
     const char** profile_name)
@@ -764,7 +777,7 @@ TRITONBACKEND_ModelInstanceProfileName(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceSecondaryDeviceCount(
     TRITONBACKEND_ModelInstance* instance, uint32_t* count)
 {
@@ -774,7 +787,7 @@ TRITONBACKEND_ModelInstanceSecondaryDeviceCount(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
     TRITONBACKEND_ModelInstance* instance, uint32_t index, const char** kind,
     int64_t* id)
@@ -797,7 +810,7 @@ TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceIsPassive(
     TRITONBACKEND_ModelInstance* instance, bool* is_passive)
 {
@@ -806,7 +819,7 @@ TRITONBACKEND_ModelInstanceIsPassive(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceModel(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Model** model)
 {
@@ -815,7 +828,7 @@ TRITONBACKEND_ModelInstanceModel(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceState(
     TRITONBACKEND_ModelInstance* instance, void** state)
 {
@@ -824,7 +837,7 @@ TRITONBACKEND_ModelInstanceState(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceSetState(
     TRITONBACKEND_ModelInstance* instance, void* state)
 {
@@ -833,7 +846,7 @@ TRITONBACKEND_ModelInstanceSetState(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportStatistics(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request* request,
     const bool success, const uint64_t exec_start_ns,
@@ -851,7 +864,7 @@ TRITONBACKEND_ModelInstanceReportStatistics(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportBatchStatistics(
     TRITONBACKEND_ModelInstance* instance, const uint64_t batch_size,
     const uint64_t exec_start_ns, const uint64_t compute_start_ns,

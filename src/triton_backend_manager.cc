@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -30,6 +30,18 @@
 #include "triton/common/logging.h"
 #include "server_message.h"
 #include "shared_library.h"
+
+// For unknown reason, windows will not export the TRITONBACKEND_*
+// functions declared with dllexport in tritonbackend.h. To get those
+// functions exported it is (also?) necessary to mark the definitions
+// in this file with dllexport as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
 
 namespace nvidia { namespace inferenceserver {
 
@@ -218,7 +230,7 @@ TritonBackend::UnloadBackendLibrary()
 
 extern "C" {
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ApiVersion(uint32_t* major, uint32_t* minor)
 {
   *major = TRITONBACKEND_API_VERSION_MAJOR;
@@ -226,7 +238,7 @@ TRITONBACKEND_ApiVersion(uint32_t* major, uint32_t* minor)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendName(TRITONBACKEND_Backend* backend, const char** name)
 {
   TritonBackend* tb = reinterpret_cast<TritonBackend*>(backend);
@@ -234,7 +246,7 @@ TRITONBACKEND_BackendName(TRITONBACKEND_Backend* backend, const char** name)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendConfig(
     TRITONBACKEND_Backend* backend, TRITONSERVER_Message** backend_config)
 {
@@ -244,7 +256,7 @@ TRITONBACKEND_BackendConfig(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendExecutionPolicy(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ExecutionPolicy* policy)
 {
@@ -253,7 +265,7 @@ TRITONBACKEND_BackendExecutionPolicy(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendSetExecutionPolicy(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ExecutionPolicy policy)
 {
@@ -262,7 +274,7 @@ TRITONBACKEND_BackendSetExecutionPolicy(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendArtifacts(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_ArtifactType* artifact_type,
     const char** location)
@@ -273,7 +285,7 @@ TRITONBACKEND_BackendArtifacts(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendMemoryManager(
     TRITONBACKEND_Backend* backend, TRITONBACKEND_MemoryManager** manager)
 {
@@ -282,7 +294,7 @@ TRITONBACKEND_BackendMemoryManager(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendState(TRITONBACKEND_Backend* backend, void** state)
 {
   TritonBackend* tb = reinterpret_cast<TritonBackend*>(backend);
@@ -290,7 +302,7 @@ TRITONBACKEND_BackendState(TRITONBACKEND_Backend* backend, void** state)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_BackendSetState(TRITONBACKEND_Backend* backend, void* state)
 {
   TritonBackend* tb = reinterpret_cast<TritonBackend*>(backend);

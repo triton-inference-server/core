@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -40,6 +40,18 @@
 #include "server_message.h"
 #include "shared_library.h"
 #include "tritonserver_apis.h"
+
+// For unknown reason, windows will not export the TRITONBACKEND_*
+// functions declared with dllexport in tritonbackend.h. To get those
+// functions exported it is (also?) necessary to mark the definitions
+// in this file with dllexport as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
 
 namespace nvidia { namespace inferenceserver {
 
@@ -332,7 +344,7 @@ extern "C" {
 //
 // TRITONBACKEND_Model
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelName(TRITONBACKEND_Model* model, const char** name)
 {
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
@@ -340,7 +352,7 @@ TRITONBACKEND_ModelName(TRITONBACKEND_Model* model, const char** name)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelVersion(TRITONBACKEND_Model* model, uint64_t* version)
 {
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
@@ -348,7 +360,7 @@ TRITONBACKEND_ModelVersion(TRITONBACKEND_Model* model, uint64_t* version)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelRepository(
     TRITONBACKEND_Model* model, TRITONBACKEND_ArtifactType* artifact_type,
     const char** location)
@@ -359,7 +371,7 @@ TRITONBACKEND_ModelRepository(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelConfig(
     TRITONBACKEND_Model* model, const uint32_t config_version,
     TRITONSERVER_Message** model_config)
@@ -380,7 +392,7 @@ TRITONBACKEND_ModelConfig(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config)
 {
@@ -389,7 +401,7 @@ TRITONBACKEND_ModelAutoCompleteConfig(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelSetConfig(
     TRITONBACKEND_Model* model, const uint32_t config_version,
     TRITONSERVER_Message* model_config)
@@ -403,7 +415,7 @@ TRITONBACKEND_ModelSetConfig(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelServer(
     TRITONBACKEND_Model* model, TRITONSERVER_Server** server)
 {
@@ -412,7 +424,7 @@ TRITONBACKEND_ModelServer(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelBackend(
     TRITONBACKEND_Model* model, TRITONBACKEND_Backend** backend)
 {
@@ -421,7 +433,7 @@ TRITONBACKEND_ModelBackend(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelState(TRITONBACKEND_Model* model, void** state)
 {
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
@@ -429,7 +441,7 @@ TRITONBACKEND_ModelState(TRITONBACKEND_Model* model, void** state)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelSetState(TRITONBACKEND_Model* model, void* state)
 {
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
@@ -440,7 +452,7 @@ TRITONBACKEND_ModelSetState(TRITONBACKEND_Model* model, void* state)
 ///
 /// TRITONBACKEND_Request
 ///
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestId(TRITONBACKEND_Request* request, const char** id)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
@@ -448,7 +460,7 @@ TRITONBACKEND_RequestId(TRITONBACKEND_Request* request, const char** id)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestCorrelationId(TRITONBACKEND_Request* request, uint64_t* id)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
@@ -463,7 +475,7 @@ TRITONBACKEND_RequestCorrelationId(TRITONBACKEND_Request* request, uint64_t* id)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestFlags(TRITONBACKEND_Request* request, uint32_t* flags)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
@@ -471,7 +483,7 @@ TRITONBACKEND_RequestFlags(TRITONBACKEND_Request* request, uint32_t* flags)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestCorrelationIdString(
     TRITONBACKEND_Request* request, const char** id)
 {
@@ -486,7 +498,7 @@ TRITONBACKEND_RequestCorrelationIdString(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestInputCount(TRITONBACKEND_Request* request, uint32_t* count)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
@@ -494,7 +506,7 @@ TRITONBACKEND_RequestInputCount(TRITONBACKEND_Request* request, uint32_t* count)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestInputName(
     TRITONBACKEND_Request* request, const uint32_t index,
     const char** input_name)
@@ -529,7 +541,7 @@ TRITONBACKEND_RequestInputName(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestInput(
     TRITONBACKEND_Request* request, const char* name,
     TRITONBACKEND_Input** input)
@@ -550,7 +562,7 @@ TRITONBACKEND_RequestInput(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestInputByIndex(
     TRITONBACKEND_Request* request, const uint32_t index,
     TRITONBACKEND_Input** input)
@@ -583,7 +595,7 @@ TRITONBACKEND_RequestInputByIndex(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestOutputCount(
     TRITONBACKEND_Request* request, uint32_t* count)
 {
@@ -592,7 +604,7 @@ TRITONBACKEND_RequestOutputCount(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestOutputName(
     TRITONBACKEND_Request* request, const uint32_t index,
     const char** output_name)
@@ -626,7 +638,7 @@ TRITONBACKEND_RequestOutputName(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestOutputBufferProperties(
     TRITONBACKEND_Request* request, const char* name, size_t* byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
@@ -641,7 +653,7 @@ TRITONBACKEND_RequestOutputBufferProperties(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestRelease(
     TRITONBACKEND_Request* request, uint32_t release_flags)
 {
@@ -655,7 +667,7 @@ TRITONBACKEND_RequestRelease(
 /// TRITONBACKEND_State
 ///
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_StateUpdate(TRITONBACKEND_State* state)
 {
   SequenceState* ts = reinterpret_cast<SequenceState*>(state);
@@ -669,7 +681,7 @@ TRITONBACKEND_StateUpdate(TRITONBACKEND_State* state)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_StateNew(
     TRITONBACKEND_State** state, TRITONBACKEND_Request* request,
     const char* name, const TRITONSERVER_DataType datatype,
@@ -701,7 +713,7 @@ TRITONBACKEND_StateNew(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_StateBuffer(
     TRITONBACKEND_State* state, void** buffer, const uint64_t buffer_byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
@@ -749,7 +761,7 @@ TRITONBACKEND_StateBuffer(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_StateBufferAttributes(
     TRITONBACKEND_State* state,
     TRITONSERVER_BufferAttributes** buffer_attributes)
@@ -764,7 +776,7 @@ TRITONBACKEND_StateBufferAttributes(
 //
 // TRITONBACKEND_ResponseFactory
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseFactoryNew(
     TRITONBACKEND_ResponseFactory** factory, TRITONBACKEND_Request* request)
 {
@@ -775,7 +787,7 @@ TRITONBACKEND_ResponseFactoryNew(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseFactoryDelete(TRITONBACKEND_ResponseFactory* factory)
 {
   InferenceResponseFactory* tf =
@@ -784,7 +796,7 @@ TRITONBACKEND_ResponseFactoryDelete(TRITONBACKEND_ResponseFactory* factory)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseFactorySendFlags(
     TRITONBACKEND_ResponseFactory* factory, const uint32_t send_flags)
 {
@@ -801,7 +813,7 @@ TRITONBACKEND_ResponseFactorySendFlags(
 ///
 /// TRITONBACKEND_Response
 ///
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseNew(
     TRITONBACKEND_Response** response, TRITONBACKEND_Request* request)
 {
@@ -819,7 +831,7 @@ TRITONBACKEND_ResponseNew(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseNewFromFactory(
     TRITONBACKEND_Response** response, TRITONBACKEND_ResponseFactory* factory)
 {
@@ -838,7 +850,7 @@ TRITONBACKEND_ResponseNewFromFactory(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseDelete(TRITONBACKEND_Response* response)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
@@ -846,7 +858,7 @@ TRITONBACKEND_ResponseDelete(TRITONBACKEND_Response* response)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetStringParameter(
     TRITONBACKEND_Response* response, const char* name, const char* value)
 {
@@ -859,7 +871,7 @@ TRITONBACKEND_ResponseSetStringParameter(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value)
 {
@@ -872,7 +884,7 @@ TRITONBACKEND_ResponseSetIntParameter(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value)
 {
@@ -885,7 +897,7 @@ TRITONBACKEND_ResponseSetBoolParameter(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseOutput(
     TRITONBACKEND_Response* response, TRITONBACKEND_Output** output,
     const char* name, const TRITONSERVER_DataType datatype,
@@ -906,7 +918,7 @@ TRITONBACKEND_ResponseOutput(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
     TRITONSERVER_Error* error)
@@ -937,7 +949,7 @@ TRITONBACKEND_ResponseSend(
 ///
 /// TRITONBACKEND_Input
 ///
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputProperties(
     TRITONBACKEND_Input* input, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
@@ -966,7 +978,7 @@ TRITONBACKEND_InputProperties(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputPropertiesForHostPolicy(
     TRITONBACKEND_Input* input, const char* host_policy_name, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
@@ -1005,7 +1017,7 @@ TRITONBACKEND_InputPropertiesForHostPolicy(
 }
 
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputBuffer(
     TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
     uint64_t* buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
@@ -1024,7 +1036,7 @@ TRITONBACKEND_InputBuffer(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputBufferAttributes(
     TRITONBACKEND_Input* input, const uint32_t index, const void** buffer,
     TRITONSERVER_BufferAttributes** buffer_attributes)
@@ -1042,7 +1054,7 @@ TRITONBACKEND_InputBufferAttributes(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputBufferForHostPolicy(
     TRITONBACKEND_Input* input, const char* host_policy_name,
     const uint32_t index, const void** buffer, uint64_t* buffer_byte_size,
@@ -1070,7 +1082,7 @@ TRITONBACKEND_InputBufferForHostPolicy(
 ///
 /// TRITONBACKEND_Output
 ///
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_OutputBuffer(
     TRITONBACKEND_Output* output, void** buffer,
     const uint64_t buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
@@ -1088,7 +1100,7 @@ TRITONBACKEND_OutputBuffer(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_OutputBufferAttributes(
     TRITONBACKEND_Output* output,
     TRITONSERVER_BufferAttributes** buffer_attributes)
