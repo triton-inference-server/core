@@ -31,7 +31,7 @@
 #include "model_config.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // A single manager across all InferenceServer objects that keeps the
@@ -55,4 +55,4 @@ class PersistentBackendManager {
   std::list<std::shared_ptr<TritonBackend>> persist_backends_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

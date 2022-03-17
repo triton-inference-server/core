@@ -29,7 +29,7 @@
 #include <cstring>
 #include "triton/common/constants.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 void
 BufferAttributes::SetByteSize(const size_t& byte_size)
 {
@@ -101,4 +101,4 @@ BufferAttributes::BufferAttributes(
         std::back_inserter(cuda_ipc_handle_));
   }
 }
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

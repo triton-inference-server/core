@@ -31,7 +31,7 @@
 #include "triton/common/constants.h"
 #include "metrics.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 MetricModelReporter::Create(
@@ -163,6 +163,6 @@ MetricModelReporter::CreateCounterMetric(
   return &family.Add(labels);
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_METRICS

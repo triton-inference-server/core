@@ -32,7 +32,7 @@
 #include "prometheus/registry.h"
 #endif  // TRITON_ENABLE_METRICS
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // Interface for a metric reporter for a given version of a model.
@@ -135,4 +135,4 @@ class MetricModelReporter {
 #endif  // TRITON_ENABLE_METRICS
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

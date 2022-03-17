@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -31,7 +31,7 @@
 #include "memory.h"
 #include "pinned_memory_manager.h"
 
-namespace ni = nvidia::inferenceserver;
+namespace tc = triton::core;
 
 namespace {
 
@@ -52,7 +52,7 @@ namespace {
   } while (false)
 
 // Wrapper of CudaMemoryManager class to expose Reset() for unit testing
-class TestingCudaMemoryManager : public ni::CudaMemoryManager {
+class TestingCudaMemoryManager : public tc::CudaMemoryManager {
  public:
   static void Reset() { CudaMemoryManager::Reset(); }
 };
@@ -68,7 +68,7 @@ class CudaMemoryManagerTest : public ::testing::Test {
 
   void TearDown() override { TestingCudaMemoryManager::Reset(); }
 
-  ni::CudaMemoryManager::Options options_;
+  tc::CudaMemoryManager::Options options_;
 };
 
 TEST_F(CudaMemoryManagerTest, InitOOM)
@@ -76,8 +76,8 @@ TEST_F(CudaMemoryManagerTest, InitOOM)
   // Set to reserve too much memory
   double cc = 6.0;
   std::map<int, uint64_t> s{{0, uint64_t(1) << 40 /* 1024 GB */}};
-  const ni::CudaMemoryManager::Options options{cc, s};
-  auto status = ni::CudaMemoryManager::Create(options);
+  const tc::CudaMemoryManager::Options options{cc, s};
+  auto status = tc::CudaMemoryManager::Create(options);
   EXPECT_FALSE(status.IsOk()) << "Expect creation error";
 }
 
@@ -85,8 +85,8 @@ TEST_F(CudaMemoryManagerTest, InitSuccess)
 {
   double cc = 6.0;
   std::map<int, uint64_t> s{{0, 1 << 10 /* 1024 bytes */}};
-  const ni::CudaMemoryManager::Options options{cc, s};
-  auto status = ni::CudaMemoryManager::Create(options);
+  const tc::CudaMemoryManager::Options options{cc, s};
+  auto status = tc::CudaMemoryManager::Create(options);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 }
 
@@ -94,12 +94,12 @@ TEST_F(CudaMemoryManagerTest, InitNoDeviceConfig)
 {
   double cc = 6.0;
   std::map<int, uint64_t> s;
-  const ni::CudaMemoryManager::Options options{cc, s};
-  auto status = ni::CudaMemoryManager::Create(options);
+  const tc::CudaMemoryManager::Options options{cc, s};
+  auto status = tc::CudaMemoryManager::Create(options);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
-  status = ni::CudaMemoryManager::Alloc(&ptr, 1, 0);
+  status = tc::CudaMemoryManager::Alloc(&ptr, 1, 0);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 }
 
@@ -107,22 +107,22 @@ TEST_F(CudaMemoryManagerTest, InitZeroByte)
 {
   double cc = 6.0;
   std::map<int, uint64_t> s{{0, 0}};
-  const ni::CudaMemoryManager::Options options{cc, s};
-  auto status = ni::CudaMemoryManager::Create(options);
+  const tc::CudaMemoryManager::Options options{cc, s};
+  auto status = tc::CudaMemoryManager::Create(options);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
-  status = ni::CudaMemoryManager::Alloc(&ptr, 1, 0);
+  status = tc::CudaMemoryManager::Alloc(&ptr, 1, 0);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 }
 
 TEST_F(CudaMemoryManagerTest, AllocSuccess)
 {
-  auto status = ni::CudaMemoryManager::Create(options_);
+  auto status = tc::CudaMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
-  status = ni::CudaMemoryManager::Alloc(&ptr, 1024, 0);
+  status = tc::CudaMemoryManager::Alloc(&ptr, 1024, 0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(ptr) << "Expect pointer to allocated buffer";
   // check if returned pointer is CUDA pointer
@@ -131,21 +131,21 @@ TEST_F(CudaMemoryManagerTest, AllocSuccess)
 
 TEST_F(CudaMemoryManagerTest, AllocFail)
 {
-  auto status = ni::CudaMemoryManager::Create(options_);
+  auto status = tc::CudaMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
-  status = ni::CudaMemoryManager::Alloc(&ptr, 2048, 0);
+  status = tc::CudaMemoryManager::Alloc(&ptr, 2048, 0);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 }
 
 TEST_F(CudaMemoryManagerTest, MultipleAlloc)
 {
-  auto status = ni::CudaMemoryManager::Create(options_);
+  auto status = tc::CudaMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* first_ptr = nullptr;
-  status = ni::CudaMemoryManager::Alloc(&first_ptr, 600, 0);
+  status = tc::CudaMemoryManager::Alloc(&first_ptr, 600, 0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(first_ptr) << "Expect pointer to allocated buffer";
   // check if returned pointer is CUDA pointer
@@ -153,13 +153,13 @@ TEST_F(CudaMemoryManagerTest, MultipleAlloc)
 
   // 512 + 600 > 1024
   void* second_ptr = nullptr;
-  status = ni::CudaMemoryManager::Alloc(&second_ptr, 512, 0);
+  status = tc::CudaMemoryManager::Alloc(&second_ptr, 512, 0);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 
   // Free the first pointer and retry the second one
-  status = ni::CudaMemoryManager::Free(first_ptr, 0);
+  status = tc::CudaMemoryManager::Free(first_ptr, 0);
   EXPECT_TRUE(status.IsOk()) << status.Message();
-  status = ni::CudaMemoryManager::Alloc(&second_ptr, 512, 0);
+  status = tc::CudaMemoryManager::Alloc(&second_ptr, 512, 0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(second_ptr) << "Expect pointer to allocated buffer";
   // check if returned pointer is CUDA pointer
@@ -169,7 +169,7 @@ TEST_F(CudaMemoryManagerTest, MultipleAlloc)
 TEST_F(CudaMemoryManagerTest, MultipleDevice)
 {
   std::set<int> supported_gpus;
-  auto status = ni::GetSupportedGPUs(
+  auto status = tc::GetSupportedGPUs(
       &supported_gpus, options_.min_supported_compute_capability_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_GE(supported_gpus.size(), size_t(2))
@@ -181,29 +181,29 @@ TEST_F(CudaMemoryManagerTest, MultipleDevice)
     // Only enough memory is only reserved in one of the devices
     s[*supported_gpus.begin()] = 32;
     s[*(++supported_gpus.begin())] = 1024;
-    const ni::CudaMemoryManager::Options options{cc, s};
-    status = ni::CudaMemoryManager::Create(options);
+    const tc::CudaMemoryManager::Options options{cc, s};
+    status = tc::CudaMemoryManager::Create(options);
     ASSERT_TRUE(status.IsOk()) << status.Message();
   }
 
   void* ptr = nullptr;
   // Allocation on small device
   int small_device = *supported_gpus.begin();
-  status = ni::CudaMemoryManager::Alloc(&ptr, 1024, small_device);
+  status = tc::CudaMemoryManager::Alloc(&ptr, 1024, small_device);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 
   // Allocation on large device
   int large_device = *(++supported_gpus.begin());
-  status = ni::CudaMemoryManager::Alloc(&ptr, 1024, large_device);
+  status = tc::CudaMemoryManager::Alloc(&ptr, 1024, large_device);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(ptr) << "Expect pointer to allocated buffer";
   // check if returned pointer is CUDA pointer
   CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, large_device);
 
   // Free allocation ...
-  status = ni::CudaMemoryManager::Free(ptr, small_device);
+  status = tc::CudaMemoryManager::Free(ptr, small_device);
   EXPECT_FALSE(status.IsOk()) << "Unexpected deallocation on wrong device";
-  status = ni::CudaMemoryManager::Free(ptr, large_device);
+  status = tc::CudaMemoryManager::Free(ptr, large_device);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 }
 
@@ -214,8 +214,8 @@ class AllocatedMemoryTest : public ::testing::Test {
   {
     // Pinned memory manager
     {
-      ni::PinnedMemoryManager::Options options{1024};
-      auto status = ni::PinnedMemoryManager::Create(options);
+      tc::PinnedMemoryManager::Options options{1024};
+      auto status = tc::PinnedMemoryManager::Create(options);
       ASSERT_TRUE(status.IsOk()) << status.Message();
     }
   }
@@ -223,8 +223,8 @@ class AllocatedMemoryTest : public ::testing::Test {
   // Set up CUDA memory manager per test for special fallback case
   void SetUp() override
   {
-    ni::CudaMemoryManager::Options options{6.0, {{0, 1 << 10}}};
-    auto status = ni::CudaMemoryManager::Create(options);
+    tc::CudaMemoryManager::Options options{6.0, {{0, 1 << 10}}};
+    auto status = tc::CudaMemoryManager::Create(options);
     ASSERT_TRUE(status.IsOk()) << status.Message();
   }
 
@@ -236,7 +236,7 @@ TEST_F(AllocatedMemoryTest, AllocGPU)
   size_t expect_size = 512, actual_size;
   TRITONSERVER_MemoryType expect_type = TRITONSERVER_MEMORY_GPU, actual_type;
   int64_t expect_id = 0, actual_id;
-  ni::AllocatedMemory memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory memory(expect_size, expect_type, expect_id);
 
   auto ptr = memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
@@ -256,7 +256,7 @@ TEST_F(AllocatedMemoryTest, AllocPinned)
   TRITONSERVER_MemoryType expect_type = TRITONSERVER_MEMORY_CPU_PINNED,
                           actual_type;
   int64_t expect_id = 0, actual_id;
-  ni::AllocatedMemory memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory memory(expect_size, expect_type, expect_id);
 
   auto ptr = memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
@@ -278,7 +278,7 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
   int64_t expect_id = 0, actual_id;
 
   // First allocation
-  ni::AllocatedMemory cuda_memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory cuda_memory(expect_size, expect_type, expect_id);
 
   auto ptr = cuda_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
@@ -292,7 +292,7 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
   CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
 
   // Second allocation, should trigger fallback from CUDA -> pinned memory
-  ni::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
 
   ptr = pinned_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
@@ -305,7 +305,7 @@ TEST_F(AllocatedMemoryTest, AllocFallback)
   CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeHost, expect_id);
 
   // Third allocation, CUDA -> pinned -> non-pinned
-  ni::AllocatedMemory system_memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory system_memory(expect_size, expect_type, expect_id);
 
   ptr = system_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
@@ -328,7 +328,7 @@ TEST_F(AllocatedMemoryTest, AllocFallbackNoCuda)
   int64_t expect_id = 0, actual_id;
 
   // CUDA memory allocation should trigger fallback to allocate pinned memory
-  ni::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
 
   auto ptr = pinned_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)
@@ -352,7 +352,7 @@ TEST_F(AllocatedMemoryTest, Release)
 
   {
     // First allocation
-    ni::AllocatedMemory cuda_memory(expect_size, expect_type, expect_id);
+    tc::AllocatedMemory cuda_memory(expect_size, expect_type, expect_id);
 
     auto ptr = cuda_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
     EXPECT_EQ(expect_size, actual_size)
@@ -366,7 +366,7 @@ TEST_F(AllocatedMemoryTest, Release)
     CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
 
     // Second allocation, should trigger fallback from CUDA -> pinned memory
-    ni::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
+    tc::AllocatedMemory pinned_memory(expect_size, expect_type, expect_id);
 
     ptr = pinned_memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
     EXPECT_EQ(expect_size, actual_size)
@@ -380,7 +380,7 @@ TEST_F(AllocatedMemoryTest, Release)
   }
 
   // Third allocation, should not trigger fallback
-  ni::AllocatedMemory memory(expect_size, expect_type, expect_id);
+  tc::AllocatedMemory memory(expect_size, expect_type, expect_id);
 
   auto ptr = memory.BufferAt(0, &actual_size, &actual_type, &actual_id);
   EXPECT_EQ(expect_size, actual_size)

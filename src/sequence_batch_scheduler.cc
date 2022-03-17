@@ -38,7 +38,7 @@
 #include "model_config_utils.h"
 #include "server.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 SequenceBatchScheduler::Create(
@@ -983,7 +983,7 @@ SequenceBatch::SetControlTensors(
       // 4 bytes for length of string plus pre-defined max string correlation id
       // length in bytes
       size_p =
-          4 + nvidia::inferenceserver::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
+          4 + triton::core::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
     }
 
     TRITONSERVER_MemoryType memory_type;
@@ -1669,4 +1669,4 @@ OldestSequenceBatch::Enqueue(
     CompleteAndNext(seq_slot);
   }
 }
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

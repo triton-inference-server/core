@@ -40,7 +40,7 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class Model;
 class InferenceServer;
@@ -757,10 +757,10 @@ bool operator==(
     const InferenceRequest::SequenceId lhs,
     const InferenceRequest::SequenceId rhs);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 namespace std {
-using namespace nvidia::inferenceserver;
+using namespace triton::core;
 template <>
 class hash<InferenceRequest::SequenceId> {
  public:

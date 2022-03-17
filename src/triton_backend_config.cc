@@ -30,7 +30,7 @@
 #include "model_config.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -212,4 +212,4 @@ BackendConfigurationBackendLibraryName(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

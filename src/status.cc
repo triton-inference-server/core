@@ -26,7 +26,7 @@
 
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 const Status Status::Success(Status::Code::SUCCESS);
 
@@ -88,4 +88,4 @@ CommonErrorToStatus(const triton::common::Error& error)
   return Status(error);
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

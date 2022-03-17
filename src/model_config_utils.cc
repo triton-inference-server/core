@@ -35,18 +35,18 @@
 #include "filesystem.h"
 #include "triton/common/logging.h"
 
-#define TRITONJSON_STATUSTYPE nvidia::inferenceserver::Status
+#define TRITONJSON_STATUSTYPE triton::core::Status
 #define TRITONJSON_STATUSRETURN(M)        \
-  return nvidia::inferenceserver::Status( \
-      nvidia::inferenceserver::Status::Code::INTERNAL, (M))
-#define TRITONJSON_STATUSSUCCESS nvidia::inferenceserver::Status::Success
+  return triton::core::Status( \
+      triton::core::Status::Code::INTERNAL, (M))
+#define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/triton_json.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -1930,4 +1930,4 @@ JsonToModelConfig(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

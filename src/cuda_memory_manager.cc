@@ -54,7 +54,7 @@ PointerToString(void* ptr)
 
 }  // namespace
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 std::unique_ptr<CudaMemoryManager> CudaMemoryManager::instance_;
 std::mutex CudaMemoryManager::instance_mu_;
@@ -194,4 +194,4 @@ CudaMemoryManager::Free(void* ptr, int64_t device_id)
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

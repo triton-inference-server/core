@@ -47,7 +47,7 @@
 #define TRITONAPI_DECLSPEC
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 extern "C" {
 
@@ -144,4 +144,4 @@ TRITONBACKEND_MemoryManagerFree(
 
 }  // extern C
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

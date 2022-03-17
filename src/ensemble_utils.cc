@@ -34,7 +34,7 @@
 #include "model.h"
 #include "model_config_utils.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -359,6 +359,6 @@ ValidateEnsembleConfig(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_ENSEMBLE

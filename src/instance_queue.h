@@ -27,7 +27,7 @@
 
 #include "payload.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // InstanceQueue
@@ -54,4 +54,4 @@ class InstanceQueue {
   std::mutex mu_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

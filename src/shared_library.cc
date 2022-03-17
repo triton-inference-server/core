@@ -38,7 +38,7 @@
 #include <dlfcn.h>
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 static std::mutex mu_;
 
@@ -228,4 +228,4 @@ SharedLibrary::GetEntrypoint(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

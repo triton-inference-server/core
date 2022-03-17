@@ -29,7 +29,7 @@
 #include <unordered_map>
 #include "scheduler.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // A collection of inputs in the request, an nullptr for InferenceRequest::Input
 // indicates that the inputs doesn't require equality check
@@ -247,4 +247,4 @@ class PriorityQueue {
   Cursor current_mark_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

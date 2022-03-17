@@ -38,7 +38,7 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifndef TRITON_ENABLE_GPU
 using cudaStream_t = void*;
@@ -106,6 +106,6 @@ class EnsembleScheduler : public Scheduler {
   cudaStream_t stream_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_ENSEMBLE

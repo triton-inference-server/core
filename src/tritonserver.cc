@@ -45,11 +45,11 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-#define TRITONJSON_STATUSTYPE nvidia::inferenceserver::Status
+#define TRITONJSON_STATUSTYPE triton::core::Status
 #define TRITONJSON_STATUSRETURN(M)        \
-  return nvidia::inferenceserver::Status( \
-      nvidia::inferenceserver::Status::Code::INTERNAL, (M))
-#define TRITONJSON_STATUSSUCCESS nvidia::inferenceserver::Status::Success
+  return triton::core::Status( \
+      triton::core::Status::Code::INTERNAL, (M))
+#define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
@@ -68,7 +68,7 @@
 #define TRITONAPI_DECLSPEC
 #endif
 
-namespace ni = nvidia::inferenceserver;
+namespace tc = triton::core;
 
 namespace {
 
@@ -81,15 +81,15 @@ ResourceString(const std::string& name, const int count, const int device_id)
 }
 
 std::string
-RateLimitModeToString(const ni::RateLimitMode rate_limit_mode)
+RateLimitModeToString(const tc::RateLimitMode rate_limit_mode)
 {
   std::string rl_mode_str("<unknown>");
   switch (rate_limit_mode) {
-    case ni::RateLimitMode::RL_EXEC_COUNT: {
+    case tc::RateLimitMode::RL_EXEC_COUNT: {
       rl_mode_str = "EXEC_COUNT";
       break;
     }
-    case ni::RateLimitMode::RL_OFF: {
+    case tc::RateLimitMode::RL_OFF: {
       rl_mode_str = "OFF";
       break;
     }
@@ -108,7 +108,7 @@ class TritonServerError {
       TRITONSERVER_Error_Code code, const char* msg);
   static TRITONSERVER_Error* Create(
       TRITONSERVER_Error_Code code, const std::string& msg);
-  static TRITONSERVER_Error* Create(const ni::Status& status);
+  static TRITONSERVER_Error* Create(const tc::Status& status);
 
   TRITONSERVER_Error_Code Code() const { return code_; }
   const std::string& Message() const { return msg_; }
@@ -142,7 +142,7 @@ TritonServerError::Create(TRITONSERVER_Error_Code code, const std::string& msg)
 }
 
 TRITONSERVER_Error*
-TritonServerError::Create(const ni::Status& status)
+TritonServerError::Create(const tc::Status& status)
 {
   // If 'status' is success then return nullptr as that indicates
   // success
@@ -151,12 +151,12 @@ TritonServerError::Create(const ni::Status& status)
   }
 
   return Create(
-      ni::StatusCodeToTritonCode(status.StatusCode()), status.Message());
+      tc::StatusCodeToTritonCode(status.StatusCode()), status.Message());
 }
 
 #define RETURN_IF_STATUS_ERROR(S)                 \
   do {                                            \
-    const ni::Status& status__ = (S);             \
+    const tc::Status& status__ = (S);             \
     if (!status__.IsOk()) {                       \
       return TritonServerError::Create(status__); \
     }                                             \
@@ -180,7 +180,7 @@ TRITONSERVER_Error*
 TritonServerMetrics::Serialize(const char** base, size_t* byte_size)
 {
 #ifdef TRITON_ENABLE_METRICS
-  serialized_ = ni::Metrics::SerializedMetrics();
+  serialized_ = tc::Metrics::SerializedMetrics();
   *base = serialized_.c_str();
   *byte_size = serialized_.size();
   return nullptr;  // Success
@@ -210,8 +210,8 @@ class TritonServerOptions {
   }
   void SetModelRepositoryPath(const char* p) { repo_paths_.insert(p); }
 
-  ni::ModelControlMode ModelControlMode() const { return model_control_mode_; }
-  void SetModelControlMode(ni::ModelControlMode m) { model_control_mode_ = m; }
+  tc::ModelControlMode ModelControlMode() const { return model_control_mode_; }
+  void SetModelControlMode(tc::ModelControlMode m) { model_control_mode_ = m; }
 
   const std::set<std::string>& StartupModels() const { return models_; }
   void SetStartupModel(const char* m) { models_.insert(m); }
@@ -222,15 +222,15 @@ class TritonServerOptions {
   bool StrictModelConfig() const { return strict_model_config_; }
   void SetStrictModelConfig(bool b) { strict_model_config_ = b; }
 
-  ni::RateLimitMode RateLimiterMode() const { return rate_limit_mode_; }
-  void SetRateLimiterMode(ni::RateLimitMode m) { rate_limit_mode_ = m; }
+  tc::RateLimitMode RateLimiterMode() const { return rate_limit_mode_; }
+  void SetRateLimiterMode(tc::RateLimitMode m) { rate_limit_mode_ = m; }
 
   TRITONSERVER_Error* AddRateLimiterResource(
       const std::string& resource, const size_t count, const int device);
 
   // The resource map is the map from device id to the map of
   // of resources with their respective counts for that device.
-  const ni::RateLimiter::ResourceMap& RateLimiterResources() const
+  const tc::RateLimiter::ResourceMap& RateLimiterResources() const
   {
     return rate_limit_resource_map_;
   }
@@ -293,7 +293,7 @@ class TritonServerOptions {
   // setting=value pairs for that backend. The empty backend name ("")
   // is used to communicate configuration information that is used
   // internally.
-  const ni::BackendCmdlineConfigMap& BackendCmdlineConfigMap() const
+  const tc::BackendCmdlineConfigMap& BackendCmdlineConfigMap() const
   {
     return backend_cmdline_config_map_;
   }
@@ -304,7 +304,7 @@ class TritonServerOptions {
   TRITONSERVER_Error* SetHostPolicy(
       const std::string& policy_name, const std::string& setting,
       const std::string& value);
-  const ni::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap() const
+  const tc::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap() const
   {
     return host_policy_map_;
   }
@@ -312,13 +312,13 @@ class TritonServerOptions {
  private:
   std::string server_id_;
   std::set<std::string> repo_paths_;
-  ni::ModelControlMode model_control_mode_;
+  tc::ModelControlMode model_control_mode_;
   std::set<std::string> models_;
   bool exit_on_error_;
   bool strict_model_config_;
   bool strict_readiness_;
-  ni::RateLimitMode rate_limit_mode_;
-  ni::RateLimiter::ResourceMap rate_limit_resource_map_;
+  tc::RateLimitMode rate_limit_mode_;
+  tc::RateLimiter::ResourceMap rate_limit_resource_map_;
   bool metrics_;
   bool gpu_metrics_;
   uint64_t metrics_interval_;
@@ -330,15 +330,15 @@ class TritonServerOptions {
   double min_compute_capability_;
   std::string backend_dir_;
   std::string repoagent_dir_;
-  ni::BackendCmdlineConfigMap backend_cmdline_config_map_;
-  ni::HostPolicyCmdlineConfigMap host_policy_map_;
+  tc::BackendCmdlineConfigMap backend_cmdline_config_map_;
+  tc::HostPolicyCmdlineConfigMap host_policy_map_;
 };
 
 TritonServerOptions::TritonServerOptions()
     : server_id_("triton"),
-      model_control_mode_(ni::ModelControlMode::MODE_POLL),
+      model_control_mode_(tc::ModelControlMode::MODE_POLL),
       exit_on_error_(true), strict_model_config_(true), strict_readiness_(true),
-      rate_limit_mode_(ni::RateLimitMode::RL_OFF), metrics_(true),
+      rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
       gpu_metrics_(true), metrics_interval_(2000), exit_timeout_(30),
       pinned_memory_pool_size_(1 << 28), response_cache_byte_size_(0),
       buffer_manager_thread_count_(0),
@@ -388,7 +388,7 @@ TritonServerOptions::AddBackendConfig(
     const std::string& backend_name, const std::string& setting,
     const std::string& value)
 {
-  ni::BackendCmdlineConfig& cc = backend_cmdline_config_map_[backend_name];
+  tc::BackendCmdlineConfig& cc = backend_cmdline_config_map_[backend_name];
   cc.push_back(std::make_pair(setting, value));
 
   return nullptr;  // success
@@ -409,7 +409,7 @@ TritonServerOptions::SetHostPolicy(
             .c_str());
   }
 
-  ni::HostPolicyCmdlineConfig& hp = host_policy_map_[policy_name];
+  tc::HostPolicyCmdlineConfig& hp = host_policy_map_[policy_name];
   hp[setting] = value;
 
   return nullptr;  // success
@@ -483,7 +483,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_DataType
 TRITONSERVER_StringToDataType(const char* dtype)
 {
   const size_t len = strlen(dtype);
-  return ni::DataTypeToTriton(ni::ProtocolStringToDataType(dtype, len));
+  return tc::DataTypeToTriton(tc::ProtocolStringToDataType(dtype, len));
 }
 
 TRITONAPI_DECLSPEC uint32_t
@@ -559,18 +559,18 @@ TRITONAPI_DECLSPEC TRITONSERVER_Parameter*
 TRITONSERVER_ParameterNew(
     const char* name, const TRITONSERVER_ParameterType type, const void* value)
 {
-  std::unique_ptr<ni::InferenceParameter> lparam;
+  std::unique_ptr<tc::InferenceParameter> lparam;
   switch (type) {
     case TRITONSERVER_PARAMETER_STRING:
-      lparam.reset(new ni::InferenceParameter(
+      lparam.reset(new tc::InferenceParameter(
           name, reinterpret_cast<const char*>(value)));
       break;
     case TRITONSERVER_PARAMETER_INT:
-      lparam.reset(new ni::InferenceParameter(
+      lparam.reset(new tc::InferenceParameter(
           name, *reinterpret_cast<const int64_t*>(value)));
       break;
     case TRITONSERVER_PARAMETER_BOOL:
-      lparam.reset(new ni::InferenceParameter(
+      lparam.reset(new tc::InferenceParameter(
           name, *reinterpret_cast<const bool*>(value)));
       break;
     default:
@@ -582,7 +582,7 @@ TRITONSERVER_ParameterNew(
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ParameterDelete(TRITONSERVER_Parameter* parameter)
 {
-  delete reinterpret_cast<ni::InferenceParameter*>(parameter);
+  delete reinterpret_cast<tc::InferenceParameter*>(parameter);
 }
 
 //
@@ -681,7 +681,7 @@ TRITONAPI_DECLSPEC const char*
 TRITONSERVER_ErrorCodeString(TRITONSERVER_Error* error)
 {
   TritonServerError* lerror = reinterpret_cast<TritonServerError*>(error);
-  return ni::Status::CodeString(ni::TritonCodeToStatusCode(lerror->Code()));
+  return tc::Status::CodeString(tc::TritonCodeToStatusCode(lerror->Code()));
 }
 
 TRITONAPI_DECLSPEC const char*
@@ -702,7 +702,7 @@ TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocatorStartFn_t start_fn)
 {
   *allocator = reinterpret_cast<TRITONSERVER_ResponseAllocator*>(
-      new ni::ResponseAllocator(alloc_fn, release_fn, start_fn));
+      new tc::ResponseAllocator(alloc_fn, release_fn, start_fn));
   return nullptr;  // Success
 }
 
@@ -711,7 +711,7 @@ TRITONSERVER_ResponseAllocatorSetQueryFunction(
     TRITONSERVER_ResponseAllocator* allocator,
     TRITONSERVER_ResponseAllocatorQueryFn_t query_fn)
 {
-  reinterpret_cast<ni::ResponseAllocator*>(allocator)->SetQueryFunction(
+  reinterpret_cast<tc::ResponseAllocator*>(allocator)->SetQueryFunction(
       query_fn);
   return nullptr;  // success
 }
@@ -721,7 +721,7 @@ TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
     TRITONSERVER_ResponseAllocator* allocator,
     TRITONSERVER_ResponseAllocatorBufferAttributesFn_t buffer_attributes_fn)
 {
-  reinterpret_cast<ni::ResponseAllocator*>(allocator)
+  reinterpret_cast<tc::ResponseAllocator*>(allocator)
       ->SetBufferAttributesFunction(buffer_attributes_fn);
   return nullptr;  // success
 }
@@ -729,8 +729,8 @@ TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorDelete(TRITONSERVER_ResponseAllocator* allocator)
 {
-  ni::ResponseAllocator* lalloc =
-      reinterpret_cast<ni::ResponseAllocator*>(allocator);
+  tc::ResponseAllocator* lalloc =
+      reinterpret_cast<tc::ResponseAllocator*>(allocator);
   delete lalloc;
   return nullptr;  // Success
 }
@@ -743,15 +743,15 @@ TRITONSERVER_MessageNewFromSerializedJson(
     TRITONSERVER_Message** message, const char* base, size_t byte_size)
 {
   *message = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage({base, byte_size}));
+      new tc::TritonServerMessage({base, byte_size}));
   return nullptr;
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MessageDelete(TRITONSERVER_Message* message)
 {
-  ni::TritonServerMessage* lmessage =
-      reinterpret_cast<ni::TritonServerMessage*>(message);
+  tc::TritonServerMessage* lmessage =
+      reinterpret_cast<tc::TritonServerMessage*>(message);
   delete lmessage;
   return nullptr;  // Success
 }
@@ -760,8 +760,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MessageSerializeToJson(
     TRITONSERVER_Message* message, const char** base, size_t* byte_size)
 {
-  ni::TritonServerMessage* lmessage =
-      reinterpret_cast<ni::TritonServerMessage*>(message);
+  tc::TritonServerMessage* lmessage =
+      reinterpret_cast<tc::TritonServerMessage*>(message);
   lmessage->Serialize(base, byte_size);
   return nullptr;  // Success
 }
@@ -870,7 +870,7 @@ TRITONSERVER_InferenceTraceNew(
         (level ^ TRITONSERVER_TRACE_LEVEL_MAX) |
         TRITONSERVER_TRACE_LEVEL_TIMESTAMPS);
   }
-  ni::InferenceTrace* ltrace = new ni::InferenceTrace(
+  tc::InferenceTrace* ltrace = new tc::InferenceTrace(
       level, parent_id, activity_fn, nullptr, release_fn, trace_userp);
   *trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(ltrace);
   return nullptr;  // Success
@@ -899,7 +899,7 @@ TRITONSERVER_InferenceTraceTensorNew(
         (level ^ TRITONSERVER_TRACE_LEVEL_MAX) |
         TRITONSERVER_TRACE_LEVEL_TIMESTAMPS);
   }
-  ni::InferenceTrace* ltrace = new ni::InferenceTrace(
+  tc::InferenceTrace* ltrace = new tc::InferenceTrace(
       level, parent_id, activity_fn, tensor_activity_fn, release_fn,
       trace_userp);
   *trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(ltrace);
@@ -915,7 +915,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceDelete(TRITONSERVER_InferenceTrace* trace)
 {
 #ifdef TRITON_ENABLE_TRACING
-  ni::InferenceTrace* ltrace = reinterpret_cast<ni::InferenceTrace*>(trace);
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
   delete ltrace;
   return nullptr;  // Success
 #else
@@ -928,7 +928,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceId(TRITONSERVER_InferenceTrace* trace, uint64_t* id)
 {
 #ifdef TRITON_ENABLE_TRACING
-  ni::InferenceTrace* ltrace = reinterpret_cast<ni::InferenceTrace*>(trace);
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
   *id = ltrace->Id();
   return nullptr;  // Success
 #else
@@ -942,7 +942,7 @@ TRITONSERVER_InferenceTraceParentId(
     TRITONSERVER_InferenceTrace* trace, uint64_t* parent_id)
 {
 #ifdef TRITON_ENABLE_TRACING
-  ni::InferenceTrace* ltrace = reinterpret_cast<ni::InferenceTrace*>(trace);
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
   *parent_id = ltrace->ParentId();
   return nullptr;  // Success
 #else
@@ -956,7 +956,7 @@ TRITONSERVER_InferenceTraceModelName(
     TRITONSERVER_InferenceTrace* trace, const char** model_name)
 {
 #ifdef TRITON_ENABLE_TRACING
-  ni::InferenceTrace* ltrace = reinterpret_cast<ni::InferenceTrace*>(trace);
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
   *model_name = ltrace->ModelName().c_str();
   return nullptr;  // Success
 #else
@@ -970,7 +970,7 @@ TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)
 {
 #ifdef TRITON_ENABLE_TRACING
-  ni::InferenceTrace* ltrace = reinterpret_cast<ni::InferenceTrace*>(trace);
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
   *model_version = ltrace->ModelVersion();
   return nullptr;  // Success
 #else
@@ -1026,18 +1026,18 @@ TRITONSERVER_ServerOptionsSetModelControlMode(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
 
-  // convert mode from TRITONSERVER_ to nvidia::inferenceserver
+  // convert mode from TRITONSERVER_ to triton::core
   switch (mode) {
     case TRITONSERVER_MODEL_CONTROL_NONE: {
-      loptions->SetModelControlMode(ni::ModelControlMode::MODE_NONE);
+      loptions->SetModelControlMode(tc::ModelControlMode::MODE_NONE);
       break;
     }
     case TRITONSERVER_MODEL_CONTROL_POLL: {
-      loptions->SetModelControlMode(ni::ModelControlMode::MODE_POLL);
+      loptions->SetModelControlMode(tc::ModelControlMode::MODE_POLL);
       break;
     }
     case TRITONSERVER_MODEL_CONTROL_EXPLICIT: {
-      loptions->SetModelControlMode(ni::ModelControlMode::MODE_EXPLICIT);
+      loptions->SetModelControlMode(tc::ModelControlMode::MODE_EXPLICIT);
       break;
     }
     default: {
@@ -1088,14 +1088,14 @@ TRITONSERVER_ServerOptionsSetRateLimiterMode(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
 
-  // convert mode from TRITONSERVER_ to nvidia::inferenceserver
+  // convert mode from TRITONSERVER_ to triton::core
   switch (mode) {
     case TRITONSERVER_RATE_LIMIT_EXEC_COUNT: {
-      loptions->SetRateLimiterMode(ni::RateLimitMode::RL_EXEC_COUNT);
+      loptions->SetRateLimiterMode(tc::RateLimitMode::RL_EXEC_COUNT);
       break;
     }
     case TRITONSERVER_RATE_LIMIT_OFF: {
-      loptions->SetRateLimiterMode(ni::RateLimitMode::RL_OFF);
+      loptions->SetRateLimiterMode(tc::RateLimitMode::RL_OFF);
       break;
     }
     default: {
@@ -1342,13 +1342,13 @@ TRITONSERVER_InferenceRequestNew(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  std::shared_ptr<ni::Model> model;
+  std::shared_ptr<tc::Model> model;
   RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
   *inference_request = reinterpret_cast<TRITONSERVER_InferenceRequest*>(
-      new ni::InferenceRequest(model, model_version));
+      new tc::InferenceRequest(model, model_version));
 
   return nullptr;  // Success
 }
@@ -1357,8 +1357,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestDelete(
     TRITONSERVER_InferenceRequest* inference_request)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   delete lrequest;
   return nullptr;  // Success
 }
@@ -1367,8 +1367,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestId(
     TRITONSERVER_InferenceRequest* inference_request, const char** id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   *id = lrequest->Id().c_str();
   return nullptr;  // Success
 }
@@ -1377,8 +1377,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetId(
     TRITONSERVER_InferenceRequest* inference_request, const char* id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   lrequest->SetId(id);
   return nullptr;  // Success
 }
@@ -1387,8 +1387,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* flags)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   *flags = lrequest->Flags();
   return nullptr;  // Success
 }
@@ -1397,8 +1397,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t flags)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   lrequest->SetFlags(flags);
   return nullptr;  // Success
 }
@@ -1407,10 +1407,10 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* correlation_id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
-  const ni::InferenceRequest::SequenceId& corr_id = lrequest->CorrelationId();
-  if (corr_id.Type() != ni::InferenceRequest::SequenceId::DataType::UINT64) {
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  const tc::InferenceRequest::SequenceId& corr_id = lrequest->CorrelationId();
+  if (corr_id.Type() != tc::InferenceRequest::SequenceId::DataType::UINT64) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         std::string("given request's correlation id is not an unsigned int")
@@ -1425,10 +1425,10 @@ TRITONSERVER_InferenceRequestCorrelationIdString(
     TRITONSERVER_InferenceRequest* inference_request,
     const char** correlation_id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
-  const ni::InferenceRequest::SequenceId& corr_id = lrequest->CorrelationId();
-  if (corr_id.Type() != ni::InferenceRequest::SequenceId::DataType::STRING) {
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  const tc::InferenceRequest::SequenceId& corr_id = lrequest->CorrelationId();
+  if (corr_id.Type() != tc::InferenceRequest::SequenceId::DataType::STRING) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         std::string("given request's correlation id is not a string").c_str());
@@ -1441,9 +1441,9 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t correlation_id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
-  lrequest->SetCorrelationId(ni::InferenceRequest::SequenceId(correlation_id));
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  lrequest->SetCorrelationId(tc::InferenceRequest::SequenceId(correlation_id));
   return nullptr;  // Success
 }
 
@@ -1452,8 +1452,8 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
     TRITONSERVER_InferenceRequest* inference_request,
     const char* correlation_id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   if (std::string(correlation_id).length() > 128) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_UNSUPPORTED,
@@ -1461,7 +1461,7 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
             "string correlation ID cannot be longer than 128 characters")
             .c_str());
   }
-  lrequest->SetCorrelationId(ni::InferenceRequest::SequenceId(correlation_id));
+  lrequest->SetCorrelationId(tc::InferenceRequest::SequenceId(correlation_id));
   return nullptr;  // Success
 }
 
@@ -1469,8 +1469,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   *priority = lrequest->Priority();
   return nullptr;  // Success
 }
@@ -1479,8 +1479,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t priority)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   lrequest->SetPriority(priority);
   return nullptr;  // Success
 }
@@ -1489,8 +1489,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestTimeoutMicroseconds(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* timeout_us)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   *timeout_us = lrequest->TimeoutMicroseconds();
   return nullptr;  // Success
 }
@@ -1499,8 +1499,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t timeout_us)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   lrequest->SetTimeoutMicroseconds(timeout_us);
   return nullptr;  // Success
 }
@@ -1511,10 +1511,10 @@ TRITONSERVER_InferenceRequestAddInput(
     const TRITONSERVER_DataType datatype, const int64_t* shape,
     uint64_t dim_count)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->AddOriginalInput(
-      name, ni::TritonToDataType(datatype), shape, dim_count));
+      name, tc::TritonToDataType(datatype), shape, dim_count));
   return nullptr;  // Success
 }
 
@@ -1522,8 +1522,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->RemoveOriginalInput(name));
   return nullptr;  // Success
 }
@@ -1532,8 +1532,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllInputs(
     TRITONSERVER_InferenceRequest* inference_request)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->RemoveAllOriginalInputs());
   return nullptr;  // Success
 }
@@ -1544,10 +1544,10 @@ TRITONSERVER_InferenceRequestAppendInputData(
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
 
-  ni::InferenceRequest::Input* input;
+  tc::InferenceRequest::Input* input;
   RETURN_IF_STATUS_ERROR(lrequest->MutableOriginalInput(name, &input));
   RETURN_IF_STATUS_ERROR(
       input->AppendData(base, byte_size, memory_type, memory_type_id));
@@ -1561,10 +1561,10 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id, const char* host_policy_name)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
 
-  ni::InferenceRequest::Input* input;
+  tc::InferenceRequest::Input* input;
   RETURN_IF_STATUS_ERROR(lrequest->MutableOriginalInput(name, &input));
   RETURN_IF_STATUS_ERROR(input->AppendDataWithHostPolicy(
       base, byte_size, memory_type, memory_type_id, host_policy_name));
@@ -1577,12 +1577,12 @@ TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const void* base, TRITONSERVER_BufferAttributes* buffer_attributes)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
 
-  ni::InferenceRequest::Input* input;
+  tc::InferenceRequest::Input* input;
   RETURN_IF_STATUS_ERROR(lrequest->MutableOriginalInput(name, &input));
   RETURN_IF_STATUS_ERROR(
       input->AppendDataWithBufferAttributes(base, lbuffer_attributes));
@@ -1594,10 +1594,10 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllInputData(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
 
-  ni::InferenceRequest::Input* input;
+  tc::InferenceRequest::Input* input;
   RETURN_IF_STATUS_ERROR(lrequest->MutableOriginalInput(name, &input));
   RETURN_IF_STATUS_ERROR(input->RemoveAllData());
 
@@ -1608,8 +1608,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAddRequestedOutput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->AddOriginalRequestedOutput(name));
   return nullptr;  // Success
 }
@@ -1618,8 +1618,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveRequestedOutput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->RemoveOriginalRequestedOutput(name));
   return nullptr;  // Success
 }
@@ -1628,8 +1628,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(
     TRITONSERVER_InferenceRequest* inference_request)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->RemoveAllOriginalRequestedOutputs());
   return nullptr;  // Success
 }
@@ -1640,8 +1640,8 @@ TRITONSERVER_InferenceRequestSetReleaseCallback(
     TRITONSERVER_InferenceRequestReleaseFn_t request_release_fn,
     void* request_release_userp)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(
       lrequest->SetReleaseCallback(request_release_fn, request_release_userp));
   return nullptr;  // Success
@@ -1655,10 +1655,10 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
-  ni::ResponseAllocator* lallocator =
-      reinterpret_cast<ni::ResponseAllocator*>(response_allocator);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  tc::ResponseAllocator* lallocator =
+      reinterpret_cast<tc::ResponseAllocator*>(response_allocator);
   RETURN_IF_STATUS_ERROR(lrequest->SetResponseCallback(
       lallocator, response_allocator_userp, response_fn, response_userp));
   return nullptr;  // Success
@@ -1671,8 +1671,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseDelete(
     TRITONSERVER_InferenceResponse* inference_response)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
   delete lresponse;
   return nullptr;  // Success
 }
@@ -1681,8 +1681,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseError(
     TRITONSERVER_InferenceResponse* inference_response)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
   RETURN_IF_STATUS_ERROR(lresponse->ResponseStatus());
   return nullptr;  // Success
 }
@@ -1692,8 +1692,8 @@ TRITONSERVER_InferenceResponseModel(
     TRITONSERVER_InferenceResponse* inference_response, const char** model_name,
     int64_t* model_version)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   *model_name = lresponse->ModelName().c_str();
   *model_version = lresponse->ActualModelVersion();
@@ -1705,8 +1705,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseId(
     TRITONSERVER_InferenceResponse* inference_response, const char** request_id)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   *request_id = lresponse->Id().c_str();
 
@@ -1717,8 +1717,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseParameterCount(
     TRITONSERVER_InferenceResponse* inference_response, uint32_t* count)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   const auto& parameters = lresponse->Parameters();
   *count = parameters.size();
@@ -1731,8 +1731,8 @@ TRITONSERVER_InferenceResponseParameter(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const char** name, TRITONSERVER_ParameterType* type, const void** vvalue)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   const auto& parameters = lresponse->Parameters();
   if (index >= parameters.size()) {
@@ -1743,7 +1743,7 @@ TRITONSERVER_InferenceResponseParameter(
             " parameters");
   }
 
-  const ni::InferenceParameter& param = parameters[index];
+  const tc::InferenceParameter& param = parameters[index];
 
   *name = param.Name().c_str();
   *type = param.Type();
@@ -1756,8 +1756,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputCount(
     TRITONSERVER_InferenceResponse* inference_response, uint32_t* count)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   const auto& outputs = lresponse->Outputs();
   *count = outputs.size();
@@ -1772,8 +1772,8 @@ TRITONSERVER_InferenceResponseOutput(
     uint64_t* dim_count, const void** base, size_t* byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id, void** userp)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   const auto& outputs = lresponse->Outputs();
   if (index >= outputs.size()) {
@@ -1784,10 +1784,10 @@ TRITONSERVER_InferenceResponseOutput(
             " outputs");
   }
 
-  const ni::InferenceResponse::Output& output = outputs[index];
+  const tc::InferenceResponse::Output& output = outputs[index];
 
   *name = output.Name().c_str();
-  *datatype = ni::DataTypeToTriton(output.DType());
+  *datatype = tc::DataTypeToTriton(output.DType());
 
   const std::vector<int64_t>& oshape = output.Shape();
   *shape = &oshape[0];
@@ -1804,8 +1804,8 @@ TRITONSERVER_InferenceResponseOutputClassificationLabel(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const size_t class_index, const char** label)
 {
-  ni::InferenceResponse* lresponse =
-      reinterpret_cast<ni::InferenceResponse*>(inference_response);
+  tc::InferenceResponse* lresponse =
+      reinterpret_cast<tc::InferenceResponse*>(inference_response);
 
   const auto& outputs = lresponse->Outputs();
   if (index >= outputs.size()) {
@@ -1816,7 +1816,7 @@ TRITONSERVER_InferenceResponseOutputClassificationLabel(
             " outputs");
   }
 
-  const ni::InferenceResponse::Output& output = outputs[index];
+  const tc::InferenceResponse::Output& output = outputs[index];
   RETURN_IF_STATUS_ERROR(
       lresponse->ClassificationLabel(output, class_index, label));
 
@@ -1830,7 +1830,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesNew(
     TRITONSERVER_BufferAttributes** buffer_attributes)
 {
-  ni::BufferAttributes* lbuffer_attributes = new ni::BufferAttributes();
+  tc::BufferAttributes* lbuffer_attributes = new tc::BufferAttributes();
   *buffer_attributes =
       reinterpret_cast<TRITONSERVER_BufferAttributes*>(lbuffer_attributes);
 
@@ -1841,8 +1841,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesDelete(
     TRITONSERVER_BufferAttributes* buffer_attributes)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   delete lbuffer_attributes;
 
   return nullptr;  // success
@@ -1852,8 +1852,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetMemoryTypeId(
     TRITONSERVER_BufferAttributes* buffer_attributes, int64_t memory_type_id)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   lbuffer_attributes->SetMemoryTypeId(memory_type_id);
 
   return nullptr;  // success
@@ -1864,8 +1864,8 @@ TRITONSERVER_BufferAttributesSetMemoryType(
     TRITONSERVER_BufferAttributes* buffer_attributes,
     TRITONSERVER_MemoryType memory_type)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   lbuffer_attributes->SetMemoryType(memory_type);
 
   return nullptr;  // success
@@ -1875,8 +1875,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetCudaIpcHandle(
     TRITONSERVER_BufferAttributes* buffer_attributes, void* cuda_ipc_handle)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   lbuffer_attributes->SetCudaIpcHandle(cuda_ipc_handle);
 
   return nullptr;  // success
@@ -1886,8 +1886,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetByteSize(
     TRITONSERVER_BufferAttributes* buffer_attributes, size_t byte_size)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   lbuffer_attributes->SetByteSize(byte_size);
 
   return nullptr;  // success
@@ -1897,8 +1897,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesMemoryTypeId(
     TRITONSERVER_BufferAttributes* buffer_attributes, int64_t* memory_type_id)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   *memory_type_id = lbuffer_attributes->MemoryTypeId();
 
   return nullptr;  // success
@@ -1909,8 +1909,8 @@ TRITONSERVER_BufferAttributesMemoryType(
     TRITONSERVER_BufferAttributes* buffer_attributes,
     TRITONSERVER_MemoryType* memory_type)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   *memory_type = lbuffer_attributes->MemoryType();
 
   return nullptr;  // success
@@ -1920,8 +1920,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesCudaIpcHandle(
     TRITONSERVER_BufferAttributes* buffer_attributes, void** cuda_ipc_handle)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   *cuda_ipc_handle = lbuffer_attributes->CudaIpcHandle();
 
   return nullptr;  // success
@@ -1931,8 +1931,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesByteSize(
     TRITONSERVER_BufferAttributes* buffer_attributes, size_t* byte_size)
 {
-  ni::BufferAttributes* lbuffer_attributes =
-      reinterpret_cast<ni::BufferAttributes*>(buffer_attributes);
+  tc::BufferAttributes* lbuffer_attributes =
+      reinterpret_cast<tc::BufferAttributes*>(buffer_attributes);
   *byte_size = lbuffer_attributes->ByteSize();
 
   return nullptr;  // success
@@ -1945,7 +1945,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerNew(
     TRITONSERVER_Server** server, TRITONSERVER_ServerOptions* options)
 {
-  ni::InferenceServer* lserver = new ni::InferenceServer();
+  tc::InferenceServer* lserver = new tc::InferenceServer();
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
 
@@ -1954,8 +1954,8 @@ TRITONSERVER_ServerNew(
 #ifdef TRITON_ENABLE_METRICS
   // NOTE: Metrics must be enabled before backends are setup
   if (loptions->Metrics()) {
-    ni::Metrics::EnableMetrics();
-    ni::Metrics::SetMetricsInterval(loptions->MetricsInterval());
+    tc::Metrics::EnableMetrics();
+    tc::Metrics::SetMetricsInterval(loptions->MetricsInterval());
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -1993,25 +1993,25 @@ TRITONSERVER_ServerNew(
   lserver->SetBackendCmdlineConfig(loptions->BackendCmdlineConfigMap());
 
   // Initialize server
-  ni::Status status = lserver->Init();
+  tc::Status status = lserver->Init();
 
 
 #ifdef TRITON_ENABLE_METRICS
   if (loptions->Metrics() && lserver->ResponseCacheEnabled()) {
     // NOTE: Cache metrics must be enabled after cache initialized in
     // server->Init()
-    ni::Metrics::EnableCacheMetrics(lserver->GetResponseCache());
+    tc::Metrics::EnableCacheMetrics(lserver->GetResponseCache());
   }
 #ifdef TRITON_ENABLE_METRICS_GPU
   if (loptions->Metrics() && loptions->GpuMetrics()) {
-    ni::Metrics::EnableGPUMetrics();
+    tc::Metrics::EnableGPUMetrics();
   }
 #endif  // TRITON_ENABLE_METRICS_GPU
 
   if (loptions->Metrics() &&
       (lserver->ResponseCacheEnabled() || loptions->GpuMetrics())) {
     // Start thread to poll enabled metrics periodically
-    ni::Metrics::StartPollingThreadSingleton(lserver->GetResponseCache());
+    tc::Metrics::StartPollingThreadSingleton(lserver->GetResponseCache());
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -2050,15 +2050,15 @@ TRITONSERVER_ServerNew(
   std::string model_control_mode;
   auto control_mode = lserver->GetModelControlMode();
   switch (control_mode) {
-    case ni::ModelControlMode::MODE_NONE: {
+    case tc::ModelControlMode::MODE_NONE: {
       model_control_mode = "MODE_NONE";
       break;
     }
-    case ni::ModelControlMode::MODE_POLL: {
+    case tc::ModelControlMode::MODE_POLL: {
       model_control_mode = "MODE_POLL";
       break;
     }
-    case ni::ModelControlMode::MODE_EXPLICIT: {
+    case tc::ModelControlMode::MODE_EXPLICIT: {
       model_control_mode = "MODE_EXPLICIT";
       break;
     }
@@ -2134,7 +2134,7 @@ TRITONSERVER_ServerNew(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerDelete(TRITONSERVER_Server* server)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   if (lserver != nullptr) {
     RETURN_IF_STATUS_ERROR(lserver->Stop());
   }
@@ -2145,7 +2145,7 @@ TRITONSERVER_ServerDelete(TRITONSERVER_Server* server)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   if (lserver != nullptr) {
     RETURN_IF_STATUS_ERROR(lserver->Stop());
   }
@@ -2155,7 +2155,7 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   RETURN_IF_STATUS_ERROR(lserver->PollModelRepository());
   return nullptr;  // Success
 }
@@ -2163,7 +2163,7 @@ TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerIsLive(TRITONSERVER_Server* server, bool* live)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   RETURN_IF_STATUS_ERROR(lserver->IsLive(live));
   return nullptr;  // Success
@@ -2172,7 +2172,7 @@ TRITONSERVER_ServerIsLive(TRITONSERVER_Server* server, bool* live)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerIsReady(TRITONSERVER_Server* server, bool* ready)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   RETURN_IF_STATUS_ERROR(lserver->IsReady(ready));
   return nullptr;  // Success
@@ -2183,7 +2183,7 @@ TRITONSERVER_ServerModelIsReady(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, bool* ready)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   RETURN_IF_STATUS_ERROR(
       lserver->ModelIsReady(model_name, model_version, ready));
@@ -2195,13 +2195,13 @@ TRITONSERVER_ServerModelBatchProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* flags, void** voidp)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   if (voidp != nullptr) {
     *voidp = nullptr;
   }
 
-  std::shared_ptr<ni::Model> model;
+  std::shared_ptr<tc::Model> model;
   RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
   if (model->Config().max_batch_size() > 0) {
@@ -2218,7 +2218,7 @@ TRITONSERVER_ServerModelTransactionProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* txn_flags, void** voidp)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   if (voidp != nullptr) {
     *voidp = nullptr;
@@ -2226,7 +2226,7 @@ TRITONSERVER_ServerModelTransactionProperties(
 
   *txn_flags = 0;
 
-  std::shared_ptr<ni::Model> model;
+  std::shared_ptr<tc::Model> model;
   RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
   if (model->Config().model_transaction_policy().decoupled()) {
@@ -2242,7 +2242,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerMetadata(
     TRITONSERVER_Server* server, TRITONSERVER_Message** server_metadata)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   triton::common::TritonJson::Value metadata(
       triton::common::TritonJson::ValueType::OBJECT);
@@ -2264,7 +2264,7 @@ TRITONSERVER_ServerMetadata(
   RETURN_IF_STATUS_ERROR(metadata.Add("extensions", std::move(extensions)));
 
   *server_metadata = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage(metadata));
+      new tc::TritonServerMessage(metadata));
   return nullptr;  // Success
 }
 
@@ -2273,9 +2273,9 @@ TRITONSERVER_ServerModelMetadata(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, TRITONSERVER_Message** model_metadata)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  std::shared_ptr<ni::Model> model;
+  std::shared_ptr<tc::Model> model;
   RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
   std::vector<int64_t> ready_versions;
@@ -2320,7 +2320,7 @@ TRITONSERVER_ServerModelMetadata(
         metadata, triton::common::TritonJson::ValueType::OBJECT);
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-        "datatype", ni::DataTypeToProtocolString(io.data_type())));
+        "datatype", tc::DataTypeToProtocolString(io.data_type())));
 
     // Input shape. If the model supports batching then must include
     // '-1' for the batch dimension.
@@ -2346,7 +2346,7 @@ TRITONSERVER_ServerModelMetadata(
         metadata, triton::common::TritonJson::ValueType::OBJECT);
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-        "datatype", ni::DataTypeToProtocolString(io.data_type())));
+        "datatype", tc::DataTypeToProtocolString(io.data_type())));
 
     // Output shape. If the model supports batching then must include
     // '-1' for the batch dimension.
@@ -2366,7 +2366,7 @@ TRITONSERVER_ServerModelMetadata(
   RETURN_IF_STATUS_ERROR(metadata.Add("outputs", std::move(outputs)));
 
   *model_metadata = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage(metadata));
+      new tc::TritonServerMessage(metadata));
   return nullptr;  // success
 }
 
@@ -2380,7 +2380,7 @@ TRITONSERVER_ServerModelStatistics(
       TRITONSERVER_ERROR_UNSUPPORTED, "statistics not supported");
 #else
 
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   auto model_name_string = std::string(model_name);
   std::map<std::string, std::vector<int64_t>> ready_model_versions;
@@ -2432,7 +2432,7 @@ TRITONSERVER_ServerModelStatistics(
       metadata, triton::common::TritonJson::ValueType::ARRAY);
   for (const auto& mv_pair : ready_model_versions) {
     for (const auto& version : mv_pair.second) {
-      std::shared_ptr<ni::Model> model;
+      std::shared_ptr<tc::Model> model;
       RETURN_IF_STATUS_ERROR(lserver->GetModel(mv_pair.first, version, &model));
       const auto& infer_stats = model->StatsAggregator().ImmutableInferStats();
       const auto& infer_batch_stats =
@@ -2516,7 +2516,7 @@ TRITONSERVER_ServerModelStatistics(
   RETURN_IF_STATUS_ERROR(
       metadata.Add("model_stats", std::move(model_stats_json)));
   *model_stats = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage(metadata));
+      new tc::TritonServerMessage(metadata));
 
   return nullptr;  // success
 
@@ -2529,17 +2529,17 @@ TRITONSERVER_ServerModelConfig(
     const int64_t model_version, const uint32_t config_version,
     TRITONSERVER_Message** model_config)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  std::shared_ptr<ni::Model> model;
+  std::shared_ptr<tc::Model> model;
   RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
   std::string model_config_json;
-  RETURN_IF_STATUS_ERROR(ni::ModelConfigToJson(
+  RETURN_IF_STATUS_ERROR(tc::ModelConfigToJson(
       model->Config(), config_version, &model_config_json));
 
   *model_config = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage(std::move(model_config_json)));
+      new tc::TritonServerMessage(std::move(model_config_json)));
 
   return nullptr;  // success
 }
@@ -2549,11 +2549,11 @@ TRITONSERVER_ServerModelIndex(
     TRITONSERVER_Server* server, uint32_t flags,
     TRITONSERVER_Message** repository_index)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   const bool ready_only = ((flags & TRITONSERVER_INDEX_FLAG_READY) != 0);
 
-  std::vector<ni::ModelRepositoryManager::ModelIndex> index;
+  std::vector<tc::ModelRepositoryManager::ModelIndex> index;
   RETURN_IF_STATUS_ERROR(lserver->RepositoryIndex(ready_only, &index));
 
   // Can use string ref in this function because TritonServeMessage
@@ -2571,7 +2571,7 @@ TRITONSERVER_ServerModelIndex(
             "version", std::move(std::to_string(in.version_))));
       }
       RETURN_IF_STATUS_ERROR(model_index.AddStringRef(
-          "state", ni::ModelReadyStateString(in.state_).c_str()));
+          "state", tc::ModelReadyStateString(in.state_).c_str()));
       if (!in.reason_.empty()) {
         RETURN_IF_STATUS_ERROR(
             model_index.AddStringRef("reason", in.reason_.c_str()));
@@ -2583,7 +2583,7 @@ TRITONSERVER_ServerModelIndex(
   }
 
   *repository_index = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage(repository_index_json));
+      new tc::TritonServerMessage(repository_index_json));
 
   return nullptr;  // success
 }
@@ -2592,7 +2592,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerLoadModel(
     TRITONSERVER_Server* server, const char* model_name)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   RETURN_IF_STATUS_ERROR(lserver->LoadModel({{std::string(model_name), {}}}));
 
@@ -2610,14 +2610,14 @@ TRITONSERVER_ServerLoadModelWithParameters(
         "load parameters are not provided while parameter count is non-zero");
   }
 
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  std::unordered_map<std::string, std::vector<const ni::InferenceParameter*>>
+  std::unordered_map<std::string, std::vector<const tc::InferenceParameter*>>
       models;
-  std::vector<const ni::InferenceParameter*> mp;
+  std::vector<const tc::InferenceParameter*> mp;
   for (size_t i = 0; i < parameter_count; ++i) {
     mp.emplace_back(
-        reinterpret_cast<const ni::InferenceParameter*>(parameters[i]));
+        reinterpret_cast<const tc::InferenceParameter*>(parameters[i]));
   }
   models[model_name] = std::move(mp);
   RETURN_IF_STATUS_ERROR(lserver->LoadModel(models));
@@ -2629,7 +2629,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerUnloadModel(
     TRITONSERVER_Server* server, const char* model_name)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
       std::string(model_name), false /* unload_dependents */));
@@ -2642,8 +2642,8 @@ TRITONSERVER_ServerUnloadModelAndDependents(
     TRITONSERVER_Server* server, const char* model_name)
 {
   {
-    ni::InferenceServer* lserver =
-        reinterpret_cast<ni::InferenceServer*>(server);
+    tc::InferenceServer* lserver =
+        reinterpret_cast<tc::InferenceServer*>(server);
 
     RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
         std::string(model_name), true /* unload_dependents */));
@@ -2673,9 +2673,9 @@ TRITONSERVER_ServerInferAsync(
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceTrace* trace)
 {
-  ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
 
   RETURN_IF_STATUS_ERROR(lrequest->PrepareForInference());
 
@@ -2684,11 +2684,11 @@ TRITONSERVER_ServerInferAsync(
   // Triton.
   if (trace != nullptr) {
 #ifdef TRITON_ENABLE_TRACING
-    ni::InferenceTrace* ltrace = reinterpret_cast<ni::InferenceTrace*>(trace);
+    tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
     ltrace->SetModelName(lrequest->ModelName());
     ltrace->SetModelVersion(lrequest->ActualModelVersion());
 
-    lrequest->SetTrace(std::make_shared<ni::InferenceTraceProxy>(ltrace));
+    lrequest->SetTrace(std::make_shared<tc::InferenceTraceProxy>(ltrace));
 #else
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
@@ -2697,10 +2697,10 @@ TRITONSERVER_ServerInferAsync(
 
   // We wrap the request in a unique pointer to ensure that it flows
   // through inferencing with clear ownership.
-  std::unique_ptr<ni::InferenceRequest> ureq(lrequest);
+  std::unique_ptr<tc::InferenceRequest> ureq(lrequest);
 
   // Run inference...
-  ni::Status status = lserver->InferAsync(ureq);
+  tc::Status status = lserver->InferAsync(ureq);
 
   // If there is an error then must explicitly release any trace
   // object associated with the inference request above.

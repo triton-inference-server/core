@@ -38,7 +38,7 @@
 #include "payload.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // Limits the rate at which requests are dispatched to the model instances
 class RateLimiter {
@@ -304,4 +304,4 @@ class RateLimiter {
   std::map<const TritonModel*, std::unique_ptr<PayloadQueue>> payload_queues_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

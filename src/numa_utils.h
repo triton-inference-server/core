@@ -32,7 +32,7 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // Helper function to set memory policy and thread affinity on current thread
 Status SetNumaConfigOnThread(const HostPolicyCmdlineConfig& host_policy);
@@ -52,4 +52,4 @@ Status SetNumaThreadAffinity(
     const HostPolicyCmdlineConfig& host_policy);
 
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

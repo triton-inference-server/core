@@ -28,7 +28,7 @@
 
 #include "triton/common/logging.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 constexpr size_t MAX_PAYLOAD_BUCKET_COUNT = 1000;
 
@@ -933,4 +933,4 @@ RateLimiter::ResourceManager::ResourceManager(const ResourceMap& resource_map)
 {
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

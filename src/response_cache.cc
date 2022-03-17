@@ -30,13 +30,12 @@
 
 namespace {
 
-namespace ni = nvidia::inferenceserver;
 enum class ScopedTimerType { INSERTION, LOOKUP };
 
 class ScopedTimer {
  public:
   explicit ScopedTimer(
-      ni::InferenceRequest& request, uint64_t& duration, ScopedTimerType type)
+      triton::core::InferenceRequest& request, uint64_t& duration, ScopedTimerType type)
       : request_(request), duration_(duration), type_(type)
   {
     switch (type_) {
@@ -66,7 +65,7 @@ class ScopedTimer {
   }
 
  private:
-  ni::InferenceRequest& request_;
+  triton::core::InferenceRequest& request_;
   uint64_t& duration_;
   ScopedTimerType type_;
 };
@@ -81,7 +80,7 @@ PointerToString(void* ptr)
 
 }  // namespace
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 RequestResponseCache::Create(
@@ -507,4 +506,4 @@ RequestResponseCache::Hash(const InferenceRequest& request, uint64_t* key)
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -30,7 +30,7 @@
 #include "model.h"
 #include "server.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // InferenceResponseFactory
@@ -427,4 +427,4 @@ operator<<(std::ostream& out, const InferenceResponse::Output& output)
   return out;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

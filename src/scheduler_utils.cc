@@ -30,7 +30,7 @@
 #include "triton/common/constants.h"
 #include "triton/common/logging.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 InitRequiredEqualInputs(
@@ -415,4 +415,4 @@ PriorityQueue::AdvanceCursor()
        pending_cursor_.curr_it_->second.UnexpiredSize());
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

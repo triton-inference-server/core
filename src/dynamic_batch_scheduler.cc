@@ -37,7 +37,7 @@
 #include "model_config.h"
 #include "server.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 bool
 IsStaleState(Payload::State payload_state)
@@ -692,4 +692,4 @@ DynamicBatchScheduler::FinalizeResponses()
     InferenceResponse::Send(std::move(response.first), response.second);
   }
 }
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

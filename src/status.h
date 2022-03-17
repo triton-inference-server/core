@@ -29,7 +29,7 @@
 #include "tritonserver_apis.h"
 #include "triton/common/error.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class Status : public triton::common::Error {
  public:
@@ -83,4 +83,4 @@ Status CommonErrorToStatus(const triton::common::Error& error);
     }                                                            \
   } while (false)
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

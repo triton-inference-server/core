@@ -31,7 +31,7 @@
 #endif
 #include "triton/common/logging.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 std::string
@@ -232,4 +232,4 @@ SetNumaThreadAffinity(
 }
 #endif
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

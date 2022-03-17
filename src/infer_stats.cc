@@ -31,7 +31,7 @@
 #include "metric_model_reporter.h"
 #include "metrics.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_STATS
 
@@ -236,4 +236,4 @@ InferenceStatsAggregator::UpdateInferBatchStatsWithDuration(
 
 #endif  // TRITON_ENABLE_STATS
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

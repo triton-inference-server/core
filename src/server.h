@@ -42,7 +42,7 @@
 #include "response_cache.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class Model;
 class InferenceRequest;
@@ -300,4 +300,4 @@ class InferenceServer {
   std::shared_ptr<RequestResponseCache> response_cache_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

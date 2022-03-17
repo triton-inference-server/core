@@ -53,7 +53,7 @@
 #define TRITONAPI_DECLSPEC
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 TritonModel::Create(
@@ -1114,4 +1114,4 @@ TRITONBACKEND_OutputBufferAttributes(
 }
 }  // extern C
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

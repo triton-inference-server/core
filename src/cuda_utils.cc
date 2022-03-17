@@ -29,7 +29,7 @@
 #include "model_config_utils.h"
 #include "triton/common/nvtx.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_GPU
 void CUDART_CB
@@ -224,4 +224,4 @@ SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support)
 
 #endif
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

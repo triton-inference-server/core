@@ -30,10 +30,10 @@
 #include "response_cache.h"
 #include "triton/common/logging.h"
 
-namespace ni = nvidia::inferenceserver;
+namespace tc = triton::core;
 
 /* Mock classes for Unit Testing */
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // InferenceResponseFactory
@@ -298,7 +298,7 @@ InferenceRequest::SequenceId::SequenceId(uint64_t sequence_index)
 {
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 
 namespace {
@@ -310,19 +310,19 @@ class RequestResponseCacheTest : public ::testing::Test {
   void TearDown() override {}
 
  public:
-  ni::Model* model = nullptr;
+  tc::Model* model = nullptr;
   uint64_t model_version = 1;
 };
 
 // Helpers
 void
-check_status(ni::Status status)
+check_status(tc::Status status)
 {
   ASSERT_TRUE(status.IsOk()) << "ERROR: " << status.Message();
 }
 
 void
-cache_stats(std::unique_ptr<ni::RequestResponseCache>& cache)
+cache_stats(std::unique_ptr<tc::RequestResponseCache>& cache)
 {
   std::cout << "Cache entries: " << cache->NumEntries() << std::endl;
   std::cout << "Cache free bytes: " << cache->FreeBytes() << std::endl;
@@ -332,8 +332,8 @@ cache_stats(std::unique_ptr<ni::RequestResponseCache>& cache)
 
 void
 reset_response(
-    std::unique_ptr<ni::InferenceResponse>* response,
-    ni::InferenceRequest* request)
+    std::unique_ptr<tc::InferenceResponse>* response,
+    tc::InferenceRequest* request)
 {
   check_status(request->ResponseFactory().CreateResponse(response));
 }
@@ -344,28 +344,28 @@ TEST_F(RequestResponseCacheTest, TestHashing)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 4 * 1024 * 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
-  ni::InferenceRequest request1(model, model_version);
-  ni::InferenceRequest request2(model, model_version);
-  ni::InferenceRequest request3(model, model_version);
-  ni::InferenceRequest request4(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request1(model, model_version);
+  tc::InferenceRequest request2(model, model_version);
+  tc::InferenceRequest request3(model, model_version);
+  tc::InferenceRequest request4(model, model_version);
 
   // Create inputs
   std::cout << "Create inputs" << std::endl;
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
-  ni::InferenceRequest::Input* input0 = nullptr;
-  ni::InferenceRequest::Input* input1 = nullptr;
-  ni::InferenceRequest::Input* input2 = nullptr;
-  ni::InferenceRequest::Input* input3_0 = nullptr;
-  ni::InferenceRequest::Input* input3_1 = nullptr;
-  ni::InferenceRequest::Input* input4_0 = nullptr;
-  ni::InferenceRequest::Input* input4_1 = nullptr;
+  tc::InferenceRequest::Input* input0 = nullptr;
+  tc::InferenceRequest::Input* input1 = nullptr;
+  tc::InferenceRequest::Input* input2 = nullptr;
+  tc::InferenceRequest::Input* input3_0 = nullptr;
+  tc::InferenceRequest::Input* input3_1 = nullptr;
+  tc::InferenceRequest::Input* input4_0 = nullptr;
+  tc::InferenceRequest::Input* input4_1 = nullptr;
 
   // Add input to requests
   std::cout << "Add input to request" << std::endl;
@@ -438,12 +438,12 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 1025};
@@ -454,11 +454,11 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
   uint64_t hash0 = 0;
 
   std::cout << "Create response object" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response0;
+  std::unique_ptr<tc::InferenceResponse> response0;
   check_status(request0.ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   // Explicitly create output buffer larger than entire cache
   std::vector<int> output0(shape[1], 0);
   uint64_t output_size = sizeof(int) * output0.size();
@@ -487,13 +487,13 @@ TEST_F(RequestResponseCacheTest, TestEviction)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 100};
@@ -507,11 +507,11 @@ TEST_F(RequestResponseCacheTest, TestEviction)
   uint64_t hash3 = 3;
 
   std::cout << "Create response object" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response0;
+  std::unique_ptr<tc::InferenceResponse> response0;
   check_status(request0.ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   std::vector<int> output0(shape[1], 0);
   uint64_t output_size = sizeof(int) * output0.size();
   std::cout << "Output size: " << output_size << std::endl;
@@ -560,13 +560,13 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 100};
@@ -574,11 +574,11 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
   int64_t memory_type_id = 0;
 
   std::cout << "Create response object to insert into cache" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response_in;
+  std::unique_ptr<tc::InferenceResponse> response_in;
   check_status(request0.ResponseFactory().CreateResponse(&response_in));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   std::vector<int> output0(shape[1], 0);
   uint64_t output_size = sizeof(int) * output0.size();
   std::cout << "Output size: " << output_size << std::endl;
@@ -600,7 +600,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(std::thread(
-        &ni::RequestResponseCache::Insert, cache.get(), idx,
+        &tc::RequestResponseCache::Insert, cache.get(), idx,
         std::ref(*response_in), &request0));
   }
 
@@ -625,13 +625,13 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
@@ -639,11 +639,11 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
   int64_t memory_type_id = 0;
 
   std::cout << "Create response object" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response0;
+  std::unique_ptr<tc::InferenceResponse> response0;
   check_status(request0.ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   std::vector<int> output0(shape[1], 0);
   uint64_t output_size = sizeof(int) * output0.size();
   std::cout << "Output size: " << output_size << std::endl;
@@ -678,7 +678,7 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(
-        std::thread(&ni::RequestResponseCache::Evict, cache.get()));
+        std::thread(&tc::RequestResponseCache::Evict, cache.get()));
   }
 
   // Join threads
@@ -700,13 +700,13 @@ TEST_F(RequestResponseCacheTest, TestLRU)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
@@ -714,11 +714,11 @@ TEST_F(RequestResponseCacheTest, TestLRU)
   int64_t memory_type_id = 0;
 
   std::cout << "Create response object" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response0;
+  std::unique_ptr<tc::InferenceResponse> response0;
   check_status(request0.ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   std::vector<int> output0(shape[1], 0);
   uint64_t output_size = sizeof(int) * output0.size();
   std::cout << "Output size: " << output_size << std::endl;
@@ -734,7 +734,7 @@ TEST_F(RequestResponseCacheTest, TestLRU)
 
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response_test;
+  std::unique_ptr<tc::InferenceResponse> response_test;
   check_status(request0.ResponseFactory().CreateResponse(&response_test));
 
   // Insert 3 items into cache: 0, 1, 2
@@ -754,7 +754,7 @@ TEST_F(RequestResponseCacheTest, TestLRU)
   cache->Evict();
   // Assert Lookup for item 0 fails but items 1, 2 succeed
   reset_response(&response_test, &request0);
-  ni::Status status;
+  tc::Status status;
   status = cache->Lookup(0, response_test.get(), &request0);
   ASSERT_FALSE(status.IsOk());
   reset_response(&response_test, &request0);
@@ -798,13 +798,13 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 1024;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
@@ -812,11 +812,11 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   int64_t memory_type_id = 0;
 
   std::cout << "Create response object" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response0;
+  std::unique_ptr<tc::InferenceResponse> response0;
   check_status(request0.ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   std::vector<int> output0(shape[1], 0);
   uint64_t output_size = sizeof(int) * output0.size();
   std::cout << "Output size: " << output_size << std::endl;
@@ -830,7 +830,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
 
   // Create threads
   std::vector<std::thread> threads;
-  std::vector<std::unique_ptr<ni::InferenceResponse>> responses;
+  std::vector<std::unique_ptr<tc::InferenceResponse>> responses;
   size_t thread_count = 10;
 
   // Create unique data for each thread's response
@@ -846,7 +846,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   // Insert [thread_count] entries into cache sequentially
   for (size_t idx = 0; idx < thread_count; idx++) {
     // Create response for each thread to fill from cache
-    std::unique_ptr<ni::InferenceResponse> response;
+    std::unique_ptr<tc::InferenceResponse> response;
     check_status(request0.ResponseFactory().CreateResponse(&response));
     responses.push_back(std::move(response));
     // Copy unique data for each response to buffer inserted into cache
@@ -867,7 +867,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(std::thread(
-        &ni::RequestResponseCache::Lookup, cache.get(), idx,
+        &tc::RequestResponseCache::Lookup, cache.get(), idx,
         responses[idx].get(), &request0));
   }
 
@@ -914,19 +914,19 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   // Create cache
   std::cout << "Create cache" << std::endl;
   uint64_t cache_size = 256;
-  std::unique_ptr<ni::RequestResponseCache> cache;
-  ni::RequestResponseCache::Create(cache_size, &cache);
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
   // Create request
   std::cout << "Create request" << std::endl;
-  ni::InferenceRequest request0(model, model_version);
+  tc::InferenceRequest request0(model, model_version);
 
   // Create input
   std::cout << "Create inputs" << std::endl;
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
-  ni::InferenceRequest::Input* input0 = nullptr;
+  tc::InferenceRequest::Input* input0 = nullptr;
   // Add input to request
   std::cout << "Add input to request" << std::endl;
   request0.AddOriginalInput("input", dtype, shape, &input0);
@@ -946,11 +946,11 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   check_status(cache->Hash(request0, &hash0));
 
   std::cout << "Create response object" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response0;
+  std::unique_ptr<tc::InferenceResponse> response0;
   check_status(request0.ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
-  ni::InferenceResponse::Output* response_output = nullptr;
+  tc::InferenceResponse::Output* response_output = nullptr;
   std::vector<int> output0 = {2, 4, 6, 8};
   uint64_t output_size = sizeof(int) * output0.size();
   std::cout << "Example InferenceResponse outputs:" << std::endl;
@@ -996,7 +996,7 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
 
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
-  std::unique_ptr<ni::InferenceResponse> response_test;
+  std::unique_ptr<tc::InferenceResponse> response_test;
   check_status(request0.ResponseFactory().CreateResponse(&response_test));
 
   // Lookup should now succeed

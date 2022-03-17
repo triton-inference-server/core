@@ -43,7 +43,7 @@
 #define TRITONAPI_DECLSPEC
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // TritonBackend
@@ -381,4 +381,4 @@ TritonBackendManager::BackendState(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

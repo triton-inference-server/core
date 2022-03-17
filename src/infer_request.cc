@@ -35,7 +35,7 @@
 #include "cuda_utils.h"
 #endif  // TRITON_ENABLE_TRACING
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -1332,4 +1332,4 @@ operator!=(
   return !(lhs == rhs);
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

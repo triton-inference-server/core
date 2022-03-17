@@ -29,7 +29,7 @@
 #include "memory.h"
 #include "triton/common/logging.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 SequenceState::SequenceState() : data_(new MemoryReference) {}
 
@@ -331,4 +331,4 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
   }
   return lsequence_states;
 }
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

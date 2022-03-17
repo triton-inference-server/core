@@ -84,7 +84,7 @@
 #define F_OK 0
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -706,7 +706,7 @@ GCSFileSystem::LocalizeDirectory(
   }
 
   std::string tmp_folder;
-  RETURN_IF_ERROR(nvidia::inferenceserver::MakeTemporaryDirectory(
+  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
       FileSystemType::LOCAL, &tmp_folder));
 
   localized->reset(new LocalizedDirectory(path, tmp_folder));
@@ -1670,7 +1670,7 @@ S3FileSystem::LocalizeDirectory(
   }
 
   std::string tmp_folder;
-  RETURN_IF_ERROR(nvidia::inferenceserver::MakeTemporaryDirectory(
+  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
       FileSystemType::LOCAL, &tmp_folder));
 
   localized->reset(new LocalizedDirectory(effective_path, tmp_folder));
@@ -2133,4 +2133,4 @@ FileSystemTypeString(const FileSystemType type)
   }
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

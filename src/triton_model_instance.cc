@@ -53,7 +53,7 @@
 #define TRITONAPI_DECLSPEC
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 // Utilities for warmup feature
@@ -881,4 +881,4 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
 }
 
 }  // extern C
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

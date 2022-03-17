@@ -36,7 +36,7 @@
 #include "infer_request.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class Payload {
  public:
@@ -94,4 +94,4 @@ class Payload {
   bool saturated_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

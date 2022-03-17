@@ -34,7 +34,7 @@
 #include "triton/common/constants.h"
 #include "model_config_utils.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 std::string TritonRepoAgentLibraryName(const std::string& agent_name);
 
@@ -179,4 +179,4 @@ class TritonRepoAgentManager {
   std::unordered_map<std::string, std::weak_ptr<TritonRepoAgent>> agent_map_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -28,7 +28,7 @@
 
 #include "triton/common/logging.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 InstanceQueue::InstanceQueue(size_t max_batch_size, uint64_t max_queue_delay_ns)
     : max_batch_size_(max_batch_size), max_queue_delay_ns_(max_queue_delay_ns)
@@ -95,4 +95,4 @@ InstanceQueue::Dequeue(
   }
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

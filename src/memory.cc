@@ -34,7 +34,7 @@
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // MemoryReference
@@ -223,4 +223,4 @@ AllocatedMemory::~AllocatedMemory()
   }
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -34,7 +34,7 @@
 #include "triton/common/logging.h"
 #include "model_config_utils.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 Model::GetInput(
@@ -126,4 +126,4 @@ Model::Init()
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

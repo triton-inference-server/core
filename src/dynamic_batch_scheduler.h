@@ -43,7 +43,7 @@
 #include "scheduler_utils.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // Scheduler that implements dynamic batching.
 class DynamicBatchScheduler : public Scheduler {
@@ -160,4 +160,4 @@ class DynamicBatchScheduler : public Scheduler {
   std::shared_ptr<MetricModelReporter> reporter_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

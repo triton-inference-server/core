@@ -30,7 +30,7 @@
 #include "scheduler.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class InferenceServer;
 
@@ -57,4 +57,4 @@ class EnsembleModel : public Model {
 
 std::ostream& operator<<(std::ostream& out, const EnsembleModel& pb);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

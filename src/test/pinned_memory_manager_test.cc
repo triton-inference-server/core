@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -33,7 +33,7 @@
 #include "pinned_memory_manager.h"
 #include "tritonserver_apis.h"
 
-namespace ni = nvidia::inferenceserver;
+namespace tc = triton::core;
 
 namespace {
 
@@ -101,26 +101,26 @@ RunMemoryWork(
   void* input_buffer = nullptr;
   STORE_RESULT_AND_RETURN_IF_ERROR(
       metadata, idx,
-      ni::PinnedMemoryManager::Alloc(
+      tc::PinnedMemoryManager::Alloc(
           &input_buffer, alloc_size, &allocated_type,
           allow_nonpinned_fallback));
   if ((!allow_nonpinned_fallback) &&
       (allocated_type != TRITONSERVER_MEMORY_CPU_PINNED)) {
-    ni::Status status(
-        ni::Status::Code::INVALID_ARG, "returned memory buffer is not pinned");
+    tc::Status status(
+        tc::Status::Code::INVALID_ARG, "returned memory buffer is not pinned");
     STORE_RESULT_AND_RETURN_IF_ERROR(metadata, idx, status);
   }
   memcpy(input_buffer, input.get(), alloc_size);
   void* output_buffer = nullptr;
   STORE_RESULT_AND_RETURN_IF_ERROR(
       metadata, idx,
-      ni::PinnedMemoryManager::Alloc(
+      tc::PinnedMemoryManager::Alloc(
           &output_buffer, alloc_size, &allocated_type,
           allow_nonpinned_fallback));
   if ((!allow_nonpinned_fallback) &&
       (allocated_type != TRITONSERVER_MEMORY_CPU_PINNED)) {
-    ni::Status status(
-        ni::Status::Code::INVALID_ARG, "returned memory buffer is not pinned");
+    tc::Status status(
+        tc::Status::Code::INVALID_ARG, "returned memory buffer is not pinned");
     STORE_RESULT_AND_RETURN_IF_ERROR(metadata, idx, status);
   }
   memcpy(output_buffer, input_buffer, alloc_size);
@@ -137,7 +137,7 @@ RunMemoryWork(
 }
 
 // Wrapper of PinnedMemoryManager class to expose Reset() for unit testing
-class TestingPinnedMemoryManager : public ni::PinnedMemoryManager {
+class TestingPinnedMemoryManager : public tc::PinnedMemoryManager {
  public:
   static void Reset() { PinnedMemoryManager::Reset(); }
 };
@@ -152,14 +152,14 @@ class PinnedMemoryManagerTest : public ::testing::Test {
 
   void TearDown() override { TestingPinnedMemoryManager::Reset(); }
 
-  ni::PinnedMemoryManager::Options options_;
+  tc::PinnedMemoryManager::Options options_;
 };
 
 TEST_F(PinnedMemoryManagerTest, InitOOM)
 {
   // Set to reserve too much memory
   options_.pinned_memory_pool_byte_size_ = uint64_t(1) << 40 /* 1024 GB */;
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   // For pinned memory manager, it will still be created for "CPU fallback"
   // allocation even if it fails to create pinned memory pool
   EXPECT_TRUE(status.IsOk()) << status.Message();
@@ -167,31 +167,31 @@ TEST_F(PinnedMemoryManagerTest, InitOOM)
 
 TEST_F(PinnedMemoryManagerTest, InitSuccess)
 {
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 }
 
 TEST_F(PinnedMemoryManagerTest, InitZeroByte)
 {
   options_.pinned_memory_pool_byte_size_ = 0;
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
   TRITONSERVER_MemoryType allocated_type = TRITONSERVER_MEMORY_GPU;
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &ptr, 1, &allocated_type, false /* allow_nonpinned_fallback */);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 }
 
 TEST_F(PinnedMemoryManagerTest, AllocSuccess)
 {
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
   TRITONSERVER_MemoryType allocated_type = TRITONSERVER_MEMORY_GPU;
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &ptr, 512, &allocated_type, false /* allow_nonpinned_fallback */);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(ptr) << "Expect pointer to allocated buffer";
@@ -203,12 +203,12 @@ TEST_F(PinnedMemoryManagerTest, AllocSuccess)
 
 TEST_F(PinnedMemoryManagerTest, AllocFallbackSuccess)
 {
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
   TRITONSERVER_MemoryType allocated_type = TRITONSERVER_MEMORY_GPU;
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &ptr, 2048, &allocated_type, true /* allow_nonpinned_fallback */);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(ptr) << "Expect pointer to allocated buffer";
@@ -220,24 +220,24 @@ TEST_F(PinnedMemoryManagerTest, AllocFallbackSuccess)
 
 TEST_F(PinnedMemoryManagerTest, AllocFail)
 {
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* ptr = nullptr;
   TRITONSERVER_MemoryType allocated_type = TRITONSERVER_MEMORY_GPU;
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &ptr, 2048, &allocated_type, false /* allow_nonpinned_fallback */);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 }
 
 TEST_F(PinnedMemoryManagerTest, MultipleAlloc)
 {
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   void* first_ptr = nullptr;
   TRITONSERVER_MemoryType allocated_type = TRITONSERVER_MEMORY_GPU;
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &first_ptr, 600, &allocated_type, false /* allow_nonpinned_fallback */);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(first_ptr) << "Expect pointer to allocated buffer";
@@ -248,14 +248,14 @@ TEST_F(PinnedMemoryManagerTest, MultipleAlloc)
 
   // 512 + 600 > 1024
   void* second_ptr = nullptr;
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &second_ptr, 512, &allocated_type, false /* allow_nonpinned_fallback */);
   ASSERT_FALSE(status.IsOk()) << "Unexpected successful allocation";
 
   // Free the first pointer and retry the second one
-  status = ni::PinnedMemoryManager::Free(first_ptr);
+  status = tc::PinnedMemoryManager::Free(first_ptr);
   EXPECT_TRUE(status.IsOk()) << status.Message();
-  status = ni::PinnedMemoryManager::Alloc(
+  status = tc::PinnedMemoryManager::Alloc(
       &second_ptr, 512, &allocated_type, false /* allow_nonpinned_fallback */);
   ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(second_ptr) << "Expect pointer to allocated buffer";
@@ -268,7 +268,7 @@ TEST_F(PinnedMemoryManagerTest, MultipleAlloc)
 TEST_F(PinnedMemoryManagerTest, ParallelAlloc)
 {
   options_.pinned_memory_pool_byte_size_ = uint64_t(1) << 28 /* 256 MB */;
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   // Create threads to perform operations on allocated memory in parallel
@@ -292,7 +292,7 @@ TEST_F(PinnedMemoryManagerTest, ParallelAlloc)
 TEST_F(PinnedMemoryManagerTest, ParallelAllocFallback)
 {
   options_.pinned_memory_pool_byte_size_ = uint64_t(1) << 28 /* 256 MB */;
-  auto status = ni::PinnedMemoryManager::Create(options_);
+  auto status = tc::PinnedMemoryManager::Create(options_);
   ASSERT_TRUE(status.IsOk()) << status.Message();
 
   // Create threads to perform operations on allocated memory in parallel
