@@ -29,7 +29,7 @@
 #include "google/protobuf/message.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 enum class FileSystemType { LOCAL, GCS, S3, AS };
 
@@ -190,4 +190,4 @@ Status GetFileSystemType(const std::string& path, FileSystemType* type);
 /// \return The string representation of the type.
 const std::string& FileSystemTypeString(const FileSystemType type);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

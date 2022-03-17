@@ -30,7 +30,7 @@
 
 #pragma once
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 //
 // A class to hold information about the buffer allocation.
 //
@@ -76,4 +76,4 @@ class BufferAttributes {
   int64_t memory_type_id_;
   std::vector<char> cuda_ipc_handle_;
 };
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

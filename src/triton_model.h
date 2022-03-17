@@ -34,7 +34,7 @@
 #include "model.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class InferenceServer;
 class TritonModelInstance;
@@ -115,4 +115,4 @@ class TritonModel : public Model {
   void* state_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

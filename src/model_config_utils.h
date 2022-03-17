@@ -29,7 +29,7 @@
 #include "model_config.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 /// Get version of a model from the path containing the model
 /// definition file.
@@ -199,4 +199,4 @@ Status JsonToModelConfig(
     const std::string& json_config, const uint32_t config_version,
     inference::ModelConfig* protobuf_config);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

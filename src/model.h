@@ -31,7 +31,7 @@
 #include "scheduler.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class InferenceRequest;
 
@@ -146,4 +146,4 @@ class Model {
   uint32_t max_priority_level_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

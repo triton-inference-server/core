@@ -30,7 +30,7 @@
 #include "triton/common/constants.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // SharedLibrary
 //
@@ -69,4 +69,4 @@ class SharedLibrary {
   explicit SharedLibrary() = default;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

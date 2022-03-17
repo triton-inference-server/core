@@ -32,7 +32,7 @@
 #include "filesystem.h"
 #include "triton/common/logging.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 static std::weak_ptr<PersistentBackendManager> persist_backend_manager_;
 static std::mutex mu_;
@@ -110,4 +110,4 @@ PersistentBackendManager::InitPersistentBackend(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

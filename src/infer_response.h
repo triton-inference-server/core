@@ -38,7 +38,7 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class Model;
 class InferenceResponse;
@@ -348,4 +348,4 @@ std::ostream& operator<<(std::ostream& out, const InferenceResponse& response);
 std::ostream& operator<<(
     std::ostream& out, const InferenceResponse::Output& output);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

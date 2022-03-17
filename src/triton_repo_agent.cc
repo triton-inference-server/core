@@ -44,7 +44,7 @@
 #define TRITONAPI_DECLSPEC
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -585,4 +585,4 @@ TRITONREPOAGENT_SetState(TRITONREPOAGENT_Agent* agent, void* state)
 
 }  // extern C
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

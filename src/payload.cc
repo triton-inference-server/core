@@ -26,7 +26,7 @@
 
 #include "payload.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Payload::Payload()
     : op_type_(Operation::INFER_RUN),
@@ -197,4 +197,4 @@ Payload::Execute(bool* should_exit)
   status_->set_value(status);
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -38,7 +38,7 @@
 #include "status.h"
 #include "triton/common/sync_queue.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class TritonModel;
 class InferenceRequest;
@@ -185,4 +185,4 @@ class TritonModelInstance {
   void* state_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

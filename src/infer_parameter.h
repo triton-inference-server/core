@@ -29,7 +29,7 @@
 #include <string>
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // An inference parameter.
@@ -79,4 +79,4 @@ class InferenceParameter {
 std::ostream& operator<<(
     std::ostream& out, const InferenceParameter& parameter);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

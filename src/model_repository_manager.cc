@@ -49,7 +49,7 @@
 #include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 const std::string&
 ModelReadyStateString(ModelReadyState state)
@@ -2258,4 +2258,4 @@ ModelRepositoryManager::CheckNode(DependencyNode* node)
   return node_ready;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

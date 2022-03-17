@@ -43,7 +43,7 @@
 #include "sequence_state.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class SequenceBatch;
 
@@ -384,4 +384,4 @@ class OldestSequenceBatch : public SequenceBatch {
   std::vector<std::deque<std::unique_ptr<InferenceRequest>>> queues_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

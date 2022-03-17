@@ -38,7 +38,7 @@
 #include <boost/functional/hash.hpp>
 #include <boost/interprocess/managed_external_buffer.hpp>
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // Assuming CPU memory only for now
 struct Output {
@@ -189,4 +189,4 @@ class RequestResponseCache {
   std::recursive_mutex cache_mtx_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

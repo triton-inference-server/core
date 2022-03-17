@@ -28,7 +28,7 @@
 
 #include "triton/common/constants.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 bool
 IsFixedSizeDataType(const inference::DataType dtype)
@@ -567,4 +567,4 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
   return inference::DataType::TYPE_INVALID;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

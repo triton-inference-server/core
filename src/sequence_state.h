@@ -33,7 +33,7 @@
 
 #pragma once
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // Sequence state tensors.
@@ -165,4 +165,4 @@ class SequenceStates {
   bool is_null_request_ = false;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -30,7 +30,7 @@
 #include "model_config.pb.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 /// The type for a repeated dims field (used for shape).
 using DimsList = ::google::protobuf::RepeatedField<::google::protobuf::int64>;
@@ -289,4 +289,4 @@ TRITONSERVER_DataType DataTypeToTriton(const inference::DataType dtype);
 /// \return The data type.
 inference::DataType TritonToDataType(const TRITONSERVER_DataType dtype);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

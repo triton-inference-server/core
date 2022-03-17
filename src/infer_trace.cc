@@ -26,7 +26,7 @@
 
 #include "infer_trace.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_TRACING
 
@@ -58,4 +58,4 @@ InferenceTraceProxy::SpawnChildTrace()
 
 #endif  // TRITON_ENABLE_TRACING
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -31,7 +31,7 @@
 #include <sstream>
 #include "filesystem.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 const std::string&
 LabelProvider::GetLabel(const std::string& name, size_t index) const
@@ -92,4 +92,4 @@ LabelProvider::AddLabels(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

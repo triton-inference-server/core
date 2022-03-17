@@ -32,7 +32,7 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_TRACING
 
@@ -202,4 +202,4 @@ class InferenceTraceProxy {
 #define INFER_TRACE_ACTIVITY_NOW(T, A)
 #define INFER_TRACE_TENSOR_ACTIVITY(T, A, N, D, BA, BY, S, DI, MT, MTI)
 #endif  // TRITON_ENABLE_TRACING
-}}      // namespace nvidia::inferenceserver
+}}      // namespace triton::core

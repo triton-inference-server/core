@@ -35,7 +35,7 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -352,4 +352,4 @@ PinnedMemoryManager::Free(void* ptr)
   return instance_->FreeInternal(ptr);
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

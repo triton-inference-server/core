@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -37,7 +37,7 @@
 #include "shared_library.h"
 #include "triton_repo_agent.h"
 
-namespace ni = nvidia::inferenceserver;
+namespace tc = triton::core;
 
 namespace {
 
@@ -48,7 +48,7 @@ class TritonServerError {
  public:
   static TRITONSERVER_Error* Create(
       TRITONSERVER_Error_Code code, const char* msg);
-  static TRITONSERVER_Error* Create(const ni::Status& status);
+  static TRITONSERVER_Error* Create(const tc::Status& status);
 
   TRITONSERVER_Error_Code Code() const { return code_; }
   const std::string& Message() const { return msg_; }
@@ -75,7 +75,7 @@ TritonServerError::Create(TRITONSERVER_Error_Code code, const char* msg)
 }
 
 TRITONSERVER_Error*
-TritonServerError::Create(const ni::Status& status)
+TritonServerError::Create(const tc::Status& status)
 {
   // If 'status' is success then return nullptr as that indicates
   // success
@@ -84,7 +84,7 @@ TritonServerError::Create(const ni::Status& status)
   }
 
   return Create(
-      ni::StatusCodeToTritonCode(status.StatusCode()),
+      tc::StatusCodeToTritonCode(status.StatusCode()),
       status.Message().c_str());
 }
 
@@ -149,7 +149,7 @@ const char*
 TRITONSERVER_ErrorCodeString(TRITONSERVER_Error* error)
 {
   TritonServerError* lerror = reinterpret_cast<TritonServerError*>(error);
-  return ni::Status::CodeString(ni::TritonCodeToStatusCode(lerror->Code()));
+  return tc::Status::CodeString(tc::TritonCodeToStatusCode(lerror->Code()));
 }
 
 const char*
@@ -167,7 +167,7 @@ TRITONSERVER_MessageNewFromSerializedJson(
     TRITONSERVER_Message** message, const char* base, size_t byte_size)
 {
   *message = reinterpret_cast<TRITONSERVER_Message*>(
-      new ni::TritonServerMessage({base, byte_size}));
+      new tc::TritonServerMessage({base, byte_size}));
   return nullptr;
 }
 
@@ -175,8 +175,8 @@ TRITONSERVER_Error*
 TRITONSERVER_MessageSerializeToJson(
     TRITONSERVER_Message* message, const char** base, size_t* byte_size)
 {
-  ni::TritonServerMessage* lmessage =
-      reinterpret_cast<ni::TritonServerMessage*>(message);
+  tc::TritonServerMessage* lmessage =
+      reinterpret_cast<tc::TritonServerMessage*>(message);
   lmessage->Serialize(base, byte_size);
   return nullptr;  // Success
 }
@@ -185,7 +185,7 @@ TRITONSERVER_MessageSerializeToJson(
 }
 #endif
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 SharedLibrary::Acquire(std::unique_ptr<SharedLibrary>* slib)
@@ -248,7 +248,7 @@ SharedLibrary::GetEntrypoint(
   return Status::Success;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 namespace {
 
@@ -260,10 +260,10 @@ class TritonRepoAgentTest : public ::testing::Test {
 TEST_F(TritonRepoAgentTest, Create)
 {
   // Set up agent with only action function defined, check agent properties
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t CheckNameModelActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t CheckNameModelActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
-    auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+    auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
     EXPECT_EQ(lagent->Name(), "minimal_agent")
         << "Expect action function is called with minimal agent";
     return nullptr;
@@ -274,8 +274,8 @@ TEST_F(TritonRepoAgentTest, Create)
       reinterpret_cast<void*>(CheckNameModelActionFn));
   global_mock_agents.emplace("minimal_agent_path", agent_handle);
 
-  std::shared_ptr<ni::TritonRepoAgent> minimal_agent;
-  auto status = ni::TritonRepoAgent::Create(
+  std::shared_ptr<tc::TritonRepoAgent> minimal_agent;
+  auto status = tc::TritonRepoAgent::Create(
       "minimal_agent", "minimal_agent_path", &minimal_agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
@@ -297,8 +297,8 @@ TEST_F(TritonRepoAgentTest, CreateFailInvalidSharedLibrary)
 {
   // Passing a agent path that is not in global_mock_agents to
   // simulate failure on opening shared library handle
-  std::shared_ptr<ni::TritonRepoAgent> invalid_agent;
-  auto status = ni::TritonRepoAgent::Create(
+  std::shared_ptr<tc::TritonRepoAgent> invalid_agent;
+  auto status = tc::TritonRepoAgent::Create(
       "invalid_agent", "invalid_agent_path", &invalid_agent);
   ASSERT_FALSE(status.IsOk()) << "Unexpect successful agent creation";
   EXPECT_NE(
@@ -313,8 +313,8 @@ TEST_F(TritonRepoAgentTest, CreateFailMissingEndpoint)
   auto agent_handle = MockSharedLibraryHandle();
   global_mock_agents.emplace("invalid_agent_path", agent_handle);
 
-  std::shared_ptr<ni::TritonRepoAgent> invalid_agent;
-  auto status = ni::TritonRepoAgent::Create(
+  std::shared_ptr<tc::TritonRepoAgent> invalid_agent;
+  auto status = tc::TritonRepoAgent::Create(
       "invalid_agent", "invalid_agent_path", &invalid_agent);
   ASSERT_FALSE(status.IsOk()) << "Unexpect successful agent creation";
   EXPECT_NE(
@@ -327,28 +327,28 @@ TEST_F(TritonRepoAgentTest, CreateFailMissingEndpoint)
 TEST_F(TritonRepoAgentTest, Lifecycle)
 {
   // Set up agent with init / fini function defined
-  ni::TritonRepoAgent::TritonRepoAgentInitFn_t InitFn =
+  tc::TritonRepoAgent::TritonRepoAgentInitFn_t InitFn =
       [](TRITONREPOAGENT_Agent* agent) -> TRITONSERVER_Error* {
-    auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+    auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
     EXPECT_TRUE(lagent->State() == nullptr)
         << "Expect agent state is not set before initialization";
     bool* state = new bool(false);
     lagent->SetState(reinterpret_cast<void*>(state));
     return nullptr;
   };
-  ni::TritonRepoAgent::TritonRepoAgentFiniFn_t FiniFn =
+  tc::TritonRepoAgent::TritonRepoAgentFiniFn_t FiniFn =
       [](TRITONREPOAGENT_Agent* agent) -> TRITONSERVER_Error* {
-    auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+    auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
     bool* state = reinterpret_cast<bool*>(lagent->State());
     EXPECT_TRUE(state != nullptr) << "Expect agent state is set";
     EXPECT_TRUE(*state) << "Expect state is set to true";
     delete state;
     return nullptr;
   };
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
-    auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+    auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
     bool* state = reinterpret_cast<bool*>(lagent->State());
     EXPECT_TRUE(state != nullptr) << "Expect agent state is set";
     EXPECT_FALSE(*state) << "Expect state is set to false";
@@ -364,8 +364,8 @@ TEST_F(TritonRepoAgentTest, Lifecycle)
       "TRITONREPOAGENT_ModelAction", reinterpret_cast<void*>(ActionFn));
   global_mock_agents.emplace("agent_path", agent_handle);
 
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
@@ -387,7 +387,7 @@ TEST_F(TritonRepoAgentTest, Lifecycle)
 TEST_F(TritonRepoAgentTest, ModelLifecycle)
 {
   // Set up agent with model init / fini function defined
-  ni::TritonRepoAgent::TritonRepoAgentModelInitFn_t InitFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelInitFn_t InitFn =
       [](TRITONREPOAGENT_Agent* agent,
          TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
     auto lmodel_state =
@@ -396,7 +396,7 @@ TEST_F(TritonRepoAgentTest, ModelLifecycle)
     lmodel_state->first->set_value();
     return nullptr;
   };
-  ni::TritonRepoAgent::TritonRepoAgentModelFiniFn_t FiniFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelFiniFn_t FiniFn =
       [](TRITONREPOAGENT_Agent* agent,
          TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
     auto lmodel_state =
@@ -405,7 +405,7 @@ TEST_F(TritonRepoAgentTest, ModelLifecycle)
     lmodel_state->second->get();
     return nullptr;
   };
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
     auto lmodel_state =
@@ -423,8 +423,8 @@ TEST_F(TritonRepoAgentTest, ModelLifecycle)
       "TRITONREPOAGENT_ModelAction", reinterpret_cast<void*>(ActionFn));
   global_mock_agents.emplace("agent_path", agent_handle);
 
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
@@ -466,17 +466,17 @@ class TritonRepoAgentManagerTest : public ::testing::Test {
   void SetUp() override
   {
     // Set up agent with init / fini function defined
-    ni::TritonRepoAgent::TritonRepoAgentInitFn_t InitFn =
+    tc::TritonRepoAgent::TritonRepoAgentInitFn_t InitFn =
         [](TRITONREPOAGENT_Agent* agent) -> TRITONSERVER_Error* {
       agent_init_counter_++;
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentFiniFn_t FiniFn =
+    tc::TritonRepoAgent::TritonRepoAgentFiniFn_t FiniFn =
         [](TRITONREPOAGENT_Agent* agent) -> TRITONSERVER_Error* {
       agent_fini_counter_++;
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
         [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
            const TRITONREPOAGENT_ActionType action_type)
         -> TRITONSERVER_Error* { return nullptr; };
@@ -490,13 +490,13 @@ class TritonRepoAgentManagerTest : public ::testing::Test {
 
     // Reserve valid shared library paths because manager searches the libraries
     // via the FileSystem API
-    const ni::FileSystemType type = ni::FileSystemType::LOCAL;
-    auto status = ni::MakeTemporaryDirectory(type, &root_agent_path_);
+    const tc::FileSystemType type = tc::FileSystemType::LOCAL;
+    auto status = tc::MakeTemporaryDirectory(type, &root_agent_path_);
     ASSERT_TRUE(status.IsOk()) << "TritonRepoAgentManagerTest set up failed: "
                                   "create temporary directory: "
                                << status.AsString();
     // FIXME make the following platform independent
-    global_agent_path_ = ni::JoinPath({root_agent_path_, "global"});
+    global_agent_path_ = tc::JoinPath({root_agent_path_, "global"});
     int err = mkdir(
         global_agent_path_.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     ASSERT_EQ(err, 0) << "TritonRepoAgentManagerTest set up failed: create "
@@ -505,9 +505,9 @@ class TritonRepoAgentManagerTest : public ::testing::Test {
     const std::set<std::string> agent_names{"global_agent"};
     for (const auto& agent_name : agent_names) {
       auto global_path_to_agent =
-          ni::JoinPath({global_agent_path_, agent_name});
-      auto global_agent = ni::JoinPath(
-          {global_path_to_agent, ni::TritonRepoAgentLibraryName(agent_name)});
+          tc::JoinPath({global_agent_path_, agent_name});
+      auto global_agent = tc::JoinPath(
+          {global_path_to_agent, tc::TritonRepoAgentLibraryName(agent_name)});
       err = mkdir(
           global_path_to_agent.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
       ASSERT_EQ(err, 0) << "TritonRepoAgentManagerTest set up failed: create "
@@ -517,7 +517,7 @@ class TritonRepoAgentManagerTest : public ::testing::Test {
       global_mock_agents.emplace(global_agent, agent_handle);
     }
     status =
-        ni::TritonRepoAgentManager::SetGlobalSearchPath(global_agent_path_);
+        tc::TritonRepoAgentManager::SetGlobalSearchPath(global_agent_path_);
     ASSERT_TRUE(status.IsOk()) << "TritonRepoAgentManagerTest set up failed: "
                                   "create temporary directory: "
                                << status.AsString();
@@ -527,7 +527,7 @@ class TritonRepoAgentManagerTest : public ::testing::Test {
     agent_init_counter_ = 0;
     agent_fini_counter_ = 0;
     if (!root_agent_path_.empty()) {
-      // ni::DeleteDirectory(root_agent_path_);
+      // tc::DeleteDirectory(root_agent_path_);
     }
     global_mock_agents.clear();
   }
@@ -543,8 +543,8 @@ TEST_F(TritonRepoAgentManagerTest, CreateFailureFileNotExist)
 {
   // Passing a agent path that is not in global_mock_agents to
   // simulate failure on opening shared library handle
-  std::shared_ptr<ni::TritonRepoAgent> invalid_agent;
-  auto status = ni::TritonRepoAgentManager::CreateAgent(
+  std::shared_ptr<tc::TritonRepoAgent> invalid_agent;
+  auto status = tc::TritonRepoAgentManager::CreateAgent(
       "invalid_agent_name", &invalid_agent);
   ASSERT_FALSE(status.IsOk()) << "Unexpect successful agent creation";
   EXPECT_NE(status.Message().find("unable to find"), std::string::npos)
@@ -554,8 +554,8 @@ TEST_F(TritonRepoAgentManagerTest, CreateFailureFileNotExist)
 
 TEST_F(TritonRepoAgentManagerTest, CreateGlobalAgent)
 {
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgentManager::CreateAgent("global_agent", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgentManager::CreateAgent("global_agent", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation" << status.AsString();
   agent.reset();
@@ -565,16 +565,16 @@ TEST_F(TritonRepoAgentManagerTest, CreateGlobalAgent)
 
 TEST_F(TritonRepoAgentManagerTest, AgentPersistence)
 {
-  std::shared_ptr<ni::TritonRepoAgent> agent1;
-  std::shared_ptr<ni::TritonRepoAgent> agent2;
+  std::shared_ptr<tc::TritonRepoAgent> agent1;
+  std::shared_ptr<tc::TritonRepoAgent> agent2;
   auto status =
-      ni::TritonRepoAgentManager::CreateAgent("global_agent", &agent1);
+      tc::TritonRepoAgentManager::CreateAgent("global_agent", &agent1);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation" << status.AsString();
   EXPECT_EQ(agent_init_counter_, (size_t)1) << "Expect 1 agent initialization";
   EXPECT_EQ(agent_fini_counter_, (size_t)0) << "Expect 0 agent finalization";
 
-  status = ni::TritonRepoAgentManager::CreateAgent("global_agent", &agent2);
+  status = tc::TritonRepoAgentManager::CreateAgent("global_agent", &agent2);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation" << status.AsString();
   EXPECT_EQ(agent_init_counter_, (size_t)1) << "Expect 1 agent initialization";
@@ -588,7 +588,7 @@ TEST_F(TritonRepoAgentManagerTest, AgentPersistence)
   EXPECT_EQ(agent_fini_counter_, (size_t)1) << "Expect 1 agent finalization";
 
   // Create again after all previous agents are reset
-  status = ni::TritonRepoAgentManager::CreateAgent("global_agent", &agent1);
+  status = tc::TritonRepoAgentManager::CreateAgent("global_agent", &agent1);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation" << status.AsString();
   EXPECT_EQ(agent_init_counter_, (size_t)2) << "Expect 2 agent initialization";
@@ -605,7 +605,7 @@ class TritonRepoAgentModelTest : public ::testing::Test {
     simple_config_.set_name("simple_config");
 
     // Add a simple agent handle for convinence
-    ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
         [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
            const TRITONREPOAGENT_ActionType action_type)
         -> TRITONSERVER_Error* { return nullptr; };
@@ -615,10 +615,10 @@ class TritonRepoAgentModelTest : public ::testing::Test {
     global_mock_agents.emplace("simple_agent_path", agent_handle);
 
     // Add a agent handle for logging actions of the model
-    ni::TritonRepoAgent::TritonRepoAgentModelInitFn_t LogInitFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelInitFn_t LogInitFn =
         [](TRITONREPOAGENT_Agent* agent,
            TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
-      auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+      auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
       auto state = reinterpret_cast<std::vector<std::string>*>(lagent->State());
       if (state == nullptr) {
         return TRITONSERVER_ErrorNew(
@@ -627,10 +627,10 @@ class TritonRepoAgentModelTest : public ::testing::Test {
       state->emplace_back("Model Initialized");
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentModelFiniFn_t LogFiniFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelFiniFn_t LogFiniFn =
         [](TRITONREPOAGENT_Agent* agent,
            TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
-      auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+      auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
       auto state = reinterpret_cast<std::vector<std::string>*>(lagent->State());
       if (state == nullptr) {
         return TRITONSERVER_ErrorNew(
@@ -639,17 +639,17 @@ class TritonRepoAgentModelTest : public ::testing::Test {
       state->emplace_back("Model Finalized");
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t LogActionFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t LogActionFn =
         [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
            const TRITONREPOAGENT_ActionType action_type)
         -> TRITONSERVER_Error* {
-      auto lagent = reinterpret_cast<ni::TritonRepoAgent*>(agent);
+      auto lagent = reinterpret_cast<tc::TritonRepoAgent*>(agent);
       auto state = reinterpret_cast<std::vector<std::string>*>(lagent->State());
       if (state == nullptr) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INTERNAL, "Agent state is not set");
       }
-      state->emplace_back(ni::TRITONREPOAGENT_ActionTypeString(action_type));
+      state->emplace_back(tc::TRITONREPOAGENT_ActionTypeString(action_type));
       return nullptr;
     };
     auto log_agent_handle = MockSharedLibraryHandle();
@@ -672,17 +672,17 @@ class TritonRepoAgentModelTest : public ::testing::Test {
 TEST_F(TritonRepoAgentModelTest, Create)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   EXPECT_EQ(model->Config().name(), simple_config_.name())
@@ -693,13 +693,13 @@ TEST_F(TritonRepoAgentModelTest, CreateFailure)
 {
   // Create agent to be associated with the model, whose model init function
   // always returns error
-  ni::TritonRepoAgent::TritonRepoAgentModelInitFn_t InitFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelInitFn_t InitFn =
       [](TRITONREPOAGENT_Agent* agent,
          TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "Model initialization error");
   };
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
     return nullptr;
@@ -711,16 +711,16 @@ TEST_F(TritonRepoAgentModelTest, CreateFailure)
       "TRITONREPOAGENT_ModelAction", reinterpret_cast<void*>(ActionFn));
   global_mock_agents.emplace("agent_path", agent_handle);
 
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_FALSE(status.IsOk()) << "Unexpect successful model creation";
   EXPECT_NE(
       status.Message().find("Model initialization error"), std::string::npos)
@@ -731,17 +731,17 @@ TEST_F(TritonRepoAgentModelTest, CreateFailure)
 TEST_F(TritonRepoAgentModelTest, Location)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   TRITONREPOAGENT_ArtifactType type;
@@ -756,17 +756,17 @@ TEST_F(TritonRepoAgentModelTest, Location)
 TEST_F(TritonRepoAgentModelTest, SetLocationFailure)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   TRITONREPOAGENT_ArtifactType type = TRITONREPOAGENT_ARTIFACT_FILESYSTEM;
@@ -790,17 +790,17 @@ TEST_F(TritonRepoAgentModelTest, SetLocation)
   static const std::string new_location = "/new_location";
 
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   // Advance the model lifecycle to be able to set location
@@ -816,7 +816,7 @@ TEST_F(TritonRepoAgentModelTest, SetLocation)
   status = model->Location(&type, &location);
   ASSERT_TRUE(status.IsOk()) << "Expect location is returned from Location()";
   EXPECT_EQ(type, new_type) << "Expect returned filesystem type is "
-                            << ni::TRITONREPOAGENT_ArtifactTypeString(new_type);
+                            << tc::TRITONREPOAGENT_ArtifactTypeString(new_type);
   EXPECT_EQ(std::string(location), new_location)
       << "Expect returned location is " << new_location;
 }
@@ -828,17 +828,17 @@ TEST_F(TritonRepoAgentModelTest, SetLocationWrongActionFailure)
   static const std::string new_location = "/new_location";
 
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   // Advance the model lifecycle to be able to set location
@@ -867,10 +867,10 @@ TEST_F(TritonRepoAgentModelTest, SetLocationViaAgent)
       TRITONREPOAGENT_ARTIFACT_FILESYSTEM;
   static const std::string new_location = "/new_location";
   // Create agent to be associated with the model
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
-    auto lmodel = reinterpret_cast<ni::TritonRepoAgentModel*>(model);
+    auto lmodel = reinterpret_cast<tc::TritonRepoAgentModel*>(model);
     auto status = lmodel->SetLocation(new_type, new_location);
     return reinterpret_cast<TRITONSERVER_Error*>(
         TritonServerError::Create(status));
@@ -879,17 +879,17 @@ TEST_F(TritonRepoAgentModelTest, SetLocationViaAgent)
   agent_handle.AddEntryPoint(
       "TRITONREPOAGENT_ModelAction", reinterpret_cast<void*>(ActionFn));
   global_mock_agents.emplace("set_location_agent_path", agent_handle);
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "set_location_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "set_location_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   // Advance the model lifecycle to be able to set location
@@ -901,7 +901,7 @@ TEST_F(TritonRepoAgentModelTest, SetLocationViaAgent)
   status = model->Location(&type, &location);
   ASSERT_TRUE(status.IsOk()) << "Expect location is returned from Location()";
   EXPECT_EQ(type, new_type) << "Expect returned filesystem type is "
-                            << ni::TRITONREPOAGENT_ArtifactTypeString(new_type);
+                            << tc::TRITONREPOAGENT_ArtifactTypeString(new_type);
   EXPECT_EQ(std::string(location), new_location)
       << "Expect returned location is " << new_location;
 }
@@ -909,17 +909,17 @@ TEST_F(TritonRepoAgentModelTest, SetLocationViaAgent)
 TEST_F(TritonRepoAgentModelTest, DeleteLocationBeforeAcquire)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
 
@@ -936,17 +936,17 @@ TEST_F(TritonRepoAgentModelTest, DeleteLocationBeforeAcquire)
 TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationAndDelete)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   const char* acquired_location;
@@ -957,16 +957,16 @@ TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationAndDelete)
 
   // Check directory
   bool is_dir = false;
-  status = ni::IsDirectory(acquired_location, &is_dir);
+  status = tc::IsDirectory(acquired_location, &is_dir);
   ASSERT_TRUE(status.IsOk())
       << "Expect location proprety can be checked: " << status.AsString();
   EXPECT_TRUE(is_dir) << "Expect a directory is returned as mutable location";
-  ni::FileSystemType type = ni::FileSystemType::LOCAL;
-  status = ni::GetFileSystemType(acquired_location, &type);
+  tc::FileSystemType type = tc::FileSystemType::LOCAL;
+  status = tc::GetFileSystemType(acquired_location, &type);
   ASSERT_TRUE(status.IsOk())
       << "Expect location filesystem type can be checked: "
       << status.AsString();
-  EXPECT_EQ(type, ni::FileSystemType::LOCAL)
+  EXPECT_EQ(type, tc::FileSystemType::LOCAL)
       << "Expect a local mutable location is acquired";
 
   status = model->DeleteMutableLocation();
@@ -974,7 +974,7 @@ TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationAndDelete)
       << "Expect successful location deletion: " << status.AsString();
   // Check directory
   bool exists = true;
-  status = ni::FileExists(acquired_location, &exists);
+  status = tc::FileExists(acquired_location, &exists);
   ASSERT_TRUE(status.IsOk())
       << "Expect location proprety can be checked: " << status.AsString();
   EXPECT_FALSE(exists) << "Expect the mutable location no longer exists";
@@ -983,17 +983,17 @@ TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationAndDelete)
 TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationTwice)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
 
@@ -1017,17 +1017,17 @@ TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationTwice)
 TEST_F(TritonRepoAgentModelTest, DeleteTwiceAfterAcquire)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   const char* acquired_location;
@@ -1052,17 +1052,17 @@ TEST_F(TritonRepoAgentModelTest, DeleteTwiceAfterAcquire)
 TEST_F(TritonRepoAgentModelTest, AcquireRemoteLocation)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
 
@@ -1081,17 +1081,17 @@ TEST_F(TritonRepoAgentModelTest, AcquireRemoteLocation)
 TEST_F(TritonRepoAgentModelTest, AgentParameters)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  ni::TritonRepoAgent::Parameters expected_params{{"key_a", "value_b"},
+  tc::TritonRepoAgent::Parameters expected_params{{"key_a", "value_b"},
                                                   {"key_b", "value_b"}};
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
       expected_params, &model);
   ASSERT_TRUE(status.IsOk())
@@ -1107,17 +1107,17 @@ TEST_F(TritonRepoAgentModelTest, AgentParameters)
 TEST_F(TritonRepoAgentModelTest, State)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
+  std::shared_ptr<tc::TritonRepoAgent> agent;
   auto status =
-      ni::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
+      tc::TritonRepoAgent::Create("agent", "simple_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   auto state = model->State();
@@ -1133,18 +1133,18 @@ TEST_F(TritonRepoAgentModelTest, State)
 TEST_F(TritonRepoAgentModelTest, EmptyLifeCycle)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
   std::vector<std::string> log;
   agent->SetState(reinterpret_cast<void*>(&log));
 
   // Create and destroy model
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
-  status = ni::TritonRepoAgentModel::Create(
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
+  status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
-      ni::TritonRepoAgent::Parameters(), &model);
+      tc::TritonRepoAgent::Parameters(), &model);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful model creation: " << status.AsString();
   model.reset();
@@ -1159,14 +1159,14 @@ TEST_F(TritonRepoAgentModelTest, EmptyLifeCycle)
 TEST_F(TritonRepoAgentModelTest, HalfLifeCycle)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
   std::vector<std::string> log;
   agent->SetState(reinterpret_cast<void*>(&log));
 
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
   // Create and destroy model in situations that a full lifecycle should run
   std::vector<std::vector<TRITONREPOAGENT_ActionType>> situations{
       {TRITONREPOAGENT_ACTION_LOAD},
@@ -1176,15 +1176,15 @@ TEST_F(TritonRepoAgentModelTest, HalfLifeCycle)
       "TRITONREPOAGENT_ACTION_LOAD_FAIL", "Model Finalized"};
   for (const auto& situation : situations) {
     log.clear();
-    status = ni::TritonRepoAgentModel::Create(
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : situation) {
       status = model->InvokeAgent(action);
       EXPECT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
     model.reset();
@@ -1202,14 +1202,14 @@ TEST_F(TritonRepoAgentModelTest, HalfLifeCycle)
 TEST_F(TritonRepoAgentModelTest, FullLifeCycle)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
   std::vector<std::string> log;
   agent->SetState(reinterpret_cast<void*>(&log));
 
-  std::unique_ptr<ni::TritonRepoAgentModel> model;
+  std::unique_ptr<tc::TritonRepoAgentModel> model;
   // Create and destroy model in situations that a full lifecycle should run
   std::vector<std::vector<TRITONREPOAGENT_ActionType>> situations{
       {TRITONREPOAGENT_ACTION_LOAD, TRITONREPOAGENT_ACTION_LOAD_COMPLETE},
@@ -1226,15 +1226,15 @@ TEST_F(TritonRepoAgentModelTest, FullLifeCycle)
       "Model Finalized"};
   for (const auto& situation : situations) {
     log.clear();
-    status = ni::TritonRepoAgentModel::Create(
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : situation) {
       status = model->InvokeAgent(action);
       EXPECT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
     model.reset();
@@ -1252,8 +1252,8 @@ TEST_F(TritonRepoAgentModelTest, FullLifeCycle)
 TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
 {
   // Create agent to be associated with the model
-  std::shared_ptr<ni::TritonRepoAgent> agent;
-  auto status = ni::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
+  std::shared_ptr<tc::TritonRepoAgent> agent;
+  auto status = tc::TritonRepoAgent::Create("agent", "log_agent_path", &agent);
   ASSERT_TRUE(status.IsOk())
       << "Expect successful agent creation: " << status.AsString();
   std::vector<std::string> log;
@@ -1280,10 +1280,10 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
                     {TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE, {}}};
   for (const auto& valid_lifecycle : valid_lifecycles) {
     log.clear();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (size_t idx = 0; idx < valid_lifecycle.size(); ++idx) {
@@ -1302,7 +1302,7 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
           }
           ASSERT_FALSE(status.IsOk())
               << "Unexpect successful agent invocation with "
-              << ni::TRITONREPOAGENT_ActionTypeString(action);
+              << tc::TRITONREPOAGENT_ActionTypeString(action);
         }
         status = model->InvokeAgent(valid_lifecycle[0]);
         if (!status.IsOk()) {
@@ -1312,7 +1312,7 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
         }
         ASSERT_TRUE(status.IsOk())
             << "Expect successful agent invocation with "
-            << ni::TRITONREPOAGENT_ActionTypeString(next_lifecycle_action)
+            << tc::TRITONREPOAGENT_ActionTypeString(next_lifecycle_action)
             << ": " << status.AsString();
         continue;
       }
@@ -1330,7 +1330,7 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
         }
         ASSERT_FALSE(status.IsOk())
             << "Unexpect successful agent invocation with "
-            << ni::TRITONREPOAGENT_ActionTypeString(action);
+            << tc::TRITONREPOAGENT_ActionTypeString(action);
       }
       status = model->InvokeAgent(next_lifecycle_action);
       if (!status.IsOk()) {
@@ -1340,7 +1340,7 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
       }
       ASSERT_TRUE(status.IsOk())
           << "Expect successful agent invocation with "
-          << ni::TRITONREPOAGENT_ActionTypeString(next_lifecycle_action) << ": "
+          << tc::TRITONREPOAGENT_ActionTypeString(next_lifecycle_action) << ": "
           << status.AsString();
     }
   }
@@ -1365,21 +1365,21 @@ class TritonRepoAgentAPITest : public ::testing::Test {
   {
     simple_config_.set_name("simple_config");
     // Add a agent handle for flexible testing
-    ni::TritonRepoAgent::TritonRepoAgentInitFn_t AgentInitFn =
+    tc::TritonRepoAgent::TritonRepoAgentInitFn_t AgentInitFn =
         [](TRITONREPOAGENT_Agent* agent) -> TRITONSERVER_Error* {
       if (agent_init_fn_ != nullptr) {
         agent_init_fn_(agent);
       }
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentFiniFn_t AgentFiniFn =
+    tc::TritonRepoAgent::TritonRepoAgentFiniFn_t AgentFiniFn =
         [](TRITONREPOAGENT_Agent* agent) -> TRITONSERVER_Error* {
       if (agent_fini_fn_ != nullptr) {
         agent_fini_fn_(agent);
       }
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentModelInitFn_t ModelInitFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelInitFn_t ModelInitFn =
         [](TRITONREPOAGENT_Agent* agent,
            TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
       if (model_init_fn_ != nullptr) {
@@ -1387,7 +1387,7 @@ class TritonRepoAgentAPITest : public ::testing::Test {
       }
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
         [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
            const TRITONREPOAGENT_ActionType action_type)
         -> TRITONSERVER_Error* {
@@ -1396,7 +1396,7 @@ class TritonRepoAgentAPITest : public ::testing::Test {
       }
       return nullptr;
     };
-    ni::TritonRepoAgent::TritonRepoAgentModelFiniFn_t ModelFiniFn =
+    tc::TritonRepoAgent::TritonRepoAgentModelFiniFn_t ModelFiniFn =
         [](TRITONREPOAGENT_Agent* agent,
            TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
       if (model_fini_fn_ != nullptr) {
@@ -1493,20 +1493,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ApiVersion)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1539,20 +1539,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryLocation)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1589,20 +1589,20 @@ TEST_F(
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1644,20 +1644,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryLocationAcquire)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1710,20 +1710,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryLocationRelease)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1774,7 +1774,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryUpdate)
 
   // Overriding the model action function in agent handle because the action
   // type needs to be checked here
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
     std::string new_location = current_location + "_new";
@@ -1832,20 +1832,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryUpdate)
     current_location = original_location_;
     current_type = TRITONREPOAGENT_ARTIFACT_FILESYSTEM;
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, current_location, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1853,7 +1853,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryUpdate)
 
 TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelParameter)
 {
-  static ni::TritonRepoAgent::Parameters expected_params{{"key_a", "value_a"},
+  static tc::TritonRepoAgent::Parameters expected_params{{"key_a", "value_a"},
                                                          {"key_b", "value_b"}};
   model_init_fn_ =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model) {
@@ -1906,12 +1906,12 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelParameter)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
         expected_params, &model);
     ASSERT_TRUE(status.IsOk())
@@ -1919,7 +1919,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelParameter)
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -1975,20 +1975,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelConfig)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -2052,7 +2052,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelState)
       };
   // Overriding the model action function in agent handle because the action
   // type needs to be checked here
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
     size_t* state = nullptr;
@@ -2113,20 +2113,20 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelState)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::unique_ptr<ni::TritonRepoAgentModel> model;
-    status = ni::TritonRepoAgentModel::Create(
+    std::unique_ptr<tc::TritonRepoAgentModel> model;
+    status = tc::TritonRepoAgentModel::Create(
         original_type_, original_location_, simple_config_, agent,
-        ni::TritonRepoAgent::Parameters(), &model);
+        tc::TritonRepoAgent::Parameters(), &model);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful model creation: " << status.AsString();
     for (const auto action : lifecycle) {
       status = model->InvokeAgent(action);
       ASSERT_TRUE(status.IsOk()) << "Expect successful agent invocation with "
-                                 << ni::TRITONREPOAGENT_ActionTypeString(action)
+                                 << tc::TRITONREPOAGENT_ActionTypeString(action)
                                  << ": " << status.AsString();
     }
   }
@@ -2262,7 +2262,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_AgentState)
   };
   // Overriding the model action function in agent handle because the action
   // type needs to be checked here
-  ni::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
+  tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ModelActionFn =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
          const TRITONREPOAGENT_ActionType action_type) -> TRITONSERVER_Error* {
     size_t* model_state = nullptr;
@@ -2331,15 +2331,15 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_AgentState)
   const auto lifecycles = valid_lifecycles_;
   for (const auto& lifecycle : lifecycles) {
     // Create agent to be associated with the model
-    std::shared_ptr<ni::TritonRepoAgent> agent;
-    auto status = ni::TritonRepoAgent::Create("agent", "agent_path", &agent);
+    std::shared_ptr<tc::TritonRepoAgent> agent;
+    auto status = tc::TritonRepoAgent::Create("agent", "agent_path", &agent);
     ASSERT_TRUE(status.IsOk())
         << "Expect successful agent creation: " << status.AsString();
-    std::vector<std::unique_ptr<ni::TritonRepoAgentModel>> models(2);
+    std::vector<std::unique_ptr<tc::TritonRepoAgentModel>> models(2);
     for (auto& model : models) {
-      status = ni::TritonRepoAgentModel::Create(
+      status = tc::TritonRepoAgentModel::Create(
           original_type_, original_location_, simple_config_, agent,
-          ni::TritonRepoAgent::Parameters(), &model);
+          tc::TritonRepoAgent::Parameters(), &model);
       ASSERT_TRUE(status.IsOk())
           << "Expect successful model creation: " << status.AsString();
     }
@@ -2348,7 +2348,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_AgentState)
         status = model->InvokeAgent(action);
         ASSERT_TRUE(status.IsOk())
             << "Expect successful agent invocation with "
-            << ni::TRITONREPOAGENT_ActionTypeString(action) << ": "
+            << tc::TRITONREPOAGENT_ActionTypeString(action) << ": "
             << status.AsString();
       }
     }

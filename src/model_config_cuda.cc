@@ -28,7 +28,7 @@
 
 #include <cuda_runtime_api.h>
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 int
 GetCudaStreamPriority(
@@ -58,4 +58,4 @@ GetCudaStreamPriority(
   return cuda_stream_priority;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

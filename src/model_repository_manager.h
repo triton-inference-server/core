@@ -34,7 +34,7 @@
 #include "model_config.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 class InferenceServer;
 class Model;
@@ -327,4 +327,4 @@ class ModelRepositoryManager {
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

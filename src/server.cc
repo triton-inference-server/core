@@ -53,7 +53,7 @@
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -595,4 +595,4 @@ InferenceServer::PrintBackendAndModelSummary()
 
   return Status::Success;
 }
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

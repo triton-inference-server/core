@@ -34,7 +34,7 @@
 #include "model_repository_manager.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 /// Validate that the ensemble are specified correctly. Assuming that the
 /// inputs and outputs specified in depending model configurations are accurate.
@@ -45,6 +45,6 @@ Status ValidateEnsembleConfig(
     ModelRepositoryManager* model_repository_manager,
     ModelRepositoryManager::DependencyNode* ensemble);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_ENSEMBLE

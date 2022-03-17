@@ -33,7 +33,7 @@
 #include "model_config.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // This is a singleton class responsible for maintaining pinned memory pool
 // used by the inference server. Pinned memory allocations and deallocations
@@ -104,4 +104,4 @@ class PinnedMemoryManager {
   std::map<unsigned long, std::shared_ptr<PinnedMemory>> pinned_memory_buffers_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

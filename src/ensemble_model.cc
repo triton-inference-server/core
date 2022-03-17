@@ -32,7 +32,7 @@
 #include "triton/common/logging.h"
 #include "model_config_utils.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Status
 EnsembleModel::Create(
@@ -64,4 +64,4 @@ operator<<(std::ostream& out, const EnsembleModel& pb)
   return out;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

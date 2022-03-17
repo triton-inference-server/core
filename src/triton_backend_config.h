@@ -28,7 +28,7 @@
 #include "model_config.h"
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 /// Get a key's string value from a backend configuration.
 Status BackendConfiguration(
@@ -67,4 +67,4 @@ Status BackendConfigurationSpecializeBackendName(
 Status BackendConfigurationBackendLibraryName(
     const std::string& backend_name, std::string* libname);
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

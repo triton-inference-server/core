@@ -35,7 +35,7 @@
 #include "status.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // Proxy to a backend shared library.
@@ -164,4 +164,4 @@ class TritonBackendManager {
   std::unordered_map<std::string, std::weak_ptr<TritonBackend>> backend_map_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

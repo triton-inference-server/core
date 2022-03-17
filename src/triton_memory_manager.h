@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // Currently there is just a global memory manager that is used for
 // all backends and which simply forwards requests on to the core
@@ -33,4 +33,4 @@ namespace nvidia { namespace inferenceserver {
 struct TritonMemoryManager {
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

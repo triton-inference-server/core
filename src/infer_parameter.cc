@@ -26,7 +26,7 @@
 
 #include "infer_parameter.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 
 const void*
@@ -56,4 +56,4 @@ operator<<(std::ostream& out, const InferenceParameter& parameter)
   return out;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

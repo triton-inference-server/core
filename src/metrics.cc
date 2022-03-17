@@ -42,7 +42,7 @@
 #include <string>
 #endif  // TRITON_ENABLE_METRICS_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 Metrics::Metrics()
     : registry_(std::make_shared<prometheus::Registry>()),
@@ -817,6 +817,6 @@ Metrics::GetSingleton()
   return &singleton;
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_METRICS

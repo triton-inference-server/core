@@ -33,7 +33,7 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_GPU
 #define RETURN_IF_CUDA_ERR(X, MSG)                                           \
@@ -134,4 +134,4 @@ struct CopyParams {
   const size_t byte_size_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

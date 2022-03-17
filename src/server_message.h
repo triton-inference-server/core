@@ -28,14 +28,14 @@
 #include <string>
 #include "status.h"
 
-#define TRITONJSON_STATUSTYPE nvidia::inferenceserver::Status
+#define TRITONJSON_STATUSTYPE triton::core::Status
 #define TRITONJSON_STATUSRETURN(M)        \
-  return nvidia::inferenceserver::Status( \
-      nvidia::inferenceserver::Status::Code::INTERNAL, (M))
-#define TRITONJSON_STATUSSUCCESS nvidia::inferenceserver::Status::Success
+  return triton::core::Status( \
+      triton::core::Status::Code::INTERNAL, (M))
+#define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/triton_json.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // Implementation for TRITONSERVER_Message.
@@ -88,4 +88,4 @@ class TritonServerMessage {
   size_t byte_size_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

@@ -40,7 +40,7 @@
 #include <dcgm_agent.h>
 #endif  // TRITON_ENABLE_METRICS_GPU
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 struct DcgmMetadata {
@@ -278,6 +278,6 @@ class Metrics {
   uint64_t metrics_interval_ms_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_METRICS

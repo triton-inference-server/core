@@ -35,7 +35,7 @@
 #include "model.h"
 #include "server.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 namespace {
 
@@ -1352,6 +1352,6 @@ EnsembleScheduler::~EnsembleScheduler()
 #endif  // TRITON_ENABLE_GPU
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
 
 #endif  // TRITON_ENABLE_ENSEMBLE

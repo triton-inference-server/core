@@ -31,7 +31,7 @@
 #include <mutex>
 #include "status.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 // This is a singleton class responsible for maintaining CUDA memory pool
 // used by the inference server. CUDA memory allocations and deallocations
@@ -82,4 +82,4 @@ class CudaMemoryManager {
   static std::mutex instance_mu_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
