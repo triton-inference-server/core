@@ -151,6 +151,11 @@ class InferenceRequest {
     Status AppendDataWithBufferAttributes(
         const void* base, BufferAttributes* buffer_attributes);
 
+    // Prepend a new buffer of data to this input.
+    Status PrependData(
+        const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+        int64_t memory_type_id);
+
     // Remove all existing data for the input.
     Status RemoveAllData();
 
@@ -702,6 +707,7 @@ class InferenceRequest {
   std::unordered_map<std::string, Input*> inputs_;
   std::set<std::string> original_requested_outputs_;
   std::string raw_input_name_;
+  uint32_t raw_input_size_;
 
   // requested_outputs_ is to be used post-normalization. It will be
   // empty unless it differs from original_requested_outputs_, so

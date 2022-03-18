@@ -753,13 +753,27 @@ InferenceRequest::Normalize()
       }
       shape.emplace_back(dim);
     }
-    if ((config_input.data_type() == inference::DataType::TYPE_STRING) &&
-        ((dynamic_axis != -1) || (element_cnt != 1))) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          "For BYTE datatype raw input, the model must have input shape [1]");
-    }
-    if (dynamic_axis != -1) {
+    if ((config_input.data_type() == inference::DataType::TYPE_STRING)) {
+      if ((dynamic_axis != -1) || (element_cnt != 1)) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "For BYTE datatype raw input, the model must have input shape [1]");
+      }
+      // In the case of BYTE data type, we will prepend the byte size to follow
+      // the Triton convention.
+      raw_input_size_ = raw_input.Data()->TotalByteSize();
+      RETURN_IF_ERROR(raw_input.PrependData(
+          &raw_input_size_, sizeof(uint32_t), TRITONSERVER_MEMORY_CPU, 0));
+      // Limit the BYTE raw input not to have host policy specific input for
+      // simplicity, such case won't happen given the current protocol spec.
+      // Will need to extend Input::PrependData() if needed.
+      if (!raw_input.HostPolicyData().empty()) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "Raw input with host policy specific data is not currently "
+            "supported");
+      }
+    } else if (dynamic_axis != -1) {
       shape[dynamic_axis] = raw_input.Data()->TotalByteSize() / element_cnt /
                             GetDataTypeByteSize(config_input.data_type());
     }
@@ -1197,6 +1211,19 @@ InferenceRequest::Input::AppendDataWithHostPolicy(
         ->AddBuffer(
             static_cast<const char*>(base), byte_size, memory_type,
             memory_type_id);
+  }
+
+  return Status::Success;
+}
+
+Status
+InferenceRequest::Input::PrependData(
+    const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id)
+{
+  if (byte_size > 0) {
+    std::static_pointer_cast<MemoryReference>(data_)->AddBufferFront(
+        static_cast<const char*>(base), byte_size, memory_type, memory_type_id);
   }
 
   return Status::Success;

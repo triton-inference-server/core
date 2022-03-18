@@ -26,8 +26,8 @@
 
 #include "memory.h"
 
-#include "triton/common/logging.h"
 #include "pinned_memory_manager.h"
+#include "triton/common/logging.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
@@ -88,6 +88,18 @@ MemoryReference::AddBuffer(
   total_byte_size_ += buffer_attributes->ByteSize();
   buffer_count_++;
   buffer_.emplace_back(buffer, buffer_attributes);
+  return buffer_.size() - 1;
+}
+
+size_t
+MemoryReference::AddBufferFront(
+    const char* buffer, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id)
+{
+  total_byte_size_ += byte_size;
+  buffer_count_++;
+  buffer_.emplace(
+      buffer_.begin(), buffer, byte_size, memory_type, memory_type_id);
   return buffer_.size() - 1;
 }
 
