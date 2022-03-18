@@ -219,7 +219,6 @@ if(${TRITON_ENABLE_GPU})
     SERVER_HDRS
     ${SERVER_HDRS}
     cuda_memory_manager.h
-    kernel.h
     model_config_cuda.h
   )
 endif() # TRITON_ENABLE_GPU
@@ -550,24 +549,6 @@ FOREACH(p ${TRITON_EXTRA_LIB_PATHS})
   )
 ENDFOREACH(p)
 
-if(${TRITON_ENABLE_GPU})
-  set(HOST_COMPILER_FLAGS "")
-  if (WIN32)
-    set(HOST_COMPILER_FLAGS "/MD")
-  else()
-    set(HOST_COMPILER_FLAGS "-fPIC")
-  endif()
-
-  set(CUDA_LIBRARIES PUBLIC ${CUDA_LIBRARIES})
-  cuda_add_library(
-    kernel-library
-    kernel.cu kernel.h
-    OPTIONS -arch compute_53
-    OPTIONS -code compute_53,sm_53,sm_60,sm_61,sm_62,sm_70,sm_72,sm_75
-    OPTIONS -Xcompiler ${HOST_COMPILER_FLAGS}
-  )
-endif() # TRITON_ENABLE_GPU
-
 find_library(RE2_LIBRARY NAMES re2)
 
 target_link_libraries(
@@ -644,7 +625,6 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CNMEM_LIBRARY}
       CUDA::cudart
-      kernel-library
   )
 endif() # TRITON_ENABLE_GPU
 
