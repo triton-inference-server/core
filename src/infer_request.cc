@@ -716,12 +716,12 @@ InferenceRequest::Normalize()
 
   // Fill metadata for raw input
   if (!raw_input_name_.empty()) {
-    if (original_inputs_.size() != 1) {
+    if ((original_inputs_.size() != 1) || (model_config.input_size() != 1)) {
       return Status(
           Status::Code::INVALID_ARG,
           "Raw request must only have 1 input to be deduced but got " +
-              std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'");
+              std::to_string(model_config.input_size()) +
+              " inputs for model '" + ModelName() + "'");
     }
     auto it = original_inputs_.begin();
     if (raw_input_name_ != it->first) {
@@ -743,7 +743,7 @@ InferenceRequest::Normalize()
         if (dynamic_axis != -1) {
           return Status(
               Status::Code::INVALID_ARG,
-              "The shape of the raw input '" + raw_input_name_ +
+              "The shape of the raw input '" + config_input.name() +
                   "' can not be deduced because there are more than one "
                   "variable-sized dimension");
         }
