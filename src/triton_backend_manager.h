@@ -29,7 +29,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "model_config.h"
 #include "server_message.h"
 #include "status.h"

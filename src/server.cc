@@ -37,7 +37,7 @@
 
 #include "model_config.pb.h"
 #include "triton_backend_manager.h"
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "cuda_utils.h"
 #include "triton/common/logging.h"
 #include "model.h"

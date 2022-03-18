@@ -31,7 +31,7 @@
 #include <string>
 #include <thread>
 #include "model_config.pb.h"
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "memory.h"
 #include "metric_model_reporter.h"
 #include "server_message.h"

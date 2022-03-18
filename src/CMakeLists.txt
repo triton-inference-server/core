@@ -164,6 +164,7 @@ set(
 set(
   SERVER_HDRS
   buffer_attributes.h
+  constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h
   ensemble_scheduler.h
@@ -574,7 +575,6 @@ target_link_libraries(
   PRIVATE
     proto-library                    # from repo-common
     triton-common-async-work-queue   # from repo-common
-    triton-common-constants          # from repo-common
     triton-common-error              # from repo-common
     triton-common-logging            # from repo-common
     triton-common-json               # from repo-common

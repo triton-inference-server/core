@@ -26,7 +26,7 @@
 
 #include "model_config.h"
 
-#include "triton/common/constants.h"
+#include "constants.h"
 
 namespace triton { namespace core {
 

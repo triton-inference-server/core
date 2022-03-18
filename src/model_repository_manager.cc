@@ -32,7 +32,7 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "ensemble_utils.h"
 #include "filesystem.h"
 #include "triton/common/logging.h"

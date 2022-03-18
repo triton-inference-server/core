@@ -32,7 +32,7 @@
 #include <unistd.h>
 #endif
 #include <algorithm>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "dynamic_batch_scheduler.h"
 #include "triton/common/logging.h"
 #include "model_config_utils.h"

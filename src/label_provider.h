@@ -28,7 +28,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "status.h"
 
 namespace triton { namespace core {

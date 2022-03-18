@@ -28,7 +28,7 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "metrics.h"
 
 namespace triton { namespace core {

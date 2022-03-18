@@ -91,6 +91,7 @@ if(${TRITON_ENABLE_GPU})
     response_cache_test.cc
     ../response_cache.cc ../response_cache.h
     ../status.cc ../status.h
+    ../constants.h
     ${MEMORY_SRCS}
     ${CUDA_MEMORY_MANAGER_SRCS}
     ${PINNED_MEMORY_MANAGER_SRCS}
@@ -130,7 +131,6 @@ if(${TRITON_ENABLE_GPU})
   target_link_libraries(
     response_cache_test
     PRIVATE
-      triton-common-constants    # from repo-common
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
       proto-library              # from repo-common
@@ -202,6 +202,7 @@ if(${TRITON_ENABLE_GPU})
   add_executable(
     memory_test
     memory_test.cc
+    ../constants.h
     ${MEMORY_SRCS}
     ${CUDA_MEMORY_MANAGER_SRCS}
     ${PINNED_MEMORY_MANAGER_SRCS}
@@ -241,7 +242,6 @@ if(${TRITON_ENABLE_GPU})
   target_link_libraries(
     memory_test
     PRIVATE
-      triton-common-constants    # from repo-common
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
       proto-library              # from repo-common
@@ -309,7 +309,6 @@ if(${TRITON_ENABLE_GPU})
   target_link_libraries(
     pinned_memory_manager_test
     PRIVATE
-      triton-common-constants    # from repo-common
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
       proto-library              # from repo-common

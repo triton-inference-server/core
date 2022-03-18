@@ -31,7 +31,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "triton/common/logging.h"
 #include "triton/common/nvtx.h"
 #include "model_config.h"

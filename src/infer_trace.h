@@ -28,7 +28,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "status.h"
 #include "tritonserver_apis.h"
 
