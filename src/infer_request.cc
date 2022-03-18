@@ -744,8 +744,8 @@ InferenceRequest::Normalize()
           return Status(
               Status::Code::INVALID_ARG,
               "The shape of the raw input '" + raw_input_name_ +
-                  "' can not be deduced because there are more than two "
-                  "dynamic dimension");
+                  "' can not be deduced because there are more than one "
+                  "variable-sized dimension");
         }
         dynamic_axis = shape.size();
       } else {
@@ -757,8 +757,7 @@ InferenceRequest::Normalize()
         ((dynamic_axis != -1) || (element_cnt != 1))) {
       return Status(
           Status::Code::INVALID_ARG,
-          "Currently only input shape [1] is allowed for raw input '" +
-              raw_input_name_ + "' in byte data type");
+          "For BYTE datatype raw input, the model must have input shape [1]");
     }
     if (dynamic_axis != -1) {
       shape[dynamic_axis] = raw_input.Data()->TotalByteSize() / element_cnt /
