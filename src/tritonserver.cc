@@ -32,7 +32,6 @@
 #include "infer_request.h"
 #include "infer_response.h"
 #include "infer_stats.h"
-#include "triton/common/logging.h"
 #include "metrics.h"
 #include "model.h"
 #include "model_config.h"
@@ -43,6 +42,7 @@
 #include "server.h"
 #include "server_message.h"
 #include "status.h"
+#include "triton/common/logging.h"
 #include "tritonserver_apis.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
@@ -1515,6 +1515,16 @@ TRITONSERVER_InferenceRequestAddInput(
       reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->AddOriginalInput(
       name, tc::TritonToDataType(datatype), shape, dim_count));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAddRawInput(
+    TRITONSERVER_InferenceRequest* inference_request, const char* name)
+{
+  ni::InferenceRequest* lrequest =
+      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  RETURN_IF_STATUS_ERROR(lrequest->AddRawInput(name));
   return nullptr;  // Success
 }
 
