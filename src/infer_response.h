@@ -30,7 +30,7 @@
 #include <string>
 #include <vector>
 #include "buffer_attributes.h"
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "infer_parameter.h"
 #include "infer_trace.h"
 #include "model_config.h"

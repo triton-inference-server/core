@@ -72,7 +72,7 @@
 #include <sys/types.h>
 #include <cerrno>
 #include <fstream>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "triton/common/logging.h"
 #include "status.h"
 

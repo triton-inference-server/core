@@ -31,7 +31,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "model_config_utils.h"
 
 namespace triton { namespace core {

@@ -27,7 +27,7 @@
 #include "scheduler_utils.h"
 
 #include <cassert>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "triton/common/logging.h"
 
 namespace triton { namespace core {

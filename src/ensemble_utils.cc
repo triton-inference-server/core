@@ -29,7 +29,7 @@
 #include "ensemble_utils.h"
 
 #include <set>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "triton/common/logging.h"
 #include "model.h"
 #include "model_config_utils.h"

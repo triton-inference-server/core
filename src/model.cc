@@ -28,7 +28,7 @@
 
 #include <chrono>
 #include <future>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "filesystem.h"
 #include "infer_request.h"
 #include "triton/common/logging.h"

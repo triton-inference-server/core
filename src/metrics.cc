@@ -31,7 +31,7 @@
 
 #include <thread>
 #include "prometheus/detail/utils.h"
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "triton/common/logging.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU

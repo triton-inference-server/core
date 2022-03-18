@@ -27,7 +27,7 @@
 #include "ensemble_model.h"
 
 #include <stdint.h>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "ensemble_scheduler.h"
 #include "triton/common/logging.h"
 #include "model_config_utils.h"

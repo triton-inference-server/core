@@ -30,7 +30,7 @@
 #include <deque>
 #include <mutex>
 #include <set>
-#include "triton/common/constants.h"
+#include "constants.h"
 #include "cuda_utils.h"
 #include "filesystem.h"
 #include "triton/common/logging.h"
