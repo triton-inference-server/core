@@ -54,6 +54,20 @@
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
 
+// For unknown reason, windows will not export some functions declared
+// with dllexport in tritonrepoagent.h and tritonbackend.h. To get
+// those functions exported it is (also?) necessary to mark the
+// definitions in this file with dllexport as well. The TRITONSERVER_*
+// functions are getting exported but for consistency adding the
+// declspec to these definitions as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
+
 namespace ni = nvidia::inferenceserver;
 
 namespace {
@@ -412,14 +426,12 @@ TritonServerOptions::SetHostPolicy(
 
 }  // namespace
 
-#ifdef __cplusplus
 extern "C" {
-#endif
 
 //
 // TRITONSERVER API Version
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ApiVersion(uint32_t* major, uint32_t* minor)
 {
   *major = TRITONSERVER_API_VERSION_MAJOR;
@@ -430,7 +442,7 @@ TRITONSERVER_ApiVersion(uint32_t* major, uint32_t* minor)
 //
 // TRITONSERVER_DataType
 //
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_DataTypeString(TRITONSERVER_DataType datatype)
 {
   switch (datatype) {
@@ -467,14 +479,14 @@ TRITONSERVER_DataTypeString(TRITONSERVER_DataType datatype)
   return "<invalid>";
 }
 
-TRITONSERVER_DataType
+TRITONAPI_DECLSPEC TRITONSERVER_DataType
 TRITONSERVER_StringToDataType(const char* dtype)
 {
   const size_t len = strlen(dtype);
   return ni::DataTypeToTriton(ni::ProtocolStringToDataType(dtype, len));
 }
 
-uint32_t
+TRITONAPI_DECLSPEC uint32_t
 TRITONSERVER_DataTypeByteSize(TRITONSERVER_DataType datatype)
 {
   switch (datatype) {
@@ -506,7 +518,7 @@ TRITONSERVER_DataTypeByteSize(TRITONSERVER_DataType datatype)
 //
 // TRITONSERVER_MemoryType
 //
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_MemoryTypeString(TRITONSERVER_MemoryType memtype)
 {
   switch (memtype) {
@@ -526,7 +538,7 @@ TRITONSERVER_MemoryTypeString(TRITONSERVER_MemoryType memtype)
 //
 // TRITONSERVER_Parameter
 //
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_ParameterTypeString(TRITONSERVER_ParameterType paramtype)
 {
   switch (paramtype) {
@@ -543,7 +555,7 @@ TRITONSERVER_ParameterTypeString(TRITONSERVER_ParameterType paramtype)
   return "<invalid>";
 }
 
-TRITONSERVER_Parameter*
+TRITONAPI_DECLSPEC TRITONSERVER_Parameter*
 TRITONSERVER_ParameterNew(
     const char* name, const TRITONSERVER_ParameterType type, const void* value)
 {
@@ -567,7 +579,7 @@ TRITONSERVER_ParameterNew(
   return reinterpret_cast<TRITONSERVER_Parameter*>(lparam.release());
 }
 
-void
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ParameterDelete(TRITONSERVER_Parameter* parameter)
 {
   delete reinterpret_cast<ni::InferenceParameter*>(parameter);
@@ -576,7 +588,7 @@ TRITONSERVER_ParameterDelete(TRITONSERVER_Parameter* parameter)
 //
 // TRITONSERVER_InstanceGroupKind
 //
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_InstanceGroupKindString(TRITONSERVER_InstanceGroupKind kind)
 {
   switch (kind) {
@@ -598,7 +610,7 @@ TRITONSERVER_InstanceGroupKindString(TRITONSERVER_InstanceGroupKind kind)
 //
 // TRITONSERVER_Log
 //
-bool
+TRITONAPI_DECLSPEC bool
 TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
 {
   switch (level) {
@@ -615,7 +627,7 @@ TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
   return false;
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
     const char* msg)
@@ -644,14 +656,14 @@ TRITONSERVER_LogMessage(
 //
 // TRITONSERVER_Error
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ErrorNew(TRITONSERVER_Error_Code code, const char* msg)
 {
   return reinterpret_cast<TRITONSERVER_Error*>(
       TritonServerError::Create(code, msg));
 }
 
-void
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ErrorDelete(TRITONSERVER_Error* error)
 {
   TritonServerError* lerror = reinterpret_cast<TritonServerError*>(error);
@@ -665,14 +677,14 @@ TRITONSERVER_ErrorCode(TRITONSERVER_Error* error)
   return lerror->Code();
 }
 
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_ErrorCodeString(TRITONSERVER_Error* error)
 {
   TritonServerError* lerror = reinterpret_cast<TritonServerError*>(error);
   return ni::Status::CodeString(ni::TritonCodeToStatusCode(lerror->Code()));
 }
 
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_ErrorMessage(TRITONSERVER_Error* error)
 {
   TritonServerError* lerror = reinterpret_cast<TritonServerError*>(error);
@@ -682,7 +694,7 @@ TRITONSERVER_ErrorMessage(TRITONSERVER_Error* error)
 //
 // TRITONSERVER_ResponseAllocator
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorNew(
     TRITONSERVER_ResponseAllocator** allocator,
     TRITONSERVER_ResponseAllocatorAllocFn_t alloc_fn,
@@ -704,7 +716,7 @@ TRITONSERVER_ResponseAllocatorSetQueryFunction(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
     TRITONSERVER_ResponseAllocator* allocator,
     TRITONSERVER_ResponseAllocatorBufferAttributesFn_t buffer_attributes_fn)
@@ -714,7 +726,7 @@ TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ResponseAllocatorDelete(TRITONSERVER_ResponseAllocator* allocator)
 {
   ni::ResponseAllocator* lalloc =
@@ -726,7 +738,7 @@ TRITONSERVER_ResponseAllocatorDelete(TRITONSERVER_ResponseAllocator* allocator)
 //
 // TRITONSERVER_Message
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MessageNewFromSerializedJson(
     TRITONSERVER_Message** message, const char* base, size_t byte_size)
 {
@@ -735,7 +747,7 @@ TRITONSERVER_MessageNewFromSerializedJson(
   return nullptr;
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MessageDelete(TRITONSERVER_Message* message)
 {
   ni::TritonServerMessage* lmessage =
@@ -744,7 +756,7 @@ TRITONSERVER_MessageDelete(TRITONSERVER_Message* message)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MessageSerializeToJson(
     TRITONSERVER_Message* message, const char** base, size_t* byte_size)
 {
@@ -757,7 +769,7 @@ TRITONSERVER_MessageSerializeToJson(
 //
 // TRITONSERVER_Metrics
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MetricsDelete(TRITONSERVER_Metrics* metrics)
 {
   TritonServerMetrics* lmetrics =
@@ -766,7 +778,7 @@ TRITONSERVER_MetricsDelete(TRITONSERVER_Metrics* metrics)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_MetricsFormatted(
     TRITONSERVER_Metrics* metrics, TRITONSERVER_MetricFormat format,
     const char** base, size_t* byte_size)
@@ -792,7 +804,7 @@ TRITONSERVER_MetricsFormatted(
 //
 // TRITONSERVER_InferenceTrace
 //
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_InferenceTraceLevelString(TRITONSERVER_InferenceTraceLevel level)
 {
   switch (level) {
@@ -811,7 +823,7 @@ TRITONSERVER_InferenceTraceLevelString(TRITONSERVER_InferenceTraceLevel level)
   return "<unknown>";
 }
 
-const char*
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_InferenceTraceActivityString(
     TRITONSERVER_InferenceTraceActivity activity)
 {
@@ -841,7 +853,7 @@ TRITONSERVER_InferenceTraceActivityString(
   return "<unknown>";
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
     uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
@@ -869,7 +881,7 @@ TRITONSERVER_InferenceTraceNew(
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceTensorNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
     uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
@@ -899,7 +911,7 @@ TRITONSERVER_InferenceTraceTensorNew(
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceDelete(TRITONSERVER_InferenceTrace* trace)
 {
 #ifdef TRITON_ENABLE_TRACING
@@ -912,7 +924,7 @@ TRITONSERVER_InferenceTraceDelete(TRITONSERVER_InferenceTrace* trace)
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceId(TRITONSERVER_InferenceTrace* trace, uint64_t* id)
 {
 #ifdef TRITON_ENABLE_TRACING
@@ -925,7 +937,7 @@ TRITONSERVER_InferenceTraceId(TRITONSERVER_InferenceTrace* trace, uint64_t* id)
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceParentId(
     TRITONSERVER_InferenceTrace* trace, uint64_t* parent_id)
 {
@@ -939,7 +951,7 @@ TRITONSERVER_InferenceTraceParentId(
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelName(
     TRITONSERVER_InferenceTrace* trace, const char** model_name)
 {
@@ -953,7 +965,7 @@ TRITONSERVER_InferenceTraceModelName(
 #endif  // TRITON_ENABLE_TRACING
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)
 {
@@ -970,7 +982,7 @@ TRITONSERVER_InferenceTraceModelVersion(
 //
 // TRITONSERVER_ServerOptions
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsNew(TRITONSERVER_ServerOptions** options)
 {
   *options =
@@ -978,7 +990,7 @@ TRITONSERVER_ServerOptionsNew(TRITONSERVER_ServerOptions** options)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsDelete(TRITONSERVER_ServerOptions* options)
 {
   TritonServerOptions* loptions =
@@ -987,7 +999,7 @@ TRITONSERVER_ServerOptionsDelete(TRITONSERVER_ServerOptions* options)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetServerId(
     TRITONSERVER_ServerOptions* options, const char* server_id)
 {
@@ -997,7 +1009,7 @@ TRITONSERVER_ServerOptionsSetServerId(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelRepositoryPath(
     TRITONSERVER_ServerOptions* options, const char* model_repository_path)
 {
@@ -1007,7 +1019,7 @@ TRITONSERVER_ServerOptionsSetModelRepositoryPath(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelControlMode(
     TRITONSERVER_ServerOptions* options, TRITONSERVER_ModelControlMode mode)
 {
@@ -1039,7 +1051,7 @@ TRITONSERVER_ServerOptionsSetModelControlMode(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStartupModel(
     TRITONSERVER_ServerOptions* options, const char* model_name)
 {
@@ -1049,7 +1061,7 @@ TRITONSERVER_ServerOptionsSetStartupModel(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetExitOnError(
     TRITONSERVER_ServerOptions* options, bool exit)
 {
@@ -1059,7 +1071,7 @@ TRITONSERVER_ServerOptionsSetExitOnError(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     TRITONSERVER_ServerOptions* options, bool strict)
 {
@@ -1069,7 +1081,7 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetRateLimiterMode(
     TRITONSERVER_ServerOptions* options, TRITONSERVER_RateLimitMode mode)
 {
@@ -1097,7 +1109,7 @@ TRITONSERVER_ServerOptionsSetRateLimiterMode(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsAddRateLimiterResource(
     TRITONSERVER_ServerOptions* options, const char* name, const size_t count,
     const int device)
@@ -1107,7 +1119,7 @@ TRITONSERVER_ServerOptionsAddRateLimiterResource(
   return loptions->AddRateLimiterResource(name, count, device);
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
@@ -1117,7 +1129,7 @@ TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size)
 {
@@ -1127,7 +1139,7 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
@@ -1137,7 +1149,7 @@ TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
     TRITONSERVER_ServerOptions* options, double cc)
 {
@@ -1147,7 +1159,7 @@ TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictReadiness(
     TRITONSERVER_ServerOptions* options, bool strict)
 {
@@ -1157,7 +1169,7 @@ TRITONSERVER_ServerOptionsSetStrictReadiness(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetExitTimeout(
     TRITONSERVER_ServerOptions* options, unsigned int timeout)
 {
@@ -1167,7 +1179,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count)
 {
@@ -1177,7 +1189,7 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogInfo(
     TRITONSERVER_ServerOptions* options, bool log)
 {
@@ -1192,7 +1204,7 @@ TRITONSERVER_ServerOptionsSetLogInfo(
 }
 
 // Enable or disable warning level logging.
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogWarn(
     TRITONSERVER_ServerOptions* options, bool log)
 {
@@ -1207,7 +1219,7 @@ TRITONSERVER_ServerOptionsSetLogWarn(
 }
 
 // Enable or disable error level logging.
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogError(
     TRITONSERVER_ServerOptions* options, bool log)
 {
@@ -1222,7 +1234,7 @@ TRITONSERVER_ServerOptionsSetLogError(
 }
 
 // Set verbose logging level. Level zero disables verbose logging.
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogVerbose(
     TRITONSERVER_ServerOptions* options, int level)
 {
@@ -1236,7 +1248,7 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetrics(
     TRITONSERVER_ServerOptions* options, bool metrics)
 {
@@ -1251,7 +1263,7 @@ TRITONSERVER_ServerOptionsSetMetrics(
 #endif  // TRITON_ENABLE_METRICS
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetGpuMetrics(
     TRITONSERVER_ServerOptions* options, bool gpu_metrics)
 {
@@ -1266,7 +1278,7 @@ TRITONSERVER_ServerOptionsSetGpuMetrics(
 #endif  // TRITON_ENABLE_METRICS
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetricsInterval(
     TRITONSERVER_ServerOptions* options, uint64_t metrics_interval_ms)
 {
@@ -1281,7 +1293,7 @@ TRITONSERVER_ServerOptionsSetMetricsInterval(
 #endif  // TRITON_ENABLE_METRICS
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendDirectory(
     TRITONSERVER_ServerOptions* options, const char* backend_dir)
 {
@@ -1291,7 +1303,7 @@ TRITONSERVER_ServerOptionsSetBackendDirectory(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
     TRITONSERVER_ServerOptions* options, const char* repoagent_dir)
 {
@@ -1301,7 +1313,7 @@ TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendConfig(
     TRITONSERVER_ServerOptions* options, const char* backend_name,
     const char* setting, const char* value)
@@ -1311,7 +1323,7 @@ TRITONSERVER_ServerOptionsSetBackendConfig(
   return loptions->AddBackendConfig(backend_name, setting, value);
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetHostPolicy(
     TRITONSERVER_ServerOptions* options, const char* policy_name,
     const char* setting, const char* value)
@@ -1324,7 +1336,7 @@ TRITONSERVER_ServerOptionsSetHostPolicy(
 //
 // TRITONSERVER_InferenceRequest
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestNew(
     TRITONSERVER_InferenceRequest** inference_request,
     TRITONSERVER_Server* server, const char* model_name,
@@ -1341,7 +1353,7 @@ TRITONSERVER_InferenceRequestNew(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestDelete(
     TRITONSERVER_InferenceRequest* inference_request)
 {
@@ -1351,7 +1363,7 @@ TRITONSERVER_InferenceRequestDelete(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestId(
     TRITONSERVER_InferenceRequest* inference_request, const char** id)
 {
@@ -1361,7 +1373,7 @@ TRITONSERVER_InferenceRequestId(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetId(
     TRITONSERVER_InferenceRequest* inference_request, const char* id)
 {
@@ -1371,7 +1383,7 @@ TRITONSERVER_InferenceRequestSetId(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* flags)
 {
@@ -1381,7 +1393,7 @@ TRITONSERVER_InferenceRequestFlags(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t flags)
 {
@@ -1391,7 +1403,7 @@ TRITONSERVER_InferenceRequestSetFlags(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* correlation_id)
 {
@@ -1408,7 +1420,7 @@ TRITONSERVER_InferenceRequestCorrelationId(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationIdString(
     TRITONSERVER_InferenceRequest* inference_request,
     const char** correlation_id)
@@ -1425,7 +1437,7 @@ TRITONSERVER_InferenceRequestCorrelationIdString(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationId(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t correlation_id)
 {
@@ -1435,7 +1447,7 @@ TRITONSERVER_InferenceRequestSetCorrelationId(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationIdString(
     TRITONSERVER_InferenceRequest* inference_request,
     const char* correlation_id)
@@ -1453,7 +1465,7 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority)
 {
@@ -1463,7 +1475,7 @@ TRITONSERVER_InferenceRequestPriority(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t priority)
 {
@@ -1473,7 +1485,7 @@ TRITONSERVER_InferenceRequestSetPriority(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestTimeoutMicroseconds(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* timeout_us)
 {
@@ -1483,7 +1495,7 @@ TRITONSERVER_InferenceRequestTimeoutMicroseconds(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t timeout_us)
 {
@@ -1493,7 +1505,7 @@ TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAddInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const TRITONSERVER_DataType datatype, const int64_t* shape,
@@ -1506,7 +1518,7 @@ TRITONSERVER_InferenceRequestAddInput(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
@@ -1516,7 +1528,7 @@ TRITONSERVER_InferenceRequestRemoveInput(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllInputs(
     TRITONSERVER_InferenceRequest* inference_request)
 {
@@ -1526,7 +1538,7 @@ TRITONSERVER_InferenceRequestRemoveAllInputs(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAppendInputData(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
@@ -1543,7 +1555,7 @@ TRITONSERVER_InferenceRequestAppendInputData(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
@@ -1560,7 +1572,7 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes(
     TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const void* base, TRITONSERVER_BufferAttributes* buffer_attributes)
@@ -1578,7 +1590,7 @@ TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllInputData(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
@@ -1592,7 +1604,7 @@ TRITONSERVER_InferenceRequestRemoveAllInputData(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAddRequestedOutput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
@@ -1602,7 +1614,7 @@ TRITONSERVER_InferenceRequestAddRequestedOutput(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveRequestedOutput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
@@ -1612,7 +1624,7 @@ TRITONSERVER_InferenceRequestRemoveRequestedOutput(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(
     TRITONSERVER_InferenceRequest* inference_request)
 {
@@ -1622,7 +1634,7 @@ TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetReleaseCallback(
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceRequestReleaseFn_t request_release_fn,
@@ -1635,7 +1647,7 @@ TRITONSERVER_InferenceRequestSetReleaseCallback(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetResponseCallback(
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_ResponseAllocator* response_allocator,
@@ -1655,7 +1667,7 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
 //
 // TRITONSERVER_InferenceResponse
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseDelete(
     TRITONSERVER_InferenceResponse* inference_response)
 {
@@ -1665,7 +1677,7 @@ TRITONSERVER_InferenceResponseDelete(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseError(
     TRITONSERVER_InferenceResponse* inference_response)
 {
@@ -1675,7 +1687,7 @@ TRITONSERVER_InferenceResponseError(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseModel(
     TRITONSERVER_InferenceResponse* inference_response, const char** model_name,
     int64_t* model_version)
@@ -1689,7 +1701,7 @@ TRITONSERVER_InferenceResponseModel(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseId(
     TRITONSERVER_InferenceResponse* inference_response, const char** request_id)
 {
@@ -1701,7 +1713,7 @@ TRITONSERVER_InferenceResponseId(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseParameterCount(
     TRITONSERVER_InferenceResponse* inference_response, uint32_t* count)
 {
@@ -1714,7 +1726,7 @@ TRITONSERVER_InferenceResponseParameterCount(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseParameter(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const char** name, TRITONSERVER_ParameterType* type, const void** vvalue)
@@ -1740,7 +1752,7 @@ TRITONSERVER_InferenceResponseParameter(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputCount(
     TRITONSERVER_InferenceResponse* inference_response, uint32_t* count)
 {
@@ -1753,7 +1765,7 @@ TRITONSERVER_InferenceResponseOutputCount(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutput(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const char** name, TRITONSERVER_DataType* datatype, const int64_t** shape,
@@ -1787,7 +1799,7 @@ TRITONSERVER_InferenceResponseOutput(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputClassificationLabel(
     TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
     const size_t class_index, const char** label)
@@ -1814,7 +1826,7 @@ TRITONSERVER_InferenceResponseOutputClassificationLabel(
 //
 // TRITONSERVER_BufferAttributes
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesNew(
     TRITONSERVER_BufferAttributes** buffer_attributes)
 {
@@ -1825,7 +1837,7 @@ TRITONSERVER_BufferAttributesNew(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesDelete(
     TRITONSERVER_BufferAttributes* buffer_attributes)
 {
@@ -1836,7 +1848,7 @@ TRITONSERVER_BufferAttributesDelete(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetMemoryTypeId(
     TRITONSERVER_BufferAttributes* buffer_attributes, int64_t memory_type_id)
 {
@@ -1847,7 +1859,7 @@ TRITONSERVER_BufferAttributesSetMemoryTypeId(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetMemoryType(
     TRITONSERVER_BufferAttributes* buffer_attributes,
     TRITONSERVER_MemoryType memory_type)
@@ -1859,7 +1871,7 @@ TRITONSERVER_BufferAttributesSetMemoryType(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetCudaIpcHandle(
     TRITONSERVER_BufferAttributes* buffer_attributes, void* cuda_ipc_handle)
 {
@@ -1870,7 +1882,7 @@ TRITONSERVER_BufferAttributesSetCudaIpcHandle(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetByteSize(
     TRITONSERVER_BufferAttributes* buffer_attributes, size_t byte_size)
 {
@@ -1881,7 +1893,7 @@ TRITONSERVER_BufferAttributesSetByteSize(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesMemoryTypeId(
     TRITONSERVER_BufferAttributes* buffer_attributes, int64_t* memory_type_id)
 {
@@ -1892,7 +1904,7 @@ TRITONSERVER_BufferAttributesMemoryTypeId(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesMemoryType(
     TRITONSERVER_BufferAttributes* buffer_attributes,
     TRITONSERVER_MemoryType* memory_type)
@@ -1904,7 +1916,7 @@ TRITONSERVER_BufferAttributesMemoryType(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesCudaIpcHandle(
     TRITONSERVER_BufferAttributes* buffer_attributes, void** cuda_ipc_handle)
 {
@@ -1915,7 +1927,7 @@ TRITONSERVER_BufferAttributesCudaIpcHandle(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesByteSize(
     TRITONSERVER_BufferAttributes* buffer_attributes, size_t* byte_size)
 {
@@ -1929,7 +1941,7 @@ TRITONSERVER_BufferAttributesByteSize(
 //
 // TRITONSERVER_Server
 //
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerNew(
     TRITONSERVER_Server** server, TRITONSERVER_ServerOptions* options)
 {
@@ -2119,7 +2131,7 @@ TRITONSERVER_ServerNew(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerDelete(TRITONSERVER_Server* server)
 {
   ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
@@ -2130,7 +2142,7 @@ TRITONSERVER_ServerDelete(TRITONSERVER_Server* server)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
 {
   ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
@@ -2140,7 +2152,7 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server)
 {
   ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
@@ -2148,7 +2160,7 @@ TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerIsLive(TRITONSERVER_Server* server, bool* live)
 {
   ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
@@ -2157,7 +2169,7 @@ TRITONSERVER_ServerIsLive(TRITONSERVER_Server* server, bool* live)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerIsReady(TRITONSERVER_Server* server, bool* ready)
 {
   ni::InferenceServer* lserver = reinterpret_cast<ni::InferenceServer*>(server);
@@ -2166,7 +2178,7 @@ TRITONSERVER_ServerIsReady(TRITONSERVER_Server* server, bool* ready)
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelIsReady(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, bool* ready)
@@ -2178,7 +2190,7 @@ TRITONSERVER_ServerModelIsReady(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelBatchProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* flags, void** voidp)
@@ -2201,7 +2213,7 @@ TRITONSERVER_ServerModelBatchProperties(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelTransactionProperties(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, uint32_t* txn_flags, void** voidp)
@@ -2226,7 +2238,7 @@ TRITONSERVER_ServerModelTransactionProperties(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerMetadata(
     TRITONSERVER_Server* server, TRITONSERVER_Message** server_metadata)
 {
@@ -2256,7 +2268,7 @@ TRITONSERVER_ServerMetadata(
   return nullptr;  // Success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelMetadata(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, TRITONSERVER_Message** model_metadata)
@@ -2358,7 +2370,7 @@ TRITONSERVER_ServerModelMetadata(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelStatistics(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, TRITONSERVER_Message** model_stats)
@@ -2511,7 +2523,7 @@ TRITONSERVER_ServerModelStatistics(
 #endif  // TRITON_ENABLE_STATS
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelConfig(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, const uint32_t config_version,
@@ -2532,7 +2544,7 @@ TRITONSERVER_ServerModelConfig(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerModelIndex(
     TRITONSERVER_Server* server, uint32_t flags,
     TRITONSERVER_Message** repository_index)
@@ -2576,7 +2588,7 @@ TRITONSERVER_ServerModelIndex(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerLoadModel(
     TRITONSERVER_Server* server, const char* model_name)
 {
@@ -2587,7 +2599,7 @@ TRITONSERVER_ServerLoadModel(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerLoadModelWithParameters(
     TRITONSERVER_Server* server, const char* model_name,
     const TRITONSERVER_Parameter** parameters, const uint64_t parameter_count)
@@ -2613,7 +2625,7 @@ TRITONSERVER_ServerLoadModelWithParameters(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerUnloadModel(
     TRITONSERVER_Server* server, const char* model_name)
 {
@@ -2625,7 +2637,7 @@ TRITONSERVER_ServerUnloadModel(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerUnloadModelAndDependents(
     TRITONSERVER_Server* server, const char* model_name)
 {
@@ -2640,7 +2652,7 @@ TRITONSERVER_ServerUnloadModelAndDependents(
   }
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerMetrics(
     TRITONSERVER_Server* server, TRITONSERVER_Metrics** metrics)
 {
@@ -2655,7 +2667,7 @@ TRITONSERVER_ServerMetrics(
 #endif  // TRITON_ENABLE_METRICS
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerInferAsync(
     TRITONSERVER_Server* server,
     TRITONSERVER_InferenceRequest* inference_request,
@@ -2708,6 +2720,4 @@ TRITONSERVER_ServerInferAsync(
   return nullptr;  // Success
 }
 
-#ifdef __cplusplus
-}
-#endif
+}  // extern C

@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -35,11 +35,23 @@
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 
+// For unknown reason, windows will not export the TRITONBACKEND_*
+// functions declared with dllexport in tritonbackend.h. To get those
+// functions exported it is (also?) necessary to mark the definitions
+// in this file with dllexport as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
+
 namespace nvidia { namespace inferenceserver {
 
 extern "C" {
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_MemoryManagerAllocate(
     TRITONBACKEND_MemoryManager* manager, void** buffer,
     const TRITONSERVER_MemoryType memory_type, const int64_t memory_type_id,
@@ -92,7 +104,7 @@ TRITONBACKEND_MemoryManagerAllocate(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_MemoryManagerFree(
     TRITONBACKEND_MemoryManager* manager, void* buffer,
     const TRITONSERVER_MemoryType memory_type, const int64_t memory_type_id)

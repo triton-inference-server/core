@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2021-2022, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -30,6 +30,19 @@
 #include "filesystem.h"
 #include "triton/common/logging.h"
 #include "shared_library.h"
+#include "tritonserver_apis.h"
+
+// For unknown reason, windows will not export the TRITONREPOAGENT_*
+// functions declared with dllexport in tritonrepoagent.h. To get
+// those functions exported it is (also?) necessary to mark the
+// definitions in this file with dllexport as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
 
 namespace nvidia { namespace inferenceserver {
 
@@ -448,7 +461,7 @@ TritonRepoAgentManager::AgentState(
 
 extern "C" {
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ApiVersion(uint32_t* major, uint32_t* minor)
 {
   *major = TRITONREPOAGENT_API_VERSION_MAJOR;
@@ -456,7 +469,7 @@ TRITONREPOAGENT_ApiVersion(uint32_t* major, uint32_t* minor)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelRepositoryLocation(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     TRITONREPOAGENT_ArtifactType* artifact_type, const char** location)
@@ -466,7 +479,7 @@ TRITONREPOAGENT_ModelRepositoryLocation(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelRepositoryLocationAcquire(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const TRITONREPOAGENT_ArtifactType artifact_type, const char** location)
@@ -477,7 +490,7 @@ TRITONREPOAGENT_ModelRepositoryLocationAcquire(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelRepositoryLocationRelease(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const char* location)
@@ -487,7 +500,7 @@ TRITONREPOAGENT_ModelRepositoryLocationRelease(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelRepositoryUpdate(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const TRITONREPOAGENT_ArtifactType artifact_type, const char* location)
@@ -497,7 +510,7 @@ TRITONREPOAGENT_ModelRepositoryUpdate(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelParameterCount(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     uint32_t* count)
@@ -507,7 +520,7 @@ TRITONREPOAGENT_ModelParameterCount(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelParameter(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const uint32_t index, const char** parameter_name,
@@ -525,7 +538,7 @@ TRITONREPOAGENT_ModelParameter(
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelConfig(
     TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
     const uint32_t config_version, TRITONSERVER_Message** model_config)
@@ -538,7 +551,7 @@ TRITONREPOAGENT_ModelConfig(
       model_config, model_config_json.c_str(), model_config_json.length());
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelState(TRITONREPOAGENT_AgentModel* model, void** state)
 {
   TritonRepoAgentModel* tam = reinterpret_cast<TritonRepoAgentModel*>(model);
@@ -546,7 +559,7 @@ TRITONREPOAGENT_ModelState(TRITONREPOAGENT_AgentModel* model, void** state)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_ModelSetState(TRITONREPOAGENT_AgentModel* model, void* state)
 {
   TritonRepoAgentModel* tam = reinterpret_cast<TritonRepoAgentModel*>(model);
@@ -554,7 +567,7 @@ TRITONREPOAGENT_ModelSetState(TRITONREPOAGENT_AgentModel* model, void* state)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_State(TRITONREPOAGENT_Agent* agent, void** state)
 {
   TritonRepoAgent* ta = reinterpret_cast<TritonRepoAgent*>(agent);
@@ -562,7 +575,7 @@ TRITONREPOAGENT_State(TRITONREPOAGENT_Agent* agent, void** state)
   return nullptr;  // success
 }
 
-TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONREPOAGENT_SetState(TRITONREPOAGENT_Agent* agent, void* state)
 {
   TritonRepoAgent* ta = reinterpret_cast<TritonRepoAgent*>(agent);
