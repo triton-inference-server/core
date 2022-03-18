@@ -868,4 +868,14 @@ TRITONREPOAGENT_SetState()
 {
 }
 
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricFamilyNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricFamilyDelete()
+{
+}
+
 } /* extern "C" */
