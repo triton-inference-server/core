@@ -46,9 +46,8 @@
 #include "tritonserver_apis.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
-#define TRITONJSON_STATUSRETURN(M)        \
-  return triton::core::Status( \
-      triton::core::Status::Code::INTERNAL, (M))
+#define TRITONJSON_STATUSRETURN(M) \
+  return triton::core::Status(triton::core::Status::Code::INTERNAL, (M))
 #define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
@@ -1522,8 +1521,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAddRawInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {
-  ni::InferenceRequest* lrequest =
-      reinterpret_cast<ni::InferenceRequest*>(inference_request);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
   RETURN_IF_STATUS_ERROR(lrequest->AddRawInput(name));
   return nullptr;  // Success
 }
