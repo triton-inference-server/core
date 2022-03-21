@@ -886,4 +886,39 @@ TRITONSERVER_MetricFamilyDelete()
 {
 }
 
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricDelete()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricValue()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricIncrement()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricDecrement()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricSet()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_GetMetricKind()
+{
+}
+
 } /* extern "C" */
