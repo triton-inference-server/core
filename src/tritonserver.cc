@@ -45,11 +45,6 @@
 #include "status.h"
 #include "triton/common/logging.h"
 #include "tritonserver_apis.h"
-
-#define TRITONJSON_STATUSTYPE triton::core::Status
-#define TRITONJSON_STATUSRETURN(M) \
-  return triton::core::Status(triton::core::Status::Code::INTERNAL, (M))
-#define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
