@@ -1,7 +1,7 @@
 #include "metric_family.h"
 #include <limits>
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // Implementation for TRITONSERVER_MetricFamily.
@@ -247,4 +247,4 @@ Metric::Set(double value)
   }
 }
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core

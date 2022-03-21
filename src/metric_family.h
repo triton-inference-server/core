@@ -28,7 +28,7 @@
 #include "prometheus/registry.h"
 #include "tritonserver_apis.h"
 
-namespace nvidia { namespace inferenceserver {
+namespace triton { namespace core {
 
 //
 // Implementation for TRITONSERVER_MetricFamily.
@@ -74,4 +74,4 @@ class Metric {
   TRITONSERVER_MetricKind kind_;
 };
 
-}}  // namespace nvidia::inferenceserver
+}}  // namespace triton::core
