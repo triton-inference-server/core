@@ -1,5 +1,4 @@
 #include "metric_family.h"
-#include <limits>
 
 namespace triton { namespace core {
 
@@ -37,65 +36,7 @@ MetricFamily::~MetricFamily()
 {
   // NOTE: registry->Remove() not added until until prometheus-cpp v1.0 which
   // we do not currently install
-
-  /*
-  // Remove family from registry
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER:
-      registry_->Remove(*reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_));
-      break;
-    case TRITONSERVER_METRIC_KIND_GAUGE:
-      registry_->Remove(*reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_));
-      break;
-    default:
-      // TODO: Error unsupported kind
-      break;
-  }*/
 }
-
-// TODO: Figure out or remove
-/*prometheus::MetricType
-MetricFamily::PrometheusType()
-{
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER:
-      return prometheus::MetricType::Counter;
-    case TRITONSERVER_METRIC_KIND_GAUGE:
-      return prometheus::MetricType::Gauge;
-  }
-
-  // Unsupported type
-  return prometheus::MetricType::Untyped;
-}
-
-// TODO: Slicker way to do this with generics/templates or passing type?
-template<typename T>
-prometheus::Family<T>
-MetricFamily::PrometheusFamily()
-{
-  return reinterpret_cast<prometheus::Family<T>*>(family_);
-}
-
-prometheus::Family<prometheus::MetricType>
-MetricFamily::PrometheusFamily(prometheus::MetricType T)
-{
-  return reinterpret_cast<prometheus::Family<T>*>(family_);
-}
-
-prometheus::Family<prometheus::MetricType>*
-MetricFamily::PrometheusFamily() {
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER:
-      return
-reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_); case
-TRITONSERVER_METRIC_KIND_GAUGE: return
-reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
-  }
-
-  // Unsupported type
-  return nullptr;
-}
-*/
 
 //
 // Implementation for TRITONSERVER_Metric.
