@@ -136,6 +136,7 @@ set(
   memory.cc
   metric_model_reporter.cc
   metrics.cc
+  metric_family.cc
   model.cc
   model_config.cc
   model_config_utils.cc
@@ -180,6 +181,7 @@ set(
   memory.h
   metric_model_reporter.h
   metrics.h
+  metric_family.h
   model_config.h
   model_config_utils.h
   model.h
