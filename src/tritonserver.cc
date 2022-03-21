@@ -32,9 +32,8 @@
 #include "infer_request.h"
 #include "infer_response.h"
 #include "infer_stats.h"
-#include "triton/common/logging.h"
-#include "metrics.h"
 #include "metric_family.h"
+#include "metrics.h"
 #include "model.h"
 #include "model_config.h"
 #include "model_config_utils.h"
@@ -44,12 +43,12 @@
 #include "server.h"
 #include "server_message.h"
 #include "status.h"
+#include "triton/common/logging.h"
 #include "tritonserver_apis.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
-#define TRITONJSON_STATUSRETURN(M)        \
-  return triton::core::Status( \
-      triton::core::Status::Code::INTERNAL, (M))
+#define TRITONJSON_STATUSRETURN(M) \
+  return triton::core::Status(triton::core::Status::Code::INTERNAL, (M))
 #define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
