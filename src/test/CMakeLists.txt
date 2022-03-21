@@ -376,14 +376,14 @@ install(
 # Unit test for TritonRepoAgent ... (TODO specify the other classes)
 #
 add_executable(
-  triton_repo_agent_test
-  triton_repo_agent_test.cc
-  ../triton_repo_agent.cc
+  repo_agent_test
+  repo_agent_test.cc
+  ../repo_agent.cc
   ../status.cc
   ../filesystem.cc
   ../model_config_utils.cc
   ../model_config.cc
-  ../triton_repo_agent.h
+  ../repo_agent.h
   ../shared_library.h
   ../status.h
   ../filesystem.h
@@ -392,7 +392,7 @@ add_executable(
 )
 
 set_target_properties(
-  triton_repo_agent_test
+  repo_agent_test
   PROPERTIES
     SKIP_BUILD_RPATH TRUE
     BUILD_WITH_INSTALL_RPATH TRUE
@@ -401,7 +401,7 @@ set_target_properties(
 )
 
 target_include_directories(
-  triton_repo_agent_test
+  repo_agent_test
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
@@ -409,7 +409,7 @@ target_include_directories(
 )
 
 target_link_libraries(
-  triton_repo_agent_test
+  repo_agent_test
   PRIVATE
     triton-common-error       # from repo-common
     triton-common-json        # from repo-common
@@ -421,6 +421,6 @@ target_link_libraries(
 )
 
 install(
-  TARGETS triton_repo_agent_test
+  TARGETS repo_agent_test
   RUNTIME DESTINATION bin
 )

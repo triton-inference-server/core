@@ -32,7 +32,7 @@
 #include <queue>
 #include <vector>
 
-#include "triton_model_instance.h"
+#include "backend_model_instance.h"
 #include "infer_request.h"
 #include "status.h"
 

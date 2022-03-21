@@ -24,11 +24,11 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "triton_model.h"
+#include "backend_model.h"
 
 #include <vector>
-#include "triton_backend_config.h"
-#include "triton_model_instance.h"
+#include "backend_config.h"
+#include "backend_model_instance.h"
 #include "dynamic_batch_scheduler.h"
 #include "filesystem.h"
 #include "triton/common/logging.h"

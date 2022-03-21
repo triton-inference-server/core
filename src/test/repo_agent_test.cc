@@ -33,9 +33,9 @@
 #include <map>
 #include <memory>
 #include "filesystem.h"
+#include "repo_agent.h"
 #include "server_message.h"
 #include "shared_library.h"
-#include "triton_repo_agent.h"
 
 namespace tc = triton::core;
 

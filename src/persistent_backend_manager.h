@@ -26,7 +26,7 @@
 #pragma once
 
 #include <list>
-#include "triton_backend_manager.h"
+#include "backend_manager.h"
 #include "constants.h"
 #include "model_config.h"
 #include "status.h"

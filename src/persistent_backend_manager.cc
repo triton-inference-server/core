@@ -28,7 +28,7 @@
 
 #include <memory>
 #include <mutex>
-#include "triton_backend_config.h"
+#include "backend_config.h"
 #include "filesystem.h"
 #include "triton/common/logging.h"
 
