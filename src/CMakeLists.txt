@@ -120,6 +120,11 @@ configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
   SERVER_SRCS
+  backend_config.cc
+  backend_manager.cc
+  backend_memory_manager.cc
+  backend_model.cc
+  backend_model_instance.cc
   buffer_attributes.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
@@ -145,6 +150,7 @@ set(
   persistent_backend_manager.cc
   pinned_memory_manager.cc
   rate_limiter.cc
+  repo_agent.cc
   response_cache.cc
   scheduler_utils.cc
   sequence_batch_scheduler.cc
@@ -152,17 +158,16 @@ set(
   server.cc
   shared_library.cc
   status.cc
-  triton_backend_config.cc
-  triton_backend_manager.cc
-  triton_memory_manager.cc
-  triton_model.cc
-  triton_model_instance.cc
-  triton_repo_agent.cc
   tritonserver.cc
 )
 
 set(
   SERVER_HDRS
+  backend_config.h
+  backend_manager.h
+  backend_memory_manager.h
+  backend_model.h
+  backend_model_instance.h
   buffer_attributes.h
   constants.h
   cuda_utils.h
@@ -189,6 +194,7 @@ set(
   persistent_backend_manager.h
   pinned_memory_manager.h
   rate_limiter.h
+  repo_agent.h
   response_allocator.h
   response_cache.h
   scheduler.h
@@ -199,12 +205,6 @@ set(
   server_message.h
   shared_library.h
   status.h
-  triton_backend_config.h
-  triton_backend_manager.h
-  triton_memory_manager.h
-  triton_model.h
-  triton_model_instance.h
-  triton_repo_agent.h
   tritonserver_apis.h
 )
 

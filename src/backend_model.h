@@ -28,7 +28,7 @@
 #include <memory>
 #include <string>
 #include "model_config.pb.h"
-#include "triton_backend_manager.h"
+#include "backend_manager.h"
 #include "filesystem.h"
 #include "infer_request.h"
 #include "model.h"

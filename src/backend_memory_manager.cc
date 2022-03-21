@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "triton_memory_manager.h"
+#include "backend_memory_manager.h"
 
 #include "pinned_memory_manager.h"
 #include "status.h"
