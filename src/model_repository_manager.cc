@@ -37,14 +37,14 @@
 #include "filesystem.h"
 #include "model.h"
 #include "model_config_utils.h"
+#include "repo_agent.h"
 #include "triton/common/logging.h"
-#include "triton_repo_agent.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif
 
-#include "triton_model.h"
+#include "backend_model.h"
 #ifdef TRITON_ENABLE_ENSEMBLE
 #include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
