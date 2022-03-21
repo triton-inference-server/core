@@ -2208,7 +2208,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDecrement(
 /// \param metric The metric object to update.
 /// \param value The amount to set metric's value to.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDecrement(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricSet(
     TRITONSERVER_Metric* metric, double value);
 
 /// Get the TRITONSERVER_MetricKind of metric and it's corresponding family.
@@ -2216,7 +2216,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDecrement(
 /// \param metric The metric object to query.
 /// \param kind Returns the TRITONSERVER_MetricKind of metric.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDecrement(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_GetMetricKind(
     TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind);
 
 #ifdef __cplusplus
