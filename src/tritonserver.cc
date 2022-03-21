@@ -44,10 +44,10 @@
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/logging.h"
-#include "tritonserver_apis.h"
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
+#include "tritonserver_apis.h"
 
 // For unknown reason, windows will not export some functions declared
 // with dllexport in tritonrepoagent.h and tritonbackend.h. To get
@@ -2811,7 +2811,8 @@ TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
 }
 
 TRITONSERVER_Error*
-TRITONSERVER_GetMetricKind(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind)
+TRITONSERVER_GetMetricKind(
+    TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind)
 {
 #ifdef TRITON_ENABLE_METRICS
   *kind = reinterpret_cast<tc::Metric*>(metric)->Kind();
