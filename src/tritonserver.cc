@@ -32,7 +32,6 @@
 #include "infer_request.h"
 #include "infer_response.h"
 #include "infer_stats.h"
-#include "triton/common/logging.h"
 #include "metrics.h"
 #include "model.h"
 #include "model_config.h"
@@ -43,16 +42,11 @@
 #include "server.h"
 #include "server_message.h"
 #include "status.h"
-#include "tritonserver_apis.h"
-
-#define TRITONJSON_STATUSTYPE triton::core::Status
-#define TRITONJSON_STATUSRETURN(M)        \
-  return triton::core::Status( \
-      triton::core::Status::Code::INTERNAL, (M))
-#define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
+#include "triton/common/logging.h"
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
+#include "tritonserver_apis.h"
 
 // For unknown reason, windows will not export some functions declared
 // with dllexport in tritonrepoagent.h and tritonbackend.h. To get
