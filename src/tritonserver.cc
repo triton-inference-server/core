@@ -2815,11 +2815,12 @@ TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
 #endif  // TRITON_ENABLE_METRICS
 }
 
-TRITONSERVER_MetricKind
-TRITONSERVER_GetMetricKind(TRITONSERVER_Metric* metric)
+TRITONSERVER_Error*
+TRITONSERVER_GetMetricKind(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind)
 {
 #ifdef TRITON_ENABLE_METRICS
-  return reinterpret_cast<tc::Metric*>(metric)->Kind();
+  *kind = reinterpret_cast<tc::Metric*>(metric)->Kind();
+  return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
