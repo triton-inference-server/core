@@ -1703,7 +1703,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.

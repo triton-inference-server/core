@@ -146,6 +146,10 @@ TRITONSERVER_InferenceTraceNew()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceTensorNew()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceDelete()
 {
 }
@@ -366,6 +370,10 @@ TRITONSERVER_ServerOptionsSetExitTimeout()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetBufferManagerThreadCount()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetLogInfo()
 {
 }
@@ -562,11 +570,15 @@ TRITONBACKEND_InputBufferForHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_InputBufferAttributes()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_OutputBuffer()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_RequestFlags()
+TRITONBACKEND_OutputBufferAttributes()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -579,6 +591,10 @@ TRITONBACKEND_RequestCorrelationId()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestCorrelationIdString()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestFlags()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -611,30 +627,6 @@ TRITONBACKEND_RequestOutputBufferProperties()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestRelease()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_StateNew()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_StateBuffer()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_StateUpdate()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_StateBufferAttributes()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_InputBufferAttributes()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_OutputBufferAttributes()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -679,6 +671,22 @@ TRITONBACKEND_ResponseOutput()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ResponseSend()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_StateNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_StateUpdate()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_StateBuffer()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_StateBufferAttributes()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -766,6 +774,10 @@ TRITONBACKEND_ModelInstanceDeviceId()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceHostPolicy()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceIsPassive()
 {
 }
@@ -783,10 +795,6 @@ TRITONBACKEND_ModelInstanceSecondaryDeviceCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceSecondaryDeviceProperties()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_ModelInstanceHostPolicy()
 {
 }
 TRITONAPI_DECLSPEC void
