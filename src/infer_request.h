@@ -67,6 +67,11 @@ class InferenceRequest {
         const std::string& name, const inference::DataType datatype,
         const int64_t* shape, const uint64_t dim_count);
 
+    // Set the name, data type and original shape of the input tensor.
+    void SetMetadata(
+        const std::string& name, const inference::DataType& dt,
+        const std::vector<int64_t>& shape);
+
     // The name of the input tensor. There is no mutable operator for
     // the name because it is used in a InferenceRequest map and a
     // mutable method would allow it to get out-of-sync.
@@ -145,6 +150,11 @@ class InferenceRequest {
 
     Status AppendDataWithBufferAttributes(
         const void* base, BufferAttributes* buffer_attributes);
+
+    // Prepend a new buffer of data to this input.
+    Status PrependData(
+        const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+        int64_t memory_type_id);
 
     // Remove all existing data for the input.
     Status RemoveAllData();
@@ -407,6 +417,10 @@ class InferenceRequest {
   Status AddOriginalInput(
       const std::string& name, const inference::DataType datatype,
       const std::vector<int64_t>& shape, Input** input = nullptr);
+
+  // Add an original raw input to the request. If 'input' is non-null
+  // return a pointer to the newly added input.
+  Status AddRawInput(const std::string& name, Input** input = nullptr);
 
   // Remove a single original input or all inputs.
   Status RemoveOriginalInput(const std::string& name);
@@ -692,6 +706,8 @@ class InferenceRequest {
   std::unordered_map<std::string, std::shared_ptr<Input>> override_inputs_;
   std::unordered_map<std::string, Input*> inputs_;
   std::set<std::string> original_requested_outputs_;
+  std::string raw_input_name_;
+  uint32_t raw_input_size_;
 
   // requested_outputs_ is to be used post-normalization. It will be
   // empty unless it differs from original_requested_outputs_, so
