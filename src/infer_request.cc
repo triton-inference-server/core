@@ -716,12 +716,16 @@ InferenceRequest::Normalize()
 
   // Fill metadata for raw input
   if (!raw_input_name_.empty()) {
-    if ((original_inputs_.size() != 1) || (model_config.input_size() != 1)) {
+    const bool has_multiple_inputs =
+        (original_inputs_.size() != 1) || (model_config.input_size() != 1);
+    if (has_multiple_inputs) {
       return Status(
           Status::Code::INVALID_ARG,
-          "Raw request must only have 1 input to be deduced but got " +
-              std::to_string(model_config.input_size()) +
-              " inputs for model '" + ModelName() + "'");
+          "Raw request must only have 1 input (found " +
+              std::to_string(original_inputs_.size()) +
+              ") to be deduced but got " +
+              std::to_string(model_config.input_size()) + " inputs in '" +
+              ModelName() + "' model configuration");
     }
     auto it = original_inputs_.begin();
     if (raw_input_name_ != it->first) {
@@ -754,7 +758,8 @@ InferenceRequest::Normalize()
       shape.emplace_back(dim);
     }
     if ((config_input.data_type() == inference::DataType::TYPE_STRING)) {
-      if ((dynamic_axis != -1) || (element_cnt != 1)) {
+      const bool has_one_element = (dynamic_axis == -1) && (element_cnt == 1);
+      if (!has_one_element) {
         return Status(
             Status::Code::INVALID_ARG,
             "For BYTE datatype raw input, the model must have input shape [1]");
@@ -770,8 +775,8 @@ InferenceRequest::Normalize()
       if (!raw_input.HostPolicyData().empty()) {
         return Status(
             Status::Code::INVALID_ARG,
-            "Raw input with host policy specific data is not currently "
-            "supported");
+            "Raw input with data associated with a host policy setting is not "
+            "currently supported");
       }
     } else if (dynamic_axis != -1) {
       shape[dynamic_axis] = raw_input.Data()->TotalByteSize() / element_cnt /
