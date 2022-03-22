@@ -1072,8 +1072,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestAddInput(
     uint64_t dim_count);
 
 /// Add a raw input to a request. The model input name, data type and shape of
-/// the input will be deduced from model configuration, this function must at
-/// most be called once on request with no other input to ensure the deduction
+/// the input will be deduced from model configuration. This function must be
+/// called at most once on request with no other input to ensure the deduction
 /// is accurate.
 ///
 /// \param inference_request The request object.
@@ -1715,7 +1715,8 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.
