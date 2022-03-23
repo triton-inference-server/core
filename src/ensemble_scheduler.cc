@@ -30,10 +30,10 @@
 
 #include <mutex>
 #include "cuda_utils.h"
-#include "triton/common/logging.h"
 #include "metrics.h"
 #include "model.h"
 #include "server.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
@@ -169,7 +169,7 @@ struct TensorData {
     uint32_t flags_;
   };
   TensorData() = default;
-  TensorData(size_t outgoing_steps_count)
+  TensorData(const size_t outgoing_steps_count)
       : current_iteration_(0), outgoing_steps_count_(outgoing_steps_count),
         batch_size_(0)
   {
@@ -469,6 +469,20 @@ EnsembleContext::EnsembleContext(
         ensemble_status_ = Status(
             Status::Code::INVALID_ARG,
             "unexpected input '" + input->Name() +
+                "' in request header that does not map to any ensemble inputs");
+      }
+    }
+
+    // Iterate the ensemble optional inputs and add empty tensor data entry
+    // if the input is not provided
+    for (const auto& name : info_->optional_inputs_) {
+      if (it != tensor_data_.end()) {
+        tensor_data.AddTensor(nullptr);
+        tensor_data.batch_size_ = lrequest->BatchSize();
+      } else {
+        ensemble_status_ = Status(
+            Status::Code::INVALID_ARG,
+            "unexpected optional input '" + name +
                 "' in request header that does not map to any ensemble inputs");
       }
     }
@@ -865,21 +879,27 @@ EnsembleContext::InitStep(
     auto& tensor_data = tensor_data_[pair.second];
     auto& tensor = tensor_data.tensor_[iteration_count];
 
-    // If the actual shape and config shape agree with each other without
-    // considering batch size, non-batch / batch conversion are not required.
-    const inference::ModelInput* input_config;
-    model->GetInput(pair.first, &input_config);
-    auto shape = ReshapeTensorDims(
-        input_config->dims(), allow_batching, tensor_data.batch_size_,
-        tensor.data_->OriginalShape());
+    // nullptr if and only if the tensor is optional ensemble input and
+    // not provided in the ensemble request. In such case, we don't add
+    // the input and expect the ensemble pipeline is configured correctly
+    // (the input to the inner model is also optional)
+    if (tensor.data_ != nullptr) {
+      // If the actual shape and config shape agree with each other without
+      // considering batch size, non-batch / batch conversion are not required.
+      const inference::ModelInput* input_config;
+      model->GetInput(pair.first, &input_config);
+      auto shape = ReshapeTensorDims(
+          input_config->dims(), allow_batching, tensor_data.batch_size_,
+          tensor.data_->OriginalShape());
 
-    InferenceRequest::Input* input;
-    RETURN_IF_ERROR(irequest->AddOriginalInput(
-        pair.first, tensor.data_->DType(), shape, &input));
-    RETURN_IF_ERROR(input->SetData(tensor.data_->Data()));
-    for (const auto& host_policy_data : tensor.data_->HostPolicyData()) {
-      RETURN_IF_ERROR(
-          input->SetData(host_policy_data.first, host_policy_data.second));
+      InferenceRequest::Input* input;
+      RETURN_IF_ERROR(irequest->AddOriginalInput(
+          pair.first, tensor.data_->DType(), shape, &input));
+      RETURN_IF_ERROR(input->SetData(tensor.data_->Data()));
+      for (const auto& host_policy_data : tensor.data_->HostPolicyData()) {
+        RETURN_IF_ERROR(
+            input->SetData(host_policy_data.first, host_policy_data.second));
+      }
     }
 
     releasing_tensors.emplace(&tensor_data, &tensor.remaining_reference_count_);
@@ -1301,6 +1321,9 @@ EnsembleScheduler::EnsembleScheduler(
 
   for (const auto& input : config.input()) {
     info_->tensor_to_step_.emplace(input.name(), std::set<size_t>());
+    if (input.optional()) {
+      info_->optional_inputs_.emplace(input.name());
+    }
   }
   for (const auto& output : config.output()) {
     info_->tensor_to_step_.emplace(output.name(), std::set<size_t>());
