@@ -89,9 +89,7 @@ InferenceServer::InferenceServer()
   extensions_.push_back("model_configuration");
   extensions_.push_back("system_shared_memory");
   extensions_.push_back("cuda_shared_memory");
-#ifdef TRITON_ENABLE_HTTP
   extensions_.push_back("binary_tensor_data");
-#endif  // TRITON_ENABLE_HTTP
 #ifdef TRITON_ENABLE_STATS
   extensions_.push_back("statistics");
 #endif  // TRITON_ENABLE_STATS
