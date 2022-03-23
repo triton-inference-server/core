@@ -1,4 +1,4 @@
-// Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -23,59 +23,63 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#pragma once
 
 #ifdef TRITON_ENABLE_METRICS
 
-#include "prometheus/registry.h"
-#include "tritonserver_apis.h"
+#include "gtest/gtest.h"
+#include "metric_family.h"
+#include "triton/core/tritonserver.h"
 
-namespace triton { namespace core {
+namespace {
 
-//
-// Implementation for TRITONSERVER_MetricFamily.
-//
-class MetricFamily {
- public:
-  MetricFamily(
-      TRITONSERVER_MetricKind kind, const char* name, const char* description,
-      std::shared_ptr<prometheus::Registry> registry);
-  ~MetricFamily();
-
-  TRITONSERVER_MetricKind Kind() const { return kind_; }
-  void* Family() const { return family_; }
-
-  // prometheus::MetricType PrometheusType();
-  // prometheus::Family<prometheus::MetricType>* PrometheusFamily();
-
- private:
-  void* family_;
-  TRITONSERVER_MetricKind kind_;
+// Test Fixture
+class MetricsApiTest : public ::testing::Test {
+ protected:
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
-//
-// Implementation for TRITONSERVER_Metric.
-//
-class Metric {
- public:
-  Metric(
-      TRITONSERVER_MetricFamily* family, TRITONSERVER_Parameter** labels,
-      int num_labels);
-  ~Metric();
+// Test end-to-end flow of Generic Metrics API
+TEST_F(MetricsApiTest, TestEndToEnd)
+{
+  // Create counter family
+  TRITONSERVER_MetricFamily* cfamily;
+  TRITONSERVER_MetricKind ckind = TRITONSERVER_METRIC_KIND_COUNTER;
+  const char* cname = "backend_counter_example";
+  const char* cdescription = "this is an example counter metric added by a backend.";
+  TRITONSERVER_MetricFamilyNew(&cfamily, ckind, cname, cdescription);
 
-  TRITONSERVER_MetricKind Kind() const { return kind_; }
-  void* Family() const { return family_; }
-  TRITONSERVER_Error* Value(double* value);
-  TRITONSERVER_Error* Increment(double value);
-  TRITONSERVER_Error* Decrement(double value);
-  TRITONSERVER_Error* Set(double value);
+  // Create counter metric
+  TRITONSERVER_Metric* cmetric;
+  TRITONSERVER_Parameter** labels = nullptr; 
+  const int num_labels = 0;
+  // TODO: Use real labels
+  TRITONSERVER_MetricNew(&cmetric, cfamily, labels, num_labels);
 
- private:
-  void* metric_;
-  MetricFamily* family_;
-  TRITONSERVER_MetricKind kind_;
-};
+  // Value of counter should be zero initially
+  double value = -1;
+  TRITONSERVER_MetricValue(cmetric, &value);
+  ASSERT_EQ(value, 0.0);
 
-}}  // namespace triton::core
+  TRITONSERVER_MetricIncrement(cmetric, 100);
+  ASSERT_EQ(value, 100.0);
+
+  TRITONSERVER_MetricKind kind;
+  TRITONSERVER_GetMetricKind(cmetric, &kind);
+  ASSERT_EQ(kind, ckind);
+
+  // Cleanup
+  TRITONSERVER_MetricDelete(cmetric);
+  TRITONSERVER_MetricFamilyDelete(cfamily);
+}
+
+}  // namespace
+
+int
+main(int argc, char** argv)
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
 
 #endif  // TRITON_ENABLE_METRICS

@@ -424,3 +424,53 @@ install(
   TARGETS triton_repo_agent_test
   RUNTIME DESTINATION bin
 )
+
+
+if(${TRITON_ENABLE_METRICS})
+  #
+  # Unit test for Generic Metrics API
+  #
+  add_executable(
+    metrics_api_test
+    metrics_api_test.cc
+    ../metric_family.cc ../metric_family.h
+  )
+
+  set_target_properties(
+    metrics_api_test
+    PROPERTIES
+      SKIP_BUILD_RPATH TRUE
+      BUILD_WITH_INSTALL_RPATH TRUE
+      INSTALL_RPATH_USE_LINK_PATH FALSE
+      INSTALL_RPATH ""
+  )
+
+  target_include_directories(
+    metrics_api_test
+    PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/..
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+      ${GTEST_INCLUDE_DIRS}
+  )
+
+  target_compile_definitions(
+    metrics_api_test 
+    PRIVATE
+      TRITON_ENABLE_METRICS=1
+  )
+
+  target_link_libraries(
+    metrics_api_test
+    PRIVATE
+      triton-common-error # from repo-common
+      triton-core
+      GTest::gtest
+      GTest::gtest_main
+      prometheus-cpp::core
+  )
+
+  install(
+    TARGETS metrics_api_test
+    RUNTIME DESTINATION bin
+  )
+endif() # TRITON_ENABLE_METRICS
