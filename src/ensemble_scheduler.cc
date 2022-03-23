@@ -476,7 +476,7 @@ EnsembleContext::EnsembleContext(
     // Iterate the ensemble optional inputs and add empty tensor data entry
     // if the input is not provided
     for (const auto& name : info_->optional_inputs_) {
-      auto it = tensor_data_.find(input->Name());
+      auto it = tensor_data_.find(name);
       if (it != tensor_data_.end()) {
         it->second.AddTensor(nullptr);
         it->second.batch_size_ = lrequest->BatchSize();
