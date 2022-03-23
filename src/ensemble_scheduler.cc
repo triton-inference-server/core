@@ -476,9 +476,10 @@ EnsembleContext::EnsembleContext(
     // Iterate the ensemble optional inputs and add empty tensor data entry
     // if the input is not provided
     for (const auto& name : info_->optional_inputs_) {
+      auto it = tensor_data_.find(input->Name());
       if (it != tensor_data_.end()) {
-        tensor_data.AddTensor(nullptr);
-        tensor_data.batch_size_ = lrequest->BatchSize();
+        it->second.AddTensor(nullptr);
+        it->second.batch_size_ = lrequest->BatchSize();
       } else {
         ensemble_status_ = Status(
             Status::Code::INVALID_ARG,
