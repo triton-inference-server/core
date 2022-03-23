@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -24,7 +24,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#define TRITON_ENABLE_METRICS 1
 #ifdef TRITON_ENABLE_METRICS
 
 #include <iostream>
@@ -36,7 +35,6 @@
 
 namespace {
 
-// TODO: Remove
 #define FAIL_TEST_IF_ERR(X, MSG)                                              \
   do {                                                                        \
     std::shared_ptr<TRITONSERVER_Error> err__((X), TRITONSERVER_ErrorDelete); \
@@ -49,134 +47,102 @@ namespace {
 // Test Fixture
 class MetricsApiTest : public ::testing::Test {
  protected:
-  static void SetUpTestSuite()
-  {
-    // Create the server...
-    /*TRITONSERVER_ServerOptions* server_options = nullptr;
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsNew(&server_options),
-        "creating server options");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetModelRepositoryPath(
-            server_options, "./models"),
-        "setting model repository path");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetBackendDirectory(
-            server_options, "/opt/tritonserver/backends"),
-        "setting backend directory");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
-            server_options, "/opt/tritonserver/repoagents"),
-        "setting repository agent directory");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetStrictModelConfig(server_options, true),
-        "setting strict model configuration");
+  void SetUp() override {}
+  void TearDown() override {}
 
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerNew(&server_, server_options), "creating server");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsDelete(server_options),
-        "deleting server options");*/
-  }
-
-  static void TearDownTestSuite()
-  {
-    FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
-  }
-
-  void SetUp() override
-  {
-    //std::cout << "Calling setup test suite" << std::endl;
-    //SetUpTestSuite();
-    //std::cout << "Finished calling setup test suite" << std::endl;
-    // Create the server...
-    TRITONSERVER_ServerOptions* server_options = nullptr;
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsNew(&server_options),
-        "creating server options");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetModelRepositoryPath(
-            server_options, "./models"),
-        "setting model repository path");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetBackendDirectory(
-            server_options, "/opt/tritonserver/backends"),
-        "setting backend directory");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
-            server_options, "/opt/tritonserver/repoagents"),
-        "setting repository agent directory");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetStrictModelConfig(server_options, true),
-        "setting strict model configuration");
-
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerNew(&server_, server_options), "creating server");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsDelete(server_options),
-        "deleting server options");
-    ASSERT_TRUE(server_ != nullptr) << "Server has not created";
-    // Wait until the server is both live and ready.
-    size_t health_iters = 0;
-    while (true) {
-      bool live, ready;
-      FAIL_TEST_IF_ERR(
-          TRITONSERVER_ServerIsLive(server_, &live),
-          "unable to get server liveness");
-      FAIL_TEST_IF_ERR(
-          TRITONSERVER_ServerIsReady(server_, &ready),
-          "unable to get server readiness");
-      if (live && ready) {
-        break;
-      }
-
-      if (++health_iters >= 10) {
-        FAIL() << "failed to find healthy inference server";
-      }
-
-      std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    }
-  }
-
-  static TRITONSERVER_Server* server_;
+  double decrement_ = 10;
+  double increment_ = 10;
+  double set_value_ = 42;
+  double value_ = -1;
+  double prev_value_ = -1;
 };
 
-TRITONSERVER_Server* MetricsApiTest::server_ = nullptr;
-
-// Test end-to-end flow of Generic Metrics API
-TEST_F(MetricsApiTest, TestEndToEnd)
+// Test end-to-end flow of Generic Metrics API for Counter metric
+TEST_F(MetricsApiTest, TestCounterEndToEnd)
 {
-  // Create counter family
-  TRITONSERVER_MetricFamily* cfamily;
-  TRITONSERVER_MetricKind ckind = TRITONSERVER_METRIC_KIND_COUNTER;
-  const char* cname = "backend_counter_example";
-  const char* cdescription = "this is an example counter metric added by a backend.";
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyNew(&cfamily, ckind, cname, cdescription), "Creating new metric family");
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_COUNTER;
+  const char* name = "api_counter_example";
+  const char* description = "this is an example counter metric added via API.";
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyNew(&family, kind, name, description), "Creating new metric family");
 
-  // Create counter metric
-  TRITONSERVER_Metric* cmetric;
-  TRITONSERVER_Parameter** labels = nullptr; 
-  const int num_labels = 0;
-  // TODO: Use real labels
-  //auto label = TRITONSERVER_ParameterNew("key", TRITONSERVER_PARAMETER_STRING, "value");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricNew(&cmetric, cfamily, labels, num_labels), "Creating new metric");
+  // Create metric
+  TRITONSERVER_Metric* metric;
+  std::vector<TRITONSERVER_Parameter*> labels;
+  labels.push_back(TRITONSERVER_ParameterNew("example1", TRITONSERVER_PARAMETER_STRING, "counter_label1"));
+  labels.push_back(TRITONSERVER_ParameterNew("example2", TRITONSERVER_PARAMETER_STRING, "counter_label2"));
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()), "Creating new metric");
 
-  // Value of counter should be zero initially
-  double value = -1;
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(cmetric, &value), "query metric value 1");
-  ASSERT_EQ(value, 0.0);
+  // Value should be zero initially
+  value_ = -1;
+  prev_value_ = value_;
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
+  ASSERT_EQ(value_, 0.0);
 
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricIncrement(cmetric, 100), "increment metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(cmetric, &value), "query metric value 2");
-  ASSERT_EQ(value, 100.0);
+  // Increment
+  prev_value_ = value_;
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  ASSERT_EQ(value_, prev_value_ + increment_);
 
-  TRITONSERVER_MetricKind kind;
-  FAIL_TEST_IF_ERR(TRITONSERVER_GetMetricKind(cmetric, &kind), "query metric kind");
-  ASSERT_EQ(kind, ckind);
+  // GetMetricKind
+  TRITONSERVER_MetricKind kind_tmp;
+  FAIL_TEST_IF_ERR(TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
+  ASSERT_EQ(kind_tmp, kind);
 
   // Cleanup
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(cmetric), "delete metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(cfamily), "delete metric family");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+}
+
+// Test end-to-end flow of Generic Metrics API for Gauge metric
+TEST_F(MetricsApiTest, TestGaugeEndToEnd)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
+  const char* name = "api_gauge_example";
+  const char* description = "this is an example gauge metric added via API.";
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyNew(&family, kind, name, description), "Creating new metric family");
+
+  // Create metric
+  TRITONSERVER_Metric* metric;
+  std::vector<TRITONSERVER_Parameter*> labels;
+  labels.push_back(TRITONSERVER_ParameterNew("example1", TRITONSERVER_PARAMETER_STRING, "gauge_label1"));
+  labels.push_back(TRITONSERVER_ParameterNew("example2", TRITONSERVER_PARAMETER_STRING, "gauge_label2"));
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()), "Creating new metric");
+
+  // Value should be zero initially
+  value_ = -1;
+  prev_value_ = value_;
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
+  ASSERT_EQ(value_, 0.0);
+
+  // Increment
+  prev_value_ = value_;
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  ASSERT_EQ(value_, prev_value_ + increment_);
+
+  // Decrement
+  prev_value_ = value_;
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDecrement(metric, decrement_), "decrement metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  ASSERT_EQ(value_, prev_value_ - decrement_);
+
+  // Set
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricSet(metric, set_value_), "set metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  ASSERT_EQ(value_, set_value_);
+
+  TRITONSERVER_MetricKind kind_tmp;
+  FAIL_TEST_IF_ERR(TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
+  ASSERT_EQ(kind_tmp, kind);
+
+  // Cleanup
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
 }
 
 }  // namespace
