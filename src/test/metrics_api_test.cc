@@ -65,35 +65,46 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_COUNTER;
   const char* name = "api_counter_example";
   const char* description = "this is an example counter metric added via API.";
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyNew(&family, kind, name, description), "Creating new metric family");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
 
   // Create metric
   TRITONSERVER_Metric* metric;
-  std::vector<TRITONSERVER_Parameter*> labels;
-  labels.push_back(TRITONSERVER_ParameterNew("example1", TRITONSERVER_PARAMETER_STRING, "counter_label1"));
-  labels.push_back(TRITONSERVER_ParameterNew("example2", TRITONSERVER_PARAMETER_STRING, "counter_label2"));
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()), "Creating new metric");
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      "example1", TRITONSERVER_PARAMETER_STRING, "counter_label1"));
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      "example2", TRITONSERVER_PARAMETER_STRING, "counter_label2"));
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
+      "Creating new metric");
 
   // Value should be zero initially
   value_ = -1;
   prev_value_ = value_;
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
   ASSERT_EQ(value_, 0.0);
 
   // Increment
   prev_value_ = value_;
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
   ASSERT_EQ(value_, prev_value_ + increment_);
 
   // GetMetricKind
   TRITONSERVER_MetricKind kind_tmp;
-  FAIL_TEST_IF_ERR(TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
 }
 
 // Test end-to-end flow of Generic Metrics API for Gauge metric
@@ -104,45 +115,59 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
   const char* name = "api_gauge_example";
   const char* description = "this is an example gauge metric added via API.";
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyNew(&family, kind, name, description), "Creating new metric family");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
 
   // Create metric
   TRITONSERVER_Metric* metric;
-  std::vector<TRITONSERVER_Parameter*> labels;
-  labels.push_back(TRITONSERVER_ParameterNew("example1", TRITONSERVER_PARAMETER_STRING, "gauge_label1"));
-  labels.push_back(TRITONSERVER_ParameterNew("example2", TRITONSERVER_PARAMETER_STRING, "gauge_label2"));
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()), "Creating new metric");
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      "example1", TRITONSERVER_PARAMETER_STRING, "gauge_label1"));
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      "example2", TRITONSERVER_PARAMETER_STRING, "gauge_label2"));
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
+      "Creating new metric");
 
   // Value should be zero initially
   value_ = -1;
   prev_value_ = value_;
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
   ASSERT_EQ(value_, 0.0);
 
   // Increment
   prev_value_ = value_;
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
   ASSERT_EQ(value_, prev_value_ + increment_);
 
   // Decrement
   prev_value_ = value_;
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDecrement(metric, decrement_), "decrement metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricDecrement(metric, decrement_), "decrement metric");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
   ASSERT_EQ(value_, prev_value_ - decrement_);
 
   // Set
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricSet(metric, set_value_), "set metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
   ASSERT_EQ(value_, set_value_);
 
   TRITONSERVER_MetricKind kind_tmp;
-  FAIL_TEST_IF_ERR(TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
 }
 
 }  // namespace

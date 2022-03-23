@@ -27,6 +27,7 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
+#include "infer_parameter.h"
 #include "prometheus/registry.h"
 #include "tritonserver_apis.h"
 
@@ -59,8 +60,8 @@ class MetricFamily {
 class Metric {
  public:
   Metric(
-      TRITONSERVER_MetricFamily* family, TRITONSERVER_Parameter** labels,
-      int num_labels);
+      TRITONSERVER_MetricFamily* family,
+      std::vector<const InferenceParameter*> labels);
   ~Metric();
 
   TRITONSERVER_MetricKind Kind() const { return kind_; }

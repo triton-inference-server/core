@@ -2757,11 +2757,16 @@ TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
 TRITONSERVER_Error*
 TRITONSERVER_MetricNew(
     TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
-    TRITONSERVER_Parameter** labels, int num_labels)
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count)
 {
 #ifdef TRITON_ENABLE_METRICS
+  std::vector<const tc::InferenceParameter*> labels_vec;
+  for (size_t i = 0; i < label_count; i++) {
+    labels_vec.emplace_back(
+        reinterpret_cast<const tc::InferenceParameter*>(labels[i]));
+  }
   *metric = reinterpret_cast<TRITONSERVER_Metric*>(
-      new tc::Metric(family, labels, num_labels));
+      new tc::Metric(family, labels_vec));
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(

@@ -2159,9 +2159,9 @@ typedef enum TRITONSERVER_metrickind_enum {
 /// \param family Returns the new metric family object.
 /// \param kind The TRITONSERVER_MetricKind type of MetricFamily to create.
 /// \param name The name of the metric family seen when calling the metrics
-/// endpoint. 
+/// endpoint.
 /// \param description The description of the metric family seen when
-/// calling the metrics endpoint. 
+/// calling the metrics endpoint.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
     TRITONSERVER_MetricFamily** family, const TRITONSERVER_MetricKind kind,
@@ -2181,11 +2181,11 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete(
 /// \param metric Returns the new metric object.
 /// \param family The metric family to add this new metric to.
 /// \param labels The array of labels to associate with this new metric.
-/// \param num_labels The number of labels in the labels parameter.
+/// \param label_count The number of labels.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricNew(
     TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
-    TRITONSERVER_Parameter** labels, int num_labels);
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count);
 
 /// Delete a metric object.
 ///

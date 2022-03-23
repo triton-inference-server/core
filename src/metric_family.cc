@@ -71,8 +71,8 @@ MetricFamily::~MetricFamily()
 // Implementation for TRITONSERVER_Metric.
 //
 Metric::Metric(
-    TRITONSERVER_MetricFamily* family, TRITONSERVER_Parameter** labels,
-    int num_labels)
+    TRITONSERVER_MetricFamily* family,
+    std::vector<const InferenceParameter*> labels)
 {
   family_ = reinterpret_cast<MetricFamily*>(family);
   kind_ = family_->Kind();
@@ -135,13 +135,15 @@ Metric::Value(double* value)
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
-      LOG_VERBOSE(1) << "SETTING COUNTER METRIC FROM: " << *value << " to " << counter_ptr->Value();
+      LOG_VERBOSE(1) << "SETTING COUNTER METRIC FROM: " << *value << " to "
+                     << counter_ptr->Value();
       *value = counter_ptr->Value();
       return nullptr;  // Success
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
-      LOG_VERBOSE(1) << "SETTING GAUGE METRIC FROM: " << *value << " to " << gauge_ptr->Value();
+      LOG_VERBOSE(1) << "SETTING GAUGE METRIC FROM: " << *value << " to "
+                     << gauge_ptr->Value();
       *value = gauge_ptr->Value();
       return nullptr;  // Success
     }
