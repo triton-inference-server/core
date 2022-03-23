@@ -28,9 +28,9 @@
 
 #include <algorithm>
 #include <deque>
-#include "triton/common/logging.h"
 #include "model.h"
 #include "server.h"
+#include "triton/common/logging.h"
 #ifdef TRITON_ENABLE_TRACING
 #include "cuda_utils.h"
 #endif  // TRITON_ENABLE_TRACING
@@ -457,7 +457,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
   // Must normalize inputs here...
   for (auto& pr : lrequest->original_inputs_) {
     lrequest->inputs_.emplace(
-        std::make_pair(pr.first, std::addressof(pr.second)));
+        std::make_pair(pr.second.Name(), std::addressof(pr.second)));
   }
 
   return lrequest.release();
@@ -526,6 +526,33 @@ InferenceRequest::AddOriginalInput(
 }
 
 Status
+InferenceRequest::AddRawInput(
+    const std::string& name, InferenceRequest::Input** input)
+{
+  if (original_inputs_.size() != 0) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "raw input '" + name + "' can't be added to request with other inputs");
+  }
+  const auto& pr = original_inputs_.emplace(
+      std::piecewise_construct, std::forward_as_tuple(name),
+      std::forward_as_tuple());
+  if (!pr.second) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "input '" + name + "' already exists in request");
+  }
+
+  if (input != nullptr) {
+    *input = std::addressof(pr.first->second);
+  }
+
+  raw_input_name_ = name;
+  needs_normalization_ = true;
+  return Status::Success;
+}
+
+Status
 InferenceRequest::RemoveOriginalInput(const std::string& name)
 {
   if (original_inputs_.erase(name) != 1) {
@@ -534,6 +561,9 @@ InferenceRequest::RemoveOriginalInput(const std::string& name)
         "input '" + name + "' does not exist in request");
   }
 
+  if (name == raw_input_name_) {
+    raw_input_name_.clear();
+  }
   needs_normalization_ = true;
   return Status::Success;
 }
@@ -542,6 +572,7 @@ Status
 InferenceRequest::RemoveAllOriginalInputs()
 {
   original_inputs_.clear();
+  raw_input_name_.clear();
   needs_normalization_ = true;
   return Status::Success;
 }
@@ -662,7 +693,8 @@ InferenceRequest::PrepareForInference()
   // inputs. If overrides are added later they will be added to
   // 'inputs_'.
   for (auto& pr : original_inputs_) {
-    inputs_.emplace(std::make_pair(pr.first, std::addressof(pr.second)));
+    inputs_.emplace(
+        std::make_pair(pr.second.Name(), std::addressof(pr.second)));
   }
 
   // Clear the timestamps
@@ -681,6 +713,77 @@ Status
 InferenceRequest::Normalize()
 {
   const inference::ModelConfig& model_config = model_raw_->Config();
+
+  // Fill metadata for raw input
+  if (!raw_input_name_.empty()) {
+    const bool has_multiple_inputs =
+        (original_inputs_.size() != 1) || (model_config.input_size() != 1);
+    if (has_multiple_inputs) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Raw request must only have 1 input (found " +
+              std::to_string(original_inputs_.size()) +
+              ") to be deduced but got " +
+              std::to_string(model_config.input_size()) + " inputs in '" +
+              ModelName() + "' model configuration");
+    }
+    auto it = original_inputs_.begin();
+    if (raw_input_name_ != it->first) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Unexpected reference name for raw input '" + raw_input_name_ +
+              "' got '" + it->first + "'");
+    }
+    const auto& config_input = model_config.input(0);
+    auto& raw_input = it->second;
+    std::vector<int64_t> shape;
+    if (model_config.max_batch_size() != 0) {
+      shape.emplace_back(1);
+    }
+    int64_t dynamic_axis = -1;
+    size_t element_cnt = 1;
+    for (const auto& dim : config_input.dims()) {
+      if (dim == WILDCARD_DIM) {
+        if (dynamic_axis != -1) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "The shape of the raw input '" + config_input.name() +
+                  "' can not be deduced because there are more than one "
+                  "variable-sized dimension");
+        }
+        dynamic_axis = shape.size();
+      } else {
+        element_cnt *= (size_t)dim;
+      }
+      shape.emplace_back(dim);
+    }
+    if ((config_input.data_type() == inference::DataType::TYPE_STRING)) {
+      const bool has_one_element = (dynamic_axis == -1) && (element_cnt == 1);
+      if (!has_one_element) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "For BYTE datatype raw input, the model must have input shape [1]");
+      }
+      // In the case of BYTE data type, we will prepend the byte size to follow
+      // the Triton convention.
+      raw_input_size_ = raw_input.Data()->TotalByteSize();
+      RETURN_IF_ERROR(raw_input.PrependData(
+          &raw_input_size_, sizeof(uint32_t), TRITONSERVER_MEMORY_CPU, 0));
+      // Limit the BYTE raw input not to have host policy specific input for
+      // simplicity, such case won't happen given the current protocol spec.
+      // Will need to extend Input::PrependData() if needed.
+      if (!raw_input.HostPolicyData().empty()) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "Raw input with data associated with a host policy setting is not "
+            "currently supported");
+      }
+    } else if (dynamic_axis != -1) {
+      shape[dynamic_axis] = raw_input.Data()->TotalByteSize() / element_cnt /
+                            GetDataTypeByteSize(config_input.data_type());
+    }
+    raw_input.SetMetadata(config_input.name(), config_input.data_type(), shape);
+  }
 
   // Initialize the requested outputs to be used during inference. If
   // original_requested_outputs_ is empty assume all outputs specified
@@ -742,7 +845,7 @@ InferenceRequest::Normalize()
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
       const inference::ModelInput* input_config;
-      RETURN_IF_ERROR(model_raw_->GetInput(pr.first, &input_config));
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
         *input.MutableShape() = input.OriginalShape();
         input.SetIsShapeTensor(true);
@@ -786,7 +889,7 @@ InferenceRequest::Normalize()
   // adjustments for reshapes and find the total tensor size.
   for (auto& pr : original_inputs_) {
     const inference::ModelInput* input_config;
-    RETURN_IF_ERROR(model_raw_->GetInput(pr.first, &input_config));
+    RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
 
     auto& input = pr.second;
     auto shape = input.MutableShape();
@@ -1020,7 +1123,8 @@ InferenceRequest::ReportStatisticsCacheMiss(
 // Input
 //
 InferenceRequest::Input::Input()
-    : data_(new MemoryReference), has_host_policy_specific_data_(false)
+    : is_shape_tensor_(false), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1040,6 +1144,16 @@ InferenceRequest::Input::Input(
       is_shape_tensor_(false), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
+}
+
+void
+InferenceRequest::Input::SetMetadata(
+    const std::string& name, const inference::DataType& dt,
+    const std::vector<int64_t>& shape)
+{
+  name_ = name;
+  datatype_ = dt;
+  original_shape_ = shape;
 }
 
 Status
@@ -1102,6 +1216,19 @@ InferenceRequest::Input::AppendDataWithHostPolicy(
         ->AddBuffer(
             static_cast<const char*>(base), byte_size, memory_type,
             memory_type_id);
+  }
+
+  return Status::Success;
+}
+
+Status
+InferenceRequest::Input::PrependData(
+    const void* base, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id)
+{
+  if (byte_size > 0) {
+    std::static_pointer_cast<MemoryReference>(data_)->AddBufferFront(
+        static_cast<const char*>(base), byte_size, memory_type, memory_type_id);
   }
 
   return Status::Success;

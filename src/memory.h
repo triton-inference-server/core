@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -89,6 +89,12 @@ class MemoryReference : public Memory {
       int64_t memory_type_id);
 
   size_t AddBuffer(const char* buffer, BufferAttributes* buffer_attributes);
+
+  // Add a 'buffer' with 'byte_size' as part of this data buffer in the front
+  // Return the index of the buffer
+  size_t AddBufferFront(
+      const char* buffer, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+      int64_t memory_type_id);
 
  private:
   struct Block {

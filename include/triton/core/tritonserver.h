@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 9
+#define TRITONSERVER_API_VERSION_MINOR 10
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1073,6 +1073,20 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestAddInput(
     const TRITONSERVER_DataType datatype, const int64_t* shape,
     uint64_t dim_count);
 
+/// Add a raw input to a request. The name recognized by the model, data type
+/// and shape of the input will be deduced from model configuration.
+/// This function must be called at most once on request with no other input to
+/// ensure the deduction is accurate.
+///
+/// \param inference_request The request object.
+/// \param name The name of the input. This name is only used as a reference
+/// of the raw input in other Tritonserver APIs. It doesn't assoicate with the
+/// name used in the model.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAddRawInput(
+    TRITONSERVER_InferenceRequest* inference_request, const char* name);
+
 /// Remove an input from a request.
 ///
 /// \param inference_request The request object.
@@ -1703,7 +1717,8 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.

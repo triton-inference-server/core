@@ -1514,6 +1514,16 @@ TRITONSERVER_InferenceRequestAddInput(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAddRawInput(
+    TRITONSERVER_InferenceRequest* inference_request, const char* name)
+{
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  RETURN_IF_STATUS_ERROR(lrequest->AddRawInput(name));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestRemoveInput(
     TRITONSERVER_InferenceRequest* inference_request, const char* name)
 {

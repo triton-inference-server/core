@@ -230,6 +230,10 @@ TRITONSERVER_InferenceRequestAddInput()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestAddRawInput()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestRemoveInput()
 {
 }
