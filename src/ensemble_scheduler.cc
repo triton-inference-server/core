@@ -477,7 +477,7 @@ EnsembleContext::EnsembleContext(
     // if the input is not provided
     for (const auto& name : info_->optional_inputs_) {
       auto it = tensor_data_.find(name);
-      if (it != tensor_data_.end()) {
+      if ((it != tensor_data_.end()) && it->second.tensor_.empty()) {
         it->second.AddTensor(nullptr);
         it->second.batch_size_ = lrequest->BatchSize();
       } else {
