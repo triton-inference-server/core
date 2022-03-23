@@ -456,13 +456,15 @@ if(${TRITON_ENABLE_METRICS})
   target_compile_definitions(
     metrics_api_test 
     PRIVATE
+      TRITON_ENABLE_LOGGING=1
       TRITON_ENABLE_METRICS=1
   )
 
   target_link_libraries(
     metrics_api_test
     PRIVATE
-      triton-common-error # from repo-common
+      triton-common-error   # from repo-common
+      triton-common-logging # from repo-common
       triton-core
       GTest::gtest
       GTest::gtest_main
