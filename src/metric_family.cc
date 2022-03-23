@@ -38,7 +38,6 @@ MetricFamily::MetricFamily(
     TRITONSERVER_MetricKind kind, const char* name, const char* description,
     std::shared_ptr<prometheus::Registry> registry)
 {
-  // TODO: Check correctness of void* cast and lifetimes here
   switch (kind) {
     case TRITONSERVER_METRIC_KIND_COUNTER:
       family_ = reinterpret_cast<void*>(&prometheus::BuildCounter()
@@ -53,7 +52,6 @@ MetricFamily::MetricFamily(
                                              .Register(*registry));
       break;
     default:
-      // TODO: Error unsupported kind
       family_ = nullptr;
       break;
   }
@@ -91,7 +89,6 @@ Metric::Metric(
         std::string(reinterpret_cast<const char*>(param->ValuePointer()));
   }
 
-  // TODO: Cleanup family_ ptr names
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_family_ptr =
@@ -117,7 +114,6 @@ Metric::Metric(
 
 Metric::~Metric()
 {
-  // TODO: Cleanup family_ ptr names
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_family_ptr =

@@ -2747,8 +2747,13 @@ TRITONSERVER_MetricFamilyNew(
 TRITONSERVER_Error*
 TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
 {
+#ifdef TRITON_ENABLE_METRICS
   delete reinterpret_cast<tc::MetricFamily*>(family);
   return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
 }
 
 //
@@ -2777,8 +2782,13 @@ TRITONSERVER_MetricNew(
 TRITONSERVER_Error*
 TRITONSERVER_MetricDelete(TRITONSERVER_Metric* metric)
 {
+#ifdef TRITON_ENABLE_METRICS
   delete reinterpret_cast<tc::Metric*>(metric);
   return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
 }
 
 TRITONSERVER_Error*

@@ -43,11 +43,8 @@ class MetricFamily {
       std::shared_ptr<prometheus::Registry> registry);
   ~MetricFamily();
 
-  TRITONSERVER_MetricKind Kind() const { return kind_; }
   void* Family() const { return family_; }
-
-  // prometheus::MetricType PrometheusType();
-  // prometheus::Family<prometheus::MetricType>* PrometheusFamily();
+  TRITONSERVER_MetricKind Kind() const { return kind_; }
 
  private:
   void* family_;
@@ -64,8 +61,9 @@ class Metric {
       std::vector<const InferenceParameter*> labels);
   ~Metric();
 
+  MetricFamily* Family() const { return family_; }
   TRITONSERVER_MetricKind Kind() const { return kind_; }
-  void* Family() const { return family_; }
+
   TRITONSERVER_Error* Value(double* value);
   TRITONSERVER_Error* Increment(double value);
   TRITONSERVER_Error* Decrement(double value);
