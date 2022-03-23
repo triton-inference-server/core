@@ -89,8 +89,10 @@ if(${TRITON_ENABLE_GPU})
   add_executable(
     response_cache_test
     response_cache_test.cc
-    ../response_cache.cc ../response_cache.h
-    ../status.cc ../status.h
+    ../response_cache.cc
+    ../response_cache.h
+    ../status.cc
+    ../status.h
     ../constants.h
     ${MEMORY_SRCS}
     ${CUDA_MEMORY_MANAGER_SRCS}
@@ -433,7 +435,10 @@ if(${TRITON_ENABLE_METRICS})
   add_executable(
     metrics_api_test
     metrics_api_test.cc
-    ../metric_family.cc ../metric_family.h
+    ../metric_family.cc
+    ../metric_family.h
+    ../infer_parameter.cc
+    ../infer_parameter.h
   )
 
   set_target_properties(

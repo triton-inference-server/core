@@ -77,14 +77,27 @@ Metric::Metric(
   family_ = reinterpret_cast<MetricFamily*>(family);
   kind_ = family_->Kind();
 
+  // Create map of labels from InferenceParameters
+  std::map<std::string, std::string> label_map;
+  for (const auto& param : labels) {
+    if (param->Type() != TRITONSERVER_PARAMETER_STRING) {
+      LOG_ERROR << "Parameter [" << param->Name()
+                << "] must have a type of TRITONSERVER_PARAMETER_STRING to be "
+                   "added as a label.";
+      continue;
+    }
+
+    label_map[param->Name()] =
+        std::string(reinterpret_cast<const char*>(param->ValuePointer()));
+  }
+
   // TODO: Cleanup family_ ptr names
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Counter>*>(
               family_->Family());
-      // TODO: Use labels
-      auto counter_ptr = &counter_family_ptr->Add({});
+      auto counter_ptr = &counter_family_ptr->Add(label_map);
       metric_ = reinterpret_cast<void*>(counter_ptr);
       break;
     }
@@ -92,8 +105,7 @@ Metric::Metric(
       auto gauge_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(
               family_->Family());
-      // TODO: Use labels
-      auto gauge_ptr = &gauge_family_ptr->Add({});
+      auto gauge_ptr = &gauge_family_ptr->Add(label_map);
       metric_ = reinterpret_cast<void*>(gauge_ptr);
       break;
     }
