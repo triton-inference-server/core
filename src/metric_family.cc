@@ -52,8 +52,8 @@ MetricFamily::MetricFamily(
                                              .Register(*registry));
       break;
     default:
-      family_ = nullptr;
-      break;
+      LOG_ERROR << "Unsupported kind passed to MetricFamily constructor.";
+      throw std::invalid_argument("Unsupported kind.");
   }
 
   kind_ = kind;
@@ -107,8 +107,8 @@ Metric::Metric(
       break;
     }
     default:
-      LOG_ERROR << "UNSUPPORTED KIND";
-      break;
+      LOG_ERROR << "Unsupported family kind passed to Metric constructor.";
+      throw std::invalid_argument("Unsupported kind.");
   }
 }
 
@@ -132,7 +132,8 @@ Metric::~Metric()
       break;
     }
     default:
-      LOG_ERROR << "UNSUPPORTED KIND";
+      // Invalid kind should be caught in constructor
+      LOG_ERROR << "Unsupported kind in Metric destructor.";
       break;
   }
 }
@@ -156,7 +157,6 @@ Metric::Value(double* value)
       break;
     }
     default:
-      LOG_ERROR << "UNSUPPORTED KIND";
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_UNSUPPORTED,
           "Unsupported TRITONSERVER_MetricKind");

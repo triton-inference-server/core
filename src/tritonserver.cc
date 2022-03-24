@@ -2734,14 +2734,21 @@ TRITONSERVER_MetricFamilyNew(
     const char* name, const char* description, void* registry_ptr)
 {
 #ifdef TRITON_ENABLE_METRICS
-  const auto& registry =
-      reinterpret_cast<std::shared_ptr<prometheus::Registry>*>(registry_ptr);
   // TODO: Remove this after review
   // TODO: Verify passing registry_ptr from API caller is OK.
   //       Calling GetRegistry() here did not add the new metrics to registry.
   // const auto& registry = tc::Metrics::GetRegistry();
-  *family = reinterpret_cast<TRITONSERVER_MetricFamily*>(
-      new tc::MetricFamily(kind, name, description, *registry));
+  const auto& registry =
+      reinterpret_cast<std::shared_ptr<prometheus::Registry>*>(registry_ptr);
+
+  try {
+    *family = reinterpret_cast<TRITONSERVER_MetricFamily*>(
+        new tc::MetricFamily(kind, name, description, *registry));
+  }
+  catch (std::invalid_argument const& ex) {
+    // Catch invalid kinds passed to constructor
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
+  }
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
@@ -2775,8 +2782,16 @@ TRITONSERVER_MetricNew(
     labels_vec.emplace_back(
         reinterpret_cast<const tc::InferenceParameter*>(labels[i]));
   }
-  *metric = reinterpret_cast<TRITONSERVER_Metric*>(
-      new tc::Metric(family, labels_vec));
+
+  try {
+    *metric = reinterpret_cast<TRITONSERVER_Metric*>(
+        new tc::Metric(family, labels_vec));
+  }
+  catch (std::invalid_argument const& ex) {
+    // Catch invalid kinds passed to constructor
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
+  }
+
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
