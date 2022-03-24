@@ -146,14 +146,14 @@ Metric::Value(double* value)
       LOG_VERBOSE(1) << "SETTING COUNTER METRIC FROM: " << *value << " to "
                      << counter_ptr->Value();
       *value = counter_ptr->Value();
-      return nullptr;  // Success
+      break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
       LOG_VERBOSE(1) << "SETTING GAUGE METRIC FROM: " << *value << " to "
                      << gauge_ptr->Value();
       *value = gauge_ptr->Value();
-      return nullptr;  // Success
+      break;
     }
     default:
       LOG_ERROR << "UNSUPPORTED KIND";
@@ -161,6 +161,8 @@ Metric::Value(double* value)
           TRITONSERVER_ERROR_UNSUPPORTED,
           "Unsupported TRITONSERVER_MetricKind");
   }
+
+  return nullptr;  // Success
 }
 
 TRITONSERVER_Error*
@@ -170,18 +172,20 @@ Metric::Increment(double value)
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
       counter_ptr->Increment(value);
-      return nullptr;  // Success
+      break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
       gauge_ptr->Increment(value);
-      return nullptr;  // Success
+      break;
     }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_UNSUPPORTED,
           "Unsupported TRITONSERVER_MetricKind");
   }
+
+  return nullptr;  // Success
 }
 
 TRITONSERVER_Error*
@@ -196,13 +200,15 @@ Metric::Decrement(double value)
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
       gauge_ptr->Decrement(value);
-      return nullptr;  // Success
+      break;
     }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_UNSUPPORTED,
           "Unsupported TRITONSERVER_MetricKind");
   }
+
+  return nullptr;  // Success
 }
 
 TRITONSERVER_Error*
@@ -217,13 +223,15 @@ Metric::Set(double value)
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
       gauge_ptr->Set(value);
-      return nullptr;  // Success
+      break;
     }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_UNSUPPORTED,
           "Unsupported TRITONSERVER_MetricKind");
   }
+
+  return nullptr;  // Success
 }
 
 }}  // namespace triton::core
