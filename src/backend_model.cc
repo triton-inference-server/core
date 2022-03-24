@@ -62,7 +62,7 @@ TritonModel::Create(
     const HostPolicyCmdlineConfigMap& host_policy_map,
     const std::string& model_name, const int64_t version,
     const inference::ModelConfig& model_config,
-    std::unique_ptr<TritonModel>* model)
+  std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -97,6 +97,10 @@ TritonModel::Create(
   RETURN_IF_ERROR(BackendConfigurationSpecializeBackendName(
       backend_cmdline_config_map, model_config.backend(),
       &specialized_backend_name));
+  
+  int global_default_max_batch_size;
+  RETURN_IF_ERROR(BackendConfigurationDefaultMaxBatchSize(
+    backend_cmdline_config_map, &global_default_max_batch_size));
 
   std::string backend_libname;
   RETURN_IF_ERROR(BackendConfigurationBackendLibraryName(
@@ -151,7 +155,7 @@ TritonModel::Create(
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
-      model_config, auto_complete_config));
+      model_config, auto_complete_config, global_default_max_batch_size));
 
   TritonModel* raw_local_model = local_model.get();
 
@@ -308,10 +312,12 @@ TritonModel::TritonModel(
     const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
     const double min_compute_capability, const int64_t version,
-    const inference::ModelConfig& config, const bool auto_complete_config)
+    const inference::ModelConfig& config, const bool auto_complete_config,
+    const int default_max_batch_size)
     : Model(
           min_compute_capability, localized_model_dir->Path(), version, config),
       server_(server), auto_complete_config_(auto_complete_config),
+      default_max_batch_size_(default_max_batch_size),
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {

@@ -91,6 +91,21 @@ BackendConfiguration(
 }
 
 Status
+BackendConfigurationParseStringToInt(const std::string& str, int* val)
+{
+  try {
+    *val = std::stoi(str);
+  } 
+  catch (...) {
+    return Status(
+      Status::Code::INTERNAL,
+        "unable to parse common backend configuration as int");
+  }
+
+  return Status::Success;
+}
+
+Status
 BackendConfigurationParseStringToDouble(const std::string& str, double* val)
 {
   try {
@@ -195,6 +210,25 @@ BackendConfigurationSpecializeBackendName(
   } else if (backend_name == "openvino") {
     RETURN_IF_ERROR(GetOVSpecializedBackendName(config_map, specialized_name));
   }
+
+  return Status::Success;
+}
+
+Status
+BackendConfigurationDefaultMaxBatchSize(
+  const BackendCmdlineConfigMap& config_map, int* dmbs)
+{
+  const auto& itr = config_map.find(std::string());
+  if (itr == config_map.end()) {
+    return Status(
+      Status::Code::INTERNAL, "unable to find default-max-batch-size configuration");
+  }
+
+  std::string default_max_batch_size_str;
+  RETURN_IF_ERROR(BackendConfiguration(
+    itr->second, "default-max-batch-size", &default_max_batch_size_str));
+  RETURN_IF_ERROR(
+    BackendConfigurationParseStringToInt(default_max_batch_size_str, dmbs));
 
   return Status::Success;
 }

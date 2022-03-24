@@ -973,6 +973,21 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config);
 
+/// When using auto-complete for a model which supports batching, this value 
+/// can be used to set the max batch size. When this value is greater than 
+/// 1, dynamic batching must be turned on else setting this value has no meaning.
+/// If no value was given on the command line parameters, this returns a value 
+/// of 4.
+///
+/// \param model The model.
+/// \param default_max_batch_size Returns the value set on the command line 
+/// else 4.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelDefaultMaxBatchSize(
+    TRITONBACKEND_Model* model, int32_t* default_max_batch_size);
+
+
 /// Set the model configuration in Triton server. Only the inputs, outputs,
 /// and max batch size can be changed. Any other changes to the model
 /// configuration will be ignored by Triton. This function can only be called
