@@ -2734,10 +2734,11 @@ TRITONSERVER_MetricFamilyNew(
     const char* name, const char* description, void* registry_ptr)
 {
 #ifdef TRITON_ENABLE_METRICS
-  // TODO: Remove this after review
-  // TODO: Verify passing registry_ptr from API caller is OK.
-  //       Calling GetRegistry() here did not add the new metrics to registry.
-  // const auto& registry = tc::Metrics::GetRegistry();
+  // TODO: Figure out how to not require passing registry pointer through API
+  //       Calling GetRegistry() inside implementation did not add the new metrics
+  //       to registry when calling Metrics::SerializedMetrics.
+  //tc::Metrics::EnableMetrics();
+  //const auto& registry = tc::Metrics::GetRegistry();
   const auto& registry =
       reinterpret_cast<std::shared_ptr<prometheus::Registry>*>(registry_ptr);
 

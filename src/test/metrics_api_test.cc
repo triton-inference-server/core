@@ -66,6 +66,7 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_COUNTER;
   const char* name = "api_counter_example";
   const char* description = "this is an example counter metric added via API.";
+  // TODO: Remove
   auto registry = triton::core::Metrics::GetRegistry();
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricFamilyNew(
@@ -109,7 +110,9 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
 
   // Assert custom metric is reported and found in output
   auto found = metrics_str.find(std::string("# HELP ") + name);
+  std::cout << metrics_str << std::endl;
   ASSERT_NE(found, std::string::npos);
+  std::cout << "======" << std::endl;
   std::cout << metrics_str.substr(found, std::string::npos) << std::endl;
 
   // Cleanup
@@ -126,6 +129,7 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
   const char* name = "api_gauge_example";
   const char* description = "this is an example gauge metric added via API.";
+  // TODO: Remove
   auto registry = triton::core::Metrics::GetRegistry();
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricFamilyNew(
@@ -182,7 +186,9 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
 
   // Assert custom metric is reported and found in output
   auto found = metrics_str.find(std::string("# HELP ") + name);
+  std::cout << metrics_str << std::endl;
   ASSERT_NE(found, std::string::npos);
+  std::cout << "======" << std::endl;
   std::cout << metrics_str.substr(found, std::string::npos) << std::endl;
 
   // Cleanup
