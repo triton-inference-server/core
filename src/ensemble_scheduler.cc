@@ -480,11 +480,6 @@ EnsembleContext::EnsembleContext(
       if ((it != tensor_data_.end()) && it->second.tensor_.empty()) {
         it->second.AddTensor(nullptr);
         it->second.batch_size_ = lrequest->BatchSize();
-      } else {
-        ensemble_status_ = Status(
-            Status::Code::INVALID_ARG,
-            "unexpected optional input '" + name +
-                "' in request header that does not map to any ensemble inputs");
       }
     }
   }
