@@ -39,8 +39,7 @@ namespace triton { namespace core {
 class MetricFamily {
  public:
   MetricFamily(
-      TRITONSERVER_MetricKind kind, const char* name, const char* description,
-      std::shared_ptr<prometheus::Registry> registry);
+      TRITONSERVER_MetricKind kind, const char* name, const char* description);
   ~MetricFamily();
 
   void* Family() const { return family_; }

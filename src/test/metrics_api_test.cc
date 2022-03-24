@@ -66,11 +66,8 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_COUNTER;
   const char* name = "api_counter_example";
   const char* description = "this is an example counter metric added via API.";
-  // TODO: Remove
-  auto registry = triton::core::Metrics::GetRegistry();
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricFamilyNew(
-          &family, kind, name, description, reinterpret_cast<void*>(&registry)),
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
       "Creating new metric family");
 
   // Create metric
@@ -88,7 +85,7 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   value_ = -1;
   prev_value_ = value_;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
+      TRITONSERVER_MetricValue(metric, &value_), "query metric initial value");
   ASSERT_EQ(value_, 0.0);
 
   // Increment
@@ -96,7 +93,8 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+      TRITONSERVER_MetricValue(metric, &value_),
+      "query metric value after increment");
   ASSERT_EQ(value_, prev_value_ + increment_);
 
   // GetMetricKind
@@ -105,8 +103,17 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
       TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
 
-  // Check metrics
-  auto metrics_str = triton::core::Metrics::SerializedMetrics();
+  // Check metrics via C API
+  TRITONSERVER_Metrics* metrics = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerMetrics(nullptr, &metrics), "fetch metrics");
+  const char* base;
+  size_t byte_size;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricsFormatted(
+          metrics, TRITONSERVER_METRIC_PROMETHEUS, &base, &byte_size),
+      "format metrics string");
+  auto metrics_str = std::string(base, byte_size);
 
   // Assert custom metric is reported and found in output
   auto found = metrics_str.find(std::string("# HELP ") + name);
@@ -129,11 +136,8 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
   const char* name = "api_gauge_example";
   const char* description = "this is an example gauge metric added via API.";
-  // TODO: Remove
-  auto registry = triton::core::Metrics::GetRegistry();
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricFamilyNew(
-          &family, kind, name, description, reinterpret_cast<void*>(&registry)),
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
       "Creating new metric family");
 
   // Create metric
@@ -151,7 +155,7 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   value_ = -1;
   prev_value_ = value_;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric value 1");
+      TRITONSERVER_MetricValue(metric, &value_), "query metric initial value");
   ASSERT_EQ(value_, 0.0);
 
   // Increment
@@ -159,7 +163,8 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+      TRITONSERVER_MetricValue(metric, &value_),
+      "query metric value after increment");
   ASSERT_EQ(value_, prev_value_ + increment_);
 
   // Decrement
@@ -167,13 +172,15 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricDecrement(metric, decrement_), "decrement metric");
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+      TRITONSERVER_MetricValue(metric, &value_),
+      "query metric value after decrement");
   ASSERT_EQ(value_, prev_value_ - decrement_);
 
   // Set
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricSet(metric, set_value_), "set metric");
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric value 2");
+      TRITONSERVER_MetricValue(metric, &value_),
+      "query metric value after set");
   ASSERT_EQ(value_, set_value_);
 
   TRITONSERVER_MetricKind kind_tmp;
@@ -181,8 +188,17 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
       TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
 
-  // Check metrics
-  auto metrics_str = triton::core::Metrics::SerializedMetrics();
+  // Check metrics via C API
+  TRITONSERVER_Metrics* metrics = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerMetrics(nullptr, &metrics), "fetch metrics");
+  const char* base;
+  size_t byte_size;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricsFormatted(
+          metrics, TRITONSERVER_METRIC_PROMETHEUS, &base, &byte_size),
+      "format metrics string");
+  auto metrics_str = std::string(base, byte_size);
 
   // Assert custom metric is reported and found in output
   auto found = metrics_str.find(std::string("# HELP ") + name);

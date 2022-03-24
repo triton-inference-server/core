@@ -36,19 +36,10 @@ namespace triton { namespace core {
 // Implementation for TRITONSERVER_MetricFamily.
 //
 MetricFamily::MetricFamily(
-    TRITONSERVER_MetricKind kind, const char* name, const char* description,
-    std::shared_ptr<prometheus::Registry> registry_ptr)
+    TRITONSERVER_MetricKind kind, const char* name, const char* description)
 {
-  // TODO: Ideally don't need to pass registry object and can just fetch
-  //       the singleton here. However, new metrics not showing up when
-  //       calling Metrics::SerializedMetrics() from unit test this way.
-  //Metrics::EnableMetrics();
-  //registry = Metrics::GetRegistry();
+  auto registry = Metrics::GetRegistry();
 
-  // WORKAROUND: Fetch registry object also inside unit test and pass registry pointer
-  //             to API calls to use here. This WILL show new metrics when calling
-  //             Metrics::SerializedMetrics() from unit test.
-  auto registry = registry_ptr;
   switch (kind) {
     case TRITONSERVER_METRIC_KIND_COUNTER:
       family_ = reinterpret_cast<void*>(&prometheus::BuildCounter()
