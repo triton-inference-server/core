@@ -66,8 +66,10 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_COUNTER;
   const char* name = "api_counter_example";
   const char* description = "this is an example counter metric added via API.";
+  auto registry = triton::core::Metrics::GetRegistry();
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      TRITONSERVER_MetricFamilyNew(
+          &family, kind, name, description, reinterpret_cast<void*>(&registry)),
       "Creating new metric family");
 
   // Create metric
@@ -104,11 +106,11 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
 
   // Check metrics
   auto metrics_str = triton::core::Metrics::SerializedMetrics();
-  std::cout << metrics_str << std::endl;
 
   // Assert custom metric is reported and found in output
-  auto found = metrics_str.find(name);
+  auto found = metrics_str.find(std::string("# HELP ") + name);
   ASSERT_NE(found, std::string::npos);
+  std::cout << metrics_str.substr(found, std::string::npos) << std::endl;
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
@@ -124,8 +126,10 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
   const char* name = "api_gauge_example";
   const char* description = "this is an example gauge metric added via API.";
+  auto registry = triton::core::Metrics::GetRegistry();
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      TRITONSERVER_MetricFamilyNew(
+          &family, kind, name, description, reinterpret_cast<void*>(&registry)),
       "Creating new metric family");
 
   // Create metric
@@ -175,11 +179,11 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
 
   // Check metrics
   auto metrics_str = triton::core::Metrics::SerializedMetrics();
-  std::cout << metrics_str << std::endl;
 
   // Assert custom metric is reported and found in output
-  auto found = metrics_str.find(name);
+  auto found = metrics_str.find(std::string("# HELP ") + name);
   ASSERT_NE(found, std::string::npos);
+  std::cout << metrics_str.substr(found, std::string::npos) << std::endl;
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");

@@ -2162,10 +2162,11 @@ typedef enum TRITONSERVER_metrickind_enum {
 /// endpoint.
 /// \param description The description of the metric family seen when
 /// calling the metrics endpoint.
+/// \param kind Pointer to the metric registry. // TODO
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
     TRITONSERVER_MetricFamily** family, const TRITONSERVER_MetricKind kind,
-    const char* name, const char* description);
+    const char* name, const char* description, void* registry_ptr);
 
 /// Delete a metric family object.
 ///

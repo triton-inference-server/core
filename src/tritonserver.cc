@@ -2731,12 +2731,17 @@ TRITONSERVER_ServerInferAsync(
 TRITONSERVER_Error*
 TRITONSERVER_MetricFamilyNew(
     TRITONSERVER_MetricFamily** family, TRITONSERVER_MetricKind kind,
-    const char* name, const char* description)
+    const char* name, const char* description, void* registry_ptr)
 {
 #ifdef TRITON_ENABLE_METRICS
-  const auto& registry = tc::Metrics::GetRegistry();
+  const auto& registry =
+      reinterpret_cast<std::shared_ptr<prometheus::Registry>*>(registry_ptr);
+  // TODO: Remove this after review
+  // TODO: Verify passing registry_ptr from API caller is OK.
+  //       Calling GetRegistry() here did not add the new metrics to registry.
+  // const auto& registry = tc::Metrics::GetRegistry();
   *family = reinterpret_cast<TRITONSERVER_MetricFamily*>(
-      new tc::MetricFamily(kind, name, description, registry));
+      new tc::MetricFamily(kind, name, description, *registry));
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
