@@ -30,6 +30,7 @@
 #include <thread>
 #include "gtest/gtest.h"
 #include "metric_family.h"
+#include "metrics.h"
 #include "triton/common/logging.h"
 #include "triton/core/tritonserver.h"
 
@@ -101,6 +102,14 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
       TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
 
+  // Check metrics
+  auto metrics_str = triton::core::Metrics::SerializedMetrics();
+  std::cout << metrics_str << std::endl;
+
+  // Assert custom metric is reported and found in output
+  auto found = metrics_str.find(name);
+  ASSERT_NE(found, std::string::npos);
+
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
   FAIL_TEST_IF_ERR(
@@ -163,6 +172,14 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
+
+  // Check metrics
+  auto metrics_str = triton::core::Metrics::SerializedMetrics();
+  std::cout << metrics_str << std::endl;
+
+  // Assert custom metric is reported and found in output
+  auto found = metrics_str.find(name);
+  ASSERT_NE(found, std::string::npos);
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");

@@ -439,6 +439,8 @@ if(${TRITON_ENABLE_METRICS})
     ../metric_family.h
     ../infer_parameter.cc
     ../infer_parameter.h
+    ../metrics.cc
+    ../metrics.h
   )
 
   set_target_properties(
@@ -474,6 +476,7 @@ if(${TRITON_ENABLE_METRICS})
       GTest::gtest
       GTest::gtest_main
       prometheus-cpp::core
+      protobuf::libprotobuf
   )
 
   install(
