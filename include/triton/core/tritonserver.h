@@ -2209,7 +2209,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricValue(
 /// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE for any value,
 /// and TRITONSERVER_METRIC_KIND_COUNTER for non-negative values. Returns
 /// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind
-/// or for negative values on a TRITONSERVER_METRIC_KIND_COUNTER metric.
+/// and TRITONSERVER_ERROR_INVALID_ARG for negative values on a
+/// TRITONSERVER_METRIC_KIND_COUNTER metric.
 ///
 /// \param metric The metric object to update.
 /// \param value The amount to increment the metric's value by.
