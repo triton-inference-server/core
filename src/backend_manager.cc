@@ -24,9 +24,9 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "triton_backend_manager.h"
+#include "backend_manager.h"
 
-#include "triton_memory_manager.h"
+#include "backend_memory_manager.h"
 #include "triton/common/logging.h"
 #include "server_message.h"
 #include "shared_library.h"

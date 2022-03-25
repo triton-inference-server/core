@@ -36,7 +36,7 @@
 #include <vector>
 
 #include "model_config.pb.h"
-#include "triton_backend_manager.h"
+#include "backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"
 #include "triton/common/logging.h"
@@ -45,7 +45,7 @@
 #include "model_config_utils.h"
 #include "model_repository_manager.h"
 #include "pinned_memory_manager.h"
-#include "triton_repo_agent.h"
+#include "repo_agent.h"
 #include "triton/common/async_work_queue.h"
 #include "triton/common/table_printer.h"
 
@@ -89,9 +89,7 @@ InferenceServer::InferenceServer()
   extensions_.push_back("model_configuration");
   extensions_.push_back("system_shared_memory");
   extensions_.push_back("cuda_shared_memory");
-#ifdef TRITON_ENABLE_HTTP
   extensions_.push_back("binary_tensor_data");
-#endif  // TRITON_ENABLE_HTTP
 #ifdef TRITON_ENABLE_STATS
   extensions_.push_back("statistics");
 #endif  // TRITON_ENABLE_STATS

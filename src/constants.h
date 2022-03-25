@@ -36,31 +36,23 @@ constexpr char kContentEncodingHTTPHeader[] = "Content-Encoding";
 constexpr char kContentTypeHeader[] = "Content-Type";
 constexpr char kContentLengthHeader[] = "Content-Length";
 
-#ifdef TRITON_ENABLE_TENSORFLOW
 constexpr char kTensorFlowGraphDefPlatform[] = "tensorflow_graphdef";
 constexpr char kTensorFlowSavedModelPlatform[] = "tensorflow_savedmodel";
 constexpr char kTensorFlowGraphDefFilename[] = "model.graphdef";
 constexpr char kTensorFlowSavedModelFilename[] = "model.savedmodel";
 constexpr char kTensorFlowBackend[] = "tensorflow";
-#endif  // TRITON_ENABLE_TENSORFLOW
 
-#ifdef TRITON_ENABLE_TENSORRT
 constexpr char kTensorRTPlanPlatform[] = "tensorrt_plan";
 constexpr char kTensorRTPlanFilename[] = "model.plan";
 constexpr char kTensorRTBackend[] = "tensorrt";
-#endif  // TRITON_ENABLE_TENSORRT
 
-#ifdef TRITON_ENABLE_ONNXRUNTIME
 constexpr char kOnnxRuntimeOnnxPlatform[] = "onnxruntime_onnx";
 constexpr char kOnnxRuntimeOnnxFilename[] = "model.onnx";
 constexpr char kOnnxRuntimeBackend[] = "onnxruntime";
-#endif  // TRITON_ENABLE_ONNXRUNTIME
 
-#ifdef TRITON_ENABLE_PYTORCH
 constexpr char kPyTorchLibTorchPlatform[] = "pytorch_libtorch";
 constexpr char kPyTorchLibTorchFilename[] = "model.pt";
 constexpr char kPyTorchBackend[] = "pytorch";
-#endif  // TRITON_ENABLE_PYTORCH
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 constexpr char kEnsemblePlatform[] = "ensemble";

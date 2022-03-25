@@ -808,12 +808,15 @@ AutoCompleteBackendFields(
     RETURN_IF_ERROR(GetDirectoryContents(version_path, &version_dir_content));
   }
 
+  // If the model name is not given in the configuration, set if based
+  // on the model path.
   if (config->name().empty()) {
     config->set_name(model_name);
   }
 
   // Trying to fill the 'backend', 'default_model_filename' field.
-#ifdef TRITON_ENABLE_TENSORFLOW
+
+  // TensorFlow
   // For TF backend, the platform is required
   if (config->platform().empty()) {
     // Check 'backend', 'default_model_filename', and the actual directory
@@ -847,6 +850,7 @@ AutoCompleteBackendFields(
       }
     }
   }
+
   // Fill 'backend' and 'default_model_filename' if missing
   if ((config->platform() == kTensorFlowSavedModelPlatform) ||
       (config->platform() == kTensorFlowGraphDefPlatform)) {
@@ -862,8 +866,8 @@ AutoCompleteBackendFields(
     }
     return Status::Success;
   }
-#endif  // TRITON_ENABLE_TENSORFLOW
-#ifdef TRITON_ENABLE_TENSORRT
+
+  // TensorRT
   if (config->backend().empty()) {
     if ((config->platform() == kTensorRTPlanPlatform) ||
         (config->default_model_filename() == kTensorRTPlanFilename)) {
@@ -891,8 +895,8 @@ AutoCompleteBackendFields(
     }
     return Status::Success;
   }
-#endif  // TRITON_ENABLE_TENSORRT
-#ifdef TRITON_ENABLE_ONNXRUNTIME
+
+  // ONNXRuntime
   if (config->backend().empty()) {
     if ((config->platform() == kOnnxRuntimeOnnxPlatform) ||
         (config->default_model_filename() == kOnnxRuntimeOnnxFilename)) {
@@ -916,8 +920,8 @@ AutoCompleteBackendFields(
     }
     return Status::Success;
   }
-#endif  // TRITON_ENABLE_ONNXRUNTIME
-#ifdef TRITON_ENABLE_PYTORCH
+
+  // PyTorch (TorchScript, LibTorch)
   if (config->backend().empty()) {
     if ((config->platform() == kPyTorchLibTorchPlatform) ||
         (config->default_model_filename() == kPyTorchLibTorchFilename)) {
@@ -945,7 +949,7 @@ AutoCompleteBackendFields(
     }
     return Status::Success;
   }
-#endif  // TRITON_ENABLE_PYTORCH
+
   return Status::Success;
 }
 
@@ -1371,10 +1375,7 @@ ValidateModelConfig(
                                         " has unexpected kind KIND_AUTO");
       }
 
-      if (
-#ifdef TRITON_ENABLE_TENSORRT
-          (config.platform() != kTensorRTPlanPlatform) &&
-#endif  // TRITON_ENABLE_TENSORRT
+      if ((config.platform() != kTensorRTPlanPlatform) &&
           !group.profile().empty()) {
         return Status(
             Status::Code::INVALID_ARG,
@@ -1417,10 +1418,7 @@ ValidateModelInput(
         Status::Code::INVALID_ARG, "model input NHWC/NCHW require 3 dims");
   }
 
-  if (
-#ifdef TRITON_ENABLE_TENSORRT
-      (platform != kTensorRTPlanPlatform) &&
-#endif  // TRITON_ENABLE_TENSORRT
+  if ((platform != kTensorRTPlanPlatform) &&
       io.is_shape_tensor()) {
     return Status(
         Status::Code::INVALID_ARG,
@@ -1457,10 +1455,7 @@ ValidateModelOutput(
 {
   RETURN_IF_ERROR(ValidateIOShape(io, max_batch_size, "model output "));
 
-  if (
-#ifdef TRITON_ENABLE_TENSORRT
-      (platform != kTensorRTPlanPlatform) &&
-#endif  // TRITON_ENABLE_TENSORRT
+  if ((platform != kTensorRTPlanPlatform) &&
       io.is_shape_tensor()) {
     return Status(
         Status::Code::INVALID_ARG,

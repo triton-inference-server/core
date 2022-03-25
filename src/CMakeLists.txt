@@ -47,9 +47,6 @@ FetchContent_Declare(
 )
 
 set(TRITON_COMMON_ENABLE_PROTOBUF ON)
-if(TRITON_ENABLE_GRPC)
-  set(TRITON_COMMON_ENABLE_GRPC ON)
-endif() # TRITON_ENABLE_GRPC
 
 FetchContent_MakeAvailable(repo-common)
 
@@ -69,28 +66,11 @@ find_package(Boost REQUIRED)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
-# libevent
-#
-if(${TRITON_ENABLE_HTTP} OR ${TRITON_ENABLE_METRICS} OR
-    ${TRITON_ENABLE_SAGEMAKER} OR ${TRITON_ENABLE_VERTEX_AI})
-  find_package(Libevent CONFIG REQUIRED)
-  message(STATUS "Using libevent ${Libevent_VERSION}")
-endif()
-
-#
 # Protobuf
 #
 set(protobuf_MODULE_COMPATIBLE TRUE CACHE BOOL "protobuf_MODULE_COMPATIBLE" FORCE)
 find_package(Protobuf CONFIG REQUIRED)
 message(STATUS "Using protobuf ${Protobuf_VERSION}")
-
-#
-# GRPC
-#
-if(${TRITON_ENABLE_GRPC})
-  find_package(gRPC CONFIG REQUIRED)
-  message(STATUS "Using gRPC ${gRPC_VERSION}")
-endif()
 
 #
 # Prometheus
@@ -120,6 +100,11 @@ configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
   SERVER_SRCS
+  backend_config.cc
+  backend_manager.cc
+  backend_memory_manager.cc
+  backend_model.cc
+  backend_model_instance.cc
   buffer_attributes.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
@@ -146,6 +131,7 @@ set(
   persistent_backend_manager.cc
   pinned_memory_manager.cc
   rate_limiter.cc
+  repo_agent.cc
   response_cache.cc
   scheduler_utils.cc
   sequence_batch_scheduler.cc
@@ -153,17 +139,16 @@ set(
   server.cc
   shared_library.cc
   status.cc
-  triton_backend_config.cc
-  triton_backend_manager.cc
-  triton_memory_manager.cc
-  triton_model.cc
-  triton_model_instance.cc
-  triton_repo_agent.cc
   tritonserver.cc
 )
 
 set(
   SERVER_HDRS
+  backend_config.h
+  backend_manager.h
+  backend_memory_manager.h
+  backend_model.h
+  backend_model_instance.h
   buffer_attributes.h
   constants.h
   cuda_utils.h
@@ -191,6 +176,7 @@ set(
   persistent_backend_manager.h
   pinned_memory_manager.h
   rate_limiter.h
+  repo_agent.h
   response_allocator.h
   response_cache.h
   scheduler.h
@@ -201,12 +187,6 @@ set(
   server_message.h
   shared_library.h
   status.h
-  triton_backend_config.h
-  triton_backend_manager.h
-  triton_memory_manager.h
-  triton_model.h
-  triton_model_instance.h
-  triton_repo_agent.h
   tritonserver_apis.h
 )
 
@@ -298,23 +278,6 @@ if(${TRITON_ENABLE_GPU})
   )
 endif() # TRITON_ENABLE_GPU
 
-if(${TRITON_ENABLE_HTTP} OR ${TRITON_ENABLE_METRICS} OR
-    ${TRITON_ENABLE_SAGEMAKER} OR ${TRITON_ENABLE_VERTEX_AI})
-  target_include_directories(
-    triton-core
-    PRIVATE
-      ${LIBEVENT_INCLUDE_DIRS}
-  )
-endif()
-
-if(${TRITON_ENABLE_GRPC})
-  target_include_directories(
-    triton-core
-    PRIVATE
-      $<TARGET_PROPERTY:gRPC::grpc,INTERFACE_INCLUDE_DIRECTORIES>
-  )
-endif()
-
 if(${TRITON_ENABLE_METRICS})
   target_include_directories(
     triton-core
@@ -354,17 +317,6 @@ target_compile_definitions(
   triton-core
   PRIVATE TRITON_VERSION="${TRITON_VERSION}"
 )
-
-if(${TRITON_ENABLE_ASAN})
-  set(CMAKE_BUILD_TYPE Debug)
-  target_compile_definitions(
-    triton-core
-      PRIVATE TRITON_ENABLE_ASAN=1
-  )
-  set(_ASAN_FLAGS "-static-libstdc++ -static-libasan -fno-omit-frame-pointer -fsanitize=address")
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${_ASAN_FLAGS}")
-  set(CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} ${_ASAN_FLAGS}")
-endif() # TRITON_ENABLE_ASAN
 
 if(${TRITON_ENABLE_NVTX})
   target_compile_definitions(
@@ -418,34 +370,6 @@ if(${TRITON_ENABLE_MALI_GPU})
   )
 endif() # TRITON_ENABLE_MALI_GPU
 
-if(${TRITON_ENABLE_HTTP})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_HTTP=1
-  )
-endif() # TRITON_ENABLE_HTTP
-
-if(${TRITON_ENABLE_SAGEMAKER})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_SAGEMAKER=1
-  )
-endif() # TRITON_ENABLE_SAGEMAKER
-
-if(${TRITON_ENABLE_VERTEX_AI})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_VERTEX_AI=1
-  )
-endif() # TRITON_ENABLE_VERTEX_AI
-
-if(${TRITON_ENABLE_GRPC})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_GRPC=1
-  )
-endif() # TRITON_ENABLE_GRPC
-
 if(${TRITON_ENABLE_METRICS})
   target_compile_definitions(
     triton-core
@@ -480,62 +404,6 @@ if(${TRITON_ENABLE_S3})
     PRIVATE TRITON_ENABLE_S3=1
   )
 endif() # TRITON_ENABLE_S3
-
-if(${TRITON_ENABLE_TENSORFLOW})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_TENSORFLOW=1
-  )
-endif() # TRITON_ENABLE_TENSORFLOW
-
-if(${TRITON_ENABLE_PYTHON})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_PYTHON=1
-  )
-endif() # TRITON_ENABLE_PYTHON
-
-if(${TRITON_ENABLE_TENSORRT})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_TENSORRT=1
-  )
-  if (NOT "${TRITON_TENSORRT_INCLUDE_PATHS}" STREQUAL "")
-    target_include_directories(
-      triton-core
-      PRIVATE
-        ${TRITON_TENSORRT_INCLUDE_PATHS}
-    )
-  endif()
-endif() # TRITON_ENABLE_TENSORRT
-
-if(${TRITON_ENABLE_ONNXRUNTIME})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_ONNXRUNTIME=1
-  )
-endif() # TRITON_ENABLE_ONNXRUNTIME
-
-if(${TRITON_ENABLE_ONNXRUNTIME_TENSORRT})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_ONNXRUNTIME_TENSORRT=1
-  )
-endif() # TRITON_ENABLE_ONNXRUNTIME_TENSORRT
-
-if(${TRITON_ENABLE_ONNXRUNTIME_OPENVINO})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_ONNXRUNTIME_OPENVINO=1
-  )
-endif() # TRITON_ENABLE_ONNXRUNTIME_OPENVINO
-
-if(${TRITON_ENABLE_PYTORCH})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_PYTORCH=1
-  )
-endif() # TRITON_ENABLE_PYTORCH
 
 if(${TRITON_ENABLE_ENSEMBLE})
   target_compile_definitions(
@@ -574,17 +442,6 @@ if (NOT WIN32)
       numa
   )
 endif()
-
-if(${TRITON_ENABLE_TENSORRT})
-  find_library(NVINFER_LIBRARY NAMES nvinfer)
-  find_library(NVINFER_PLUGIN_LIBRARY NAMES nvinfer_plugin)
-  target_link_libraries(
-    triton-core
-    PRIVATE
-      ${NVINFER_LIBRARY}
-      ${NVINFER_PLUGIN_LIBRARY}
-  )
-endif() # TRITON_ENABLE_TENSORRT
 
 if(${TRITON_ENABLE_METRICS})
   target_link_libraries(

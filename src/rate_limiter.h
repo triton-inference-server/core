@@ -32,8 +32,8 @@
 #include <vector>
 
 #include "model_config.pb.h"
-#include "triton_model.h"
-#include "triton_model_instance.h"
+#include "backend_model.h"
+#include "backend_model_instance.h"
 #include "instance_queue.h"
 #include "payload.h"
 #include "status.h"
