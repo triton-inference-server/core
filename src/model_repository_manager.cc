@@ -35,9 +35,9 @@
 #include "constants.h"
 #include "ensemble_utils.h"
 #include "filesystem.h"
-#include "triton/common/logging.h"
 #include "model.h"
 #include "model_config_utils.h"
+#include "triton/common/logging.h"
 #include "triton_repo_agent.h"
 
 #ifdef TRITON_ENABLE_GPU
@@ -590,55 +590,86 @@ ModelRepositoryManager::ModelLifeCycle::GetModel(
     const std::string& model_name, const int64_t version,
     std::shared_ptr<Model>* model)
 {
-  LOG_VERBOSE(1) << "GetModel() '" << model_name << "' version " << version;
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-  auto mit = map_.find(model_name);
-  if (mit == map_.end()) {
-    return Status(Status::Code::NOT_FOUND, "'" + model_name + "' is not found");
-  }
+  do {
+    LOG_VERBOSE(1) << "GetModel() '" << model_name << "' version " << version;
+    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+    auto mit = map_.find(model_name);
+    if (mit == map_.end()) {
+      return Status(
+          Status::Code::NOT_FOUND, "'" + model_name + "' is not found");
+    }
 
-  auto vit = mit->second.find(version);
-  if (vit == mit->second.end()) {
-    // In case the request is asking for latest version
-    int64_t latest = -1;
-    if (version == -1) {
-      for (auto& version_model : mit->second) {
-        if (version_model.first > latest) {
-          std::lock_guard<std::recursive_mutex> lock(
-              version_model.second.first->mtx_);
-          if (version_model.second.first->state_ == ModelReadyState::READY) {
-            latest = version_model.first;
-            // Tedious, but have to set handle for any "latest" version
-            // at the moment to avoid edge case like the following:
-            // "versions : 1 3 2", version 3 is latest but is requested
-            // to be unloaded when the iterator is examining version 2.
-            *model = version_model.second.first->model_;
+    auto vit = mit->second.find(version);
+    if (vit == mit->second.end()) {
+      // In case the request is asking for latest version
+      int64_t latest = -1;
+      // Whether or not a re-attempt should be made to acquire stable model.
+      bool retry = false;
+      if (version == -1) {
+        for (auto& version_model : mit->second) {
+          if (version_model.first > latest) {
+            // The LoadUnload thread may have already acquired version model
+            // mutex to update its state. Here we attempt to acquire the lock
+            // but don't block on it.
+            std::unique_lock<std::recursive_mutex> lock(
+                version_model.second.first->mtx_, std::try_to_lock);
+            retry = !lock.owns_lock();
+            if (retry) {
+              // Skip this version as it is still being processed.
+              continue;
+            }
+            if (version_model.second.first->state_ == ModelReadyState::READY) {
+              latest = version_model.first;
+              // Tedious, but have to set handle for any "latest" version
+              // at the moment to avoid edge case like the following:
+              // "versions : 1 3 2", version 3 is latest but is requested
+              // to be unloaded when the iterator is examining version 2.
+              *model = version_model.second.first->model_;
+            }
           }
         }
-      }
-      if (latest == -1) {
+        if (retry) {
+          // Failed to find a stable model version to use. Will initiate a
+          // re-attempt, which will release map_mtx_ for now. This is important
+          // so that the LoadUnload thread which is processing the model version
+          // can make progress and avoid a deadlock.
+          continue;
+        }
+        if (latest == -1) {
+          return Status(
+              Status::Code::NOT_FOUND,
+              "'" + model_name + "' has no available versions");
+        }
+      } else {
         return Status(
-            Status::Code::NOT_FOUND,
-            "'" + model_name + "' has no available versions");
+            Status::Code::NOT_FOUND, "'" + model_name + "' version " +
+                                         std::to_string(version) +
+                                         " is not found");
       }
     } else {
-      return Status(
-          Status::Code::NOT_FOUND, "'" + model_name + "' version " +
-                                       std::to_string(version) +
-                                       " is not found");
+      // The LoadUnload thread may have already acquired version model
+      // mutex to update its state. Here we attempt to acquire the lock
+      // but don't block on it.
+      std::unique_lock<std::recursive_mutex> lock(
+          vit->second.first->mtx_, std::try_to_lock);
+      if (!lock.owns_lock()) {
+        // The model version is still being processed. Will initiate a
+        // re-attempt, which will release map_mtx_ for now. This is important so
+        // that the LoadUnload thread which is processing the model version can
+        // make progress and avoid a deadlock.
+        continue;
+      }
+      if (vit->second.first->state_ == ModelReadyState::READY) {
+        *model = vit->second.first->model_;
+      } else {
+        return Status(
+            Status::Code::UNAVAILABLE, "'" + model_name + "' version " +
+                                           std::to_string(version) +
+                                           " is not at ready state");
+      }
     }
-  } else {
-    std::lock_guard<std::recursive_mutex> lock(vit->second.first->mtx_);
-    if (vit->second.first->state_ == ModelReadyState::READY) {
-      *model = vit->second.first->model_;
-    } else {
-      return Status(
-          Status::Code::UNAVAILABLE, "'" + model_name + "' version " +
-                                         std::to_string(version) +
-                                         " is not at ready state");
-    }
-  }
-  return Status::Success;
+    return Status::Success;
+  } while (true);
 }
 
 Status
