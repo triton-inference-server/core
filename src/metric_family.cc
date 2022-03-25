@@ -1,4 +1,4 @@
-// Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -54,8 +54,8 @@ MetricFamily::MetricFamily(
                                              .Register(*registry));
       break;
     default:
-      LOG_ERROR << "Unsupported kind passed to MetricFamily constructor.";
-      throw std::invalid_argument("Unsupported kind.");
+      throw std::invalid_argument(
+          "Unsupported kind passed to MetricFamily constructor.");
   }
 
   kind_ = kind;
@@ -81,10 +81,10 @@ Metric::Metric(
   std::map<std::string, std::string> label_map;
   for (const auto& param : labels) {
     if (param->Type() != TRITONSERVER_PARAMETER_STRING) {
-      LOG_ERROR << "Parameter [" << param->Name()
-                << "] must have a type of TRITONSERVER_PARAMETER_STRING to be "
-                   "added as a label.";
-      continue;
+      throw std::invalid_argument(
+          "Parameter [" + param->Name() +
+          "] must have a type of TRITONSERVER_PARAMETER_STRING to be "
+          "added as a label.");
     }
 
     label_map[param->Name()] =
@@ -109,8 +109,8 @@ Metric::Metric(
       break;
     }
     default:
-      LOG_ERROR << "Unsupported family kind passed to Metric constructor.";
-      throw std::invalid_argument("Unsupported kind.");
+      throw std::invalid_argument(
+          "Unsupported family kind passed to Metric constructor.");
   }
 }
 

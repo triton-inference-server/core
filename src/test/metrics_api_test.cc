@@ -1,4 +1,4 @@
-// Copyright 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -29,8 +29,6 @@
 #include <iostream>
 #include <thread>
 #include "gtest/gtest.h"
-#include "metric_family.h"
-#include "metrics.h"
 #include "triton/common/logging.h"
 #include "triton/core/tritonserver.h"
 
@@ -48,6 +46,36 @@ namespace {
 // Test Fixture
 class MetricsApiTest : public ::testing::Test {
  protected:
+  static void SetUpTestSuite()
+  {
+    // Create server object to pass when retrieving metrics.
+    // NOTE: It is currently not required to pass a valid server object to
+    //       TRITONSERVER_ServerMetrics, but is more future-proof to include.
+    TRITONSERVER_ServerOptions* server_options = nullptr;
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsNew(&server_options),
+        "creating server options");
+    // This test doesn't require the use of any models, so we use "." as repo
+    // and set ModelControlMode to EXPLICIT to avoid attempting to load models
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetModelRepositoryPath(server_options, "."),
+        "setting model repository path");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetModelControlMode(
+            server_options, TRITONSERVER_MODEL_CONTROL_EXPLICIT),
+        "setting model control mode");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerNew(&server_, server_options), "creating server");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsDelete(server_options),
+        "deleting server options");
+  }
+
+  static void TearDownTestSuite()
+  {
+    FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
+  }
+
   void SetUp() override {}
   void TearDown() override {}
 
@@ -56,7 +84,10 @@ class MetricsApiTest : public ::testing::Test {
   double set_value_ = 42;
   double value_ = -1;
   double prev_value_ = -1;
+  static TRITONSERVER_Server* server_;
 };
+
+TRITONSERVER_Server* MetricsApiTest::server_ = nullptr;
 
 // Test end-to-end flow of Generic Metrics API for Counter metric
 TEST_F(MetricsApiTest, TestCounterEndToEnd)
@@ -104,9 +135,10 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   ASSERT_EQ(kind_tmp, kind);
 
   // Check metrics via C API
+  ASSERT_NE(server_, nullptr);
   TRITONSERVER_Metrics* metrics = nullptr;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerMetrics(nullptr, &metrics), "fetch metrics");
+      TRITONSERVER_ServerMetrics(server_, &metrics), "fetch metrics");
   const char* base;
   size_t byte_size;
   FAIL_TEST_IF_ERR(
@@ -189,9 +221,10 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   ASSERT_EQ(kind_tmp, kind);
 
   // Check metrics via C API
+  ASSERT_NE(server_, nullptr);
   TRITONSERVER_Metrics* metrics = nullptr;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerMetrics(nullptr, &metrics), "fetch metrics");
+      TRITONSERVER_ServerMetrics(server_, &metrics), "fetch metrics");
   const char* base;
   size_t byte_size;
   FAIL_TEST_IF_ERR(

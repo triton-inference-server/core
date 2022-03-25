@@ -435,12 +435,6 @@ if(${TRITON_ENABLE_METRICS})
   add_executable(
     metrics_api_test
     metrics_api_test.cc
-    ../metric_family.cc
-    ../metric_family.h
-    ../infer_parameter.cc
-    ../infer_parameter.h
-    ../metrics.cc
-    ../metrics.h
   )
 
   set_target_properties(
