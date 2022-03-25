@@ -79,7 +79,6 @@ class MetricsApiTest : public ::testing::Test {
   void SetUp() override {}
   void TearDown() override {}
 
-  double decrement_ = 10;
   double increment_ = 10;
   double set_value_ = 42;
   double value_ = -1;
@@ -119,14 +118,23 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
       TRITONSERVER_MetricValue(metric, &value_), "query metric initial value");
   ASSERT_EQ(value_, 0.0);
 
-  // Increment
+  // Increment Positively
   prev_value_ = value_;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
+      TRITONSERVER_MetricIncrement(metric, increment_),
+      "increase metric value");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricValue(metric, &value_),
       "query metric value after increment");
   ASSERT_EQ(value_, prev_value_ + increment_);
+
+  // Verify negative increment fails on counter metric
+  auto err = TRITONSERVER_MetricIncrement(metric, -1.0 * increment_);
+  ASSERT_NE(err, nullptr);
+
+  // Verify set fails on counter metric
+  err = TRITONSERVER_MetricSet(metric, set_value_);
+  ASSERT_NE(err, nullptr);
 
   // GetMetricKind
   TRITONSERVER_MetricKind kind_tmp;
@@ -190,23 +198,25 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
       TRITONSERVER_MetricValue(metric, &value_), "query metric initial value");
   ASSERT_EQ(value_, 0.0);
 
-  // Increment
+  // Increment positively
   prev_value_ = value_;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricIncrement(metric, increment_), "increment metric");
+      TRITONSERVER_MetricIncrement(metric, increment_),
+      "increase metric value");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricValue(metric, &value_),
-      "query metric value after increment");
+      "query metric value after positive increment");
   ASSERT_EQ(value_, prev_value_ + increment_);
 
-  // Decrement
+  // Increment negatively
   prev_value_ = value_;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricDecrement(metric, decrement_), "decrement metric");
+      TRITONSERVER_MetricIncrement(metric, -1.0 * increment_),
+      "decrease metric value");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricValue(metric, &value_),
-      "query metric value after decrement");
-  ASSERT_EQ(value_, prev_value_ - decrement_);
+      "query metric value after negative increment");
+  ASSERT_EQ(value_, prev_value_ + (-1.0 * increment_));
 
   // Set
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricSet(metric, set_value_), "set metric");

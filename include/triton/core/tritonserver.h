@@ -2205,25 +2205,16 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDelete(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricValue(
     TRITONSERVER_Metric* metric, double* value);
 
-/// Increase the current value of metric by value.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_COUNTER
-/// and TRITONSERVER_METRIC_KIND_GAUGE, and returns
-/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
+/// Increment the current value of metric by value.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE for any value,
+/// and TRITONSERVER_METRIC_KIND_COUNTER for non-negative values. Returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind
+/// or for negative values on a TRITONSERVER_METRIC_KIND_COUNTER metric.
 ///
 /// \param metric The metric object to update.
 /// \param value The amount to increment the metric's value by.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
-    TRITONSERVER_Metric* metric, double value);
-
-/// Decrease the current value of metric by value.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE and returns
-/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
-///
-/// \param metric The metric object to update.
-/// \param value The amount to decrement the metric's value by.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDecrement(
     TRITONSERVER_Metric* metric, double value);
 
 /// Set the current value of metric to value.

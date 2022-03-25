@@ -2827,17 +2827,6 @@ TRITONSERVER_MetricIncrement(TRITONSERVER_Metric* metric, double value)
 }
 
 TRITONSERVER_Error*
-TRITONSERVER_MetricDecrement(TRITONSERVER_Metric* metric, double value)
-{
-#ifdef TRITON_ENABLE_METRICS
-  return reinterpret_cast<tc::Metric*>(metric)->Decrement(value);
-#else
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
-#endif  // TRITON_ENABLE_METRICS
-}
-
-TRITONSERVER_Error*
 TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
 {
 #ifdef TRITON_ENABLE_METRICS

@@ -65,7 +65,6 @@ class Metric {
 
   TRITONSERVER_Error* Value(double* value);
   TRITONSERVER_Error* Increment(double value);
-  TRITONSERVER_Error* Decrement(double value);
   TRITONSERVER_Error* Set(double value);
 
  private:

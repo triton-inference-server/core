@@ -172,36 +172,28 @@ Metric::Increment(double value)
 {
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
+      if (value < 0.0) {
+        return TRITONSERVER_ErrorNew(
+            TRITONSERVER_ERROR_INVALID_ARG,
+            "TRITONSERVER_METRIC_KIND_COUNTER can only be incremented "
+            "monotonically by non-negative values.");
+      }
+
       auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
       counter_ptr->Increment(value);
       break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
-      gauge_ptr->Increment(value);
-      break;
-    }
-    default:
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "Unsupported TRITONSERVER_MetricKind");
-  }
-
-  return nullptr;  // Success
-}
-
-TRITONSERVER_Error*
-Metric::Decrement(double value)
-{
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "TRITONSERVER_METRIC_KIND_COUNTER does not support Decrement");
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
-      gauge_ptr->Decrement(value);
+      // Gauge::Increment works for both positive and negative values as of
+      // prometheus-cpp v1.0 but for now on v0.7 we defer call to
+      // Increment/Decrement based on the sign of value
+      // https://github.com/jupp0r/prometheus-cpp/blob/master/core/src/gauge.cc
+      if (value < 0.0) {
+        gauge_ptr->Decrement(-1.0 * value);
+      } else {
+        gauge_ptr->Increment(value);
+      }
       break;
     }
     default:

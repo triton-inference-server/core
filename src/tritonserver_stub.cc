@@ -911,11 +911,6 @@ TRITONSERVER_MetricIncrement()
 }
 
 TRITONAPI_DECLSPEC void
-TRITONSERVER_MetricDecrement()
-{
-}
-
-TRITONAPI_DECLSPEC void
 TRITONSERVER_MetricSet()
 {
 }
