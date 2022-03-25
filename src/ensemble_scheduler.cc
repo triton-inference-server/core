@@ -200,6 +200,11 @@ struct TensorData {
   std::unordered_map<IterationCount, Metadata> tensor_;
   size_t current_iteration_;
   size_t outgoing_steps_count_;
+
+  // Ensemble may be configured to passing tensor between batching model and
+  // non-batching model as long as the full shapes match and storing the batch
+  // size of the generated tensor explicitly for checking and setting proper
+  // shape for the downstream model request.
   size_t batch_size_;
 };
 
