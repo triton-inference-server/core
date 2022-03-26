@@ -32,6 +32,7 @@
 #include "infer_request.h"
 #include "infer_response.h"
 #include "infer_stats.h"
+#include "metric_family.h"
 #include "metrics.h"
 #include "model.h"
 #include "model_config.h"
@@ -43,11 +44,10 @@
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/logging.h"
-#include "tritonserver_apis.h"
-
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
+#include "tritonserver_apis.h"
 
 // For unknown reason, windows will not export some functions declared
 // with dllexport in tritonrepoagent.h and tritonbackend.h. To get
@@ -2723,6 +2723,131 @@ TRITONSERVER_ServerInferAsync(
 
   RETURN_IF_STATUS_ERROR(status);
   return nullptr;  // Success
+}
+
+//
+// TRITONSERVER_MetricFamily
+//
+TRITONSERVER_Error*
+TRITONSERVER_MetricFamilyNew(
+    TRITONSERVER_MetricFamily** family, TRITONSERVER_MetricKind kind,
+    const char* name, const char* description)
+{
+#ifdef TRITON_ENABLE_METRICS
+  try {
+    *family = reinterpret_cast<TRITONSERVER_MetricFamily*>(
+        new tc::MetricFamily(kind, name, description));
+  }
+  catch (std::invalid_argument const& ex) {
+    // Catch invalid kinds passed to constructor
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
+  }
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
+{
+#ifdef TRITON_ENABLE_METRICS
+  delete reinterpret_cast<tc::MetricFamily*>(family);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+//
+// TRITONSERVER_Metric
+//
+TRITONSERVER_Error*
+TRITONSERVER_MetricNew(
+    TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count)
+{
+#ifdef TRITON_ENABLE_METRICS
+  std::vector<const tc::InferenceParameter*> labels_vec;
+  for (size_t i = 0; i < label_count; i++) {
+    labels_vec.emplace_back(
+        reinterpret_cast<const tc::InferenceParameter*>(labels[i]));
+  }
+
+  try {
+    *metric = reinterpret_cast<TRITONSERVER_Metric*>(
+        new tc::Metric(family, labels_vec));
+  }
+  catch (std::invalid_argument const& ex) {
+    // Catch invalid kinds passed to constructor
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
+  }
+
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricDelete(TRITONSERVER_Metric* metric)
+{
+#ifdef TRITON_ENABLE_METRICS
+  delete reinterpret_cast<tc::Metric*>(metric);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricValue(TRITONSERVER_Metric* metric, double* value)
+{
+#ifdef TRITON_ENABLE_METRICS
+  return reinterpret_cast<tc::Metric*>(metric)->Value(value);
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricIncrement(TRITONSERVER_Metric* metric, double value)
+{
+#ifdef TRITON_ENABLE_METRICS
+  return reinterpret_cast<tc::Metric*>(metric)->Increment(value);
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
+{
+#ifdef TRITON_ENABLE_METRICS
+  return reinterpret_cast<tc::Metric*>(metric)->Set(value);
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_GetMetricKind(
+    TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind)
+{
+#ifdef TRITON_ENABLE_METRICS
+  *kind = reinterpret_cast<tc::Metric*>(metric)->Kind();
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
 }
 
 }  // extern C

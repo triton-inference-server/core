@@ -62,6 +62,8 @@ struct TRITONSERVER_Parameter;
 struct TRITONSERVER_ResponseAllocator;
 struct TRITONSERVER_Server;
 struct TRITONSERVER_ServerOptions;
+struct TRITONSERVER_Metric;
+struct TRITONSERVER_MetricFamily;
 
 ///
 /// TRITONSERVER API Version
@@ -89,7 +91,7 @@ struct TRITONSERVER_ServerOptions;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 10
+#define TRITONSERVER_API_VERSION_MINOR 11
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -2140,6 +2142,99 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
     TRITONSERVER_Server* server,
     TRITONSERVER_InferenceRequest* inference_request,
     TRITONSERVER_InferenceTrace* trace);
+
+/// TRITONSERVER_MetricKind
+///
+/// Types of metrics recognized by TRITONSERVER.
+///
+typedef enum TRITONSERVER_metrickind_enum {
+  TRITONSERVER_METRIC_KIND_COUNTER,
+  TRITONSERVER_METRIC_KIND_GAUGE
+} TRITONSERVER_MetricKind;
+
+/// Create a new metric family object. The caller takes ownership of the
+/// TRITONSERVER_MetricFamily object and must call
+/// TRITONSERVER_MetricFamilyDelete to release the object.
+///
+/// \param family Returns the new metric family object.
+/// \param kind The type of metric family to create.
+/// \param name The name of the metric family seen when calling the metrics
+/// endpoint.
+/// \param description The description of the metric family seen when
+/// calling the metrics endpoint.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
+    TRITONSERVER_MetricFamily** family, const TRITONSERVER_MetricKind kind,
+    const char* name, const char* description);
+
+/// Delete a metric family object.
+///
+/// \param family The metric family object to delete.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete(
+    TRITONSERVER_MetricFamily* family);
+
+/// Create a new metric object. The caller takes ownership of the
+/// TRITONSERVER_Metric object and must call
+/// TRITONSERVER_MetricDelete to release the object.
+///
+/// \param metric Returns the new metric object.
+/// \param family The metric family to add this new metric to.
+/// \param labels The array of labels to associate with this new metric.
+/// \param label_count The number of labels.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricNew(
+    TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count);
+
+/// Delete a metric object.
+///
+/// \param metric The metric object to delete.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricDelete(
+    TRITONSERVER_Metric* metric);
+
+/// Get the current value of a metric object.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_COUNTER
+/// and TRITONSERVER_METRIC_KIND_GAUGE, and returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
+///
+/// \param metric The metric object to query.
+/// \param value Returns the current value of the metric object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricValue(
+    TRITONSERVER_Metric* metric, double* value);
+
+/// Increment the current value of metric by value.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE for any value,
+/// and TRITONSERVER_METRIC_KIND_COUNTER for non-negative values. Returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind
+/// and TRITONSERVER_ERROR_INVALID_ARG for negative values on a
+/// TRITONSERVER_METRIC_KIND_COUNTER metric.
+///
+/// \param metric The metric object to update.
+/// \param value The amount to increment the metric's value by.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
+    TRITONSERVER_Metric* metric, double value);
+
+/// Set the current value of metric to value.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE and returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
+///
+/// \param metric The metric object to update.
+/// \param value The amount to set metric's value to.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricSet(
+    TRITONSERVER_Metric* metric, double value);
+
+/// Get the TRITONSERVER_MetricKind of metric and its corresponding family.
+///
+/// \param metric The metric object to query.
+/// \param kind Returns the TRITONSERVER_MetricKind of metric.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_GetMetricKind(
+    TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind);
 
 #ifdef __cplusplus
 }
