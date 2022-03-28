@@ -250,7 +250,7 @@ InferenceServer::Stop(const bool force)
     LOG_INFO << "Waiting for in-flight requests to complete.";
   }
 
-  Status status = model_repository_manager_->UnloadAllModels();
+  Status status = model_repository_manager_->StopAllModels();
   if (!status.IsOk()) {
     LOG_ERROR << status.Message();
   }
@@ -258,25 +258,51 @@ InferenceServer::Stop(const bool force)
   // Wait for all in-flight non-inference requests to complete and all
   // loaded models to unload, or for the exit timeout to expire.
   uint32_t exit_timeout_iters = exit_timeout_secs_;
-
+  bool unloading_model = false;
   while (true) {
-    const auto& live_models = model_repository_manager_->LiveModelStates();
-
-    LOG_INFO << "Timeout " << exit_timeout_iters << ": Found "
-             << live_models.size() << " live models and "
-             << inflight_request_counter_
-             << " in-flight non-inference requests";
-    if (LOG_VERBOSE_IS_ON(1)) {
-      for (const auto& m : live_models) {
-        for (const auto& v : m.second) {
-          LOG_VERBOSE(1) << m.first << " v" << v.first << ": "
-                         << ModelReadyStateString(v.second.first);
+    if (!unloading_model) {
+      // Check if all in-flight inference requests / sequences are completed
+      const auto& inflight_status = model_repository_manager_->InflightStatus();
+      LOG_INFO << "Timeout " << exit_timeout_iters << ": Found "
+               << inflight_status.size()
+               << " model versions that have in-flight inferences";
+      if (LOG_VERBOSE_IS_ON(1)) {
+        for (const auto& inflight : inflight_status) {
+          LOG_VERBOSE(1) << std::get<0>(inflight) << " v"
+                         << std::get<1>(inflight) << ": "
+                         << std::get<2>(inflight) << " in-flight inferences";
         }
       }
-    }
 
-    if ((live_models.size() == 0) && (inflight_request_counter_ == 0)) {
-      return Status::Success;
+      if (inflight_status.size() == 0) {
+        unloading_model = true;
+        status = model_repository_manager_->UnloadAllModels();
+        if (!status.IsOk()) {
+          LOG_ERROR << status.Message();
+        } else {
+          LOG_INFO << "All models are stopped, unloading models";
+          continue;
+        }
+      }
+    } else {
+      const auto& live_models = model_repository_manager_->LiveModelStates();
+
+      LOG_INFO << "Timeout " << exit_timeout_iters << ": Found "
+               << live_models.size() << " live models and "
+               << inflight_request_counter_
+               << " in-flight non-inference requests";
+      if (LOG_VERBOSE_IS_ON(1)) {
+        for (const auto& m : live_models) {
+          for (const auto& v : m.second) {
+            LOG_VERBOSE(1) << m.first << " v" << v.first << ": "
+                           << ModelReadyStateString(v.second.first);
+          }
+        }
+      }
+
+      if ((live_models.size() == 0) && (inflight_request_counter_ == 0)) {
+        return Status::Success;
+      }
     }
     if (exit_timeout_iters <= 0) {
       break;
@@ -454,9 +480,13 @@ InferenceServer::RepositoryIndex(
 Status
 InferenceServer::InferAsync(std::unique_ptr<InferenceRequest>& request)
 {
-  if (ready_state_ != ServerReadyState::SERVER_READY) {
-    return Status(Status::Code::UNAVAILABLE, "Server not ready");
-  }
+  // Allow inference request while server exiting to provide graceful
+  // completion of inference sequence that spans multiple requests.
+  if (ready_state_ != ServerReadyState::SERVER_READY)
+    &&(ready_state_ != ServerReadyState::SERVER_EXITING)
+    {
+      return Status(Status::Code::UNAVAILABLE, "Server not ready");
+    }
 
 #ifdef TRITON_ENABLE_STATS
   request->CaptureRequestStartNs();
