@@ -180,7 +180,7 @@ class ModelRepositoryManager {
   Status StopAllModels();
 
   /// \return the number of in-flight inferences for the all versions of all
-  /// models. Note that the model version will not be included if it doesn't
+  /// models. Note that a model version will not be included if it doesn't
   /// have in-flight inferences.
   const std::set<std::tuple<std::string, int64_t, size_t>> InflightStatus();
 

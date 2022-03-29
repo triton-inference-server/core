@@ -74,6 +74,12 @@ class DynamicBatchScheduler : public Scheduler {
   // \see Scheduler::Enqueue()
   Status Enqueue(std::unique_ptr<InferenceRequest>& request) override;
 
+  // \see Scheduler::InflightInferenceCount()
+  size_t InflightInferenceCount() override { return queue_.Size(); }
+
+  // \see Scheduler::Stop()
+  void Stop() override { stop_ = true; }
+
   MetricModelReporter* MetricReporter() const { return reporter_.get(); }
 
  private:
@@ -87,6 +93,14 @@ class DynamicBatchScheduler : public Scheduler {
       const inference::ModelQueuePolicy& default_queue_policy,
       const uint32_t priority_levels,
       const ModelQueuePolicyMap& queue_policy_map);
+
+  // \see Scheduler::IsInflightInference()
+  bool IsInflightInference(
+      const std::unique_ptr<InferenceRequest>& request) override
+  {
+    // For dynamic batch scheduler, all requests are independent
+    return false;
+  }
 
   void BatcherThread(const int nice);
   void NewPayload();
@@ -107,6 +121,7 @@ class DynamicBatchScheduler : public Scheduler {
   // represented by this scheduler. If priority queues are not supported by the
   // scheduler, then priority zero entry is used as the single queue.
   PriorityQueue queue_;
+  bool stop_;
 
   std::thread scheduler_thread_;
   std::atomic<bool> scheduler_thread_exit_;

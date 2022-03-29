@@ -97,6 +97,15 @@ class Model {
     return scheduler_->Enqueue(request);
   }
 
+  // Return the number of in-flight inferences.
+  size_t InflightInferenceCount()
+  {
+    return scheduler_->InflightInferenceCount();
+  }
+
+  // Stop processing future requests unless they are considered as in-flight.
+  void Stop() { scheduler_->Stop(); }
+
   uint32_t DefaultPriorityLevel() const { return default_priority_level_; }
 
   uint32_t MaxPriorityLevel() const { return max_priority_level_; }

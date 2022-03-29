@@ -390,6 +390,13 @@ class ModelRepositoryManager::ModelLifeCycle {
       const std::string& model_name, const int64_t model_version,
       ModelReadyState* state);
 
+  // Instruct the model to stop accepting new inference requests.
+  Status StopAllModels();
+
+  // Return the number of in-flight inference if any, model versions
+  // that don't have in-flight inferences will not be included.
+  const std::set<std::tuple<std::string, int64_t, size_t>> InflightStatus();
+
  private:
   struct ModelInfo {
     ModelInfo(
@@ -517,6 +524,39 @@ ModelRepositoryManager::ModelLifeCycle::LiveModelStates(bool strict_readiness)
     }
   }
   return live_model_states;
+}
+
+Status
+ModelRepositoryManager::ModelLifeCycle::StopAllModels()
+{
+  LOG_VERBOSE(1) << "StopAllModels()";
+  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  for (auto& model_version : map_) {
+    for (auto& version_model : model_version.second) {
+      std::lock_guard<std::recursive_mutex> lock(
+          version_model.second.first->mtx_);
+      version_model.second.first->model_->Stop();
+    }
+  }
+  return Status::Success;
+}
+
+const std::set<std::tuple<std::string, int64_t, size_t>>
+ModelRepositoryManager::ModelLifeCycle::InflightStatus()
+{
+  LOG_VERBOSE(1) << "InflightStatus()";
+  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::set<std::tuple<std::string, int64_t, size_t>> inflight_status;
+  for (auto& model_version : map_) {
+    for (auto& version_model : model_version.second) {
+      std::lock_guard<std::recursive_mutex> lock(
+          version_model.second.first->mtx_);
+      const auto cnt =
+          version_model.second.first->model_->InflightInferenceCount();
+      inflight_status.emplace(model_version.first, version_model.first, cnt);
+    }
+  }
+  return inflight_status;
 }
 
 const ModelRepositoryManager::ModelStateMap
@@ -1605,6 +1645,18 @@ ModelRepositoryManager::UnloadAllModels()
     }
   }
   return Status::Success;
+}
+
+Status
+ModelRepositoryManager::StopAllModels()
+{
+  return model_life_cycle_->StopAllModels();
+}
+
+const std::set<std::tuple<std::string, int64_t, size_t>>
+ModelRepositoryManager::InflightStatus()
+{
+  return model_life_cycle_->InflightStatus();
 }
 
 const ModelRepositoryManager::ModelStateMap
