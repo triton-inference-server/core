@@ -28,8 +28,8 @@
 #ifdef TRITON_ENABLE_ENSEMBLE
 
 #include <memory>
-#include "model_config.pb.h"
 #include "metric_model_reporter.h"
+#include "model_config.pb.h"
 #include "model_config_utils.h"
 #include "scheduler.h"
 #include "status.h"
@@ -65,6 +65,9 @@ struct EnsembleInfo {
 
   // the ensemble output (re)shape expected by the ensemble
   std::unordered_map<std::string, DimsList> ensemble_output_shape_;
+
+  // Inputs that is marked optional for the ensemble
+  std::set<std::string> optional_inputs_;
 
   std::vector<StepInfo> steps_;
 
