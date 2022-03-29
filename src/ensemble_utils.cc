@@ -30,9 +30,9 @@
 
 #include <set>
 #include "constants.h"
-#include "triton/common/logging.h"
 #include "model.h"
 #include "model_config_utils.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
@@ -157,6 +157,10 @@ ValidateTensorMapping(
       }
     }
     if (mapped_cnt == 0) {
+      // Allow the input to be excluded from ensemble if it is optional
+      if (model_input.optional()) {
+        continue;
+      }
       return Status(
           Status::Code::INVALID_ARG,
           "in ensemble " + ensemble + ", input " + model_input.name() +
