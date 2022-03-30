@@ -1290,8 +1290,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
   // Add additional callback to keep track of in-flight count
   ++inflight_count_;
-  request->AddInternalReleaseCallback(
-      [&inflight_count_]() { --inflight_count_; });
+  request->AddInternalReleaseCallback([this]() { --inflight_count_; });
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));

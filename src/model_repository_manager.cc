@@ -553,7 +553,9 @@ ModelRepositoryManager::ModelLifeCycle::InflightStatus()
           version_model.second.first->mtx_);
       const auto cnt =
           version_model.second.first->model_->InflightInferenceCount();
-      inflight_status.emplace(model_version.first, version_model.first, cnt);
+      if (cnt != 0) {
+        inflight_status.emplace(model_version.first, version_model.first, cnt);
+      }
     }
   }
   return inflight_status;

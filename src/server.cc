@@ -482,11 +482,10 @@ InferenceServer::InferAsync(std::unique_ptr<InferenceRequest>& request)
 {
   // Allow inference request while server exiting to provide graceful
   // completion of inference sequence that spans multiple requests.
-  if (ready_state_ != ServerReadyState::SERVER_READY)
-    &&(ready_state_ != ServerReadyState::SERVER_EXITING)
-    {
-      return Status(Status::Code::UNAVAILABLE, "Server not ready");
-    }
+  if ((ready_state_ != ServerReadyState::SERVER_READY) &&
+      (ready_state_ != ServerReadyState::SERVER_EXITING)) {
+    return Status(Status::Code::UNAVAILABLE, "Server not ready");
+  }
 
 #ifdef TRITON_ENABLE_STATS
   request->CaptureRequestStartNs();
