@@ -75,7 +75,11 @@ class DynamicBatchScheduler : public Scheduler {
   Status Enqueue(std::unique_ptr<InferenceRequest>& request) override;
 
   // \see Scheduler::InflightInferenceCount()
-  size_t InflightInferenceCount() override { return queue_.Size(); }
+  size_t InflightInferenceCount() override
+  {
+    std::unique_lock<std::mutex> lock(mu_);
+    return queue_.Size();
+  }
 
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
@@ -93,14 +97,6 @@ class DynamicBatchScheduler : public Scheduler {
       const inference::ModelQueuePolicy& default_queue_policy,
       const uint32_t priority_levels,
       const ModelQueuePolicyMap& queue_policy_map);
-
-  // \see Scheduler::IsInflightInference()
-  bool IsInflightInference(
-      const std::unique_ptr<InferenceRequest>& request) override
-  {
-    // For dynamic batch scheduler, all requests are independent
-    return false;
-  }
 
   void BatcherThread(const int nice);
   void NewPayload();

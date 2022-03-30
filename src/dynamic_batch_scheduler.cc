@@ -163,7 +163,7 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
 Status
 DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
-  if (stop_ && !IsInflightInference(request)) {
+  if (stop_) {
     return Status(
         Status::Code::UNAVAILABLE,
         "Scheduler has stopped accepting new inference");

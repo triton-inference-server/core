@@ -75,13 +75,6 @@ class Scheduler {
   // Instruct the scheduler to stop processing future requests unless they are
   // considered as in-flight.
   virtual void Stop() = 0;
-
- protected:
-  // Whether the request has been committed as an in-flight inference to
-  // the scheduler. The scheduler should still process an in-flight request
-  // even if it has been instructed to stop.
-  virtual bool IsInflightInference(
-      const std::unique_ptr<InferenceRequest>& request) = 0;
 };
 
 }}  // namespace triton::core
