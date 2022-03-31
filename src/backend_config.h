@@ -55,10 +55,13 @@ Status BackendConfigurationMinComputeCapability(
 Status BackendConfigurationAutoCompleteConfig(
     const BackendCmdlineConfigMap& config_map, bool* acc);
 
-/// Get the global default max batch size form teh backend configuration.
-Status
-BackendConfigurationDefaultMaxBatchSize(
-  const BackendCmdlineConfigMap& config_map, int* dmbs);
+/// Get the global default max batch size form the backend configuration.
+Status BackendConfigurationDefaultMaxBatchSize(
+    const BackendCmdlineConfigMap& config_map, int* dmbs);
+
+/// Return the default max batch size which has higher precedence.
+Status BackendConfigurationResolveDefaultMaxBatchSize(
+    const BackendCmdlineConfig* config, int global_dmbs, int* dmbs);
 
 /// Convert a backend name to the specialized version of that name
 /// based on the backend configuration. For example, "tensorflow" will

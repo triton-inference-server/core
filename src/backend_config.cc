@@ -95,10 +95,10 @@ BackendConfigurationParseStringToInt(const std::string& str, int* val)
 {
   try {
     *val = std::stoi(str);
-  } 
+  }
   catch (...) {
     return Status(
-      Status::Code::INTERNAL,
+        Status::Code::INTERNAL,
         "unable to parse common backend configuration as int");
   }
 
@@ -216,19 +216,37 @@ BackendConfigurationSpecializeBackendName(
 
 Status
 BackendConfigurationDefaultMaxBatchSize(
-  const BackendCmdlineConfigMap& config_map, int* dmbs)
+    const BackendCmdlineConfigMap& config_map, int* dmbs)
 {
   const auto& itr = config_map.find(std::string());
   if (itr == config_map.end()) {
     return Status(
-      Status::Code::INTERNAL, "unable to find default-max-batch-size configuration");
+        Status::Code::INTERNAL,
+        "unable to find default-max-batch-size configuration");
   }
 
   std::string default_max_batch_size_str;
   RETURN_IF_ERROR(BackendConfiguration(
-    itr->second, "default-max-batch-size", &default_max_batch_size_str));
+      itr->second, "default-max-batch-size", &default_max_batch_size_str));
   RETURN_IF_ERROR(
-    BackendConfigurationParseStringToInt(default_max_batch_size_str, dmbs));
+      BackendConfigurationParseStringToInt(default_max_batch_size_str, dmbs));
+
+  return Status::Success;
+}
+
+Status
+BackendConfigurationResolveDefaultMaxBatchSize(
+    const BackendCmdlineConfig* config, int global_dmbs, int* dmbs)
+{
+  std::string default_max_batch_size_str;
+  Status found_status = BackendConfiguration(
+      *config, "default-max-batch-size", &default_max_batch_size_str);
+  if (found_status.IsOk()) {
+    RETURN_IF_ERROR(
+        BackendConfigurationParseStringToInt(default_max_batch_size_str, dmbs));
+  } else {
+    *dmbs = global_dmbs;
+  }
 
   return Status::Success;
 }

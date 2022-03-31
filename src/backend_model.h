@@ -100,7 +100,8 @@ class TritonModel : public Model {
   // Whether the backend should attempt to auto-complete the model config.
   const bool auto_complete_config_;
 
-  // If using auto-complete and no max batch size set, use this value as guidance.
+  // If using auto-complete and no max batch size set, use this value as
+  // guidance.
   const int default_max_batch_size_;
 
   // The localized repo directory holding the model. If localization

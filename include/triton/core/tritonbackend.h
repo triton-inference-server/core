@@ -91,7 +91,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 9
+#define TRITONBACKEND_API_VERSION_MINOR 10
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -973,16 +973,12 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config);
 
-/// When using auto-complete for a model which supports batching, this value 
-/// can be used to set the max batch size. When this value is greater than 
-/// 1, dynamic batching must be turned on else setting this value has no meaning.
-/// If no value was given on the command line parameters, this returns a value 
-/// of 4.
+/// Get the default max batch size value for the model. When auto-completing
+/// the model configuration, the backend may use this value to populate
+/// max_batch_size field.
 ///
 /// \param model The model.
-/// \param default_max_batch_size Returns the value set on the command line 
-/// else 4.
-/// \return a TRITONSERVER_Error indicating success or failure.
+/// \param default_max_batch_size Returns the default_max_batch_size
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelDefaultMaxBatchSize(
     TRITONBACKEND_Model* model, int32_t* default_max_batch_size);

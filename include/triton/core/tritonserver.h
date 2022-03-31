@@ -1834,7 +1834,8 @@ TRITONSERVER_ServerOptionsSetHostPolicy(
     TRITONSERVER_ServerOptions* options, const char* policy_name,
     const char* setting, const char* value);
 
-/// Set the default maximum batch size when using auto-complete.
+/// Set the default maximum batch size which may be used by the backends for
+/// auto-completion of the model configuration.
 ///
 /// \param options The server options object.
 /// \param default_max_batch_size The default maximum batch size for all models

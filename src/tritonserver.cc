@@ -415,17 +415,17 @@ TritonServerOptions::SetHostPolicy(
 }
 
 TRITONSERVER_Error*
-TritonServerOptions::SetDefaultMaxBatchSize(
-    int32_t default_max_batch_size)
+TritonServerOptions::SetDefaultMaxBatchSize(int32_t default_max_batch_size)
 {
   if (default_max_batch_size < 0) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        std::string("Default max batch size must be greater than or equal to 0").c_str());
+        std::string("Default max batch size must be greater than or equal to 0")
+            .c_str());
   }
 
   default_max_batch_size_ = default_max_batch_size;
-  return nullptr; // success
+  return nullptr;  // success
 }
 
 #define SetDurationStat(DOC, PARENT, STAT_NAME, COUNT, NS)   \
@@ -2024,7 +2024,7 @@ TRITONSERVER_ServerNew(
   loptions->AddBackendConfig(
       std::string(), "backend-directory", loptions->BackendDir());
   loptions->AddBackendConfig(
-      std::string(), "default-max-batch-size", 
+      std::string(), "default-max-batch-size",
       std::to_string(default_max_batch_size));
   lserver->SetBackendCmdlineConfig(loptions->BackendCmdlineConfigMap());
 
