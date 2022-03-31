@@ -130,6 +130,19 @@ class InferenceServer {
   // Print backends and models summary
   Status PrintBackendAndModelSummary();
 
+  // Add model repository path.
+  bool AddModelRepositoryPath(const std::string& path);
+
+  // Remove model repository path.
+  bool RemoveModelRepositoryPath(const std::string& path);
+
+  // Add model mapping.
+  bool AddModelMapping(
+      const std::string& model_name, const std::string& directory_name);
+
+  // Remove model mapping.
+  bool RemoveModelMapping(const std::string& model_name);
+
   // Return the server version.
   const std::string& Version() const { return version_; }
 
@@ -149,21 +162,6 @@ class InferenceServer {
   void SetModelRepositoryPaths(const std::set<std::string>& p)
   {
     model_repository_paths_ = p;
-  }
-
-  // Add / remove model repository path
-  // Return true on success, else false
-  bool AddModelRepositoryPath(const std::string& path)
-  {
-    if (model_repository_paths_.insert(path).second) {
-      return false;  // Already exists
-    }
-    return true;
-  }
-
-  void RemoveModelRepositoryPath(const std::string& path)
-  {
-    return model_repository_paths_.erase(path) == 1;
   }
 
   // Get / set model control mode.

@@ -2173,13 +2173,15 @@ TRITONSERVER_ServerRegisterModelRepository(
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         std::string(
-            "model repository " + repository_path + " already registered")
+            "model repository " + std::string(repository_path) +
+            " already registered")
             .c_str());
   }
 
   for (size_t i = 0; i < mapping_count; ++i) {
-    auto mapping = reinterpret_cast<tc::InferenceParameter*>(name_mapping[i]);
-    auto model = mapping.Name();
+    auto mapping =
+        reinterpret_cast<const tc::InferenceParameter*>(name_mapping[i]);
+    auto model_name = mapping->Name();
 
     if (mapping->Type() != TRITONSERVER_PARAMETER_STRING) {
       return TRITONSERVER_ErrorNew(
@@ -2187,19 +2189,20 @@ TRITONSERVER_ServerRegisterModelRepository(
           std::string(
               "Requested model mapping directory must be a string, found "
               "another type for " +
-              model)
+              model_name)
               .c_str());
     }
     // TODO: Maybe we should create these paths by default for all models? To
     // avoid new model mapping overriding current model.
     auto model_path =
-        std::string(reinterpret_cast<const char*>(param->ValuePointer()));
+        std::string(reinterpret_cast<const char*>(mapping->ValuePointer()));
 
     // When the model directory name is unknown, the model override name will be
     // applied to the model directory under the path. There must only be one.
     if (model_path.empty()) {
       std::set<std::string> subdirs;
-      RETURN_IF_ERROR(GetDirectorySubdirs(repository_path, &subdirs));
+      RETURN_IF_STATUS_ERROR(
+          triton::core::GetDirectorySubdirs(repository_path, &subdirs));
       if (subdirs.size() != 1) {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INVALID_ARG,
@@ -2211,10 +2214,8 @@ TRITONSERVER_ServerRegisterModelRepository(
       }
       model_path = *(subdirs.begin());
     }
+    lserver->AddModelMapping(model_name, model_path);
   }
-
-  // TODO Add model map and path map to server (maybe server can do this for
-  // both maps)
 
   return nullptr;  // Success
 }
@@ -2223,7 +2224,18 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerUnregisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path)
 {
-  // TODO: Code
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  if (!lserver->RemoveModelRepositoryPath(repository_path)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        std::string(
+            "model repository " + std::string(repository_path) +
+            " not registered")
+            .c_str());
+  }
+  // TODO: Remove model mappings of models in repository?
+  // Can get messy unless mappings are created for all models (ideal... just
+  // figure out model name and version combo)
   return nullptr;  // Success
 }
 

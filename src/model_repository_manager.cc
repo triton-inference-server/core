@@ -2162,6 +2162,43 @@ ModelRepositoryManager::UpdateDependencyGraph(
   return Status::Success;
 }
 
+bool
+ModelRepositoryManager::AddModelMapping(
+    const std::string& model_name, const std::string& directory_name)
+{
+  auto model_it = model_mappings_.find(model_name);
+  if (model_it != model_mappings_.end()) {
+    LOG_ERROR << "Model mapping already found for: " << model_name
+              << ", current directory name: " << model_it->second;
+    return false;
+  }
+
+  auto directory_it = directory_mappings_.find(model_name);
+  if (directory_it != directory_mappings_.end()) {
+    // The maps should have the same elements, so the code should never get
+    // here. This is a sanity check.
+    LOG_ERROR << "Directory mapping already found for: " << directory_name
+              << ", current model name: " << directory_it->second;
+    return false;
+  }
+  model_mappings_[model_name] = directory_name;
+  directory_mappings_[directory_name] = model_name;
+  return true;
+}
+
+bool
+ModelRepositoryManager::RemoveModelMapping(const std::string& model_name)
+{
+  auto model_it = model_mappings_.find(model_name);
+  if (model_it == model_mappings_.end()) {
+    LOG_ERROR << "Model mapping not found for: " << model_name;
+    return false;
+  }
+  return (
+      (directory_mappings_.erase(model_it->second) == 1) &&
+      (model_mappings_.erase(model_name) == 1));
+}
+
 Status
 ModelRepositoryManager::CircularcyCheck(
     DependencyNode* current_node, const DependencyNode* start_node)

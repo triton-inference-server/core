@@ -218,6 +218,18 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
 
+  /// Insert a model mapping.
+  /// \param model_name Name of the model.
+  /// \param directory_name Name of the model directory.
+  /// \return True on success. False otherwise.
+  bool AddModelMapping(
+      const std::string& model_name, const std::string& directory_name);
+
+  /// Remove a model mapping.
+  /// \param model_name Name of the model.
+  /// \return True on success. False otherwise.
+  bool RemoveModelMapping(const std::string& model_name);
+
  private:
   struct ModelInfo;
   class ModelLifeCycle;
@@ -327,40 +339,12 @@ class ModelRepositoryManager {
     return model_mappings_;
   }
 
-  /// Insert a model mapping.
-  /// \param model_name Name of the model.
-  /// \param path Path of the model directory.
-  /// \return True on success. False otherwise.
-  bool AddModelMapping(
-      const std::string& model_name, const std::string& path_name)
-  {
-    if (model_mappings_.find(model_name) != model_mappings_.end()) {
-      return false;  // Already exists.
-    }
-    model_mappings_[model_name] = path_name;
-    path_mappings_[path_name] = model_name;
-  }
-
-  /// Remove a model mapping.
-  /// \param path Path of the model directory.
-  /// \return True on success. False otherwise.
-  bool RemoveModelMapping(const std::string& model_name)
-  {
-    auto it = model_mappings_.find(model_name);
-    if (it == model_mappings_.end()) {
-      return false;
-    }
-    return (
-        (path_mappings_.erase(it->second) == 1) &&
-        (model_mappings_.erase(model) == 1));
-  }
-
-  /// Get the path mappings.
+  /// Get the directory mappings.
   /// \return Map with model directory name as key, overriden model name as
   /// value
-  const std::unordered_map<std::string, std::string>& PathMappings() const
+  const std::unordered_map<std::string, std::string>& DirectoryMappings() const
   {
-    return path_mappings_;
+    return directory_mappings_;
   }
 
   Status CircularcyCheck(
@@ -381,7 +365,7 @@ class ModelRepositoryManager {
       missing_nodes_;
 
   std::unordered_map<std::string, std::string> model_mappings_;
-  std::unordered_map<std::string, std::string> path_mappings_;
+  std::unordered_map<std::string, std::string> directory_mappings_;
 
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };

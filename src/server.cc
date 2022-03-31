@@ -620,4 +620,38 @@ InferenceServer::PrintBackendAndModelSummary()
 
   return Status::Success;
 }
+
+bool
+InferenceServer::AddModelRepositoryPath(const std::string& path)
+{
+  if (model_repository_paths_.insert(path).second) {
+    LOG_ERROR << "Model repository already registered: " << path;
+    return false;
+  }
+  return true;
+}
+
+bool
+InferenceServer::RemoveModelRepositoryPath(const std::string& path)
+{
+  if (model_repository_paths_.erase(path) != 1) {
+    LOG_ERROR << "Model repository is not registered: " << path;
+    return false;
+  }
+  return true;
+}
+
+bool
+InferenceServer::AddModelMapping(
+    const std::string& model_name, const std::string& directory_name)
+{
+  return model_repository_manager_->AddModelMapping(model_name, directory_name);
+}
+
+bool
+InferenceServer::RemoveModelMapping(const std::string& model_name)
+{
+  return model_repository_manager_->RemoveModelMapping(model_name);
+}
+
 }}  // namespace triton::core
