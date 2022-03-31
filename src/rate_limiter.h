@@ -31,10 +31,10 @@
 #include <queue>
 #include <vector>
 
-#include "model_config.pb.h"
 #include "backend_model.h"
 #include "backend_model_instance.h"
 #include "instance_queue.h"
+#include "model_config.pb.h"
 #include "payload.h"
 #include "status.h"
 

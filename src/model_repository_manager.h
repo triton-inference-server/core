@@ -29,9 +29,9 @@
 #include <functional>
 #include <map>
 #include <mutex>
-#include "model_config.pb.h"
 #include "infer_parameter.h"
 #include "model_config.h"
+#include "model_config.pb.h"
 #include "status.h"
 
 namespace triton { namespace core {

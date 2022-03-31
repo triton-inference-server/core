@@ -35,18 +35,18 @@
 #include <utility>
 #include <vector>
 
-#include "model_config.pb.h"
 #include "backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"
-#include "triton/common/logging.h"
 #include "model.h"
 #include "model_config.h"
+#include "model_config.pb.h"
 #include "model_config_utils.h"
 #include "model_repository_manager.h"
 #include "pinned_memory_manager.h"
 #include "repo_agent.h"
 #include "triton/common/async_work_queue.h"
+#include "triton/common/logging.h"
 #include "triton/common/table_printer.h"
 
 #ifdef TRITON_ENABLE_GPU

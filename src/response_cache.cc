@@ -35,7 +35,8 @@ enum class ScopedTimerType { INSERTION, LOOKUP };
 class ScopedTimer {
  public:
   explicit ScopedTimer(
-      triton::core::InferenceRequest& request, uint64_t& duration, ScopedTimerType type)
+      triton::core::InferenceRequest& request, uint64_t& duration,
+      ScopedTimerType type)
       : request_(request), duration_(duration), type_(type)
   {
     switch (type_) {

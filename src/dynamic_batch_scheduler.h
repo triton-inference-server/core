@@ -34,10 +34,10 @@
 #include <queue>
 #include <set>
 #include <thread>
-#include "model_config.pb.h"
 #include "backend_model.h"
 #include "backend_model_instance.h"
 #include "model_config.h"
+#include "model_config.pb.h"
 #include "rate_limiter.h"
 #include "scheduler.h"
 #include "scheduler_utils.h"

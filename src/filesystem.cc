@@ -73,8 +73,8 @@
 #include <cerrno>
 #include <fstream>
 #include "constants.h"
-#include "triton/common/logging.h"
 #include "status.h"
+#include "triton/common/logging.h"
 
 #ifdef _WIN32
 // <sys/stat.h> in Windows doesn't define S_ISDIR macro
@@ -706,8 +706,8 @@ GCSFileSystem::LocalizeDirectory(
   }
 
   std::string tmp_folder;
-  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
-      FileSystemType::LOCAL, &tmp_folder));
+  RETURN_IF_ERROR(
+      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
 
   localized->reset(new LocalizedDirectory(path, tmp_folder));
 
@@ -1670,8 +1670,8 @@ S3FileSystem::LocalizeDirectory(
   }
 
   std::string tmp_folder;
-  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
-      FileSystemType::LOCAL, &tmp_folder));
+  RETURN_IF_ERROR(
+      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
 
   localized->reset(new LocalizedDirectory(effective_path, tmp_folder));
 

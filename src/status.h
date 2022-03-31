@@ -26,8 +26,8 @@
 #pragma once
 
 #include <string>
-#include "tritonserver_apis.h"
 #include "triton/common/error.h"
+#include "tritonserver_apis.h"
 
 namespace triton { namespace core {
 

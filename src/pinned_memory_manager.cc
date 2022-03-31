@@ -28,8 +28,8 @@
 #include "pinned_memory_manager.h"
 
 #include <sstream>
-#include "triton/common/logging.h"
 #include "numa_utils.h"
+#include "triton/common/logging.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>

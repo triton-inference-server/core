@@ -30,8 +30,8 @@
 #include "metrics.h"
 
 #include <thread>
-#include "prometheus/detail/utils.h"
 #include "constants.h"
+#include "prometheus/detail/utils.h"
 #include "triton/common/logging.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
@@ -130,8 +130,7 @@ Metrics::Metrics()
       cache_insertion_duration_us_family_(
           prometheus::BuildGauge()
               .Name("nv_cache_insertion_duration")
-              .Help(
-                  "Total cache insertion duration, in microseconds")
+              .Help("Total cache insertion duration, in microseconds")
               .Register(*registry_)),
       cache_util_family_(prometheus::BuildGauge()
                              .Name("nv_cache_util")

@@ -29,8 +29,8 @@
 #include <stdint.h>
 #include "constants.h"
 #include "ensemble_scheduler.h"
-#include "triton/common/logging.h"
 #include "model_config_utils.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
