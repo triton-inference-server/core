@@ -2211,725 +2211,713 @@ TRITONSERVER_ServerRegisterModelRepository(
       }
       model_path = *(subdirs.begin());
     }
-
-    // TODO Add model map and path map to server (maybe server can do this for
-    // both maps)
-
-    return nullptr;  // Success
   }
 
-  TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-  TRITONSERVER_ServerUnregisterModelRepository(
-      TRITONSERVER_Server * server, const char* repository_path)
-  {
-    // TODO: Code
-    return nullptr;  // Success
+  // TODO Add model map and path map to server (maybe server can do this for
+  // both maps)
+
+  return nullptr;  // Success
+}
+
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerUnregisterModelRepository(
+    TRITONSERVER_Server* server, const char* repository_path)
+{
+  // TODO: Code
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  RETURN_IF_STATUS_ERROR(lserver->PollModelRepository());
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerIsLive(TRITONSERVER_Server* server, bool* live)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  RETURN_IF_STATUS_ERROR(lserver->IsLive(live));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerIsReady(TRITONSERVER_Server* server, bool* ready)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  RETURN_IF_STATUS_ERROR(lserver->IsReady(ready));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelIsReady(
+    TRITONSERVER_Server* server, const char* model_name,
+    const int64_t model_version, bool* ready)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  RETURN_IF_STATUS_ERROR(
+      lserver->ModelIsReady(model_name, model_version, ready));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelBatchProperties(
+    TRITONSERVER_Server* server, const char* model_name,
+    const int64_t model_version, uint32_t* flags, void** voidp)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  if (voidp != nullptr) {
+    *voidp = nullptr;
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerPollModelRepository(
-      TRITONSERVER_Server * server)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
-    RETURN_IF_STATUS_ERROR(lserver->PollModelRepository());
-    return nullptr;  // Success
+  std::shared_ptr<tc::Model> model;
+  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
+
+  if (model->Config().max_batch_size() > 0) {
+    *flags = TRITONSERVER_BATCH_FIRST_DIM;
+  } else {
+    *flags = TRITONSERVER_BATCH_UNKNOWN;
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerIsLive(
-      TRITONSERVER_Server * server, bool* live)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  return nullptr;  // Success
+}
 
-    RETURN_IF_STATUS_ERROR(lserver->IsLive(live));
-    return nullptr;  // Success
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelTransactionProperties(
+    TRITONSERVER_Server* server, const char* model_name,
+    const int64_t model_version, uint32_t* txn_flags, void** voidp)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  if (voidp != nullptr) {
+    *voidp = nullptr;
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
-      TRITONSERVER_Server * server, bool* ready)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  *txn_flags = 0;
 
-    RETURN_IF_STATUS_ERROR(lserver->IsReady(ready));
-    return nullptr;  // Success
+  std::shared_ptr<tc::Model> model;
+  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
+
+  if (model->Config().model_transaction_policy().decoupled()) {
+    *txn_flags = TRITONSERVER_TXN_DECOUPLED;
+  } else {
+    *txn_flags = TRITONSERVER_TXN_ONE_TO_ONE;
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
-      TRITONSERVER_Server * server, const char* model_name,
-      const int64_t model_version, bool* ready)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  return nullptr;  // Success
+}
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerMetadata(
+    TRITONSERVER_Server* server, TRITONSERVER_Message** server_metadata)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  triton::common::TritonJson::Value metadata(
+      triton::common::TritonJson::ValueType::OBJECT);
+
+  // Just store string reference in JSON object since it will be
+  // serialized to another buffer before lserver->Id() or
+  // lserver->Version() lifetime ends.
+  RETURN_IF_STATUS_ERROR(metadata.AddStringRef("name", lserver->Id().c_str()));
+  RETURN_IF_STATUS_ERROR(
+      metadata.AddStringRef("version", lserver->Version().c_str()));
+
+  triton::common::TritonJson::Value extensions(
+      metadata, triton::common::TritonJson::ValueType::ARRAY);
+  const std::vector<const char*>& exts = lserver->Extensions();
+  for (const auto ext : exts) {
+    RETURN_IF_STATUS_ERROR(extensions.AppendStringRef(ext));
+  }
+
+  RETURN_IF_STATUS_ERROR(metadata.Add("extensions", std::move(extensions)));
+
+  *server_metadata = reinterpret_cast<TRITONSERVER_Message*>(
+      new tc::TritonServerMessage(metadata));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelMetadata(
+    TRITONSERVER_Server* server, const char* model_name,
+    const int64_t model_version, TRITONSERVER_Message** model_metadata)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  std::shared_ptr<tc::Model> model;
+  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
+
+  std::vector<int64_t> ready_versions;
+  RETURN_IF_STATUS_ERROR(
+      lserver->ModelReadyVersions(model_name, &ready_versions));
+
+  triton::common::TritonJson::Value metadata(
+      triton::common::TritonJson::ValueType::OBJECT);
+
+  // Can use string ref in this function even though model can be
+  // unloaded and config becomes invalid, because TritonServeMessage
+  // serializes the json when it is constructed below.
+  RETURN_IF_STATUS_ERROR(metadata.AddStringRef("name", model_name));
+
+  triton::common::TritonJson::Value versions(
+      metadata, triton::common::TritonJson::ValueType::ARRAY);
+  if (model_version != -1) {
     RETURN_IF_STATUS_ERROR(
-        lserver->ModelIsReady(model_name, model_version, ready));
-    return nullptr;  // Success
-  }
-
-  TRITONAPI_DECLSPEC TRITONSERVER_Error*
-  TRITONSERVER_ServerModelBatchProperties(
-      TRITONSERVER_Server * server, const char* model_name,
-      const int64_t model_version, uint32_t* flags, void** voidp)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
-
-    if (voidp != nullptr) {
-      *voidp = nullptr;
+        versions.AppendString(std::move(std::to_string(model_version))));
+  } else {
+    for (const auto v : ready_versions) {
+      RETURN_IF_STATUS_ERROR(
+          versions.AppendString(std::move(std::to_string(v))));
     }
-
-    std::shared_ptr<tc::Model> model;
-    RETURN_IF_STATUS_ERROR(
-        lserver->GetModel(model_name, model_version, &model));
-
-    if (model->Config().max_batch_size() > 0) {
-      *flags = TRITONSERVER_BATCH_FIRST_DIM;
-    } else {
-      *flags = TRITONSERVER_BATCH_UNKNOWN;
-    }
-
-    return nullptr;  // Success
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error*
-  TRITONSERVER_ServerModelTransactionProperties(
-      TRITONSERVER_Server * server, const char* model_name,
-      const int64_t model_version, uint32_t* txn_flags, void** voidp)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  RETURN_IF_STATUS_ERROR(metadata.Add("versions", std::move(versions)));
 
-    if (voidp != nullptr) {
-      *voidp = nullptr;
-    }
-
-    *txn_flags = 0;
-
-    std::shared_ptr<tc::Model> model;
+  const auto& model_config = model->Config();
+  if (!model_config.platform().empty()) {
     RETURN_IF_STATUS_ERROR(
-        lserver->GetModel(model_name, model_version, &model));
-
-    if (model->Config().model_transaction_policy().decoupled()) {
-      *txn_flags = TRITONSERVER_TXN_DECOUPLED;
-    } else {
-      *txn_flags = TRITONSERVER_TXN_ONE_TO_ONE;
-    }
-
-    return nullptr;  // Success
+        metadata.AddStringRef("platform", model_config.platform().c_str()));
+  } else {
+    RETURN_IF_STATUS_ERROR(
+        metadata.AddStringRef("platform", model_config.backend().c_str()));
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerMetadata(
-      TRITONSERVER_Server * server, TRITONSERVER_Message * *server_metadata)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  triton::common::TritonJson::Value inputs(
+      metadata, triton::common::TritonJson::ValueType::ARRAY);
+  for (const auto& io : model_config.input()) {
+    triton::common::TritonJson::Value io_metadata(
+        metadata, triton::common::TritonJson::ValueType::OBJECT);
+    RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
+    RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
+        "datatype", tc::DataTypeToProtocolString(io.data_type())));
 
-    triton::common::TritonJson::Value metadata(
-        triton::common::TritonJson::ValueType::OBJECT);
-
-    // Just store string reference in JSON object since it will be
-    // serialized to another buffer before lserver->Id() or
-    // lserver->Version() lifetime ends.
-    RETURN_IF_STATUS_ERROR(
-        metadata.AddStringRef("name", lserver->Id().c_str()));
-    RETURN_IF_STATUS_ERROR(
-        metadata.AddStringRef("version", lserver->Version().c_str()));
-
-    triton::common::TritonJson::Value extensions(
+    // Input shape. If the model supports batching then must include
+    // '-1' for the batch dimension.
+    triton::common::TritonJson::Value io_metadata_shape(
         metadata, triton::common::TritonJson::ValueType::ARRAY);
-    const std::vector<const char*>& exts = lserver->Extensions();
-    for (const auto ext : exts) {
-      RETURN_IF_STATUS_ERROR(extensions.AppendStringRef(ext));
+    if (model_config.max_batch_size() >= 1) {
+      RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(-1));
     }
-
-    RETURN_IF_STATUS_ERROR(metadata.Add("extensions", std::move(extensions)));
-
-    *server_metadata = reinterpret_cast<TRITONSERVER_Message*>(
-        new tc::TritonServerMessage(metadata));
-    return nullptr;  // Success
-  }
-
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelMetadata(
-      TRITONSERVER_Server * server, const char* model_name,
-      const int64_t model_version, TRITONSERVER_Message** model_metadata)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
-
-    std::shared_ptr<tc::Model> model;
+    for (const auto d : io.dims()) {
+      RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(d));
+    }
     RETURN_IF_STATUS_ERROR(
-        lserver->GetModel(model_name, model_version, &model));
+        io_metadata.Add("shape", std::move(io_metadata_shape)));
 
-    std::vector<int64_t> ready_versions;
-    RETURN_IF_STATUS_ERROR(
-        lserver->ModelReadyVersions(model_name, &ready_versions));
-
-    triton::common::TritonJson::Value metadata(
-        triton::common::TritonJson::ValueType::OBJECT);
-
-    // Can use string ref in this function even though model can be
-    // unloaded and config becomes invalid, because TritonServeMessage
-    // serializes the json when it is constructed below.
-    RETURN_IF_STATUS_ERROR(metadata.AddStringRef("name", model_name));
-
-    triton::common::TritonJson::Value versions(
-        metadata, triton::common::TritonJson::ValueType::ARRAY);
-    if (model_version != -1) {
-      RETURN_IF_STATUS_ERROR(
-          versions.AppendString(std::move(std::to_string(model_version))));
-    } else {
-      for (const auto v : ready_versions) {
-        RETURN_IF_STATUS_ERROR(
-            versions.AppendString(std::move(std::to_string(v))));
-      }
-    }
-
-    RETURN_IF_STATUS_ERROR(metadata.Add("versions", std::move(versions)));
-
-    const auto& model_config = model->Config();
-    if (!model_config.platform().empty()) {
-      RETURN_IF_STATUS_ERROR(
-          metadata.AddStringRef("platform", model_config.platform().c_str()));
-    } else {
-      RETURN_IF_STATUS_ERROR(
-          metadata.AddStringRef("platform", model_config.backend().c_str()));
-    }
-
-    triton::common::TritonJson::Value inputs(
-        metadata, triton::common::TritonJson::ValueType::ARRAY);
-    for (const auto& io : model_config.input()) {
-      triton::common::TritonJson::Value io_metadata(
-          metadata, triton::common::TritonJson::ValueType::OBJECT);
-      RETURN_IF_STATUS_ERROR(
-          io_metadata.AddStringRef("name", io.name().c_str()));
-      RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-          "datatype", tc::DataTypeToProtocolString(io.data_type())));
-
-      // Input shape. If the model supports batching then must include
-      // '-1' for the batch dimension.
-      triton::common::TritonJson::Value io_metadata_shape(
-          metadata, triton::common::TritonJson::ValueType::ARRAY);
-      if (model_config.max_batch_size() >= 1) {
-        RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(-1));
-      }
-      for (const auto d : io.dims()) {
-        RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(d));
-      }
-      RETURN_IF_STATUS_ERROR(
-          io_metadata.Add("shape", std::move(io_metadata_shape)));
-
-      RETURN_IF_STATUS_ERROR(inputs.Append(std::move(io_metadata)));
-    }
-    RETURN_IF_STATUS_ERROR(metadata.Add("inputs", std::move(inputs)));
-
-    triton::common::TritonJson::Value outputs(
-        metadata, triton::common::TritonJson::ValueType::ARRAY);
-    for (const auto& io : model_config.output()) {
-      triton::common::TritonJson::Value io_metadata(
-          metadata, triton::common::TritonJson::ValueType::OBJECT);
-      RETURN_IF_STATUS_ERROR(
-          io_metadata.AddStringRef("name", io.name().c_str()));
-      RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-          "datatype", tc::DataTypeToProtocolString(io.data_type())));
-
-      // Output shape. If the model supports batching then must include
-      // '-1' for the batch dimension.
-      triton::common::TritonJson::Value io_metadata_shape(
-          metadata, triton::common::TritonJson::ValueType::ARRAY);
-      if (model_config.max_batch_size() >= 1) {
-        RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(-1));
-      }
-      for (const auto d : io.dims()) {
-        RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(d));
-      }
-      RETURN_IF_STATUS_ERROR(
-          io_metadata.Add("shape", std::move(io_metadata_shape)));
-
-      RETURN_IF_STATUS_ERROR(outputs.Append(std::move(io_metadata)));
-    }
-    RETURN_IF_STATUS_ERROR(metadata.Add("outputs", std::move(outputs)));
-
-    *model_metadata = reinterpret_cast<TRITONSERVER_Message*>(
-        new tc::TritonServerMessage(metadata));
-    return nullptr;  // success
+    RETURN_IF_STATUS_ERROR(inputs.Append(std::move(io_metadata)));
   }
+  RETURN_IF_STATUS_ERROR(metadata.Add("inputs", std::move(inputs)));
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelStatistics(
-      TRITONSERVER_Server * server, const char* model_name,
-      const int64_t model_version, TRITONSERVER_Message** model_stats)
-  {
+  triton::common::TritonJson::Value outputs(
+      metadata, triton::common::TritonJson::ValueType::ARRAY);
+  for (const auto& io : model_config.output()) {
+    triton::common::TritonJson::Value io_metadata(
+        metadata, triton::common::TritonJson::ValueType::OBJECT);
+    RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
+    RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
+        "datatype", tc::DataTypeToProtocolString(io.data_type())));
+
+    // Output shape. If the model supports batching then must include
+    // '-1' for the batch dimension.
+    triton::common::TritonJson::Value io_metadata_shape(
+        metadata, triton::common::TritonJson::ValueType::ARRAY);
+    if (model_config.max_batch_size() >= 1) {
+      RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(-1));
+    }
+    for (const auto d : io.dims()) {
+      RETURN_IF_STATUS_ERROR(io_metadata_shape.AppendInt(d));
+    }
+    RETURN_IF_STATUS_ERROR(
+        io_metadata.Add("shape", std::move(io_metadata_shape)));
+
+    RETURN_IF_STATUS_ERROR(outputs.Append(std::move(io_metadata)));
+  }
+  RETURN_IF_STATUS_ERROR(metadata.Add("outputs", std::move(outputs)));
+
+  *model_metadata = reinterpret_cast<TRITONSERVER_Message*>(
+      new tc::TritonServerMessage(metadata));
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelStatistics(
+    TRITONSERVER_Server* server, const char* model_name,
+    const int64_t model_version, TRITONSERVER_Message** model_stats)
+{
 #ifndef TRITON_ENABLE_STATS
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "statistics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "statistics not supported");
 #else
 
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-    auto model_name_string = std::string(model_name);
-    std::map<std::string, std::vector<int64_t>> ready_model_versions;
-    if (model_name_string.empty()) {
-      RETURN_IF_STATUS_ERROR(
-          lserver->ModelReadyVersions(&ready_model_versions));
+  auto model_name_string = std::string(model_name);
+  std::map<std::string, std::vector<int64_t>> ready_model_versions;
+  if (model_name_string.empty()) {
+    RETURN_IF_STATUS_ERROR(lserver->ModelReadyVersions(&ready_model_versions));
+  } else {
+    std::vector<int64_t> ready_versions;
+    RETURN_IF_STATUS_ERROR(
+        lserver->ModelReadyVersions(model_name_string, &ready_versions));
+    if (ready_versions.empty()) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          std::string(
+              "requested model '" + model_name_string + "' is not available")
+              .c_str());
+    }
+
+    if (model_version == -1) {
+      ready_model_versions.emplace(
+          model_name_string, std::move(ready_versions));
     } else {
-      std::vector<int64_t> ready_versions;
-      RETURN_IF_STATUS_ERROR(
-          lserver->ModelReadyVersions(model_name_string, &ready_versions));
-      if (ready_versions.empty()) {
+      bool found = false;
+      for (const auto v : ready_versions) {
+        if (v == model_version) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        ready_model_versions.emplace(
+            model_name_string, std::vector<int64_t>{model_version});
+      } else {
         return TRITONSERVER_ErrorNew(
             TRITONSERVER_ERROR_INVALID_ARG,
             std::string(
-                "requested model '" + model_name_string + "' is not available")
+                "requested model version is not available for model '" +
+                model_name_string + "'")
                 .c_str());
       }
-
-      if (model_version == -1) {
-        ready_model_versions.emplace(
-            model_name_string, std::move(ready_versions));
-      } else {
-        bool found = false;
-        for (const auto v : ready_versions) {
-          if (v == model_version) {
-            found = true;
-            break;
-          }
-        }
-        if (found) {
-          ready_model_versions.emplace(
-              model_name_string, std::vector<int64_t>{model_version});
-        } else {
-          return TRITONSERVER_ErrorNew(
-              TRITONSERVER_ERROR_INVALID_ARG,
-              std::string(
-                  "requested model version is not available for model '" +
-                  model_name_string + "'")
-                  .c_str());
-        }
-      }
     }
+  }
 
-    // Can use string ref in this function because TritonServeMessage
-    // serializes the json when it is constructed below.
-    triton::common::TritonJson::Value metadata(
-        triton::common::TritonJson::ValueType::OBJECT);
+  // Can use string ref in this function because TritonServeMessage
+  // serializes the json when it is constructed below.
+  triton::common::TritonJson::Value metadata(
+      triton::common::TritonJson::ValueType::OBJECT);
 
-    triton::common::TritonJson::Value model_stats_json(
-        metadata, triton::common::TritonJson::ValueType::ARRAY);
-    for (const auto& mv_pair : ready_model_versions) {
-      for (const auto& version : mv_pair.second) {
-        std::shared_ptr<tc::Model> model;
-        RETURN_IF_STATUS_ERROR(
-            lserver->GetModel(mv_pair.first, version, &model));
-        const auto& infer_stats =
-            model->StatsAggregator().ImmutableInferStats();
-        const auto& infer_batch_stats =
-            model->StatsAggregator().ImmutableInferBatchStats();
+  triton::common::TritonJson::Value model_stats_json(
+      metadata, triton::common::TritonJson::ValueType::ARRAY);
+  for (const auto& mv_pair : ready_model_versions) {
+    for (const auto& version : mv_pair.second) {
+      std::shared_ptr<tc::Model> model;
+      RETURN_IF_STATUS_ERROR(lserver->GetModel(mv_pair.first, version, &model));
+      const auto& infer_stats = model->StatsAggregator().ImmutableInferStats();
+      const auto& infer_batch_stats =
+          model->StatsAggregator().ImmutableInferBatchStats();
 
-        triton::common::TritonJson::Value inference_stats(
+      triton::common::TritonJson::Value inference_stats(
+          metadata, triton::common::TritonJson::ValueType::OBJECT);
+      // Compute figures only calculated when not going through cache, so
+      // subtract cache_hit count from success count. Cache hit count will
+      // simply be 0 when cache is disabled.
+      uint64_t compute_count =
+          infer_stats.success_count_ - infer_stats.cache_hit_count_;
+      SetDurationStat(
+          metadata, inference_stats, "success", infer_stats.success_count_,
+          infer_stats.request_duration_ns_);
+      SetDurationStat(
+          metadata, inference_stats, "fail", infer_stats.failure_count_,
+          infer_stats.failure_duration_ns_);
+      SetDurationStat(
+          metadata, inference_stats, "queue", infer_stats.success_count_,
+          infer_stats.queue_duration_ns_);
+      SetDurationStat(
+          metadata, inference_stats, "compute_input", compute_count,
+          infer_stats.compute_input_duration_ns_);
+      SetDurationStat(
+          metadata, inference_stats, "compute_infer", compute_count,
+          infer_stats.compute_infer_duration_ns_);
+      SetDurationStat(
+          metadata, inference_stats, "compute_output", compute_count,
+          infer_stats.compute_output_duration_ns_);
+      SetDurationStat(
+          metadata, inference_stats, "cache_hit", infer_stats.cache_hit_count_,
+          infer_stats.cache_hit_lookup_duration_ns_);
+      // NOTE: cache_miss_count_ should equal compute_count if non-zero
+      SetDurationStat(
+          metadata, inference_stats, "cache_miss",
+          infer_stats.cache_miss_count_,
+          infer_stats.cache_miss_lookup_duration_ns_ +
+              infer_stats.cache_miss_insertion_duration_ns_);
+
+      triton::common::TritonJson::Value batch_stats(
+          metadata, triton::common::TritonJson::ValueType::ARRAY);
+      for (const auto& batch : infer_batch_stats) {
+        triton::common::TritonJson::Value batch_stat(
             metadata, triton::common::TritonJson::ValueType::OBJECT);
-        // Compute figures only calculated when not going through cache, so
-        // subtract cache_hit count from success count. Cache hit count will
-        // simply be 0 when cache is disabled.
-        uint64_t compute_count =
-            infer_stats.success_count_ - infer_stats.cache_hit_count_;
+        RETURN_IF_STATUS_ERROR(batch_stat.AddUInt("batch_size", batch.first));
         SetDurationStat(
-            metadata, inference_stats, "success", infer_stats.success_count_,
-            infer_stats.request_duration_ns_);
+            metadata, batch_stat, "compute_input", batch.second.count_,
+            batch.second.compute_input_duration_ns_);
         SetDurationStat(
-            metadata, inference_stats, "fail", infer_stats.failure_count_,
-            infer_stats.failure_duration_ns_);
+            metadata, batch_stat, "compute_infer", batch.second.count_,
+            batch.second.compute_infer_duration_ns_);
         SetDurationStat(
-            metadata, inference_stats, "queue", infer_stats.success_count_,
-            infer_stats.queue_duration_ns_);
-        SetDurationStat(
-            metadata, inference_stats, "compute_input", compute_count,
-            infer_stats.compute_input_duration_ns_);
-        SetDurationStat(
-            metadata, inference_stats, "compute_infer", compute_count,
-            infer_stats.compute_infer_duration_ns_);
-        SetDurationStat(
-            metadata, inference_stats, "compute_output", compute_count,
-            infer_stats.compute_output_duration_ns_);
-        SetDurationStat(
-            metadata, inference_stats, "cache_hit",
-            infer_stats.cache_hit_count_,
-            infer_stats.cache_hit_lookup_duration_ns_);
-        // NOTE: cache_miss_count_ should equal compute_count if non-zero
-        SetDurationStat(
-            metadata, inference_stats, "cache_miss",
-            infer_stats.cache_miss_count_,
-            infer_stats.cache_miss_lookup_duration_ns_ +
-                infer_stats.cache_miss_insertion_duration_ns_);
-
-        triton::common::TritonJson::Value batch_stats(
-            metadata, triton::common::TritonJson::ValueType::ARRAY);
-        for (const auto& batch : infer_batch_stats) {
-          triton::common::TritonJson::Value batch_stat(
-              metadata, triton::common::TritonJson::ValueType::OBJECT);
-          RETURN_IF_STATUS_ERROR(batch_stat.AddUInt("batch_size", batch.first));
-          SetDurationStat(
-              metadata, batch_stat, "compute_input", batch.second.count_,
-              batch.second.compute_input_duration_ns_);
-          SetDurationStat(
-              metadata, batch_stat, "compute_infer", batch.second.count_,
-              batch.second.compute_infer_duration_ns_);
-          SetDurationStat(
-              metadata, batch_stat, "compute_output", batch.second.count_,
-              batch.second.compute_output_duration_ns_);
-          RETURN_IF_STATUS_ERROR(batch_stats.Append(std::move(batch_stat)));
-        }
-
-        triton::common::TritonJson::Value model_stat(
-            metadata, triton::common::TritonJson::ValueType::OBJECT);
-        RETURN_IF_STATUS_ERROR(
-            model_stat.AddStringRef("name", mv_pair.first.c_str()));
-        RETURN_IF_STATUS_ERROR(model_stat.AddString(
-            "version", std::move(std::to_string(version))));
-
-        RETURN_IF_STATUS_ERROR(model_stat.AddUInt(
-            "last_inference", model->StatsAggregator().LastInferenceMs()));
-        RETURN_IF_STATUS_ERROR(model_stat.AddUInt(
-            "inference_count", model->StatsAggregator().InferenceCount()));
-        RETURN_IF_STATUS_ERROR(model_stat.AddUInt(
-            "execution_count", model->StatsAggregator().ExecutionCount()));
-
-        RETURN_IF_STATUS_ERROR(
-            model_stat.Add("inference_stats", std::move(inference_stats)));
-        RETURN_IF_STATUS_ERROR(
-            model_stat.Add("batch_stats", std::move(batch_stats)));
-        RETURN_IF_STATUS_ERROR(model_stats_json.Append(std::move(model_stat)));
+            metadata, batch_stat, "compute_output", batch.second.count_,
+            batch.second.compute_output_duration_ns_);
+        RETURN_IF_STATUS_ERROR(batch_stats.Append(std::move(batch_stat)));
       }
+
+      triton::common::TritonJson::Value model_stat(
+          metadata, triton::common::TritonJson::ValueType::OBJECT);
+      RETURN_IF_STATUS_ERROR(
+          model_stat.AddStringRef("name", mv_pair.first.c_str()));
+      RETURN_IF_STATUS_ERROR(
+          model_stat.AddString("version", std::move(std::to_string(version))));
+
+      RETURN_IF_STATUS_ERROR(model_stat.AddUInt(
+          "last_inference", model->StatsAggregator().LastInferenceMs()));
+      RETURN_IF_STATUS_ERROR(model_stat.AddUInt(
+          "inference_count", model->StatsAggregator().InferenceCount()));
+      RETURN_IF_STATUS_ERROR(model_stat.AddUInt(
+          "execution_count", model->StatsAggregator().ExecutionCount()));
+
+      RETURN_IF_STATUS_ERROR(
+          model_stat.Add("inference_stats", std::move(inference_stats)));
+      RETURN_IF_STATUS_ERROR(
+          model_stat.Add("batch_stats", std::move(batch_stats)));
+      RETURN_IF_STATUS_ERROR(model_stats_json.Append(std::move(model_stat)));
     }
+  }
 
-    RETURN_IF_STATUS_ERROR(
-        metadata.Add("model_stats", std::move(model_stats_json)));
-    *model_stats = reinterpret_cast<TRITONSERVER_Message*>(
-        new tc::TritonServerMessage(metadata));
+  RETURN_IF_STATUS_ERROR(
+      metadata.Add("model_stats", std::move(model_stats_json)));
+  *model_stats = reinterpret_cast<TRITONSERVER_Message*>(
+      new tc::TritonServerMessage(metadata));
 
-    return nullptr;  // success
+  return nullptr;  // success
 
 #endif  // TRITON_ENABLE_STATS
-  }
+}
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelConfig(
-      TRITONSERVER_Server * server, const char* model_name,
-      const int64_t model_version, const uint32_t config_version,
-      TRITONSERVER_Message** model_config)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelConfig(
+    TRITONSERVER_Server* server, const char* model_name,
+    const int64_t model_version, const uint32_t config_version,
+    TRITONSERVER_Message** model_config)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-    std::shared_ptr<tc::Model> model;
-    RETURN_IF_STATUS_ERROR(
-        lserver->GetModel(model_name, model_version, &model));
+  std::shared_ptr<tc::Model> model;
+  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
-    std::string model_config_json;
-    RETURN_IF_STATUS_ERROR(tc::ModelConfigToJson(
-        model->Config(), config_version, &model_config_json));
+  std::string model_config_json;
+  RETURN_IF_STATUS_ERROR(tc::ModelConfigToJson(
+      model->Config(), config_version, &model_config_json));
 
-    *model_config = reinterpret_cast<TRITONSERVER_Message*>(
-        new tc::TritonServerMessage(std::move(model_config_json)));
+  *model_config = reinterpret_cast<TRITONSERVER_Message*>(
+      new tc::TritonServerMessage(std::move(model_config_json)));
 
-    return nullptr;  // success
-  }
+  return nullptr;  // success
+}
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerModelIndex(
-      TRITONSERVER_Server * server, uint32_t flags,
-      TRITONSERVER_Message * *repository_index)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerModelIndex(
+    TRITONSERVER_Server* server, uint32_t flags,
+    TRITONSERVER_Message** repository_index)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-    const bool ready_only = ((flags & TRITONSERVER_INDEX_FLAG_READY) != 0);
+  const bool ready_only = ((flags & TRITONSERVER_INDEX_FLAG_READY) != 0);
 
-    std::vector<tc::ModelRepositoryManager::ModelIndex> index;
-    RETURN_IF_STATUS_ERROR(lserver->RepositoryIndex(ready_only, &index));
+  std::vector<tc::ModelRepositoryManager::ModelIndex> index;
+  RETURN_IF_STATUS_ERROR(lserver->RepositoryIndex(ready_only, &index));
 
-    // Can use string ref in this function because TritonServerMessage
-    // serializes the json when it is constructed below.
-    triton::common::TritonJson::Value repository_index_json(
-        triton::common::TritonJson::ValueType::ARRAY);
+  // Can use string ref in this function because TritonServerMessage
+  // serializes the json when it is constructed below.
+  triton::common::TritonJson::Value repository_index_json(
+      triton::common::TritonJson::ValueType::ARRAY);
 
-    for (const auto& in : index) {
-      triton::common::TritonJson::Value model_index(
-          repository_index_json, triton::common::TritonJson::ValueType::OBJECT);
-      RETURN_IF_STATUS_ERROR(
-          model_index.AddStringRef("name", in.name_.c_str()));
-      if (!in.name_only_) {
-        if (in.version_ >= 0) {
-          RETURN_IF_STATUS_ERROR(model_index.AddString(
-              "version", std::move(std::to_string(in.version_))));
-        }
-        RETURN_IF_STATUS_ERROR(model_index.AddStringRef(
-            "state", tc::ModelReadyStateString(in.state_).c_str()));
-        if (!in.reason_.empty()) {
-          RETURN_IF_STATUS_ERROR(
-              model_index.AddStringRef("reason", in.reason_.c_str()));
-        }
+  for (const auto& in : index) {
+    triton::common::TritonJson::Value model_index(
+        repository_index_json, triton::common::TritonJson::ValueType::OBJECT);
+    RETURN_IF_STATUS_ERROR(model_index.AddStringRef("name", in.name_.c_str()));
+    if (!in.name_only_) {
+      if (in.version_ >= 0) {
+        RETURN_IF_STATUS_ERROR(model_index.AddString(
+            "version", std::move(std::to_string(in.version_))));
       }
-
-      RETURN_IF_STATUS_ERROR(
-          repository_index_json.Append(std::move(model_index)));
+      RETURN_IF_STATUS_ERROR(model_index.AddStringRef(
+          "state", tc::ModelReadyStateString(in.state_).c_str()));
+      if (!in.reason_.empty()) {
+        RETURN_IF_STATUS_ERROR(
+            model_index.AddStringRef("reason", in.reason_.c_str()));
+      }
     }
 
-    *repository_index = reinterpret_cast<TRITONSERVER_Message*>(
-        new tc::TritonServerMessage(repository_index_json));
-
-    return nullptr;  // success
+    RETURN_IF_STATUS_ERROR(
+        repository_index_json.Append(std::move(model_index)));
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
-      TRITONSERVER_Server * server, const char* model_name)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
+  *repository_index = reinterpret_cast<TRITONSERVER_Message*>(
+      new tc::TritonServerMessage(repository_index_json));
 
-    RETURN_IF_STATUS_ERROR(lserver->LoadModel({{std::string(model_name), {}}}));
+  return nullptr;  // success
+}
 
-    return nullptr;  // success
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerLoadModel(
+    TRITONSERVER_Server* server, const char* model_name)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  RETURN_IF_STATUS_ERROR(lserver->LoadModel({{std::string(model_name), {}}}));
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerLoadModelWithParameters(
+    TRITONSERVER_Server* server, const char* model_name,
+    const TRITONSERVER_Parameter** parameters, const uint64_t parameter_count)
+{
+  if ((parameters == nullptr) && (parameter_count != 0)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "load parameters are not provided while parameter count is non-zero");
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error*
-  TRITONSERVER_ServerLoadModelWithParameters(
-      TRITONSERVER_Server * server, const char* model_name,
-      const TRITONSERVER_Parameter** parameters, const uint64_t parameter_count)
-  {
-    if ((parameters == nullptr) && (parameter_count != 0)) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          "load parameters are not provided while parameter count is non-zero");
-    }
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
-
-    std::unordered_map<std::string, std::vector<const tc::InferenceParameter*>>
-        models;
-    std::vector<const tc::InferenceParameter*> mp;
-    for (size_t i = 0; i < parameter_count; ++i) {
-      mp.emplace_back(
-          reinterpret_cast<const tc::InferenceParameter*>(parameters[i]));
-    }
-    models[model_name] = std::move(mp);
-    RETURN_IF_STATUS_ERROR(lserver->LoadModel(models));
-
-    return nullptr;  // success
+  std::unordered_map<std::string, std::vector<const tc::InferenceParameter*>>
+      models;
+  std::vector<const tc::InferenceParameter*> mp;
+  for (size_t i = 0; i < parameter_count; ++i) {
+    mp.emplace_back(
+        reinterpret_cast<const tc::InferenceParameter*>(parameters[i]));
   }
+  models[model_name] = std::move(mp);
+  RETURN_IF_STATUS_ERROR(lserver->LoadModel(models));
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnloadModel(
-      TRITONSERVER_Server * server, const char* model_name)
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerUnloadModel(
+    TRITONSERVER_Server* server, const char* model_name)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
+      std::string(model_name), false /* unload_dependents */));
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerUnloadModelAndDependents(
+    TRITONSERVER_Server* server, const char* model_name)
+{
   {
     tc::InferenceServer* lserver =
         reinterpret_cast<tc::InferenceServer*>(server);
 
     RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
-        std::string(model_name), false /* unload_dependents */));
+        std::string(model_name), true /* unload_dependents */));
 
     return nullptr;  // success
   }
+}
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error*
-  TRITONSERVER_ServerUnloadModelAndDependents(
-      TRITONSERVER_Server * server, const char* model_name)
-  {
-    {
-      tc::InferenceServer* lserver =
-          reinterpret_cast<tc::InferenceServer*>(server);
-
-      RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
-          std::string(model_name), true /* unload_dependents */));
-
-      return nullptr;  // success
-    }
-  }
-
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerMetrics(
-      TRITONSERVER_Server * server, TRITONSERVER_Metrics * *metrics)
-  {
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerMetrics(
+    TRITONSERVER_Server* server, TRITONSERVER_Metrics** metrics)
+{
 #ifdef TRITON_ENABLE_METRICS
-    TritonServerMetrics* lmetrics = new TritonServerMetrics();
-    *metrics = reinterpret_cast<TRITONSERVER_Metrics*>(lmetrics);
-    return nullptr;  // Success
+  TritonServerMetrics* lmetrics = new TritonServerMetrics();
+  *metrics = reinterpret_cast<TRITONSERVER_Metrics*>(lmetrics);
+  return nullptr;  // Success
 #else
-    *metrics = nullptr;
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  *metrics = nullptr;
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerInferAsync(
+    TRITONSERVER_Server* server,
+    TRITONSERVER_InferenceRequest* inference_request,
+    TRITONSERVER_InferenceTrace* trace)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+
+  RETURN_IF_STATUS_ERROR(lrequest->PrepareForInference());
+
+  // Set the trace object in the request so that activity associated
+  // with the request can be recorded as the request flows through
+  // Triton.
+  if (trace != nullptr) {
+#ifdef TRITON_ENABLE_TRACING
+    tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+    ltrace->SetModelName(lrequest->ModelName());
+    ltrace->SetModelVersion(lrequest->ActualModelVersion());
+
+    lrequest->SetTrace(std::make_shared<tc::InferenceTraceProxy>(ltrace));
+#else
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
   }
 
-  TRITONAPI_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
-      TRITONSERVER_Server * server,
-      TRITONSERVER_InferenceRequest * inference_request,
-      TRITONSERVER_InferenceTrace * trace)
-  {
-    tc::InferenceServer* lserver =
-        reinterpret_cast<tc::InferenceServer*>(server);
-    tc::InferenceRequest* lrequest =
-        reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  // We wrap the request in a unique pointer to ensure that it flows
+  // through inferencing with clear ownership.
+  std::unique_ptr<tc::InferenceRequest> ureq(lrequest);
 
-    RETURN_IF_STATUS_ERROR(lrequest->PrepareForInference());
+  // Run inference...
+  tc::Status status = lserver->InferAsync(ureq);
 
-    // Set the trace object in the request so that activity associated
-    // with the request can be recorded as the request flows through
-    // Triton.
-    if (trace != nullptr) {
+  // If there is an error then must explicitly release any trace
+  // object associated with the inference request above.
 #ifdef TRITON_ENABLE_TRACING
-      tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-      ltrace->SetModelName(lrequest->ModelName());
-      ltrace->SetModelVersion(lrequest->ActualModelVersion());
-
-      lrequest->SetTrace(std::make_shared<tc::InferenceTraceProxy>(ltrace));
-#else
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
-#endif  // TRITON_ENABLE_TRACING
-    }
-
-    // We wrap the request in a unique pointer to ensure that it flows
-    // through inferencing with clear ownership.
-    std::unique_ptr<tc::InferenceRequest> ureq(lrequest);
-
-    // Run inference...
-    tc::Status status = lserver->InferAsync(ureq);
-
-    // If there is an error then must explicitly release any trace
-    // object associated with the inference request above.
-#ifdef TRITON_ENABLE_TRACING
-    if (!status.IsOk()) {
-      ureq->ReleaseTrace();
-    }
+  if (!status.IsOk()) {
+    ureq->ReleaseTrace();
+  }
 #endif  // TRITON_ENABLE_TRACING
 
-    // If there is an error then ureq will still have 'lrequest' and we
-    // must release it from unique_ptr since the caller should retain
-    // ownership when there is error. If there is not an error then ureq
-    // == nullptr and so this release is a nop.
-    ureq.release();
+  // If there is an error then ureq will still have 'lrequest' and we
+  // must release it from unique_ptr since the caller should retain
+  // ownership when there is error. If there is not an error then ureq
+  // == nullptr and so this release is a nop.
+  ureq.release();
 
-    RETURN_IF_STATUS_ERROR(status);
-    return nullptr;  // Success
-  }
+  RETURN_IF_STATUS_ERROR(status);
+  return nullptr;  // Success
+}
 
-  //
-  // TRITONSERVER_MetricFamily
-  //
-  TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
-      TRITONSERVER_MetricFamily * *family, TRITONSERVER_MetricKind kind,
-      const char* name, const char* description)
-  {
+//
+// TRITONSERVER_MetricFamily
+//
+TRITONSERVER_Error*
+TRITONSERVER_MetricFamilyNew(
+    TRITONSERVER_MetricFamily** family, TRITONSERVER_MetricKind kind,
+    const char* name, const char* description)
+{
 #ifdef TRITON_ENABLE_METRICS
-    try {
-      *family = reinterpret_cast<TRITONSERVER_MetricFamily*>(
-          new tc::MetricFamily(kind, name, description));
-    }
-    catch (std::invalid_argument const& ex) {
-      // Catch invalid kinds passed to constructor
-      return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
-    }
-    return nullptr;  // Success
-#else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
-#endif  // TRITON_ENABLE_METRICS
+  try {
+    *family = reinterpret_cast<TRITONSERVER_MetricFamily*>(
+        new tc::MetricFamily(kind, name, description));
   }
+  catch (std::invalid_argument const& ex) {
+    // Catch invalid kinds passed to constructor
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
+  }
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
 
-  TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete(
-      TRITONSERVER_MetricFamily * family)
-  {
+TRITONSERVER_Error*
+TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
+{
 #ifdef TRITON_ENABLE_METRICS
-    delete reinterpret_cast<tc::MetricFamily*>(family);
-    return nullptr;  // Success
+  delete reinterpret_cast<tc::MetricFamily*>(family);
+  return nullptr;  // Success
 #else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
-  }
+}
 
-  //
-  // TRITONSERVER_Metric
-  //
-  TRITONSERVER_Error* TRITONSERVER_MetricNew(
-      TRITONSERVER_Metric * *metric, TRITONSERVER_MetricFamily * family,
-      const TRITONSERVER_Parameter** labels, const uint64_t label_count)
-  {
+//
+// TRITONSERVER_Metric
+//
+TRITONSERVER_Error*
+TRITONSERVER_MetricNew(
+    TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count)
+{
 #ifdef TRITON_ENABLE_METRICS
-    std::vector<const tc::InferenceParameter*> labels_vec;
-    for (size_t i = 0; i < label_count; i++) {
-      labels_vec.emplace_back(
-          reinterpret_cast<const tc::InferenceParameter*>(labels[i]));
-    }
-
-    try {
-      *metric = reinterpret_cast<TRITONSERVER_Metric*>(
-          new tc::Metric(family, labels_vec));
-    }
-    catch (std::invalid_argument const& ex) {
-      // Catch invalid kinds passed to constructor
-      return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
-    }
-
-    return nullptr;  // Success
-#else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
-#endif  // TRITON_ENABLE_METRICS
+  std::vector<const tc::InferenceParameter*> labels_vec;
+  for (size_t i = 0; i < label_count; i++) {
+    labels_vec.emplace_back(
+        reinterpret_cast<const tc::InferenceParameter*>(labels[i]));
   }
 
-  TRITONSERVER_Error* TRITONSERVER_MetricDelete(TRITONSERVER_Metric * metric)
-  {
+  try {
+    *metric = reinterpret_cast<TRITONSERVER_Metric*>(
+        new tc::Metric(family, labels_vec));
+  }
+  catch (std::invalid_argument const& ex) {
+    // Catch invalid kinds passed to constructor
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG, ex.what());
+  }
+
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricDelete(TRITONSERVER_Metric* metric)
+{
 #ifdef TRITON_ENABLE_METRICS
-    delete reinterpret_cast<tc::Metric*>(metric);
-    return nullptr;  // Success
+  delete reinterpret_cast<tc::Metric*>(metric);
+  return nullptr;  // Success
 #else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
-  }
+}
 
-  TRITONSERVER_Error* TRITONSERVER_MetricValue(
-      TRITONSERVER_Metric * metric, double* value)
-  {
+TRITONSERVER_Error*
+TRITONSERVER_MetricValue(TRITONSERVER_Metric* metric, double* value)
+{
 #ifdef TRITON_ENABLE_METRICS
-    return reinterpret_cast<tc::Metric*>(metric)->Value(value);
+  return reinterpret_cast<tc::Metric*>(metric)->Value(value);
 #else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
-  }
+}
 
-  TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
-      TRITONSERVER_Metric * metric, double value)
-  {
+TRITONSERVER_Error*
+TRITONSERVER_MetricIncrement(TRITONSERVER_Metric* metric, double value)
+{
 #ifdef TRITON_ENABLE_METRICS
-    return reinterpret_cast<tc::Metric*>(metric)->Increment(value);
+  return reinterpret_cast<tc::Metric*>(metric)->Increment(value);
 #else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
-  }
+}
 
-  TRITONSERVER_Error* TRITONSERVER_MetricSet(
-      TRITONSERVER_Metric * metric, double value)
-  {
+TRITONSERVER_Error*
+TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
+{
 #ifdef TRITON_ENABLE_METRICS
-    return reinterpret_cast<tc::Metric*>(metric)->Set(value);
+  return reinterpret_cast<tc::Metric*>(metric)->Set(value);
 #else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
-  }
+}
 
-  TRITONSERVER_Error* TRITONSERVER_GetMetricKind(
-      TRITONSERVER_Metric * metric, TRITONSERVER_MetricKind * kind)
-  {
+TRITONSERVER_Error*
+TRITONSERVER_GetMetricKind(
+    TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind)
+{
 #ifdef TRITON_ENABLE_METRICS
-    *kind = reinterpret_cast<tc::Metric*>(metric)->Kind();
-    return nullptr;  // Success
+  *kind = reinterpret_cast<tc::Metric*>(metric)->Kind();
+  return nullptr;  // Success
 #else
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
-  }
+}
 
 }  // extern C
