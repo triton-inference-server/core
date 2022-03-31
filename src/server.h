@@ -140,8 +140,11 @@ class InferenceServer {
   bool AddModelMapping(
       const std::string& model_name, const std::string& directory_name);
 
-  // Remove model mapping.
-  bool RemoveModelMapping(const std::string& model_name);
+  // Remove model mapping via the model name.
+  bool RemoveModelMappingByName(const std::string& model_name);
+
+  // Remove model mapping via the directory name.
+  bool RemoveModelMappingByDirectory(const std::string& directory_name);
 
   // Return the server version.
   const std::string& Version() const { return version_; }

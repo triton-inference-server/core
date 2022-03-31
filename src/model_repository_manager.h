@@ -228,7 +228,12 @@ class ModelRepositoryManager {
   /// Remove a model mapping.
   /// \param model_name Name of the model.
   /// \return True on success. False otherwise.
-  bool RemoveModelMapping(const std::string& model_name);
+  bool RemoveModelMappingByName(const std::string& model_name);
+
+  /// Remove a model mapping.
+  /// \param directory_name Name of the model directory
+  /// \return True on success. False otherwise.
+  bool RemoveModelMappingByDirectory(const std::string& directory_name);
 
  private:
   struct ModelInfo;

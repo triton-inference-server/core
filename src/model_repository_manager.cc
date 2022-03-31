@@ -2187,7 +2187,7 @@ ModelRepositoryManager::AddModelMapping(
 }
 
 bool
-ModelRepositoryManager::RemoveModelMapping(const std::string& model_name)
+ModelRepositoryManager::RemoveModelMappingByName(const std::string& model_name)
 {
   auto model_it = model_mappings_.find(model_name);
   if (model_it == model_mappings_.end()) {
@@ -2197,6 +2197,20 @@ ModelRepositoryManager::RemoveModelMapping(const std::string& model_name)
   return (
       (directory_mappings_.erase(model_it->second) == 1) &&
       (model_mappings_.erase(model_name) == 1));
+}
+
+bool
+ModelRepositoryManager::RemoveModelMappingByDirectory(
+    const std::string& directory_name)
+{
+  auto directory_it = directory_mappings_.find(directory_name);
+  if (directory_it == directory_mappings_.end()) {
+    LOG_ERROR << "Directory mapping not found for: " << directory_name;
+    return false;
+  }
+  return (
+      (model_mappings_.erase(directory_it->second) == 1) &&
+      (directory_mappings_.erase(directory_name) == 1));
 }
 
 Status
