@@ -2157,6 +2157,48 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
   return nullptr;  // Success
 }
 
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerRegisterModelRepository(TRITONSERVER_Server* server,
+    const char* repository_path, const TRITONSERVER_Parameter** model_mapping,
+    const uint32_t mapping_count){
+
+      // TODO: Figure out naming... model_mapping is directory to model name?
+      // But then it's the reverse in model repo manager.
+      if ((model_mapping == nullptr) && (mapping_count != 0)) {
+        return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          "model mappings are not provided while mapping count is non-zero");
+      }
+
+      tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+      lserver->AddModelRepositoryPath(repository_path);
+
+      for (size_t i = 0; i < mapping_count; ++i) {
+        auto mapping = reinterpret_cast<tc::InferenceParameter*>(model_mapping[i]);
+        auto model = mapping.Name();
+        if(mapping->Type() != TRITONSERVER_PARAMETER_STRING){
+          return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          std::string(
+              "Requested model mapping directory must be a string, found another type for " + model)
+              .c_str());
+        }
+        // Add model->model_path and model_path->model in model repository manager (via Triton server)
+        // Check if already exists
+        // Maybe we should create these paths by default for all models? To avoid new model mapping overriding current model
+        auto model_path = std::string(reinterpret_cast<const char*>(param->ValuePointer()));
+
+        //TODO Add model map and path map to server (maybe server can do this for both maps)
+
+      return nullptr;  // Success
+}
+
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerUnregisterModelRepository(
+    TRITONSERVER_Server* server, const char* repository_path){
+      //TODO: Code
+      return nullptr;  // Success    
+    }
+
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerPollModelRepository(TRITONSERVER_Server* server)
 {
@@ -2561,7 +2603,7 @@ TRITONSERVER_ServerModelIndex(
   std::vector<tc::ModelRepositoryManager::ModelIndex> index;
   RETURN_IF_STATUS_ERROR(lserver->RepositoryIndex(ready_only, &index));
 
-  // Can use string ref in this function because TritonServeMessage
+  // Can use string ref in this function because TritonServerMessage
   // serializes the json when it is constructed below.
   triton::common::TritonJson::Value repository_index_json(
       triton::common::TritonJson::ValueType::ARRAY);

@@ -320,6 +320,60 @@ class ModelRepositoryManager {
   /// \return True if the node is ready. False otherwise.
   bool CheckNode(DependencyNode* node);
 
+  /// Get the model mappings.
+  /// \return Map with model name as key, directory path as value.
+  const std::unordered_map<std::string, std::string>& ModelMappings() const
+  {
+    return model_mappings_;
+  }
+
+  /// Insert a model mapping.
+  /// \param model_name Name of the model.
+  /// \param path Path of the model directory.
+  /// \return True on success. False otherwise.
+  bool AddModelMapping(const std::string& model_name, const std::string& path_name)
+  {
+    if (model_mappings_.find(model_name) != model_mappings_.end()) {
+        return false; // Already exists.
+    }
+    model_mappings_[model_name] = path_name;
+  }
+
+  /// Remove a model mapping.
+  /// \param path Path of the model directory.
+  /// \return True on success. False otherwise.
+  bool RemoveModelMapping(const std::string& model)
+  {
+    return model_mappings_.erase(model) == 1;
+  }
+
+  /// Get the path mappings.
+  /// \return Map with model directory name as key, overriden model name as value
+  const std::unordered_map<std::string, std::string>& PathMappings() const
+  {
+    return path_mappings_;
+  }
+
+  /// Insert a path mapping.
+  /// \param path Path of the model directory.
+  /// \param model_name Name of the model.
+  /// \return True on success. False otherwise.
+  bool AddPathMapping(const std::string& path, const std::string& model_name)
+  {
+    if (path_mappings_.find(model_name) != path_mappings_.end()) {
+        return false; // Already exists.
+    }
+    path_mappings_[path] = model_name;
+  }
+
+  /// Remove a path mapping.
+  /// \param path Path of the model directory.
+  /// \return True on success. False otherwise.
+  bool RemovePathMapping(const std::string& path)
+  {
+    return path_mappings_.erase(path) == 1;
+  }
+  
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);
 
@@ -337,6 +391,9 @@ class ModelRepositoryManager {
   std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
       missing_nodes_;
 
+  std::unordered_map<std::string, std::string> model_mappings_;
+  std::unordered_map<std::string, std::string> path_mappings_;
+  
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };
 
