@@ -1883,6 +1883,30 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerStop(
     TRITONSERVER_Server* server);
 
+/// Register a new model repository
+///
+/// \param server The inference server object.
+/// \param repository_path The full path to the model repository.
+/// \param name_mapping List of name_mapping parameters. Each path mapping has
+/// the model directory name as its key, overriden model name as its value.
+/// These map each directory to overwritten model names. This is for cases where
+/// the directory name does not match the model. \param model_count Number of
+/// mappings provided \return a TRITONSERVER_Error indicating success or
+/// failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerRegisterModelRepository(
+    TRITONSERVER_Server* server, const char* repository_path,
+    const TRITONSERVER_Parameter** name_mapping, const uint32_t mapping_count);
+
+/// Unregister a model repository
+///
+/// \param server The inference server object.
+/// \param repository_path The full path to the model repository.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerUnregisterModelRepository(
+    TRITONSERVER_Server* server, const char* repository_path);
+
 /// Check the model repository for changes and update server state
 /// based on those changes.
 ///
