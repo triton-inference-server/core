@@ -30,10 +30,10 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include "model_config.pb.h"
 #include "constants.h"
 #include "memory.h"
 #include "metric_model_reporter.h"
+#include "model_config.pb.h"
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/sync_queue.h"

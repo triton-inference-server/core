@@ -25,8 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "model_config.pb.h"
 #include "model.h"
+#include "model_config.pb.h"
 #include "scheduler.h"
 #include "status.h"
 

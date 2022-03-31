@@ -26,9 +26,9 @@
 
 #include "infer_response.h"
 
-#include "triton/common/logging.h"
 #include "model.h"
 #include "server.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 

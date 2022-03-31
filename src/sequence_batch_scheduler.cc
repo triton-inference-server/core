@@ -34,9 +34,9 @@
 #include <algorithm>
 #include "constants.h"
 #include "dynamic_batch_scheduler.h"
-#include "triton/common/logging.h"
 #include "model_config_utils.h"
 #include "server.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
@@ -982,8 +982,7 @@ SequenceBatch::SetControlTensors(
     if (seq_corr_id->DType() == inference::DataType::TYPE_STRING) {
       // 4 bytes for length of string plus pre-defined max string correlation id
       // length in bytes
-      size_p =
-          4 + triton::core::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
+      size_p = 4 + triton::core::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
     }
 
     TRITONSERVER_MemoryType memory_type;

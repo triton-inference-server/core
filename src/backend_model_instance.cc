@@ -31,13 +31,13 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
-#include "model_config.pb.h"
 #include "backend_model.h"
-#include "triton/common/logging.h"
 #include "metrics.h"
+#include "model_config.pb.h"
 #include "numa_utils.h"
 #include "server.h"
 #include "shared_library.h"
+#include "triton/common/logging.h"
 #include "triton/common/nvtx.h"
 #include "tritonserver_apis.h"
 

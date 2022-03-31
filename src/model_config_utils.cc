@@ -1409,8 +1409,7 @@ ValidateModelInput(
         Status::Code::INVALID_ARG, "model input NHWC/NCHW require 3 dims");
   }
 
-  if ((platform != kTensorRTPlanPlatform) &&
-      io.is_shape_tensor()) {
+  if ((platform != kTensorRTPlanPlatform) && io.is_shape_tensor()) {
     return Status(
         Status::Code::INVALID_ARG,
         "shape tensors are only supported for TensorRT platform");
@@ -1446,8 +1445,7 @@ ValidateModelOutput(
 {
   RETURN_IF_ERROR(ValidateIOShape(io, max_batch_size, "model output "));
 
-  if ((platform != kTensorRTPlanPlatform) &&
-      io.is_shape_tensor()) {
+  if ((platform != kTensorRTPlanPlatform) && io.is_shape_tensor()) {
     return Status(
         Status::Code::INVALID_ARG,
         "shape tensors are only supported for TensorRT platform");

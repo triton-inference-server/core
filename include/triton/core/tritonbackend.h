@@ -1133,7 +1133,8 @@ TRITONBACKEND_ModelInstanceSecondaryDeviceCount(
 /// to the index.
 /// \param id Returns the id of secondary device corresponding to the index.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceSecondaryDeviceProperties(
     TRITONBACKEND_ModelInstance* instance, uint32_t index, const char** kind,
     int64_t* id);
 

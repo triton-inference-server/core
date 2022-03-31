@@ -32,10 +32,10 @@
 #include <unistd.h>
 #endif
 #include "constants.h"
-#include "triton/common/logging.h"
-#include "triton/common/nvtx.h"
 #include "model_config.h"
 #include "server.h"
+#include "triton/common/logging.h"
+#include "triton/common/nvtx.h"
 
 namespace triton { namespace core {
 

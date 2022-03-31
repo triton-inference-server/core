@@ -26,9 +26,9 @@
 
 #include "backend_config.h"
 
-#include "triton/common/logging.h"
 #include "model_config.h"
 #include "status.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 

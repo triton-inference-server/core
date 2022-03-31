@@ -26,8 +26,8 @@
 
 #include "shared_library.h"
 
-#include "mutex"
 #include "filesystem.h"
+#include "mutex"
 #include "triton/common/logging.h"
 
 #ifdef _WIN32

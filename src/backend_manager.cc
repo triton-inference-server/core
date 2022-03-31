@@ -27,9 +27,9 @@
 #include "backend_manager.h"
 
 #include "backend_memory_manager.h"
-#include "triton/common/logging.h"
 #include "server_message.h"
 #include "shared_library.h"
+#include "triton/common/logging.h"
 
 // For unknown reason, windows will not export the TRITONBACKEND_*
 // functions declared with dllexport in tritonbackend.h. To get those

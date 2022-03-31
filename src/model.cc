@@ -31,8 +31,8 @@
 #include "constants.h"
 #include "filesystem.h"
 #include "infer_request.h"
-#include "triton/common/logging.h"
 #include "model_config_utils.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 

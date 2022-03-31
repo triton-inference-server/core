@@ -29,9 +29,8 @@
 #include "status.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
-#define TRITONJSON_STATUSRETURN(M)        \
-  return triton::core::Status( \
-      triton::core::Status::Code::INTERNAL, (M))
+#define TRITONJSON_STATUSRETURN(M) \
+  return triton::core::Status(triton::core::Status::Code::INTERNAL, (M))
 #define TRITONJSON_STATUSSUCCESS triton::core::Status::Success
 #include "triton/common/triton_json.h"
 

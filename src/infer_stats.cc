@@ -27,9 +27,9 @@
 #include "infer_stats.h"
 
 #include <time.h>
-#include "triton/common/logging.h"
 #include "metric_model_reporter.h"
 #include "metrics.h"
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 

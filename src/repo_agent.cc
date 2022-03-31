@@ -28,8 +28,8 @@
 
 #include <string>
 #include "filesystem.h"
-#include "triton/common/logging.h"
 #include "shared_library.h"
+#include "triton/common/logging.h"
 #include "tritonserver_apis.h"
 
 // For unknown reason, windows will not export the TRITONREPOAGENT_*
