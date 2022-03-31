@@ -155,8 +155,8 @@ class InferenceServer {
   // Return true on success, else false
   bool AddModelRepositoryPath(const std::string& path)
   {
-    if ( model_repository_paths_.insert(path).second ){
-      return false; // Already exists
+    if (model_repository_paths_.insert(path).second) {
+      return false;  // Already exists
     }
     return true;
   }
