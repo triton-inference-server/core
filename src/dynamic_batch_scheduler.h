@@ -78,6 +78,9 @@ class DynamicBatchScheduler : public Scheduler {
   size_t InflightInferenceCount() override
   {
     std::unique_lock<std::mutex> lock(mu_);
+    if (curr_payload_ != nullptr) {
+      return queue_.Size() + curr_payload_->RequestCount();
+    }
     return queue_.Size();
   }
 

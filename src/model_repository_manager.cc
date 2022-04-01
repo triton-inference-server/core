@@ -533,9 +533,13 @@ ModelRepositoryManager::ModelLifeCycle::StopAllModels()
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_model.second.first->mtx_);
-      version_model.second.first->model_->Stop();
+      if (version_model.second.first != nullptr) {
+        std::lock_guard<std::recursive_mutex> lock(
+            version_model.second.first->mtx_);
+        if (version_model.second.first->model_ != nullptr) {
+          version_model.second.first->model_->Stop();
+        }
+      }
     }
   }
   return Status::Success;
@@ -549,12 +553,17 @@ ModelRepositoryManager::ModelLifeCycle::InflightStatus()
   std::set<std::tuple<std::string, int64_t, size_t>> inflight_status;
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_model.second.first->mtx_);
-      const auto cnt =
-          version_model.second.first->model_->InflightInferenceCount();
-      if (cnt != 0) {
-        inflight_status.emplace(model_version.first, version_model.first, cnt);
+      if (version_model.second.first != nullptr) {
+        std::lock_guard<std::recursive_mutex> lock(
+            version_model.second.first->mtx_);
+        if (version_model.second.first->model_ != nullptr) {
+          const auto cnt =
+              version_model.second.first->model_->InflightInferenceCount();
+          if (cnt != 0) {
+            inflight_status.emplace(
+                model_version.first, version_model.first, cnt);
+          }
+        }
       }
     }
   }
