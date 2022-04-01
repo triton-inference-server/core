@@ -643,23 +643,17 @@ InferenceServer::RemoveModelRepositoryPath(const std::string& path)
 
 bool
 InferenceServer::AddModelMapping(
-    const std::string& model_name, const std::string& directory_name)
+    const std::string& repository_path,
+    const std::unordered_map<std::string, std::string>& model_mapping)
 {
-  return model_repository_manager_->AddModelMapping(model_name, directory_name);
+  return model_repository_manager_->AddModelMapping(
+      repository_path, model_mapping);
 }
 
 bool
-InferenceServer::RemoveModelMappingByName(const std::string& model_name)
+InferenceServer::RemoveModelMapping(const std::string& repository_path)
 {
-  return model_repository_manager_->RemoveModelMappingByName(model_name);
-}
-
-bool
-InferenceServer::RemoveModelMappingByDirectory(
-    const std::string& directory_name)
-{
-  return model_repository_manager_->RemoveModelMappingByDirectory(
-      directory_name);
+  return model_repository_manager_->RemoveModelMapping(repository_path);
 }
 
 }}  // namespace triton::core

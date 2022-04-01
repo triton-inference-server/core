@@ -1978,6 +1978,8 @@ ModelRepositoryManager::Poll(
         // like good practice to require it of the user. It also acts as a
         // check to make sure we don't have two different models with the
         // same name.
+        // TODO: See whether model name or config used elsewhere, update config
+        // as needed, and make this check search the mapping for the name
         if (model_config.name() != child) {
           status = Status(
               Status::Code::INVALID_ARG,
@@ -2164,53 +2166,28 @@ ModelRepositoryManager::UpdateDependencyGraph(
 
 bool
 ModelRepositoryManager::AddModelMapping(
-    const std::string& model_name, const std::string& directory_name)
+    const std::string& repository_path,
+    std::unordered_map<std::string, std::string> model_mapping)
 {
-  auto model_it = model_mappings_.find(model_name);
+  auto model_it = model_mappings_.find(repository_path);
   if (model_it != model_mappings_.end()) {
-    LOG_ERROR << "Model mapping already found for: " << model_name
-              << ", current directory name: " << model_it->second;
+    LOG_ERROR << "Model mapping already found for repository: ";
     return false;
   }
 
-  auto directory_it = directory_mappings_.find(model_name);
-  if (directory_it != directory_mappings_.end()) {
-    // The maps should have the same elements, so the code should never get
-    // here. This is a sanity check.
-    LOG_ERROR << "Directory mapping already found for: " << directory_name
-              << ", current model name: " << directory_it->second;
-    return false;
-  }
-  model_mappings_[model_name] = directory_name;
-  directory_mappings_[directory_name] = model_name;
+  // TODO: Move vs copy? Pass by reference (const)?
+  model_mappings_[repository_path] = model_mapping;
   return true;
 }
 
 bool
-ModelRepositoryManager::RemoveModelMappingByName(const std::string& model_name)
+ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
 {
-  auto model_it = model_mappings_.find(model_name);
-  if (model_it == model_mappings_.end()) {
-    LOG_ERROR << "Model mapping not found for: " << model_name;
+  if (model_mappings_.erase(repository_path) != 1) {
+    LOG_ERROR << "Model mapping not found for repository: " << repository_path;
     return false;
   }
-  return (
-      (directory_mappings_.erase(model_it->second) == 1) &&
-      (model_mappings_.erase(model_name) == 1));
-}
-
-bool
-ModelRepositoryManager::RemoveModelMappingByDirectory(
-    const std::string& directory_name)
-{
-  auto directory_it = directory_mappings_.find(directory_name);
-  if (directory_it == directory_mappings_.end()) {
-    LOG_ERROR << "Directory mapping not found for: " << directory_name;
-    return false;
-  }
-  return (
-      (model_mappings_.erase(directory_it->second) == 1) &&
-      (directory_mappings_.erase(directory_name) == 1));
+  return true;
 }
 
 Status

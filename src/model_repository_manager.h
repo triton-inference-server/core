@@ -218,22 +218,18 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
 
-  /// Insert a model mapping.
-  /// \param model_name Name of the model.
-  /// \param directory_name Name of the model directory.
+  /// Insert a repository's model mapping.
+  /// \param repository_path Path to model repository.
+  /// \param model_mapping Map of overriden model names to directory names.
   /// \return True on success. False otherwise.
   bool AddModelMapping(
-      const std::string& model_name, const std::string& directory_name);
+      const std::string& repository_path,
+      std::unordered_map<std::string, std::string> model_mapping);
 
   /// Remove a model mapping.
-  /// \param model_name Name of the model.
+  /// \param repository_path Path to model repository.
   /// \return True on success. False otherwise.
-  bool RemoveModelMappingByName(const std::string& model_name);
-
-  /// Remove a model mapping.
-  /// \param directory_name Name of the model directory
-  /// \return True on success. False otherwise.
-  bool RemoveModelMappingByDirectory(const std::string& directory_name);
+  bool RemoveModelMapping(const std::string& repository_path);
 
  private:
   struct ModelInfo;
@@ -337,19 +333,13 @@ class ModelRepositoryManager {
   /// \return True if the node is ready. False otherwise.
   bool CheckNode(DependencyNode* node);
 
-  /// Get the model mappings.
-  /// \return Map with model name as key, directory name as value.
-  const std::unordered_map<std::string, std::string>& ModelMappings() const
+  /// Get the model mappings for all repositories.
+  /// \return Map with repository path as key, model mappings as value.
+  const std::unordered_map<
+      std::string, std::unordered_map<std::string, std::string>>&
+  ModelMappings() const
   {
     return model_mappings_;
-  }
-
-  /// Get the directory mappings.
-  /// \return Map with model directory name as key, overriden model name as
-  /// value
-  const std::unordered_map<std::string, std::string>& DirectoryMappings() const
-  {
-    return directory_mappings_;
   }
 
   Status CircularcyCheck(
@@ -369,8 +359,11 @@ class ModelRepositoryManager {
   std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
       missing_nodes_;
 
-  std::unordered_map<std::string, std::string> model_mappings_;
-  std::unordered_map<std::string, std::string> directory_mappings_;
+  // Map from a repository path to its model mapping, if it has one.
+  // The model mapping maps overridden model names (key) to directory names
+  // (value).
+  std::unordered_map<std::string, std::unordered_map<std::string, std::string>>
+      model_mappings_;
 
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };
