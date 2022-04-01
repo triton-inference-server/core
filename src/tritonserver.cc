@@ -2168,8 +2168,6 @@ TRITONSERVER_ServerRegisterModelRepository(
         "model mappings are not provided while mapping count is non-zero");
   }
 
-  // TODO: Change the model/path mapping to be <repository_path>,
-  // std::map<model,path>
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   if (!lserver->AddModelRepositoryPath(repository_path)) {
     return TRITONSERVER_ErrorNew(
