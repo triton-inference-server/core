@@ -547,12 +547,12 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
       ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0);
 
   // Check if the request is one of the in-flight sequence (not starting new
-  // sequence), currently we consider sequences in backlog are also in-flight
-  // for simplicity.
+  // sequence), we consider sequences in backlog as also in-flight.
   if (stop_ && seq_start) {
     return Status(
         Status::Code::UNAVAILABLE,
-        "Scheduler has stopped accepting new inference");
+        "Server is stopping, scheduler for model has stopped accepting new "
+        "inference requests");
   }
 
   std::unique_lock<std::mutex> lock(mu_);

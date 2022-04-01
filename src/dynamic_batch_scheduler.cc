@@ -166,7 +166,8 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   if (stop_) {
     return Status(
         Status::Code::UNAVAILABLE,
-        "Scheduler has stopped accepting new inference");
+        "Server is stopping, scheduler for model has stopped accepting new "
+        "inference requests");
   }
   // If queue start timestamp hasn't been set, queue timer starts at
   // the beginning of the queueing and scheduling process. Otherwise,

@@ -268,8 +268,8 @@ InferenceServer::Stop(const bool force)
                << " model versions that have in-flight inferences";
       if (LOG_VERBOSE_IS_ON(1)) {
         for (const auto& inflight : inflight_status) {
-          LOG_VERBOSE(1) << std::get<0>(inflight) << " v"
-                         << std::get<1>(inflight) << ": "
+          LOG_VERBOSE(1) << "Model '" << std::get<0>(inflight) << "' "
+                         << "(version " << std::get<1>(inflight) << ") has "
                          << std::get<2>(inflight) << " in-flight inferences";
         }
       }

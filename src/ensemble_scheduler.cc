@@ -1271,12 +1271,6 @@ EnsembleScheduler::Create(
 Status
 EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
-  if (stop_) {
-    return Status(
-        Status::Code::UNAVAILABLE,
-        "Scheduler has stopped accepting new inference");
-  }
-
   // Queue timer starts at the beginning of the queueing and
   // scheduling process
   request->CaptureQueueStartNs();
@@ -1302,7 +1296,7 @@ EnsembleScheduler::EnsembleScheduler(
     InferenceStatsAggregator* const stats_aggregator,
     InferenceServer* const server, const inference::ModelConfig& config)
     : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr),
-      inflight_count_(0), stop_(false)
+      inflight_count_(0)
 {
 #ifdef TRITON_ENABLE_GPU
   // create CUDA stream

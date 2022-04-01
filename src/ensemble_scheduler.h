@@ -97,7 +97,7 @@ class EnsembleScheduler : public Scheduler {
   size_t InflightInferenceCount() override { return inflight_count_; }
 
   // \see Scheduler::Stop()
-  void Stop() override { stop_ = true; }
+  void Stop() override {}
 
  private:
   EnsembleScheduler(
@@ -115,7 +115,6 @@ class EnsembleScheduler : public Scheduler {
   cudaStream_t stream_;
 
   std::atomic<size_t> inflight_count_;
-  bool stop_;
 };
 
 }}  // namespace triton::core
