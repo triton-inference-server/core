@@ -1777,6 +1777,13 @@ ModelRepositoryManager::Poll(
   if (models.empty()) {
     std::set<std::string> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
+      // Save this repository_path's model mapping, if it has one.
+      auto mapping_it = model_mappings_.find(repository_path);
+      bool has_mapping = false;
+      if (mapping_it != model_mappings_.end()) {
+        has_mapping = true;
+      }
+
       std::set<std::string> subdirs;
       Status status = GetDirectorySubdirs(repository_path, &subdirs);
       if (!status.IsOk()) {
@@ -1785,8 +1792,18 @@ ModelRepositoryManager::Poll(
         *all_models_polled = false;
       } else {
         for (const auto& subdir : subdirs) {
-          if (!model_to_repository.emplace(subdir, repository_path).second) {
-            duplicated_models.insert(subdir);
+          auto model_name = subdir;
+          if (has_mapping) {
+            for (const auto& mapping : mapping_it->second) {
+              if (mapping.first == subdir) {
+                model_name = mapping.second;
+                break;
+              }
+            }
+          }
+          if (!model_to_repository.emplace(model_name, repository_path)
+                   .second) {
+            duplicated_models.insert(model_name);
             *all_models_polled = false;
           }
         }
@@ -1806,7 +1823,23 @@ ModelRepositoryManager::Poll(
       bool exists = false;
       for (const auto repository_path : repository_paths_) {
         bool exists_in_this_repo = false;
-        const auto full_path = JoinPath({repository_path, model.first});
+        auto subdir_name = model.first;
+
+        // Save this repository_path's model mapping, if it has one.
+        // If so, look for an associated mapping.
+        bool has_mapping = false;
+        auto mapping_it = model_mappings_.find(repository_path);
+        if (mapping_it != model_mappings_.end()) {
+          has_mapping = true;
+        }
+        if (has_mapping) {
+          for (const auto& mapping : mapping_it->second) {
+            if (mapping.second == subdir_name) {
+              subdir_name = mapping.first;
+            }
+          }
+        }
+        const auto full_path = JoinPath({repository_path, subdir_name});
         Status status = FileExists(full_path, &exists_in_this_repo);
         if (!status.IsOk()) {
           LOG_ERROR << "failed to poll model repository '" << repository_path
