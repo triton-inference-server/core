@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 12
+#define TRITONSERVER_API_VERSION_MINOR 11
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1833,17 +1833,6 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetHostPolicy(
     TRITONSERVER_ServerOptions* options, const char* policy_name,
     const char* setting, const char* value);
-
-//nocheckin
-// /// Set the default maximum batch size which may be used by the backends for
-// /// auto-completion of the model configuration.
-// ///
-// /// \param options The server options object.
-// /// \param default_max_batch_size The default maximum batch size for all models
-// /// \return a TRITONSERVER_Error indicating success or failure.
-// TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-// TRITONSERVER_ServerOptionsSetDefaultMaxBatchSize(
-//     TRITONSERVER_ServerOptions* options, int32_t default_max_batch_size);
 
 /// TRITONSERVER_Server
 ///

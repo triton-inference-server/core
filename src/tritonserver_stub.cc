@@ -421,11 +421,6 @@ TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetHostPolicy()
 {
 }
-//nocheckin
-// TRITONAPI_DECLSPEC void
-// TRITONSERVER_ServerOptionsSetDefaultMaxBatchSize()
-// {
-// }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes()
 {
@@ -756,10 +751,6 @@ TRITONBACKEND_ModelConfig()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelAutoCompleteConfig()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_ModelDefaultMaxBatchSize()
 {
 }
 TRITONAPI_DECLSPEC void

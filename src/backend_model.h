@@ -82,12 +82,17 @@ class TritonModel : public Model {
       const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
       const std::shared_ptr<TritonBackend>& backend,
       const double min_compute_capability, const int64_t version,
-      const inference::ModelConfig& config, const bool auto_complete_config,
-      const int default_max_batch_size);
+      const inference::ModelConfig& config, const bool auto_complete_config);
 
   // Set the scheduler based on the model configuration. The scheduler
   // can only be set once for a backend.
   Status SetConfiguredScheduler();
+
+  // Merges the global backend configs with the specific
+  // backend configs.
+  static Status ResolveBackendConfigs(
+      const BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const std::string& backend_name, BackendCmdlineConfig& config);
 
   Status Initialize();
   Status WarmUp();
@@ -99,10 +104,6 @@ class TritonModel : public Model {
 
   // Whether the backend should attempt to auto-complete the model config.
   const bool auto_complete_config_;
-
-  // If using auto-complete and no max batch size set, use this value as
-  // guidance.
-  const int default_max_batch_size_;
 
   // The localized repo directory holding the model. If localization
   // required creation of a temporary local copy then that copy will

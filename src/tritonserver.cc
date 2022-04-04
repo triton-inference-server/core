@@ -410,21 +410,6 @@ TritonServerOptions::SetHostPolicy(
   return nullptr;  // success
 }
 
-//nocheckin
-// TRITONSERVER_Error*
-// TritonServerOptions::SetDefaultMaxBatchSize(int32_t default_max_batch_size)
-// {
-//   if (default_max_batch_size < 0) {
-//     return TRITONSERVER_ErrorNew(
-//         TRITONSERVER_ERROR_INVALID_ARG,
-//         std::string("Default max batch size must be greater than or equal to 0")
-//             .c_str());
-//   }
-
-//   default_max_batch_size_ = default_max_batch_size;
-//   return nullptr;  // success
-// }
-
 #define SetDurationStat(DOC, PARENT, STAT_NAME, COUNT, NS)   \
   do {                                                       \
     triton::common::TritonJson::Value dstat(                 \
@@ -1343,16 +1328,6 @@ TRITONSERVER_ServerOptionsSetHostPolicy(
   return loptions->SetHostPolicy(policy_name, setting, value);
 }
 
-//nocheckin
-// TRITONAPI_DECLSPEC TRITONSERVER_Error*
-// TRITONSERVER_ServerOptionsSetDefaultMaxBatchSize(
-//     TRITONSERVER_ServerOptions* options, int32_t default_max_batch_size)
-// {
-//   TritonServerOptions* loptions =
-//       reinterpret_cast<TritonServerOptions*>(options);
-//   return loptions->SetDefaultMaxBatchSize(default_max_batch_size);
-// }
-
 //
 // TRITONSERVER_InferenceRequest
 //
@@ -2007,7 +1982,6 @@ TRITONSERVER_ServerNew(
   lserver->SetHostPolicyCmdlineConfig(loptions->HostPolicyCmdlineConfigMap());
   lserver->SetRepoAgentDir(loptions->RepoAgentDir());
   lserver->SetBufferManagerThreadCount(loptions->BufferManagerThreadCount());
-  // int default_max_batch_size = loptions->DefaultMaxBatchSize();
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.

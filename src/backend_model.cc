@@ -98,11 +98,6 @@ TritonModel::Create(
       backend_cmdline_config_map, model_config.backend(),
       &specialized_backend_name));
 
-  //nocheckin
-  // int global_default_max_batch_size;
-  // RETURN_IF_ERROR(BackendConfigurationDefaultMaxBatchSize(
-  //     backend_cmdline_config_map, &global_default_max_batch_size));
-
   std::string backend_libname;
   RETURN_IF_ERROR(BackendConfigurationBackendLibraryName(
       specialized_backend_name, &backend_libname));
@@ -138,91 +133,22 @@ TritonModel::Create(
                                        model_path + ", " + global_path);
   }
 
-  // Resolve the global backend configuration with the specific backend configuration
+  // Resolve the global backend configuration with the specific backend
+  // configuration
   BackendCmdlineConfig config;
-  const auto& global_itr = backend_cmdline_config_map.find(std::string());
-  const auto& specific_itr = backend_cmdline_config_map.find(model_config.backend());
-  if (specific_itr == backend_cmdline_config_map.end()
-      && global_itr != backend_cmdline_config_map.end()) {
-      for (auto setting : global_itr->second) {
-        config.push_back(setting);
-      }
-  } else if (specific_itr != backend_cmdline_config_map.end()
-        && global_itr != backend_cmdline_config_map.end()) {
-      BackendCmdlineConfig global_backend_config = global_itr->second;
-      BackendCmdlineConfig specific_backend_config = specific_itr->second;
-
-      std::sort(global_backend_config.begin(), global_backend_config.end());
-      std::sort(specific_backend_config.begin(), specific_backend_config.end());
-      
-      size_t global_index = 0;
-      size_t specific_index = 0;
-      while (global_index < global_backend_config.size()
-              && specific_index < specific_backend_config.size()) {
-        
-        auto current_global_setting = global_backend_config.at(global_index);
-        auto current_specific_setting = specific_backend_config.at(specific_index);
-        if (current_specific_setting.first.compare(current_global_setting.first) == 0) {
-          // specific setting overrides global setting
-          config.push_back(current_specific_setting);
-          ++global_index;
-          ++specific_index;
-        } else if (current_specific_setting.first.compare(current_global_setting.first) < 0) {
-          config.push_back(current_specific_setting);
-          ++specific_index;
-        } else {
-          config.push_back(current_global_setting);
-          ++global_index;
-        }
-      }
-
-      // add the rest of the global configs
-      if (global_index < global_backend_config.size()) {
-        auto current_global_setting = global_backend_config.at(global_index);
-        config.push_back(current_global_setting);
-      }
-
-      // add the rest of the specific settings
-      if (specific_index < specific_backend_config.size()) {
-        auto current_specific_setting = specific_backend_config.at(specific_index);
-        config.push_back(current_specific_setting);
-      }
-  } else if (specific_itr != backend_cmdline_config_map.end()
-        && global_itr == backend_cmdline_config_map.end()) {
-      
-      for (auto setting : specific_itr->second) {
-        config.push_back(setting);
-      }
-  } // else empty config
-
-  //nocheckin
-  // // Find/create the backend
-  // BackendCmdlineConfig empty_backend_cmdline_config;
-  // const BackendCmdlineConfig* config;
-  // const auto& itr = backend_cmdline_config_map.find(model_config.backend());
-  // if (itr == backend_cmdline_config_map.end()) {
-  //   config = &empty_backend_cmdline_config;
-  // } else {
-  //   config = &itr->second;
-  // }
+  RETURN_IF_ERROR(ResolveBackendConfigs(
+      backend_cmdline_config_map, model_config.backend(), config));
 
   std::shared_ptr<TritonBackend> backend;
   RETURN_IF_ERROR(TritonBackendManager::CreateBackend(
       model_config.backend(), backend_libdir, backend_libpath, config,
       &backend));
 
-  // Explicit backend config takes precedence over global value
-  int new_dmbs = 0;
-  //nocheckin
-  // RETURN_IF_ERROR(BackendConfigurationResolveDefaultMaxBatchSize(
-  //     &config, global_default_max_batch_size, &new_dmbs));
-  // LOG_VERBOSE(1) << "Resolved default max batch size to: "
-  //                << std::to_string(new_dmbs);
 
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
-      model_config, auto_complete_config, new_dmbs));
+      model_config, auto_complete_config));
 
   TritonModel* raw_local_model = local_model.get();
 
@@ -264,6 +190,74 @@ TritonModel::Create(
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
 
   *model = std::move(local_model);
+  return Status::Success;
+}
+
+Status
+TritonModel::ResolveBackendConfigs(
+    const BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const std::string& backend_name, BackendCmdlineConfig& config)
+{
+  const auto& global_itr = backend_cmdline_config_map.find(std::string());
+  const auto& specific_itr = backend_cmdline_config_map.find(backend_name);
+  if (specific_itr == backend_cmdline_config_map.end() &&
+      global_itr != backend_cmdline_config_map.end()) {
+    for (auto setting : global_itr->second) {
+      config.push_back(setting);
+    }
+  } else if (
+      specific_itr != backend_cmdline_config_map.end() &&
+      global_itr == backend_cmdline_config_map.end()) {
+    for (auto setting : specific_itr->second) {
+      config.push_back(setting);
+    }
+  } else if (
+      specific_itr != backend_cmdline_config_map.end() &&
+      global_itr != backend_cmdline_config_map.end()) {
+    BackendCmdlineConfig global_backend_config = global_itr->second;
+    BackendCmdlineConfig specific_backend_config = specific_itr->second;
+
+    std::sort(global_backend_config.begin(), global_backend_config.end());
+    std::sort(specific_backend_config.begin(), specific_backend_config.end());
+
+    size_t global_index = 0;
+    size_t specific_index = 0;
+    while (global_index < global_backend_config.size() &&
+           specific_index < specific_backend_config.size()) {
+      auto& current_global_setting = global_backend_config.at(global_index);
+      auto& current_specific_setting =
+          specific_backend_config.at(specific_index);
+      if (current_specific_setting.first.compare(
+              current_global_setting.first) == 0) {
+        // specific setting overrides global setting
+        config.push_back(current_specific_setting);
+        ++global_index;
+        ++specific_index;
+      } else if (
+          current_specific_setting.first.compare(current_global_setting.first) <
+          0) {
+        config.push_back(current_specific_setting);
+        ++specific_index;
+      } else {
+        config.push_back(current_global_setting);
+        ++global_index;
+      }
+    }
+
+    // add the rest of the global configs
+    if (global_index < global_backend_config.size()) {
+      auto& current_global_setting = global_backend_config.at(global_index);
+      config.push_back(current_global_setting);
+    }
+
+    // add the rest of the specific settings
+    if (specific_index < specific_backend_config.size()) {
+      auto& current_specific_setting =
+          specific_backend_config.at(specific_index);
+      config.push_back(current_specific_setting);
+    }
+  }  // else empty config
+
   return Status::Success;
 }
 
@@ -379,12 +373,10 @@ TritonModel::TritonModel(
     const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
     const double min_compute_capability, const int64_t version,
-    const inference::ModelConfig& config, const bool auto_complete_config,
-    const int default_max_batch_size)
+    const inference::ModelConfig& config, const bool auto_complete_config)
     : Model(
           min_compute_capability, localized_model_dir->Path(), version, config),
       server_(server), auto_complete_config_(auto_complete_config),
-      default_max_batch_size_(default_max_batch_size),
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {
