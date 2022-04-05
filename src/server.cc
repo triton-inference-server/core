@@ -266,12 +266,10 @@ InferenceServer::Stop(const bool force)
       LOG_INFO << "Timeout " << exit_timeout_iters << ": Found "
                << inflight_status.size()
                << " model versions that have in-flight inferences";
-      if (LOG_VERBOSE_IS_ON(1)) {
-        for (const auto& inflight : inflight_status) {
-          LOG_VERBOSE(1) << "Model '" << std::get<0>(inflight) << "' "
-                         << "(version " << std::get<1>(inflight) << ") has "
-                         << std::get<2>(inflight) << " in-flight inferences";
-        }
+      for (const auto& inflight : inflight_status) {
+        LOG_INFO << "Model '" << std::get<0>(inflight) << "' "
+                 << "(version " << std::get<1>(inflight) << ") has "
+                 << std::get<2>(inflight) << " in-flight inferences";
       }
 
       if (inflight_status.size() == 0) {
