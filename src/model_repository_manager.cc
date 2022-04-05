@@ -1138,7 +1138,6 @@ ModelRepositoryManager::ModelLifeCycle::CreateModel(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
   LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
-  const auto model_path = JoinPath({model_info->repository_path_, model_name});
   // make copy of the current model config in case model config in model info
   // is updated (another poll) during the creation of the model
   inference::ModelConfig model_config;
