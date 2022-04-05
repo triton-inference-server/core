@@ -235,7 +235,8 @@ class ModelRepositoryManager {
   /// \param model_name Name of model.
   /// \param repository_path Path to model repository.
   /// \return Path to model.
-  std::string ModelPath(const std::string& model_name, const std::string& repository_path);
+  std::string ModelPath(
+      const std::string& model_name, const std::string& repository_path);
 
  private:
   struct ModelInfo;

@@ -360,8 +360,7 @@ class ModelRepositoryManager::ModelLifeCycle {
   // not specified in the load will be unloaded after the load is finished.
   Status AsyncLoad(
       const std::string& repository_path, const std::string& model_name,
-      const std::string& model_path,
-      const inference::ModelConfig& model_config,
+      const std::string& model_path, const inference::ModelConfig& model_config,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)> OnComplete);
 
@@ -403,11 +402,11 @@ class ModelRepositoryManager::ModelLifeCycle {
   struct ModelInfo {
     ModelInfo(
         const std::string& repository_path, const std::string& model_path,
-        const ModelReadyState state,
-        const ActionType next_action,
+        const ModelReadyState state, const ActionType next_action,
         const inference::ModelConfig& model_config)
-        : repository_path_(repository_path), model_path_(model_path), is_ensemble_(false),
-        state_(state), next_action_(next_action), model_config_(model_config)
+        : repository_path_(repository_path), model_path_(model_path),
+          is_ensemble_(false), state_(state), next_action_(next_action),
+          model_config_(model_config)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
       is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
@@ -782,8 +781,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncUnload(
 Status
 ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
     const std::string& repository_path, const std::string& model_name,
-    const std::string& model_path,
-    const inference::ModelConfig& model_config,
+    const std::string& model_path, const inference::ModelConfig& model_config,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)> OnComplete)
 {
@@ -813,8 +811,8 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
             std::unique_ptr<ModelInfo>(), std::unique_ptr<ModelInfo>())));
     if (res.second) {
       res.first->second.first.reset(new ModelInfo(
-          repository_path, model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
-          model_config));
+          repository_path, model_path, ModelReadyState::UNKNOWN,
+          ActionType::NO_ACTION, model_config));
     } else {
       auto& serving_model = res.first->second.first;
       std::lock_guard<std::recursive_mutex> lock(serving_model->mtx_);
@@ -822,8 +820,8 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
       // should be performed in background to avoid version down-time
       if (serving_model->state_ == ModelReadyState::READY) {
         res.first->second.second.reset(new ModelInfo(
-            repository_path, model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
-            model_config));
+            repository_path, model_path, ModelReadyState::UNKNOWN,
+            ActionType::NO_ACTION, model_config));
       }
     }
   }
@@ -1437,9 +1435,8 @@ ModelRepositoryManager::LoadModelByDependency()
       const auto itr = infos_.find(valid_model->model_name_);
       auto status = model_life_cycle_->AsyncLoad(
           itr->second->model_repository_path_, valid_model->model_name_,
-          itr->second->model_path_,
-          valid_model->model_config_, itr->second->agent_model_list_,
-          [model_state](Status load_status) {
+          itr->second->model_path_, valid_model->model_config_,
+          itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();
           });
@@ -1872,7 +1869,6 @@ ModelRepositoryManager::Poll(
     const auto& child = pair.first;
     const auto& repository = pair.second;
 
-    
 
     auto model_poll_state = STATE_UNMODIFIED;
     auto full_path = ModelPath(child, repository);
@@ -1928,7 +1924,8 @@ ModelRepositoryManager::Poll(
     }
 
     if (status.IsOk() && (model_poll_state != STATE_UNMODIFIED)) {
-      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, repository, full_path));
+      model_info.reset(
+          new ModelInfo(mtime_ns, prev_mtime_ns, repository, full_path));
       inference::ModelConfig& model_config = model_info->model_config_;
 
       // Create the associated repo agent models when a model is to be loaded,
@@ -1977,7 +1974,8 @@ ModelRepositoryManager::Poll(
             }
             model_info->model_repository_path_ =
                 location_string.substr(0, location_string.rfind('/', pos));
-            //TODO: Figure out why this is used below... likely has to do with the use of directory one level up
+            // TODO: Figure out why this is used below... likely has to do with
+            // the use of directory one level up
             full_path = location_string;
           }
         }
@@ -2218,7 +2216,9 @@ ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
 }
 
 std::string
-ModelRepositoryManager::ModelPath(const std::string& model_name, const std::string& repository_path){
+ModelRepositoryManager::ModelPath(
+    const std::string& model_name, const std::string& repository_path)
+{
   // Save this repository_path's model mapping, if it has one.
   auto model = model_name;
   auto mapping_it = model_mappings_.find(repository_path);
