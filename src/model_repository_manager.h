@@ -231,11 +231,11 @@ class ModelRepositoryManager {
   /// \return True on success. False otherwise.
   bool RemoveModelMapping(const std::string& repository_path);
 
-  /// Get a model path.
+  /// Get a model's name, checking against its repository's model mappings.
   /// \param model_name Name of model.
   /// \param repository_path Path to model repository.
   /// \return Path to model.
-  std::string ModelPath(
+  std::string ModelName(
       const std::string& model_name, const std::string& repository_path);
 
  private:

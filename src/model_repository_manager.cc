@@ -1163,8 +1163,8 @@ ModelRepositoryManager::ModelLifeCycle::CreateModel(
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
-          server_, model_path, version, model_config, min_compute_capability_,
-          &is);
+          server_, model_info->model_path_, version, model_config,
+          min_compute_capability_, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to
       // obtained from server because this may happen during server
@@ -1706,14 +1706,25 @@ ModelRepositoryManager::RepositoryIndex(
   std::set<std::string> seen_models;
   std::set<std::string> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
+    // Save this repository_path's model mapping, if it has one.
+    auto mapping_it = model_mappings_.find(repository_path);
+    bool mapping_exists = mapping_it != model_mappings_.end();
     std::set<std::string> subdirs;
     RETURN_IF_ERROR(GetDirectorySubdirs(repository_path, &subdirs));
     for (const auto& subdir : subdirs) {
-      if (seen_models.find(subdir) != seen_models.end()) {
-        duplicate_models.insert(subdir);
+      auto model = subdir;
+      if (mapping_exists) {
+        auto model_it = mapping_it->second.find(subdir);
+        if (model_it != mapping_it->second.end()) {
+          model = model_it->second;
+        }
       }
 
-      seen_models.insert(subdir);
+      if (seen_models.find(model) != seen_models.end()) {
+        duplicate_models.insert(model);
+      }
+
+      seen_models.insert(model);
     }
   }
 
@@ -1797,11 +1808,8 @@ ModelRepositoryManager::Poll(
         for (const auto& subdir : subdirs) {
           auto model_name = subdir;
           if (has_mapping) {
-            for (const auto& mapping : mapping_it->second) {
-              if (mapping.first == subdir) {
-                model_name = mapping.second;
-                break;
-              }
+            if (mapping_it->second.find(subdir) != mapping_it->second.end()) {
+              model_name = mapping_it->second.find(subdir)->second;
             }
           }
           if (!model_to_repository.emplace(model_name, repository_path)
@@ -1827,7 +1835,8 @@ ModelRepositoryManager::Poll(
       for (const auto repository_path : repository_paths_) {
         bool exists_in_this_repo = false;
 
-        auto full_path = ModelPath(model.first, repository_path);
+        auto full_path = JoinPath(
+            {repository_path, ModelName(model.first, repository_path)});
         Status status = FileExists(full_path, &exists_in_this_repo);
         if (!status.IsOk()) {
           LOG_ERROR << "failed to poll model repository '" << repository_path
@@ -1871,7 +1880,7 @@ ModelRepositoryManager::Poll(
 
 
     auto model_poll_state = STATE_UNMODIFIED;
-    auto full_path = ModelPath(child, repository);
+    auto full_path = JoinPath({repository, ModelName(child, repository)});
 
     const auto& mit = models.find(child);
 
@@ -1974,8 +1983,6 @@ ModelRepositoryManager::Poll(
             }
             model_info->model_repository_path_ =
                 location_string.substr(0, location_string.rfind('/', pos));
-            // TODO: Figure out why this is used below... likely has to do with
-            // the use of directory one level up
             full_path = location_string;
           }
         }
@@ -2216,7 +2223,7 @@ ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
 }
 
 std::string
-ModelRepositoryManager::ModelPath(
+ModelRepositoryManager::ModelName(
     const std::string& model_name, const std::string& repository_path)
 {
   // Save this repository_path's model mapping, if it has one.
@@ -2233,7 +2240,7 @@ ModelRepositoryManager::ModelPath(
     }
   }
 
-  return JoinPath({repository_path, model});
+  return model;
 }
 
 Status
