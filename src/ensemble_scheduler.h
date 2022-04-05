@@ -93,6 +93,12 @@ class EnsembleScheduler : public Scheduler {
   // \see Scheduler::Enqueue()
   Status Enqueue(std::unique_ptr<InferenceRequest>& request) override;
 
+  // \see Scheduler::InflightInferenceCount()
+  size_t InflightInferenceCount() override { return inflight_count_; }
+
+  // \see Scheduler::Stop()
+  void Stop() override {}
+
  private:
   EnsembleScheduler(
       InferenceStatsAggregator* const stats_aggregator,
@@ -107,6 +113,8 @@ class EnsembleScheduler : public Scheduler {
 
   // The stream used for data transfer.
   cudaStream_t stream_;
+
+  std::atomic<size_t> inflight_count_;
 };
 
 }}  // namespace triton::core

@@ -390,6 +390,13 @@ class ModelRepositoryManager::ModelLifeCycle {
       const std::string& model_name, const int64_t model_version,
       ModelReadyState* state);
 
+  // Instruct the model to stop accepting new inference requests.
+  Status StopAllModels();
+
+  // Return the number of in-flight inference if any, model versions
+  // that don't have in-flight inferences will not be included.
+  const std::set<std::tuple<std::string, int64_t, size_t>> InflightStatus();
+
  private:
   struct ModelInfo {
     ModelInfo(
@@ -486,7 +493,7 @@ ModelRepositoryManager::ModelLifeCycle::Create(
 const ModelRepositoryManager::ModelStateMap
 ModelRepositoryManager::ModelLifeCycle::LiveModelStates(bool strict_readiness)
 {
-  LOG_VERBOSE(1) << "LiveModelStates()";
+  LOG_VERBOSE(2) << "LiveModelStates()";
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   ModelStateMap live_model_states;
   for (auto& model_version : map_) {
@@ -519,10 +526,54 @@ ModelRepositoryManager::ModelLifeCycle::LiveModelStates(bool strict_readiness)
   return live_model_states;
 }
 
+Status
+ModelRepositoryManager::ModelLifeCycle::StopAllModels()
+{
+  LOG_VERBOSE(2) << "StopAllModels()";
+  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  for (auto& model_version : map_) {
+    for (auto& version_model : model_version.second) {
+      if (version_model.second.first != nullptr) {
+        std::lock_guard<std::recursive_mutex> lock(
+            version_model.second.first->mtx_);
+        if (version_model.second.first->model_ != nullptr) {
+          version_model.second.first->model_->Stop();
+        }
+      }
+    }
+  }
+  return Status::Success;
+}
+
+const std::set<std::tuple<std::string, int64_t, size_t>>
+ModelRepositoryManager::ModelLifeCycle::InflightStatus()
+{
+  LOG_VERBOSE(2) << "InflightStatus()";
+  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::set<std::tuple<std::string, int64_t, size_t>> inflight_status;
+  for (auto& model_version : map_) {
+    for (auto& version_model : model_version.second) {
+      if (version_model.second.first != nullptr) {
+        std::lock_guard<std::recursive_mutex> lock(
+            version_model.second.first->mtx_);
+        if (version_model.second.first->model_ != nullptr) {
+          const auto cnt =
+              version_model.second.first->model_->InflightInferenceCount();
+          if (cnt != 0) {
+            inflight_status.emplace(
+                model_version.first, version_model.first, cnt);
+          }
+        }
+      }
+    }
+  }
+  return inflight_status;
+}
+
 const ModelRepositoryManager::ModelStateMap
 ModelRepositoryManager::ModelLifeCycle::ModelStates()
 {
-  LOG_VERBOSE(1) << "ModelStates()";
+  LOG_VERBOSE(2) << "ModelStates()";
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   ModelStateMap model_states;
   for (auto& model_version : map_) {
@@ -546,7 +597,7 @@ const ModelRepositoryManager::VersionStateMap
 ModelRepositoryManager::ModelLifeCycle::VersionStates(
     const std::string& model_name)
 {
-  LOG_VERBOSE(1) << "VersionStates() '" << model_name << "'";
+  LOG_VERBOSE(2) << "VersionStates() '" << model_name << "'";
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   VersionStateMap version_map;
   auto mit = map_.find(model_name);
@@ -591,7 +642,7 @@ ModelRepositoryManager::ModelLifeCycle::GetModel(
     std::shared_ptr<Model>* model)
 {
   do {
-    LOG_VERBOSE(1) << "GetModel() '" << model_name << "' version " << version;
+    LOG_VERBOSE(2) << "GetModel() '" << model_name << "' version " << version;
     std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
     auto mit = map_.find(model_name);
     if (mit == map_.end()) {
@@ -676,7 +727,7 @@ Status
 ModelRepositoryManager::ModelLifeCycle::AsyncUnload(
     const std::string& model_name)
 {
-  LOG_VERBOSE(1) << "AsyncUnload() '" << model_name << "'";
+  LOG_VERBOSE(2) << "AsyncUnload() '" << model_name << "'";
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   auto it = map_.find(model_name);
   if (it == map_.end()) {
@@ -731,7 +782,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)> OnComplete)
 {
-  LOG_VERBOSE(1) << "AsyncLoad() '" << model_name << "'";
+  LOG_VERBOSE(2) << "AsyncLoad() '" << model_name << "'";
 
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   auto it = map_.find(model_name);
@@ -970,7 +1021,7 @@ Status
 ModelRepositoryManager::ModelLifeCycle::TriggerNextAction(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
-  LOG_VERBOSE(1) << "TriggerNextAction() '" << model_name << "' version "
+  LOG_VERBOSE(2) << "TriggerNextAction() '" << model_name << "' version "
                  << version << ": " << std::to_string(model_info->next_action_);
   ActionType next_action = model_info->next_action_;
   model_info->next_action_ = ActionType::NO_ACTION;
@@ -984,7 +1035,7 @@ ModelRepositoryManager::ModelLifeCycle::TriggerNextAction(
       break;
     default:
       if (model_info->OnComplete_ != nullptr) {
-        LOG_VERBOSE(1) << "no next action, trigger OnComplete()";
+        LOG_VERBOSE(2) << "no next action, trigger OnComplete()";
         model_info->OnComplete_();
         model_info->OnComplete_ = nullptr;
       }
@@ -994,7 +1045,7 @@ ModelRepositoryManager::ModelLifeCycle::TriggerNextAction(
   // If status is not ok, "next action" path ends here and thus need to
   // invoke callback by this point
   if ((!status.IsOk()) && (model_info->OnComplete_ != nullptr)) {
-    LOG_VERBOSE(1) << "failed to execute next action, trigger OnComplete()";
+    LOG_VERBOSE(2) << "failed to execute next action, trigger OnComplete()";
     model_info->OnComplete_();
     model_info->OnComplete_ = nullptr;
   }
@@ -1006,7 +1057,7 @@ Status
 ModelRepositoryManager::ModelLifeCycle::Load(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
-  LOG_VERBOSE(1) << "Load() '" << model_name << "' version " << version;
+  LOG_VERBOSE(2) << "Load() '" << model_name << "' version " << version;
   Status status = Status::Success;
 
   model_info->next_action_ = ActionType::NO_ACTION;
@@ -1050,7 +1101,7 @@ Status
 ModelRepositoryManager::ModelLifeCycle::Unload(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
-  LOG_VERBOSE(1) << "Unload() '" << model_name << "' version " << version;
+  LOG_VERBOSE(2) << "Unload() '" << model_name << "' version " << version;
   Status status = Status::Success;
 
   model_info->next_action_ = ActionType::NO_ACTION;
@@ -1083,7 +1134,7 @@ Status
 ModelRepositoryManager::ModelLifeCycle::CreateModel(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
-  LOG_VERBOSE(1) << "CreateModel() '" << model_name << "' version " << version;
+  LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
   const auto model_path = JoinPath({model_info->repository_path_, model_name});
   // make copy of the current model config in case model config in model info
   // is updated (another poll) during the creation of the model
@@ -1161,7 +1212,7 @@ ModelRepositoryManager::ModelLifeCycle::CreateModel(
       model_info->model_.reset(
           is.release(),
           ModelDeleter([this, model_name, version, model_info]() mutable {
-            LOG_VERBOSE(1) << "OnDestroy callback() '" << model_name
+            LOG_VERBOSE(2) << "OnDestroy callback() '" << model_name
                            << "' version " << version;
             LOG_INFO << "successfully unloaded '" << model_name << "' version "
                      << version;
@@ -1605,6 +1656,18 @@ ModelRepositoryManager::UnloadAllModels()
     }
   }
   return Status::Success;
+}
+
+Status
+ModelRepositoryManager::StopAllModels()
+{
+  return model_life_cycle_->StopAllModels();
+}
+
+const std::set<std::tuple<std::string, int64_t, size_t>>
+ModelRepositoryManager::InflightStatus()
+{
+  return model_life_cycle_->InflightStatus();
 }
 
 const ModelRepositoryManager::ModelStateMap

@@ -246,7 +246,10 @@ class InferenceServer {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model)
   {
-    if (ready_state_ != ServerReadyState::SERVER_READY) {
+    // Allow model retrival while server exiting to provide graceful
+    // completion of inference sequence that spans multiple requests.
+    if ((ready_state_ != ServerReadyState::SERVER_READY) &&
+        (ready_state_ != ServerReadyState::SERVER_EXITING)) {
       return Status(Status::Code::UNAVAILABLE, "Server not ready");
     }
     return model_repository_manager_->GetModel(

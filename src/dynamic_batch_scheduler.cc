@@ -59,7 +59,7 @@ DynamicBatchScheduler::DynamicBatchScheduler(
     : model_(model), model_instance_(model_instance),
       dynamic_batching_enabled_(dynamic_batching_enabled),
       queue_(default_queue_policy, priority_levels, queue_policy_map),
-      max_batch_size_((size_t)std::max(1, max_batch_size)),
+      stop_(false), max_batch_size_((size_t)std::max(1, max_batch_size)),
       preferred_batch_sizes_(preferred_batch_sizes),
       pending_batch_delay_ns_(max_queue_delay_microseconds * 1000),
       pending_batch_size_(0), queued_batch_size_(0),
@@ -163,6 +163,12 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
 Status
 DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
+  if (stop_) {
+    return Status(
+        Status::Code::UNAVAILABLE,
+        "Server is stopping, scheduler for model has stopped accepting new "
+        "inference requests");
+  }
   // If queue start timestamp hasn't been set, queue timer starts at
   // the beginning of the queueing and scheduling process. Otherwise,
   // dynamic batcher is used as component of another batcher and should not

@@ -1282,6 +1282,9 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
       TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT, "EnsembleScheduler Enqueue");
 #endif  // TRITON_ENABLE_TRACING
 
+  // Add additional callback to keep track of in-flight count
+  ++inflight_count_;
+  request->AddInternalReleaseCallback([this]() { --inflight_count_; });
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
@@ -1292,7 +1295,8 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 EnsembleScheduler::EnsembleScheduler(
     InferenceStatsAggregator* const stats_aggregator,
     InferenceServer* const server, const inference::ModelConfig& config)
-    : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr)
+    : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr),
+      inflight_count_(0)
 {
 #ifdef TRITON_ENABLE_GPU
   // create CUDA stream

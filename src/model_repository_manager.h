@@ -170,7 +170,20 @@ class ModelRepositoryManager {
 
   /// Unload all models. This function should be called before shutting down
   /// the model repository manager.
+  /// \return error status.
   Status UnloadAllModels();
+
+  /// Instruct all models to stop accepting new inference requests. However,
+  /// the models are still capable of processing inference requests
+  /// if the model considers them as part of the in-flight inference.
+  /// \return error status.
+  Status StopAllModels();
+
+  /// \return the number of in-flight inferences for the all versions of all
+  /// models. The set element will be a tuple of <model_name, model_version,
+  /// in-flight inference count>. Note that a model version will not be included
+  /// if it doesn't have in-flight inferences.
+  const std::set<std::tuple<std::string, int64_t, size_t>> InflightStatus();
 
   /// \param strict_readiness If true, only models that have at least one
   /// ready version will be considered as live. Otherwise, the models that

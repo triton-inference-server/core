@@ -66,6 +66,16 @@ class SequenceBatchScheduler : public Scheduler {
   // \see Scheduler::Enqueue()
   Status Enqueue(std::unique_ptr<InferenceRequest>& request) override;
 
+  // \see Scheduler::InflightInferenceCount()
+  size_t InflightInferenceCount() override
+  {
+    std::unique_lock<std::mutex> lock(mu_);
+    return sequence_to_batcherseqslot_map_.size();
+  }
+
+  // \see Scheduler::Stop()
+  void Stop() override { stop_ = true; }
+
   // A batcher-sequence_slot combination. The batcher is represented
   // by the index into 'batchers_'.
   struct BatcherSequenceSlot {
@@ -126,6 +136,8 @@ class SequenceBatchScheduler : public Scheduler {
 
   // The max_sequence_idle_microseconds value for this scheduler.
   uint64_t max_sequence_idle_microseconds_;
+
+  bool stop_;
 
   // Mutex
   std::mutex mu_;

@@ -68,6 +68,13 @@ class Scheduler {
   // 'request' will be nullptr. If non-success is returned then the
   // caller still retains ownership of 'request'.
   virtual Status Enqueue(std::unique_ptr<InferenceRequest>& request) = 0;
+
+  // Return the number of in-flight inferences tracked by the scheduler.
+  virtual size_t InflightInferenceCount() = 0;
+
+  // Instruct the scheduler to stop processing future requests unless they are
+  // considered as in-flight.
+  virtual void Stop() = 0;
 };
 
 }}  // namespace triton::core
