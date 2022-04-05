@@ -176,13 +176,12 @@ CreateAgentModelListWithLoadAction(
 
 Status
 VersionsToLoad(
-    const std::string model_repository_path, const std::string& name,
+    const std::string model_path, const std::string& name,
     const inference::ModelConfig& model_config, std::set<int64_t>* versions)
 {
   versions->clear();
 
   // Get integral number of the version directory
-  const auto model_path = JoinPath({model_repository_path, name});
   std::set<std::string> subdirs;
   RETURN_IF_ERROR(GetDirectorySubdirs(model_path, &subdirs));
   std::set<int64_t, std::greater<int64_t>> existing_versions;
@@ -327,9 +326,10 @@ struct ModelDeleter {
 struct ModelRepositoryManager::ModelInfo {
   ModelInfo(
       const int64_t mtime_nsec, const int64_t prev_mtime_ns,
-      const std::string& model_repository_path)
+      const std::string& model_repository_path, const std::string& model_path)
       : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
-        explicitly_load_(true), model_repository_path_(model_repository_path)
+        explicitly_load_(true), model_repository_path_(model_repository_path),
+        model_path_(model_path)
   {
   }
   int64_t mtime_nsec_;
@@ -337,6 +337,7 @@ struct ModelRepositoryManager::ModelInfo {
   bool explicitly_load_;
   inference::ModelConfig model_config_;
   std::string model_repository_path_;
+  std::string model_path_;
   // Temporary location to hold agent model list before creating the model
   // model, the ownership must transfer to ModelLifeCycle to ensure
   // the list's life cycle is handled properly.
@@ -359,6 +360,7 @@ class ModelRepositoryManager::ModelLifeCycle {
   // not specified in the load will be unloaded after the load is finished.
   Status AsyncLoad(
       const std::string& repository_path, const std::string& model_name,
+      const std::string& model_path,
       const inference::ModelConfig& model_config,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)> OnComplete);
@@ -400,11 +402,12 @@ class ModelRepositoryManager::ModelLifeCycle {
  private:
   struct ModelInfo {
     ModelInfo(
-        const std::string& repository_path, const ModelReadyState state,
+        const std::string& repository_path, const std::string& model_path,
+        const ModelReadyState state,
         const ActionType next_action,
         const inference::ModelConfig& model_config)
-        : repository_path_(repository_path), is_ensemble_(false), state_(state),
-          next_action_(next_action), model_config_(model_config)
+        : repository_path_(repository_path), model_path_(model_path), is_ensemble_(false),
+        state_(state), next_action_(next_action), model_config_(model_config)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
       is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
@@ -412,6 +415,7 @@ class ModelRepositoryManager::ModelLifeCycle {
     }
 
     std::string repository_path_;
+    std::string model_path_;
     bool is_ensemble_;
 
     std::recursive_mutex mtx_;
@@ -778,6 +782,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncUnload(
 Status
 ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
     const std::string& repository_path, const std::string& model_name,
+    const std::string& model_path,
     const inference::ModelConfig& model_config,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)> OnComplete)
@@ -792,7 +797,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
 
   std::set<int64_t> versions;
   RETURN_IF_ERROR(
-      VersionsToLoad(repository_path, model_name, model_config, &versions));
+      VersionsToLoad(model_path, model_name, model_config, &versions));
   if (versions.empty()) {
     return Status(
         Status::Code::INVALID_ARG,
@@ -808,7 +813,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
             std::unique_ptr<ModelInfo>(), std::unique_ptr<ModelInfo>())));
     if (res.second) {
       res.first->second.first.reset(new ModelInfo(
-          repository_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
+          repository_path, model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
           model_config));
     } else {
       auto& serving_model = res.first->second.first;
@@ -817,7 +822,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
       // should be performed in background to avoid version down-time
       if (serving_model->state_ == ModelReadyState::READY) {
         res.first->second.second.reset(new ModelInfo(
-            repository_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
+            repository_path, model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
             model_config));
       }
     }
@@ -1432,6 +1437,7 @@ ModelRepositoryManager::LoadModelByDependency()
       const auto itr = infos_.find(valid_model->model_name_);
       auto status = model_life_cycle_->AsyncLoad(
           itr->second->model_repository_path_, valid_model->model_name_,
+          itr->second->model_path_,
           valid_model->model_config_, itr->second->agent_model_list_,
           [model_state](Status load_status) {
             model_state->status_ = load_status;
@@ -1823,23 +1829,8 @@ ModelRepositoryManager::Poll(
       bool exists = false;
       for (const auto repository_path : repository_paths_) {
         bool exists_in_this_repo = false;
-        auto subdir_name = model.first;
 
-        // Save this repository_path's model mapping, if it has one.
-        // If so, look for an associated mapping.
-        bool has_mapping = false;
-        auto mapping_it = model_mappings_.find(repository_path);
-        if (mapping_it != model_mappings_.end()) {
-          has_mapping = true;
-        }
-        if (has_mapping) {
-          for (const auto& mapping : mapping_it->second) {
-            if (mapping.second == subdir_name) {
-              subdir_name = mapping.first;
-            }
-          }
-        }
-        const auto full_path = JoinPath({repository_path, subdir_name});
+        auto full_path = ModelPath(model.first, repository_path);
         Status status = FileExists(full_path, &exists_in_this_repo);
         if (!status.IsOk()) {
           LOG_ERROR << "failed to poll model repository '" << repository_path
@@ -1881,8 +1872,10 @@ ModelRepositoryManager::Poll(
     const auto& child = pair.first;
     const auto& repository = pair.second;
 
+    
+
     auto model_poll_state = STATE_UNMODIFIED;
-    auto full_path = JoinPath({repository, child});
+    auto full_path = ModelPath(child, repository);
 
     const auto& mit = models.find(child);
 
@@ -1935,7 +1928,7 @@ ModelRepositoryManager::Poll(
     }
 
     if (status.IsOk() && (model_poll_state != STATE_UNMODIFIED)) {
-      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, repository));
+      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, repository, full_path));
       inference::ModelConfig& model_config = model_info->model_config_;
 
       // Create the associated repo agent models when a model is to be loaded,
@@ -1984,6 +1977,7 @@ ModelRepositoryManager::Poll(
             }
             model_info->model_repository_path_ =
                 location_string.substr(0, location_string.rfind('/', pos));
+            //TODO: Figure out why this is used below... likely has to do with the use of directory one level up
             full_path = location_string;
           }
         }
@@ -2221,6 +2215,25 @@ ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
     return false;
   }
   return true;
+}
+
+std::string
+ModelRepositoryManager::ModelPath(const std::string& model_name, const std::string& repository_path){
+  // Save this repository_path's model mapping, if it has one.
+  auto model = model_name;
+  auto mapping_it = model_mappings_.find(repository_path);
+
+  // If it has a mapping, look for an associated mapping.
+  if (mapping_it != model_mappings_.end()) {
+    for (const auto& mapping : mapping_it->second) {
+      if (mapping.second == model_name) {
+        model = mapping.first;
+        break;
+      }
+    }
+  }
+
+  return JoinPath({repository_path, model});
 }
 
 Status
