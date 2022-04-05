@@ -94,6 +94,10 @@ class TritonModel : public Model {
       const BackendCmdlineConfigMap& backend_cmdline_config_map,
       const std::string& backend_name, BackendCmdlineConfig& config);
 
+  // Sets defaults for some backend configurations when none are specified on
+  // the command line.
+  static Status SetBackendConfigDefaults(BackendCmdlineConfig& config);
+
   Status Initialize();
   Status WarmUp();
 

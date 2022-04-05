@@ -139,6 +139,8 @@ TritonModel::Create(
   RETURN_IF_ERROR(ResolveBackendConfigs(
       backend_cmdline_config_map, model_config.backend(), config));
 
+  RETURN_IF_ERROR(SetBackendConfigDefaults(config));
+
   std::shared_ptr<TritonBackend> backend;
   RETURN_IF_ERROR(TritonBackendManager::CreateBackend(
       model_config.backend(), backend_libdir, backend_libpath, config,
@@ -257,6 +259,36 @@ TritonModel::ResolveBackendConfigs(
       config.push_back(current_specific_setting);
     }
   }  // else empty config
+
+  return Status::Success;
+}
+
+
+const std::unordered_map<std::string, std::string> backend_config_defaults(
+    {{"default-max-batch-size", "4"}});
+
+Status
+TritonModel::SetBackendConfigDefaults(BackendCmdlineConfig& config)
+{
+  auto backend_config_defaults_copy = backend_config_defaults;
+
+  for (auto& setting : config) {
+    if (setting.first.compare("default-max-batch-size") == 0) {
+      backend_config_defaults_copy.erase(setting.first);
+    }
+
+    if (backend_config_defaults_copy.empty()) {
+      break;
+    }
+  }
+
+  // Anything left should be added to the config
+  for (const auto& default_setting : backend_config_defaults_copy) {
+    LOG_VERBOSE(1) << "Adding default backend config setting: "
+                   << default_setting.first << "," << default_setting.second;
+    config.push_back(
+        std::make_pair(default_setting.first, default_setting.second));
+  }
 
   return Status::Success;
 }
