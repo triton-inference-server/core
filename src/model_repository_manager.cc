@@ -1705,7 +1705,7 @@ ModelRepositoryManager::RepositoryIndex(
   std::set<std::string> seen_models;
   std::set<std::string> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
-    // Save this repository_path's model mapping, if it has one.
+    // Save this repository's model mapping, if it has one.
     auto mapping_it = model_mappings_.find(repository_path);
     bool mapping_exists = (mapping_it != model_mappings_.end());
     std::set<std::string> subdirs;
@@ -1790,7 +1790,7 @@ ModelRepositoryManager::Poll(
   if (models.empty()) {
     std::set<std::string> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
-      // Save this repository_path's model mapping, if it has one.
+      // Save this repository's model mapping, if it has one.
       auto mapping_it = model_mappings_.find(repository_path);
       bool has_mapping = false;
       if (mapping_it != model_mappings_.end()) {
@@ -2215,8 +2215,6 @@ ModelRepositoryManager::AddModelMapping(
     LOG_ERROR << "Model mapping already found for repository: ";
     return false;
   }
-
-  // TODO: Move vs copy? Pass by reference (const)?
   model_mappings_[repository_path] = model_mapping;
   return true;
 }
@@ -2231,13 +2229,11 @@ ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
   return true;
 }
 
-
-// TODO: Fix this, naming and directory... this returns the directory name
 std::string
 ModelRepositoryManager::ModelSubdir(
     const std::string& model_name, const std::string& repository_path)
 {
-  // Save this repository_path's model mapping, if it has one.
+  // Save this repository's model mapping, if it has one.
   auto model = model_name;
   auto mapping_it = model_mappings_.find(repository_path);
 
