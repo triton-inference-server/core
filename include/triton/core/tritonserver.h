@@ -1889,10 +1889,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerStop(
 /// \param repository_path The full path to the model repository.
 /// \param name_mapping List of name_mapping parameters. Each mapping has
 /// the model directory name as its key, overriden model name as its value.
-/// If the model directory name is empty, there must only be one model directory
-/// in the repository. In that case, the name will be set to that model
-/// directory. \param model_count Number of mappings provided. \return a
-/// TRITONSERVER_Error indicating success or failure.
+/// \param model_count Number of mappings provided.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerRegisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path,
