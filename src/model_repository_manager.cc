@@ -1707,7 +1707,7 @@ ModelRepositoryManager::RepositoryIndex(
   for (const auto& repository_path : repository_paths_) {
     // Save this repository_path's model mapping, if it has one.
     auto mapping_it = model_mappings_.find(repository_path);
-    bool mapping_exists = mapping_it != model_mappings_.end();
+    bool mapping_exists = (mapping_it != model_mappings_.end());
     std::set<std::string> subdirs;
     RETURN_IF_ERROR(GetDirectorySubdirs(repository_path, &subdirs));
     for (const auto& subdir : subdirs) {
@@ -1835,7 +1835,7 @@ ModelRepositoryManager::Poll(
         bool exists_in_this_repo = false;
 
         auto full_path = JoinPath(
-            {repository_path, ModelName(model.first, repository_path)});
+            {repository_path, ModelSubdir(model.first, repository_path)});
         Status status = FileExists(full_path, &exists_in_this_repo);
         if (!status.IsOk()) {
           LOG_ERROR << "failed to poll model repository '" << repository_path
@@ -1879,7 +1879,7 @@ ModelRepositoryManager::Poll(
 
 
     auto model_poll_state = STATE_UNMODIFIED;
-    auto full_path = JoinPath({repository, ModelName(child, repository)});
+    auto full_path = JoinPath({repository, ModelSubdir(child, repository)});
 
     const auto& mit = models.find(child);
 
@@ -2004,14 +2004,24 @@ ModelRepositoryManager::Poll(
         }
       }
       if (status.IsOk()) {
-        // Make sure the name of the model matches the name of the
-        // directory. This is a somewhat arbitrary requirement but seems
-        // like good practice to require it of the user. It also acts as a
-        // check to make sure we don't have two different models with the
-        // same name.
-        // TODO: See whether model name or config used elsewhere, update config
-        // as needed, and make this check search the mapping for the name
-        if (model_config.name() != child) {
+        // If the model is mapped, update its config name based on the
+        // mapping.
+        auto mapping_it = model_mappings_.find(repository);
+        bool mapping_exists = (mapping_it != model_mappings_.end());
+        if (mapping_exists) {
+          auto model_it = mapping_it->second.find(child);
+          if (model_it != mapping_it->second.end()) {
+            model_config.set_name(model_it->second);
+          }
+        }
+
+        // If there is no model mapping, make sure the name of the model
+        // matches the name of the directory. This is a somewhat arbitrary
+        // requirement but seems like good practice to require it of the user.
+        // It also acts as a check to make sure we don't have two different
+        // models with the same name.
+
+        if (!mapping_exists && model_config.name() != child) {
           status = Status(
               Status::Code::INVALID_ARG,
               "unexpected directory name '" + child + "' for model '" +
@@ -2221,8 +2231,10 @@ ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
   return true;
 }
 
+
+// TODO: Fix this, naming and directory... this returns the directory name
 std::string
-ModelRepositoryManager::ModelName(
+ModelRepositoryManager::ModelSubdir(
     const std::string& model_name, const std::string& repository_path)
 {
   // Save this repository_path's model mapping, if it has one.

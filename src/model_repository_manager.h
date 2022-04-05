@@ -220,7 +220,7 @@ class ModelRepositoryManager {
 
   /// Insert a repository's model mapping.
   /// \param repository_path Path to model repository.
-  /// \param model_mapping Map of overriden model names to directory names.
+  /// \param model_mapping Map of subdirectory names to overridden model names.
   /// \return True on success. False otherwise.
   bool AddModelMapping(
       const std::string& repository_path,
@@ -231,11 +231,12 @@ class ModelRepositoryManager {
   /// \return True on success. False otherwise.
   bool RemoveModelMapping(const std::string& repository_path);
 
-  /// Get a model's name, checking against its repository's model mappings.
+  /// Return a model's subdirectory name, checking against its repository's
+  /// model mappings.
   /// \param model_name Name of model.
   /// \param repository_path Path to model repository.
   /// \return Path to model.
-  std::string ModelName(
+  std::string ModelSubdir(
       const std::string& model_name, const std::string& repository_path);
 
  private:
@@ -367,8 +368,8 @@ class ModelRepositoryManager {
       missing_nodes_;
 
   // Map from a repository path to its model mapping, if it has one.
-  // The model mapping maps overridden model names (key) to directory names
-  // (value).
+  // The model mapping maps subdirectory names (key) to overridden model
+  // names (value).
   std::unordered_map<std::string, std::unordered_map<std::string, std::string>>
       model_mappings_;
 
