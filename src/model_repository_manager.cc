@@ -2205,28 +2205,41 @@ ModelRepositoryManager::UpdateDependencyGraph(
   return Status::Success;
 }
 
-bool
+Status
 ModelRepositoryManager::AddModelMapping(
     const std::string& repository_path,
     std::unordered_map<std::string, std::string> model_mapping)
 {
+  // Verify there are no duplicate model names in mapping.
+  std::set<std::string> models;
+  for (auto const& mapping : model_mapping) {
+    if (!models.insert(mapping.second).second) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Multiple subdirectories point to model: " + mapping.second);
+    }
+  }
+
+  // If does not exist, add new model mapping to mappings.
   auto model_it = model_mappings_.find(repository_path);
   if (model_it != model_mappings_.end()) {
-    LOG_ERROR << "Model mapping already found for repository: ";
-    return false;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Model mapping already found for repository: " + repository_path);
   }
   model_mappings_[repository_path] = model_mapping;
-  return true;
+  return Status::Success;
 }
 
-bool
+Status
 ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
 {
   if (model_mappings_.erase(repository_path) != 1) {
-    LOG_ERROR << "Model mapping not found for repository: " << repository_path;
-    return false;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Model mapping not found for repository: " + repository_path);
   }
-  return true;
+  return Status::Success;
 }
 
 std::string

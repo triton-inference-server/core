@@ -131,19 +131,19 @@ class InferenceServer {
   Status PrintBackendAndModelSummary();
 
   // Add model repository path.
-  bool AddModelRepositoryPath(const std::string& path);
+  Status AddModelRepositoryPath(const std::string& path);
 
   // Remove model repository path.
-  bool RemoveModelRepositoryPath(const std::string& path);
+  Status RemoveModelRepositoryPath(const std::string& path);
 
   // Add model mapping.
-  bool AddModelMapping(
+  Status AddModelMapping(
       const std::string& repository_path,
       const std::unordered_map<std::string, std::string>& model_mapping);
 
 
   // Remove model mapping associated with a repository_path.
-  bool RemoveModelMapping(const std::string& repository_path);
+  Status RemoveModelMapping(const std::string& repository_path);
 
   // Return the server version.
   const std::string& Version() const { return version_; }

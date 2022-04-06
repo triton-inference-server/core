@@ -2169,38 +2169,38 @@ TRITONSERVER_ServerRegisterModelRepository(
   }
 
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
-  if (!lserver->AddModelRepositoryPath(repository_path)) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        std::string(
-            "model repository " + std::string(repository_path) +
-            " already registered")
-            .c_str());
-  }
+  RETURN_IF_STATUS_ERROR(lserver->AddModelRepositoryPath(repository_path));
   std::unordered_map<std::string, std::string> model_mapping;
 
   for (size_t i = 0; i < mapping_count; ++i) {
     auto mapping =
         reinterpret_cast<const tc::InferenceParameter*>(name_mapping[i]);
-    auto model_name = mapping->Name();
+    auto subdir = mapping->Name();
 
     if (mapping->Type() != TRITONSERVER_PARAMETER_STRING) {
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
           std::string(
-              "Requested model mapping directory must be a string, found "
+              "Mapped model name must be a string, found "
               "another type for " +
-              model_name)
+              subdir)
               .c_str());
     }
 
-    auto model_path =
+    auto model_name =
         std::string(reinterpret_cast<const char*>(mapping->ValuePointer()));
 
-    model_mapping[model_name] = model_path;
+    if (model_mapping.find(subdir) != model_mapping.end()) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          std::string("Duplicate mappings found for subdirectory " + subdir)
+              .c_str());
+    }
+    model_mapping[subdir] = model_name;
   }
 
-  lserver->AddModelMapping(repository_path, model_mapping);
+  RETURN_IF_STATUS_ERROR(
+      lserver->AddModelMapping(repository_path, model_mapping));
 
   return nullptr;  // Success
 }
@@ -2210,22 +2210,8 @@ TRITONSERVER_ServerUnregisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path)
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
-  if (!lserver->RemoveModelRepositoryPath(repository_path)) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        std::string(
-            "model repository " + std::string(repository_path) +
-            " not registered")
-            .c_str());
-  }
-  if (!lserver->RemoveModelMapping(repository_path)) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        std::string(
-            "model mapping not found for repository: " +
-            std::string(repository_path))
-            .c_str());
-  }
+  RETURN_IF_STATUS_ERROR(lserver->RemoveModelRepositoryPath(repository_path));
+  RETURN_IF_STATUS_ERROR(lserver->RemoveModelMapping(repository_path));
   return nullptr;  // Success
 }
 

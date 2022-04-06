@@ -221,15 +221,15 @@ class ModelRepositoryManager {
   /// Insert a repository's model mapping.
   /// \param repository_path Path to model repository.
   /// \param model_mapping Map of subdirectory names to overridden model names.
-  /// \return True on success. False otherwise.
-  bool AddModelMapping(
+  /// \return error status
+  Status AddModelMapping(
       const std::string& repository_path,
       std::unordered_map<std::string, std::string> model_mapping);
 
   /// Remove a model mapping.
   /// \param repository_path Path to model repository.
-  /// \return True on success. False otherwise.
-  bool RemoveModelMapping(const std::string& repository_path);
+  /// \return error status
+  Status RemoveModelMapping(const std::string& repository_path);
 
   /// Return a model's subdirectory name, checking against its repository's
   /// model mappings.

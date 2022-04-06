@@ -621,39 +621,44 @@ InferenceServer::PrintBackendAndModelSummary()
   return Status::Success;
 }
 
-bool
+Status
 InferenceServer::AddModelRepositoryPath(const std::string& path)
 {
   if (model_repository_paths_.insert(path).second) {
-    LOG_ERROR << "Model repository already registered: " << path;
-    return false;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Model repository already registered: " + path);
   }
-  return true;
+  return Status::Success;
 }
 
-bool
+Status
 InferenceServer::RemoveModelRepositoryPath(const std::string& path)
 {
   if (model_repository_paths_.erase(path) != 1) {
-    LOG_ERROR << "Model repository is not registered: " << path;
-    return false;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Model repository is not registered: " + path);
   }
-  return true;
+  return Status::Success;
 }
 
-bool
+Status
 InferenceServer::AddModelMapping(
     const std::string& repository_path,
     const std::unordered_map<std::string, std::string>& model_mapping)
 {
-  return model_repository_manager_->AddModelMapping(
-      repository_path, model_mapping);
+  RETURN_IF_ERROR(model_repository_manager_->AddModelMapping(
+      repository_path, model_mapping));
+  return Status::Success;
 }
 
-bool
+Status
 InferenceServer::RemoveModelMapping(const std::string& repository_path)
 {
-  return model_repository_manager_->RemoveModelMapping(repository_path);
+  RETURN_IF_ERROR(
+      model_repository_manager_->RemoveModelMapping(repository_path));
+  return Status::Success;
 }
 
 }}  // namespace triton::core
