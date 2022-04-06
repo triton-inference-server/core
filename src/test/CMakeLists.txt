@@ -478,3 +478,43 @@ if(${TRITON_ENABLE_METRICS})
     RUNTIME DESTINATION bin
   )
 endif() # TRITON_ENABLE_METRICS
+
+#
+# Unit test for Model Repository Register API
+#
+add_executable(
+  register_api_test
+  register_api_test.cc
+)
+
+set_target_properties(
+  register_api_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  register_api_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  register_api_test
+  PRIVATE
+    triton-common-error   # from repo-common
+    triton-common-logging # from repo-common
+    triton-core
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(
+  TARGETS register_api_test
+  RUNTIME DESTINATION bin
+)
