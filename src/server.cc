@@ -624,7 +624,7 @@ InferenceServer::PrintBackendAndModelSummary()
 Status
 InferenceServer::AddModelRepositoryPath(const std::string& path)
 {
-  if (model_repository_paths_.insert(path).second) {
+  if (!model_repository_paths_.insert(path).second) {
     return Status(
         Status::Code::INVALID_ARG,
         "model repository '" + path + "' has been registered");

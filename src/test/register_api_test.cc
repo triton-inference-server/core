@@ -623,12 +623,12 @@ TEST_F(PollingRegisterApiTest, unsupport)
       TRITONSERVER_ServerRegisterModelRepository(
           server_, "empty_models", nullptr, 0),
       TRITONSERVER_ERROR_UNSUPPORTED,
-      "Register API is unsupported in POLLING model control mode",
+      "Register API is unsupported in POLL model control mode",
       "registering model repository 'empty_models'");
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
       TRITONSERVER_ERROR_UNSUPPORTED,
-      "Unregister API is unsupported in POLLING model control mode",
+      "Unregister API is unsupported in POLL model control mode",
       "unregistering model repository 'empty_models'");
 }
 
