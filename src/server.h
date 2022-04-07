@@ -138,12 +138,12 @@ class InferenceServer {
 
   // Add model mapping.
   Status AddModelMapping(
-      const std::string& repository_path,
-      const std::unordered_map<std::string, std::string>& model_mapping);
+      const std::string& model_name, const std::string& repository_path,
+      const std::string& subdir_name);
 
 
-  // Remove model mapping associated with a repository_path.
-  Status RemoveModelMapping(const std::string& repository_path);
+  // Remove model mapping associated with a repository name.
+  Status RemoveModelMappingRepository(const std::string& repository_name);
 
   // Return the server version.
   const std::string& Version() const { return version_; }

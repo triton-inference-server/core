@@ -645,19 +645,20 @@ InferenceServer::RemoveModelRepositoryPath(const std::string& path)
 
 Status
 InferenceServer::AddModelMapping(
-    const std::string& repository_path,
-    const std::unordered_map<std::string, std::string>& model_mapping)
+    const std::string& model_name, const std::string& repository_path,
+    const std::string& subdir_name)
 {
   RETURN_IF_ERROR(model_repository_manager_->AddModelMapping(
-      repository_path, model_mapping));
+      model_name, repository_path, subdir_name));
   return Status::Success;
 }
 
 Status
-InferenceServer::RemoveModelMapping(const std::string& repository_path)
+InferenceServer::RemoveModelMappingRepository(
+    const std::string& repository_name)
 {
   RETURN_IF_ERROR(
-      model_repository_manager_->RemoveModelMapping(repository_path));
+      model_repository_manager_->RemoveModelMappingRepository(repository_name));
   return Status::Success;
 }
 

@@ -2190,17 +2190,9 @@ TRITONSERVER_ServerRegisterModelRepository(
     auto model_name =
         std::string(reinterpret_cast<const char*>(mapping->ValuePointer()));
 
-    if (model_mapping.find(subdir) != model_mapping.end()) {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_INVALID_ARG,
-          std::string("Duplicate mappings found for subdirectory " + subdir)
-              .c_str());
-    }
-    model_mapping[subdir] = model_name;
+    RETURN_IF_STATUS_ERROR(
+        lserver->AddModelMapping(model_name, repository_path, subdir));
   }
-
-  RETURN_IF_STATUS_ERROR(
-      lserver->AddModelMapping(repository_path, model_mapping));
 
   return nullptr;  // Success
 }
@@ -2211,7 +2203,10 @@ TRITONSERVER_ServerUnregisterModelRepository(
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   RETURN_IF_STATUS_ERROR(lserver->RemoveModelRepositoryPath(repository_path));
-  RETURN_IF_STATUS_ERROR(lserver->RemoveModelMapping(repository_path));
+  // TODO: Remove all model mappings associated with a specific path... do when
+  // unregistering path in model_repo_manager?
+  RETURN_IF_STATUS_ERROR(
+      lserver->RemoveModelMappingRepository(repository_path));
   return nullptr;  // Success
 }
 

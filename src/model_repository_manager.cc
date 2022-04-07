@@ -1705,18 +1705,21 @@ ModelRepositoryManager::RepositoryIndex(
   std::set<std::string> seen_models;
   std::set<std::string> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
-    // Save this repository's model mapping, if it has one.
-    auto mapping_it = model_mappings_.find(repository_path);
-    bool mapping_exists = (mapping_it != model_mappings_.end());
+    // For any mapped models in this repository, save the mapping
+    // from their subdirectory name to model name.
+    std::map<std::string, std::string> models_in_repo;
+    for (const auto& mapping_it : model_mappings_) {
+      if (mapping_it.second.first == repository_path) {
+        models_in_repo.emplace(mapping_it.second.first, repository_path);
+      }
+    }
     std::set<std::string> subdirs;
     RETURN_IF_ERROR(GetDirectorySubdirs(repository_path, &subdirs));
     for (const auto& subdir : subdirs) {
       auto model = subdir;
-      if (mapping_exists) {
-        auto model_it = mapping_it->second.find(subdir);
-        if (model_it != mapping_it->second.end()) {
-          model = model_it->second;
-        }
+      auto model_it = models_in_repo.find(subdir);
+      if (model_it != models_in_repo.end()) {
+        model = model_it->second;
       }
 
       if (seen_models.find(model) != seen_models.end()) {
@@ -1790,13 +1793,6 @@ ModelRepositoryManager::Poll(
   if (models.empty()) {
     std::set<std::string> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
-      // Save this repository's model mapping, if it has one.
-      auto mapping_it = model_mappings_.find(repository_path);
-      bool has_mapping = false;
-      if (mapping_it != model_mappings_.end()) {
-        has_mapping = true;
-      }
-
       std::set<std::string> subdirs;
       Status status = GetDirectorySubdirs(repository_path, &subdirs);
       if (!status.IsOk()) {
@@ -1805,15 +1801,8 @@ ModelRepositoryManager::Poll(
         *all_models_polled = false;
       } else {
         for (const auto& subdir : subdirs) {
-          auto model_name = subdir;
-          if (has_mapping) {
-            if (mapping_it->second.find(subdir) != mapping_it->second.end()) {
-              model_name = mapping_it->second.find(subdir)->second;
-            }
-          }
-          if (!model_to_repository.emplace(model_name, repository_path)
-                   .second) {
-            duplicated_models.insert(model_name);
+          if (!model_to_repository.emplace(subdir, repository_path).second) {
+            duplicated_models.insert(subdir);
             *all_models_polled = false;
           }
         }
@@ -1830,12 +1819,36 @@ ModelRepositoryManager::Poll(
     // [DLIS-3487] Model doesn't need to be in repository if model files
     // are provided in flight.
     for (const auto& model : models) {
+      // Check model mapping first to see if matching model to load.
       bool exists = false;
+      auto model_it = model_mappings_.find(model.first);
+      if (model_it != model_mappings_.end()) {
+        const auto full_path = model_it->second.second;
+        // TODO: Break below out after an if-else?
+        bool exists_in_this_repo = false;
+        Status status = FileExists(full_path, &exists_in_this_repo);
+        if (!status.IsOk()) {
+          LOG_ERROR << "failed to poll mapped model repository '"
+                    << model_it->second.first << "' for model '" << model.first
+                    << "': " << status.Message();
+          *all_models_polled = false;
+        } else if (exists_in_this_repo) {
+          auto res =
+              model_to_repository.emplace(model.first, model_it->second.first);
+          if (res.second) {
+            exists = true;
+          } else {
+            exists = false;
+            model_to_repository.erase(res.first);
+            LOG_ERROR << "failed to poll model '" << model.first
+                      << "': not unique across all model repositories";
+            *all_models_polled = false;
+          }
+        }
+      }
       for (const auto repository_path : repository_paths_) {
         bool exists_in_this_repo = false;
-
-        auto full_path = JoinPath(
-            {repository_path, ModelSubdir(model.first, repository_path)});
+        const auto full_path = JoinPath({repository_path, model.first});
         Status status = FileExists(full_path, &exists_in_this_repo);
         if (!status.IsOk()) {
           LOG_ERROR << "failed to poll model repository '" << repository_path
@@ -1879,7 +1892,13 @@ ModelRepositoryManager::Poll(
 
 
     auto model_poll_state = STATE_UNMODIFIED;
-    auto full_path = JoinPath({repository, ModelSubdir(child, repository)});
+    std::string full_path;
+    auto model_it = model_mappings_.find(child);
+    if (model_it != model_mappings_.end()) {
+      full_path = model_it->second.second;
+    } else {
+      full_path = JoinPath({repository, child});
+    }
 
     const auto& mit = models.find(child);
 
@@ -2006,27 +2025,21 @@ ModelRepositoryManager::Poll(
       if (status.IsOk()) {
         // If the model is mapped, update its config name based on the
         // mapping.
-        auto mapping_it = model_mappings_.find(repository);
-        bool mapping_exists = (mapping_it != model_mappings_.end());
-        if (mapping_exists) {
-          auto model_it = mapping_it->second.find(child);
-          if (model_it != mapping_it->second.end()) {
-            model_config.set_name(model_it->second);
+        if (model_mappings_.find(child) != model_mappings_.end()) {
+          model_config.set_name(child);
+        } else {
+          // If there is no model mapping, make sure the name of the model
+          // matches the name of the directory. This is a somewhat arbitrary
+          // requirement but seems like good practice to require it of the user.
+          // It also acts as a check to make sure we don't have two different
+          // models with the same name.
+          if (model_config.name() != child) {
+            status = Status(
+                Status::Code::INVALID_ARG,
+                "unexpected directory name '" + child + "' for model '" +
+                    model_config.name() +
+                    "', directory name must equal model name");
           }
-        }
-
-        // If there is no model mapping, make sure the name of the model
-        // matches the name of the directory. This is a somewhat arbitrary
-        // requirement but seems like good practice to require it of the user.
-        // It also acts as a check to make sure we don't have two different
-        // models with the same name.
-
-        if (!mapping_exists && model_config.name() != child) {
-          status = Status(
-              Status::Code::INVALID_ARG,
-              "unexpected directory name '" + child + "' for model '" +
-                  model_config.name() +
-                  "', directory name must equal model name");
         }
       }
     }
@@ -2207,60 +2220,41 @@ ModelRepositoryManager::UpdateDependencyGraph(
 
 Status
 ModelRepositoryManager::AddModelMapping(
-    const std::string& repository_path,
-    std::unordered_map<std::string, std::string> model_mapping)
+    const std::string& model_name, const std::string& repository_path,
+    const std::string& subdir_name)
 {
-  // Verify there are no duplicate model names in mapping.
-  std::set<std::string> models;
-  for (auto const& mapping : model_mapping) {
-    if (!models.insert(mapping.second).second) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          "Multiple subdirectories point to model: " + mapping.second);
-    }
-  }
-
-  // If does not exist, add new model mapping to mappings.
-  auto model_it = model_mappings_.find(repository_path);
+  // If does not already exist, add new model mapping to mappings.
+  auto model_it = model_mappings_.find(model_name);
   if (model_it != model_mappings_.end()) {
     return Status(
         Status::Code::INVALID_ARG,
-        "Model mapping already found for repository: " + repository_path);
+        "Model mapping already found for model '" + repository_path + "'");
   }
-  model_mappings_[repository_path] = model_mapping;
+  model_mappings_.emplace(
+      model_name,
+      std::make_pair(
+          repository_path, JoinPath({repository_path, subdir_name})));
   return Status::Success;
 }
 
 Status
-ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
+ModelRepositoryManager::RemoveModelMappingRepository(
+    const std::string& repository_path)
 {
-  if (model_mappings_.erase(repository_path) != 1) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "Model mapping not found for repository: " + repository_path);
-  }
-  return Status::Success;
-}
-
-std::string
-ModelRepositoryManager::ModelSubdir(
-    const std::string& model_name, const std::string& repository_path)
-{
-  // Save this repository's model mapping, if it has one.
-  auto model = model_name;
-  auto mapping_it = model_mappings_.find(repository_path);
-
-  // If it has a mapping, look for an associated mapping.
-  if (mapping_it != model_mappings_.end()) {
-    for (const auto& mapping : mapping_it->second) {
-      if (mapping.second == model_name) {
-        model = mapping.first;
-        break;
-      }
+  std::set<std::string> models_to_delete;
+  for (auto const& mapping : model_mappings_) {
+    if (mapping.second.first == repository_path) {
+      models_to_delete.insert(mapping.first);
     }
   }
-
-  return model;
+  for (auto const& model : models_to_delete) {
+    if (model_mappings_.erase(model) != 1) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Model mapping not found for model '" + model + "'");
+    }
+  }
+  return Status::Success;
 }
 
 Status
