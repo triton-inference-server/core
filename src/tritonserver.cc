@@ -2162,6 +2162,11 @@ TRITONSERVER_ServerRegisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path,
     const TRITONSERVER_Parameter** name_mapping, const uint32_t mapping_count)
 {
+  if (model_control_mode_ == ModelControlMode::MODE_POLL) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNSUPPORTED,
+        "Register API is unsupported in POLLING model control mode");
+  }
   if ((name_mapping == nullptr) && (mapping_count != 0)) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
@@ -2201,6 +2206,11 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerUnregisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path)
 {
+  if (model_control_mode_ == ModelControlMode::MODE_POLL) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_UNSUPPORTED,
+        "Unregister API is unsupported in POLLING model control mode");
+  }
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   RETURN_IF_STATUS_ERROR(lserver->RemoveModelRepositoryPath(repository_path));
   // TODO: Remove all model mappings associated with a specific path... do when

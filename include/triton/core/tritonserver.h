@@ -1883,7 +1883,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerStop(
     TRITONSERVER_Server* server);
 
-/// Register a new model repository
+/// Register a new model repository. Not available in polling mode.
 ///
 /// \param server The inference server object.
 /// \param repository_path The full path to the model repository.
@@ -1896,7 +1896,7 @@ TRITONSERVER_ServerRegisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path,
     const TRITONSERVER_Parameter** name_mapping, const uint32_t mapping_count);
 
-/// Unregister a model repository
+/// Unregister a model repository. Not available in polling mode.
 ///
 /// \param server The inference server object.
 /// \param repository_path The full path to the model repository.

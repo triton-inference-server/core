@@ -1824,48 +1824,29 @@ ModelRepositoryManager::Poll(
       auto model_it = model_mappings_.find(model.first);
       if (model_it != model_mappings_.end()) {
         const auto full_path = model_it->second.second;
-        // TODO: Break below out after an if-else?
-        bool exists_in_this_repo = false;
-        Status status = FileExists(full_path, &exists_in_this_repo);
-        if (!status.IsOk()) {
-          LOG_ERROR << "failed to poll mapped model repository '"
-                    << model_it->second.first << "' for model '" << model.first
-                    << "': " << status.Message();
-          *all_models_polled = false;
-        } else if (exists_in_this_repo) {
-          auto res =
-              model_to_repository.emplace(model.first, model_it->second.first);
-          if (res.second) {
-            exists = true;
-          } else {
-            exists = false;
-            model_to_repository.erase(res.first);
-            LOG_ERROR << "failed to poll model '" << model.first
-                      << "': not unique across all model repositories";
+      } else {
+        for (const auto repository_path : repository_paths_) {
+          bool exists_in_this_repo = false;
+          const auto full_path = JoinPath({repository_path, model.first});
+          Status status = FileExists(full_path, &exists_in_this_repo);
+          if (!status.IsOk()) {
+            LOG_ERROR << "failed to poll model repository '" << repository_path
+                      << "' for model '" << model.first
+                      << "': " << status.Message();
             *all_models_polled = false;
-          }
-        }
-      }
-      for (const auto repository_path : repository_paths_) {
-        bool exists_in_this_repo = false;
-        const auto full_path = JoinPath({repository_path, model.first});
-        Status status = FileExists(full_path, &exists_in_this_repo);
-        if (!status.IsOk()) {
-          LOG_ERROR << "failed to poll model repository '" << repository_path
-                    << "' for model '" << model.first
-                    << "': " << status.Message();
-          *all_models_polled = false;
-        } else if (exists_in_this_repo) {
-          auto res = model_to_repository.emplace(model.first, repository_path);
-          if (res.second) {
-            exists = true;
-          } else {
-            exists = false;
-            model_to_repository.erase(res.first);
-            LOG_ERROR << "failed to poll model '" << model.first
-                      << "': not unique across all model repositories";
-            *all_models_polled = false;
-            break;
+          } else if (exists_in_this_repo) {
+            auto res =
+                model_to_repository.emplace(model.first, repository_path);
+            if (res.second) {
+              exists = true;
+            } else {
+              exists = false;
+              model_to_repository.erase(res.first);
+              LOG_ERROR << "failed to poll model '" << model.first
+                        << "': not unique across all model repositories";
+              *all_models_polled = false;
+              break;
+            }
           }
         }
       }
