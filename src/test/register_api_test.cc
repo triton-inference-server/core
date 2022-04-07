@@ -262,7 +262,7 @@ TEST_F(RegisterApiTest, RegisterWithRepeatedMap2)
       TRITONSERVER_ServerRegisterModelRepository(
           server_, "models_1", name_map.data(), name_map.size()),
       TRITONSERVER_ERROR_INVALID_ARG,
-      "failed to register 'models_1', there is conflicting mapping",
+      "failed to register 'models_1', there is conflicting mapping for 'model_1'",
       "registering model repository 'models_1'");
 }
 

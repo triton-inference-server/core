@@ -627,7 +627,7 @@ InferenceServer::AddModelRepositoryPath(const std::string& path)
   if (model_repository_paths_.insert(path).second) {
     return Status(
         Status::Code::INVALID_ARG,
-        "Model repository already registered: " + path);
+        "model repository '" + path + "' has been registered");
   }
   return Status::Success;
 }
@@ -638,7 +638,7 @@ InferenceServer::RemoveModelRepositoryPath(const std::string& path)
   if (model_repository_paths_.erase(path) != 1) {
     return Status(
         Status::Code::INVALID_ARG,
-        "Model repository is not registered: " + path);
+        "failed to unregister '" + path + "', repository not found");
   }
   return Status::Success;
 }

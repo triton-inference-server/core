@@ -2162,6 +2162,7 @@ TRITONSERVER_ServerRegisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path,
     const TRITONSERVER_Parameter** name_mapping, const uint32_t mapping_count)
 {
+  LOG_INFO << "MODE:" << model_control_mode_;
   if (model_control_mode_ == ModelControlMode::MODE_POLL) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_UNSUPPORTED,
@@ -2195,8 +2196,13 @@ TRITONSERVER_ServerRegisterModelRepository(
     auto model_name =
         std::string(reinterpret_cast<const char*>(mapping->ValuePointer()));
 
-    RETURN_IF_STATUS_ERROR(
-        lserver->AddModelMapping(model_name, repository_path, subdir));
+    tc::Status status = lserver->AddModelMapping(model_name, repository_path, subdir));
+    if (!status.IsOk()) {
+      TRITONSERVER_ServerUnregisterModelRepository(server, repository_path);
+      return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "failed to register '" + repository_path + "', there is conflicting mapping for '" + model_name + "'");
+    }
   }
 
   return nullptr;  // Success
@@ -2213,8 +2219,6 @@ TRITONSERVER_ServerUnregisterModelRepository(
   }
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   RETURN_IF_STATUS_ERROR(lserver->RemoveModelRepositoryPath(repository_path));
-  // TODO: Remove all model mappings associated with a specific path... do when
-  // unregistering path in model_repo_manager?
   RETURN_IF_STATUS_ERROR(
       lserver->RemoveModelMappingRepository(repository_path));
   return nullptr;  // Success
