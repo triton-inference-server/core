@@ -294,7 +294,7 @@ TEST_F(RegisterApiTest, RegisterWithRepeatedMap2)
       TRITONSERVER_ServerRegisterModelRepository(
           server_, "models_1", name_map.data(), name_map.size()),
       TRITONSERVER_ERROR_INVALID_ARG,
-      "failed to register 'models_1', there is conflicting mapping for "
+      "failed to register 'models_1', there is a conflicting mapping for "
       "'name_0'",
       "registering model repository 'models_1'");
 }
@@ -746,12 +746,14 @@ TEST_F(PollingRegisterApiTest, unsupport)
       TRITONSERVER_ServerRegisterModelRepository(
           server_, "empty_models", nullptr, 0),
       TRITONSERVER_ERROR_UNSUPPORTED,
-      "Register API is unsupported in POLL model control mode",
+      "repository registration is not allowed if model control mode is not "
+      "EXPLICIT",
       "registering model repository 'empty_models'");
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
       TRITONSERVER_ERROR_UNSUPPORTED,
-      "Unregister API is unsupported in POLL model control mode",
+      "repository unregistration is not allowed if model control mode is not "
+      "EXPLICIT",
       "unregistering model repository 'empty_models'");
 }
 
@@ -804,12 +806,14 @@ TEST_F(NoneRegisterApiTest, unsupport)
       TRITONSERVER_ServerRegisterModelRepository(
           server_, "empty_models", nullptr, 0),
       TRITONSERVER_ERROR_UNSUPPORTED,
-      "Register API is unsupported in NONE model control mode",
+      "repository registration is not allowed if model control mode is not "
+      "EXPLICIT",
       "registering model repository 'empty_models'");
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
       TRITONSERVER_ERROR_UNSUPPORTED,
-      "Unregister API is unsupported in NONE model control mode",
+      "repository unregistration is not allowed if model control mode is not "
+      "EXPLICIT",
       "unregistering model repository 'empty_models'");
 }
 

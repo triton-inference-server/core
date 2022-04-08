@@ -2228,62 +2228,95 @@ ModelRepositoryManager::UpdateDependencyGraph(
 }
 
 Status
-ModelRepositoryManager::AddModelRepositoryPath(const std::string& path)
+ModelRepositoryManager::RegisterModelRepository(
+    const std::string& repository,
+    const std::unordered_map<std::string, std::string>& model_mapping)
 {
-  if (!repository_paths_.insert(path).second) {
+  if (!model_control_enabled_) {
     return Status(
-        Status::Code::ALREADY_EXISTS,
-        "model repository '" + path + "' has already been registered");
+        Status::Code::UNSUPPORTED,
+        "repository registration is not allowed if model control mode is not "
+        "EXPLICIT");
   }
-  LOG_INFO << "Model repository registered: " << path;
-  return Status::Success;
-}
-
-Status
-ModelRepositoryManager::RemoveModelRepositoryPath(const std::string& path)
-{
-  if (repository_paths_.erase(path) != 1) {
+  bool is_directory = false;
+  auto status = IsDirectory(repository, &is_directory);
+  if (!status.IsOk() || !is_directory) {
     return Status(
-        Status::Code::INVALID_ARG,
-        "failed to unregister '" + path + "', repository not found");
+        Status::Code::INVALID_ARG, (std::string("failed to register '") +
+                                    repository + "', repository not found")
+                                       .c_str());
   }
-  LOG_INFO << "Model repository unregistered: " << path;
-  return Status::Success;
-}
 
-Status
-ModelRepositoryManager::AddModelMapping(
-    const std::string& model_name, const std::string& repository_path,
-    const std::string& subdir_name)
-{
-  auto model_it = model_mappings_.find(model_name);
-  if (model_it != model_mappings_.end()) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "Model mapping already found for model '" + repository_path + "'");
-  }
-  model_mappings_.emplace(
-      model_name,
-      std::make_pair(
-          repository_path, JoinPath({repository_path, subdir_name})));
-  return Status::Success;
-}
+  {
+    // Serialize all operations that change model state
+    std::lock_guard<std::mutex> lock(poll_mu_);
 
-Status
-ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
-{
-  std::set<std::string> models_to_delete;
-  for (auto const& mapping : model_mappings_) {
-    if (mapping.second.first == repository_path) {
-      models_to_delete.insert(mapping.first);
-    }
-  }
-  for (auto const& model : models_to_delete) {
-    if (model_mappings_.erase(model) != 1) {
+    // Check repository and mapped models do not yet exist.
+    if (repository_paths_.find(repository) != repository_paths_.end()) {
       return Status(
-          Status::Code::INTERNAL,
-          "Model mapping not found for model '" + model + "'");
+          Status::Code::ALREADY_EXISTS,
+          "model repository '" + repository + "' has already been registered");
     }
+
+    for (const auto& mapping : model_mapping) {
+      if (model_mappings_.find(mapping.first) != model_mappings_.end()) {
+        return Status(
+            Status::Code::ALREADY_EXISTS,
+            (std::string("failed to register '") + mapping.first +
+             "', there is a conflicting mapping for '" +
+             std::string(mapping.first) + "'")
+                .c_str());
+      }
+    }
+
+    repository_paths_.emplace(repository).second;
+    for (const auto& mapping : model_mapping) {
+      model_mappings_.emplace(
+          mapping.first,
+          std::make_pair(repository, JoinPath({repository, mapping.second})));
+    }
+  }
+
+  LOG_INFO << "Model repository registered: " << repository;
+  return Status::Success;
+}
+
+Status
+ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
+{
+  if (!model_control_enabled_) {
+    return Status(
+        Status::Code::UNSUPPORTED,
+        "repository unregistration is not allowed if model control mode is not "
+        "EXPLICIT");
+  }
+  bool all_found = true;
+  {
+    std::lock_guard<std::mutex> lock(poll_mu_);
+    if (repository_paths_.erase(repository) != 1) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "failed to unregister '" + repository + "', repository not found");
+    }
+
+    std::set<std::string> models_to_delete;
+    for (auto const& mapping : model_mappings_) {
+      if (mapping.second.first == repository) {
+        models_to_delete.insert(mapping.first);
+      }
+    }
+    for (auto const& model : models_to_delete) {
+      if (model_mappings_.erase(model) != 1) {
+        all_found = false;
+      }
+    }
+  }
+
+  LOG_INFO << "Model repository unregistered: " << repository;
+  if (!all_found) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Not all registered model mappings found for '" + repository + "'");
   }
   return Status::Success;
 }

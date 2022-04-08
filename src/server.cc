@@ -622,30 +622,18 @@ InferenceServer::PrintBackendAndModelSummary()
 }
 
 Status
-InferenceServer::AddModelRepositoryPath(const std::string& path)
+InferenceServer::RegisterModelRepository(
+    const std::string& repository,
+    const std::unordered_map<std::string, std::string>& model_mapping)
 {
-  return model_repository_manager_->AddModelRepositoryPath(path);
+  return model_repository_manager_->RegisterModelRepository(
+      repository, model_mapping);
 }
 
 Status
-InferenceServer::RemoveModelRepositoryPath(const std::string& path)
+InferenceServer::UnregisterModelRepository(const std::string& repository)
 {
-  return model_repository_manager_->RemoveModelRepositoryPath(path);
-}
-
-Status
-InferenceServer::AddModelMapping(
-    const std::string& model_name, const std::string& repository_path,
-    const std::string& subdir_name)
-{
-  return model_repository_manager_->AddModelMapping(
-      model_name, repository_path, subdir_name);
-}
-
-Status
-InferenceServer::RemoveModelMapping(const std::string& repository_name)
-{
-  return model_repository_manager_->RemoveModelMapping(repository_name);
+  return model_repository_manager_->UnregisterModelRepository(repository);
 }
 
 }}  // namespace triton::core

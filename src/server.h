@@ -130,20 +130,13 @@ class InferenceServer {
   // Print backends and models summary
   Status PrintBackendAndModelSummary();
 
-  // Add model repository path.
-  Status AddModelRepositoryPath(const std::string& path);
+  // Register model repository path and associated mappings
+  Status RegisterModelRepository(
+      const std::string& repository,
+      const std::unordered_map<std::string, std::string>& model_mapping);
 
-  // Remove model repository path.
-  Status RemoveModelRepositoryPath(const std::string& path);
-
-  // Add model mapping.
-  Status AddModelMapping(
-      const std::string& model_name, const std::string& repository_path,
-      const std::string& subdir_name);
-
-
-  // Remove model mapping associated with a repository name.
-  Status RemoveModelMapping(const std::string& repository_name);
+  // Unregister model repository path.
+  Status UnregisterModelRepository(const std::string& repository);
 
   // Return the server version.
   const std::string& Version() const { return version_; }

@@ -218,29 +218,18 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
 
-  // Add model repository path.
-  /// \param repository_path Path to model repository.
-  /// \return error status
-  Status AddModelRepositoryPath(const std::string& path);
+  // Register model repository path.
+  /// \param repository Path to model repository.
+  /// \param model_mapping Mapping with (overridden) model name as key, subdir
+  /// name as value. \return error status
+  Status RegisterModelRepository(
+      const std::string& repository,
+      const std::unordered_map<std::string, std::string>& model_mapping);
 
-  // Remove model repository path.
-  /// \param repository_path Path to model repository.
+  // Unregister model repository path.
+  /// \param repository Path to model repository.
   /// \return error status
-  Status RemoveModelRepositoryPath(const std::string& path);
-
-  /// Insert a model's mapping.
-  /// \param model_name Name of the model.
-  /// \param repository_path Path to model repository.
-  /// \param subdir_name Subdirectory name of model.
-  /// \return error status
-  Status AddModelMapping(
-      const std::string& model_name, const std::string& repository_path,
-      const std::string& subdir_name);
-
-  /// Remove a model mapping.
-  /// \param repository_path Path of the repository
-  /// \return error status
-  Status RemoveModelMapping(const std::string& repository_path);
+  Status UnregisterModelRepository(const std::string& repository);
 
  private:
   struct ModelInfo;
