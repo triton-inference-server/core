@@ -1893,7 +1893,6 @@ ModelRepositoryManager::Poll(
     const auto& child = pair.first;
     const auto& repository = pair.second;
 
-
     auto model_poll_state = STATE_UNMODIFIED;
     std::string full_path;
     auto model_it = model_mappings_.find(child);
@@ -2250,7 +2249,6 @@ ModelRepositoryManager::AddModelMapping(
     const std::string& model_name, const std::string& repository_path,
     const std::string& subdir_name)
 {
-  // If does not already exist, add new model mapping to mappings.
   auto model_it = model_mappings_.find(model_name);
   if (model_it != model_mappings_.end()) {
     return Status(
