@@ -51,11 +51,13 @@ namespace {
     }                                                                         \
   } while (false)
 
-// Test Fixture, this test suit expects the current direcotry to
+// Test Fixture, this test suit expects the current directory to
 // have the following file structure:
 //  - empty_models (empty directory)
 //  - models_0 (contain model directory "model_0")
 //  - models_1 (contain model directories "model_0", "model_1")
+//  - models_2 (contain model directories "model_0" with config name
+//    "mapped_name")
 class RegisterApiTest : public ::testing::Test {
  protected:
   void SetUp() override
@@ -145,6 +147,36 @@ TEST_F(RegisterApiTest, RegisterWithMap)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_0"),
       "loading model 'name_0'");
+}
+
+TEST_F(RegisterApiTest, RegisterWithMap2)
+{
+  // Registering a repository "models_2" where contains "model_2", but with
+  // different name mapping. Different from "RegisterWithMap", the directory
+  // name does not match the original model name.
+  const char* override_name = "mapped_name";
+  std::shared_ptr<TRITONSERVER_Parameter> managed_param(
+      TRITONSERVER_ParameterNew(
+          "model_0", TRITONSERVER_PARAMETER_STRING, override_name),
+      TRITONSERVER_ParameterDelete);
+  ASSERT_TRUE(managed_param != nullptr) << "failed to create name mapping pair";
+  std::vector<const TRITONSERVER_Parameter*> name_map{managed_param.get()};
+
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "models_0", name_map.data(), name_map.size()),
+      "registering model repository 'models_0'");
+
+  // Request to load "model_0" which should fail
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerLoadModel(server_, "model_0"),
+      TRITONSERVER_ERROR_INTERNAL,
+      "failed to load 'model_0', no version is available",
+      "loading model 'model_0'");
+  // Request to load "mapped_name"
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerLoadModel(server_, "mapped_name"),
+      "loading model 'mapped_name'");
 }
 
 TEST_F(RegisterApiTest, RegisterTwice)
