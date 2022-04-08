@@ -118,6 +118,12 @@ TEST_F(RegisterApiTest, Register)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       "loading model 'model_0'");
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
+      "Is 'model_0' v1 ready");
+  ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
 }
 
 TEST_F(RegisterApiTest, RegisterWithMap)
@@ -147,36 +153,12 @@ TEST_F(RegisterApiTest, RegisterWithMap)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_0"),
       "loading model 'name_0'");
-}
-
-TEST_F(RegisterApiTest, RegisterWithMap2)
-{
-  // Registering a repository "models_2" where contains "model_2", but with
-  // different name mapping. Different from "RegisterWithMap", the directory
-  // name does not match the original model name.
-  const char* override_name = "mapped_name";
-  std::shared_ptr<TRITONSERVER_Parameter> managed_param(
-      TRITONSERVER_ParameterNew(
-          "model_0", TRITONSERVER_PARAMETER_STRING, override_name),
-      TRITONSERVER_ParameterDelete);
-  ASSERT_TRUE(managed_param != nullptr) << "failed to create name mapping pair";
-  std::vector<const TRITONSERVER_Parameter*> name_map{managed_param.get()};
-
+  bool ready = false;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerRegisterModelRepository(
-          server_, "models_0", name_map.data(), name_map.size()),
-      "registering model repository 'models_0'");
-
-  // Request to load "model_0" which should fail
-  FAIL_TEST_IF_NOT_ERR(
-      TRITONSERVER_ServerLoadModel(server_, "model_0"),
-      TRITONSERVER_ERROR_INTERNAL,
-      "failed to load 'model_0', no version is available",
-      "loading model 'model_0'");
-  // Request to load "mapped_name"
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerLoadModel(server_, "mapped_name"),
-      "loading model 'mapped_name'");
+      TRITONSERVER_ServerModelIsReady(server_, "name_0", 1, &ready),
+      "Is 'name_0' v1 ready");
+  ASSERT_TRUE(ready) << "Expect 'name_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
 }
 
 TEST_F(RegisterApiTest, RegisterTwice)
@@ -233,10 +215,23 @@ TEST_F(RegisterApiTest, RegisterWithMultiMap)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_0"),
       "loading model 'name_0'");
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "name_0", 1, &ready),
+      "Is 'name_0' v1 ready");
+  ASSERT_TRUE(ready) << "Expect 'name_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
+
   // Request to load "name_1"
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_1"),
       "loading model 'name_1'");
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "name_1", 1, &ready),
+      "Is 'name_1' v1 ready");
+  ASSERT_TRUE(ready) << "Expect 'name_1' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
 }
 
 TEST_F(RegisterApiTest, RegisterWithRepeatedMap)
@@ -267,7 +262,12 @@ TEST_F(RegisterApiTest, RegisterWithRepeatedMap)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_1"),
       "loading model 'model_1'");
-  // [FIXME] check if the correct model is loaded (directory "model_0")
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_1", 2, &ready),
+      "Is 'model_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_1' v2 to be ready, model directory is "
+                        "'models_1/model_0'";
 }
 
 TEST_F(RegisterApiTest, RegisterWithRepeatedMap2)
@@ -323,6 +323,12 @@ TEST_F(RegisterApiTest, RegisterMulti)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_1"),
       "loading model 'model_1'");
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_1", 3, &ready),
+      "Is 'model_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_1' v3 to be ready, model directory is "
+                        "'models_1/model_1'";
 }
 
 TEST_F(RegisterApiTest, RegisterMultiWithMap)
@@ -353,9 +359,22 @@ TEST_F(RegisterApiTest, RegisterMultiWithMap)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       "loading model 'model_0'");
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
+      "Is 'model_0' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
+
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_1"),
       "loading model 'model_1'");
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_1", 3, &ready),
+      "Is 'model_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_1' v3 to be ready, model directory is "
+                        "'models_1/model_1'";
 }
 
 TEST_F(RegisterApiTest, RegisterMultiWithMap2)
@@ -386,12 +405,32 @@ TEST_F(RegisterApiTest, RegisterMultiWithMap2)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       "loading model 'model_0'");
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
+      "Is 'model_0' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
+
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_1"),
       "loading model 'model_1'");
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_1", 3, &ready),
+      "Is 'model_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_1' v3 to be ready, model directory is "
+                        "'models_1/model_1'";
+
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_2"),
       "loading model 'model_2'");
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_2", 2, &ready),
+      "Is 'model_2' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_2' v2 to be ready, model directory is "
+                        "'models_1/model_0'";
 }
 
 TEST_F(RegisterApiTest, RegisterMultiWithMap3)
@@ -426,12 +465,32 @@ TEST_F(RegisterApiTest, RegisterMultiWithMap3)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_0"),
       "loading model 'name_0'");
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "name_0", 1, &ready),
+      "Is 'name_0' ready");
+  ASSERT_TRUE(ready) << "Expect 'name_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
+
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_1"),
       "loading model 'name_1'");
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "name_1", 2, &ready),
+      "Is 'name_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'name_1' v2 to be ready, model directory is "
+                        "'models_1/model_0'";
+
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_1"),
       "loading model 'model_1'");
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_1", 3, &ready),
+      "Is 'model_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_1' v3 to be ready, model directory is "
+                        "'models_1/model_1'";
 }
 
 TEST_F(RegisterApiTest, RegisterNonExistingRepo)
@@ -493,9 +552,10 @@ TEST_F(RegisterApiTest, UnregisterWithLoadedModel)
 
   bool ready = false;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerModelIsReady(server_, "model_0", -1, &ready),
+      TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
       "Is 'model_0' ready");
-  ASSERT_TRUE(ready) << "Expect 'model_0' to be ready";
+  ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
 
   // Request to load "model_0" which should fail
   FAIL_TEST_IF_NOT_ERR(
@@ -559,14 +619,25 @@ TEST_F(RegisterApiTest, RegisterMulti2)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       "loading model 'model_0'");
+
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
+      "Is 'model_0' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
+
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_1", 3, &ready),
+      "Is 'model_1' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_1' v3 to be ready, model directory is "
+                        "'models_1/model_1'";
 }
 
 TEST_F(RegisterApiTest, DifferentMapping)
 {
   // With register and unregister, user can update a mapping for specific repo.
-  //
-  // Registering repository "models_0" and "model_1" without mappings,
-  // there are duplicate models but it won't be checked until load
   std::vector<std::string> override_names{"name_0"};
   std::vector<std::shared_ptr<TRITONSERVER_Parameter>> managed_params;
   std::vector<const TRITONSERVER_Parameter*> name_map;
@@ -605,6 +676,25 @@ TEST_F(RegisterApiTest, DifferentMapping)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_0"),
       "loading model 'name_0'");
+
+  bool ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "name_0", 1, &ready),
+      "Is 'name_0' ready");
+  ASSERT_TRUE(ready) << "Expect 'name_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
+
+  // [FIXME] need to revisit this, currently the model manager will actually
+  // unload 'model_0' as the side affect of calling load 'model_0' after updated
+  // the mapping, the reasoning is 'model_0' no longing "seen" in any
+  // repositories. Probably not the expected behavior as we want to keep the
+  // previously loaded 'model_0'
+  // ready = false;
+  // FAIL_TEST_IF_ERR(
+  //     TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
+  //     "Is 'model_0' ready");
+  // ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is
+  // 'models_0/model_0'";
 }
 
 // // Test Fixture that runs server with POLLING mode
