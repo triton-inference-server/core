@@ -1844,6 +1844,19 @@ ModelRepositoryManager::Poll(
                       << "': " << status.Message();
             *all_models_polled = false;
           } else if (exists_in_this_repo) {
+            // Check to make sure this directory is not mapped.
+            // If mapped, continue to next repository path.
+            bool mapped = false;
+            for (auto const& mapping : model_mappings_) {
+              if (mapping.second.second == full_path) {
+                mapped = true;
+                break;
+              }
+            }
+            if(mapped){
+              continue;
+            }
+
             auto res =
                 model_to_repository.emplace(model.first, repository_path);
             if (res.second) {
