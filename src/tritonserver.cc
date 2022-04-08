@@ -2178,12 +2178,23 @@ TRITONSERVER_ServerRegisterModelRepository(
     }
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_UNSUPPORTED,
-        (std::string("Register API is unsupported in ") + mode + " model control mode").c_str());
+        (std::string("Register API is unsupported in ") + mode +
+         " model control mode")
+            .c_str());
   }
   if ((name_mapping == nullptr) && (mapping_count != 0)) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         "model mappings are not provided while mapping count is non-zero");
+  }
+  bool is_directory = false;
+  auto status = triton::core::IsDirectory(repository_path, &is_directory);
+  if (!status.IsOk() || !is_directory) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("failed to register '") + repository_path +
+         "', repository not found")
+            .c_str());
   }
 
   RETURN_IF_STATUS_ERROR(lserver->AddModelRepositoryPath(repository_path));
@@ -2207,12 +2218,16 @@ TRITONSERVER_ServerRegisterModelRepository(
     auto model_name =
         std::string(reinterpret_cast<const char*>(mapping->ValuePointer()));
 
-    tc::Status status = lserver->AddModelMapping(model_name, repository_path, subdir);
+    tc::Status status =
+        lserver->AddModelMapping(model_name, repository_path, subdir);
     if (!status.IsOk()) {
       TRITONSERVER_ServerUnregisterModelRepository(server, repository_path);
       return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("failed to register '") + repository_path + "', there is conflicting mapping for '" + std::string(model_name) + "'").c_str());
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("failed to register '") + repository_path +
+           "', there is conflicting mapping for '" + std::string(model_name) +
+           "'")
+              .c_str());
     }
   }
 
@@ -2239,11 +2254,12 @@ TRITONSERVER_ServerUnregisterModelRepository(
     }
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_UNSUPPORTED,
-        (std::string("Unregister API is unsupported in ") + mode + " model control mode").c_str());
+        (std::string("Unregister API is unsupported in ") + mode +
+         " model control mode")
+            .c_str());
   }
   RETURN_IF_STATUS_ERROR(lserver->RemoveModelRepositoryPath(repository_path));
-  RETURN_IF_STATUS_ERROR(
-      lserver->RemoveModelMapping(repository_path));
+  RETURN_IF_STATUS_ERROR(lserver->RemoveModelMapping(repository_path));
   return nullptr;  // Success
 }
 

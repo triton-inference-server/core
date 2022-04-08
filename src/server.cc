@@ -638,12 +638,12 @@ InferenceServer::AddModelMapping(
     const std::string& model_name, const std::string& repository_path,
     const std::string& subdir_name)
 {
-  return model_repository_manager_->AddModelMapping(model_name, repository_path, subdir_name);
+  return model_repository_manager_->AddModelMapping(
+      model_name, repository_path, subdir_name);
 }
 
 Status
-InferenceServer::RemoveModelMapping(
-    const std::string& repository_name)
+InferenceServer::RemoveModelMapping(const std::string& repository_name)
 {
   return model_repository_manager_->RemoveModelMapping(repository_name);
 }

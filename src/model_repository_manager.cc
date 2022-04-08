@@ -847,6 +847,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
     std::set<int64_t> defer_unload_set_;
     std::mutex mtx_;
   };
+  LOG_INFO << "Temp0";
   std::shared_ptr<LoadTracker> load_tracker(new LoadTracker(versions.size()));
   for (auto& version_model : it->second) {
     auto version = version_model.first;
@@ -867,7 +868,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
       load_tracker->defer_unload_set_.emplace(version);
       continue;
     }
-
+    LOG_INFO << "Temp1";
     // set version-wise callback before triggering next action
     if (OnComplete != nullptr) {
       model_info->OnComplete_ = [this, model_name, version, model_info,
@@ -881,6 +882,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
               ("version " + std::to_string(version) + ": " +
                model_info->state_reason_ + ";");
         }
+        LOG_INFO << "Temp2";
         // Check if all versions are completed and finish the load
         if (load_tracker->completed_version_cnt_ ==
             load_tracker->affected_version_cnt_) {
@@ -898,6 +900,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
                           << status.AsString();
               }
             }
+            LOG_INFO << "Temp3";
             for (auto& loaded : load_tracker->load_set_) {
               std::lock_guard<std::recursive_mutex> lock(loaded.second->mtx_);
               if (loaded.second->state_ == ModelReadyState::READY) {
@@ -920,6 +923,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
               }
             }
           } else {
+            LOG_INFO << "Temp-ELSE";
             if (model_info->agent_model_list_) {
               auto status = model_info->agent_model_list_->InvokeAgentModels(
                   TRITONREPOAGENT_ACTION_LOAD_COMPLETE);
@@ -973,6 +977,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
                 TriggerNextAction(model_name, version, unload_model);
               }
             }
+            LOG_INFO << "Temp4";
             // Unload the deferred versions
             for (const auto deferred_version :
                  load_tracker->defer_unload_set_) {
@@ -980,7 +985,9 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
               auto unload_model = vit->second.first.get();
               std::lock_guard<std::recursive_mutex> lock(unload_model->mtx_);
               unload_model->next_action_ = ActionType::UNLOAD;
+              LOG_INFO << "Temp5";
               if (unload_model->agent_model_list_ && !notified_agent) {
+                LOG_INFO << "Temp6";
                 auto unloading_agent_model_list =
                     unload_model->agent_model_list_;
                 auto status = unloading_agent_model_list->InvokeAgentModels(
@@ -1007,10 +1014,12 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
               TriggerNextAction(model_name, deferred_version, unload_model);
             }
           }
+          LOG_INFO << "Temp7";
           OnComplete(
               load_tracker->load_failed_
                   ? Status(Status::Code::INVALID_ARG, load_tracker->reason_)
                   : Status::Success);
+          LOG_INFO << "Temp8";
         }
       };
     }
@@ -1612,6 +1621,7 @@ ModelRepositoryManager::LoadUnloadModels(
   }
   std::set<std::string> deleted_dependents;
 
+  // TODO: Going through here
   // Update dependency graph and load
   UpdateDependencyGraph(
       added, deleted, modified,
@@ -1830,7 +1840,8 @@ ModelRepositoryManager::Poll(
       auto model_it = model_mappings_.find(model.first);
       if (model_it != model_mappings_.end()) {
         LOG_INFO << "Found model mapping";
-        auto res = model_to_repository.emplace(model.first, model_it->second.first);
+        auto res =
+            model_to_repository.emplace(model.first, model_it->second.first);
         if (res.second) {
           exists = true;
         } else {
@@ -1843,7 +1854,8 @@ ModelRepositoryManager::Poll(
       } else {
         LOG_INFO << "Did not find model mapping";
         for (const auto repository_path : repository_paths_) {
-          LOG_INFO << "Searching for model in repo " << repository_path;
+          LOG_INFO << "Searching for model " << model.first << " in repo "
+                   << repository_path;
           bool exists_in_this_repo = false;
           const auto full_path = JoinPath({repository_path, model.first});
           Status status = FileExists(full_path, &exists_in_this_repo);
@@ -2218,7 +2230,8 @@ ModelRepositoryManager::UpdateDependencyGraph(
 }
 
 Status
-ModelRepositoryManager::AddModelRepositoryPath(const std::string& path){
+ModelRepositoryManager::AddModelRepositoryPath(const std::string& path)
+{
   if (!repository_paths_.insert(path).second) {
     return Status(
         Status::Code::ALREADY_EXISTS,
@@ -2229,8 +2242,9 @@ ModelRepositoryManager::AddModelRepositoryPath(const std::string& path){
 }
 
 Status
-ModelRepositoryManager::RemoveModelRepositoryPath(const std::string& path){
-    if (repository_paths_.erase(path) != 1) {
+ModelRepositoryManager::RemoveModelRepositoryPath(const std::string& path)
+{
+  if (repository_paths_.erase(path) != 1) {
     LOG_INFO << "Model repository failed to be unregistered: " << path;
     return Status(
         Status::Code::INVALID_ARG,
@@ -2260,8 +2274,7 @@ ModelRepositoryManager::AddModelMapping(
 }
 
 Status
-ModelRepositoryManager::RemoveModelMapping(
-    const std::string& repository_path)
+ModelRepositoryManager::RemoveModelMapping(const std::string& repository_path)
 {
   std::set<std::string> models_to_delete;
   for (auto const& mapping : model_mappings_) {
