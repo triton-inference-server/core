@@ -624,23 +624,13 @@ InferenceServer::PrintBackendAndModelSummary()
 Status
 InferenceServer::AddModelRepositoryPath(const std::string& path)
 {
-  if (!model_repository_paths_.insert(path).second) {
-    return Status(
-        Status::Code::ALREADY_EXISTS,
-        "model repository '" + path + "' has been registered");
-  }
-  return Status::Success;
+  return model_repository_manager_->AddModelRepositoryPath(path);
 }
 
 Status
 InferenceServer::RemoveModelRepositoryPath(const std::string& path)
 {
-  if (model_repository_paths_.erase(path) != 1) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "failed to unregister '" + path + "', repository not found");
-  }
-  return Status::Success;
+  return model_repository_manager_->RemoveModelRepositoryPath(path);
 }
 
 Status
@@ -648,18 +638,14 @@ InferenceServer::AddModelMapping(
     const std::string& model_name, const std::string& repository_path,
     const std::string& subdir_name)
 {
-  RETURN_IF_ERROR(model_repository_manager_->AddModelMapping(
-      model_name, repository_path, subdir_name));
-  return Status::Success;
+  return model_repository_manager_->AddModelMapping(model_name, repository_path, subdir_name);
 }
 
 Status
-InferenceServer::RemoveModelMappingRepository(
+InferenceServer::RemoveModelMapping(
     const std::string& repository_name)
 {
-  RETURN_IF_ERROR(
-      model_repository_manager_->RemoveModelMappingRepository(repository_name));
-  return Status::Success;
+  return model_repository_manager_->RemoveModelMapping(repository_name);
 }
 
 }}  // namespace triton::core

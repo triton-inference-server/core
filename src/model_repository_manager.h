@@ -218,6 +218,16 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
 
+  // Add model repository path.
+  /// \param repository_path Path to model repository.
+  /// \return error status
+  Status AddModelRepositoryPath(const std::string& path);
+
+  // Remove model repository path.
+  /// \param repository_path Path to model repository.
+  /// \return error status
+  Status RemoveModelRepositoryPath(const std::string& path);
+
   /// Insert a model's mapping.
   /// \param model_name Name of the model.
   /// \param repository_path Path to model repository.
@@ -230,7 +240,7 @@ class ModelRepositoryManager {
   /// Remove a model mapping.
   /// \param repository_path Path of the repository
   /// \return error status
-  Status RemoveModelMappingRepository(const std::string& repository_path);
+  Status RemoveModelMapping(const std::string& repository_path);
 
  private:
   struct ModelInfo;
@@ -346,7 +356,7 @@ class ModelRepositoryManager {
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);
 
-  const std::set<std::string> repository_paths_;
+  std::set<std::string> repository_paths_;
   const bool autofill_;
   const bool polling_enabled_;
   const bool model_control_enabled_;

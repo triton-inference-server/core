@@ -2224,7 +2224,7 @@ TRITONSERVER_ServerUnregisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path)
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
-  if (lserver->GetModelControlMode() == tc::ModelControlMode::MODE_POLL) {
+  if (lserver->GetModelControlMode() != tc::ModelControlMode::MODE_EXPLICIT) {
     std::string mode;
     switch (lserver->GetModelControlMode()) {
       case tc::ModelControlMode::MODE_NONE:
@@ -2243,7 +2243,7 @@ TRITONSERVER_ServerUnregisterModelRepository(
   }
   RETURN_IF_STATUS_ERROR(lserver->RemoveModelRepositoryPath(repository_path));
   RETURN_IF_STATUS_ERROR(
-      lserver->RemoveModelMappingRepository(repository_path));
+      lserver->RemoveModelMapping(repository_path));
   return nullptr;  // Success
 }
 

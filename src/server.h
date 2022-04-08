@@ -143,7 +143,7 @@ class InferenceServer {
 
 
   // Remove model mapping associated with a repository name.
-  Status RemoveModelMappingRepository(const std::string& repository_name);
+  Status RemoveModelMapping(const std::string& repository_name);
 
   // Return the server version.
   const std::string& Version() const { return version_; }

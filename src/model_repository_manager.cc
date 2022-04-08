@@ -604,8 +604,11 @@ ModelRepositoryManager::ModelLifeCycle::VersionStates(
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   VersionStateMap version_map;
   auto mit = map_.find(model_name);
+  LOG_INFO << "Before mapping";
   if (mit != map_.end()) {
+    LOG_INFO << "Mapping found";
     for (auto& version_model : mit->second) {
+      LOG_INFO << "A version found";
       std::lock_guard<std::recursive_mutex> lock(
           version_model.second.first->mtx_);
       version_map[version_model.first] = std::make_pair(
@@ -1785,12 +1788,14 @@ ModelRepositoryManager::Poll(
     std::set<std::string>* modified, std::set<std::string>* unmodified,
     ModelInfoMap* updated_infos, bool* all_models_polled)
 {
+  LOG_INFO << "POLLING";
   *all_models_polled = true;
   std::map<std::string, std::string> model_to_repository;
 
   // If no model is specified, poll all models in all model repositories.
   // Otherwise, only poll the specified models
   if (models.empty()) {
+    LOG_INFO << "POLLING ALL>>>TODO:GETRIDOF";
     std::set<std::string> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
       std::set<std::string> subdirs;
@@ -1816,6 +1821,7 @@ ModelRepositoryManager::Poll(
                 << "': not unique across all model repositories";
     }
   } else {
+    LOG_INFO << "LOADING_CORRECTLY";
     // [DLIS-3487] Model doesn't need to be in repository if model files
     // are provided in flight.
     for (const auto& model : models) {
@@ -1823,9 +1829,21 @@ ModelRepositoryManager::Poll(
       bool exists = false;
       auto model_it = model_mappings_.find(model.first);
       if (model_it != model_mappings_.end()) {
-        const auto full_path = model_it->second.second;
+        LOG_INFO << "Found model mapping";
+        auto res = model_to_repository.emplace(model.first, model_it->second.first);
+        if (res.second) {
+          exists = true;
+        } else {
+          exists = false;
+          model_to_repository.erase(res.first);
+          LOG_ERROR << "failed to poll model '" << model.first
+                    << "': not unique across all model repositories";
+          *all_models_polled = false;
+        }
       } else {
+        LOG_INFO << "Did not find model mapping";
         for (const auto repository_path : repository_paths_) {
+          LOG_INFO << "Searching for model in repo " << repository_path;
           bool exists_in_this_repo = false;
           const auto full_path = JoinPath({repository_path, model.first});
           Status status = FileExists(full_path, &exists_in_this_repo);
@@ -2200,6 +2218,29 @@ ModelRepositoryManager::UpdateDependencyGraph(
 }
 
 Status
+ModelRepositoryManager::AddModelRepositoryPath(const std::string& path){
+  if (!repository_paths_.insert(path).second) {
+    return Status(
+        Status::Code::ALREADY_EXISTS,
+        "model repository '" + path + "' has already been registered");
+  }
+  LOG_INFO << "Model repository registered: " << path;
+  return Status::Success;
+}
+
+Status
+ModelRepositoryManager::RemoveModelRepositoryPath(const std::string& path){
+    if (repository_paths_.erase(path) != 1) {
+    LOG_INFO << "Model repository failed to be unregistered: " << path;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "failed to unregister '" + path + "', repository not found");
+  }
+  LOG_INFO << "Model repository unregistered: " << path;
+  return Status::Success;
+}
+
+Status
 ModelRepositoryManager::AddModelMapping(
     const std::string& model_name, const std::string& repository_path,
     const std::string& subdir_name)
@@ -2219,7 +2260,7 @@ ModelRepositoryManager::AddModelMapping(
 }
 
 Status
-ModelRepositoryManager::RemoveModelMappingRepository(
+ModelRepositoryManager::RemoveModelMapping(
     const std::string& repository_path)
 {
   std::set<std::string> models_to_delete;

@@ -66,7 +66,8 @@ class RegisterApiTest : public ::testing::Test {
         TRITONSERVER_ServerOptionsNew(&server_options),
         "creating server options");
     //TODO: Remove. For debugging purposes.
-    FAIL_TEST_IF_ERR(TRITONSERVER_ServerOptionsSetLogInfo(server_options, true), "enabling logs");
+    FAIL_TEST_IF_ERR(TRITONSERVER_ServerOptionsSetLogInfo(server_options, true), "enabling info logs");
+    FAIL_TEST_IF_ERR(TRITONSERVER_ServerOptionsSetLogVerbose(server_options, 5), "enabling verbose logs");
     // Triton expects at least one model repository is set at start, set to
     // an empty repository set ModelControlMode to EXPLICIT to avoid attempting
     // to load models.
@@ -100,25 +101,25 @@ class RegisterApiTest : public ::testing::Test {
   TRITONSERVER_Server* server_ = nullptr;
 };
 
-TEST_F(RegisterApiTest, Register)
-{
-  // Request to load "model_0" which should fail
-  FAIL_TEST_IF_NOT_ERR(
-      TRITONSERVER_ServerLoadModel(server_, "model_0"),
-      TRITONSERVER_ERROR_INTERNAL,
-      "failed to load 'model_0', no version is available",
-      "loading model 'model_0'");
+// TEST_F(RegisterApiTest, Register)
+// {
+//   // Request to load "model_0" which should fail
+//   FAIL_TEST_IF_NOT_ERR(
+//       TRITONSERVER_ServerLoadModel(server_, "model_0"),
+//       TRITONSERVER_ERROR_INTERNAL,
+//       "failed to load 'model_0', no version is available",
+//       "loading model 'model_0'");
 
-  // Registering a repository "models_0" where contains "model_0"
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerRegisterModelRepository(
-          server_, "models_0", nullptr, 0),
-      "registering model repository 'models_0'");
-  // Request to load "model_0"
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerLoadModel(server_, "model_0"),
-      "loading model 'model_0'");
-}
+//   // Registering a repository "models_0" where contains "model_0"
+//   FAIL_TEST_IF_ERR(
+//       TRITONSERVER_ServerRegisterModelRepository(
+//           server_, "models_0", nullptr, 0),
+//       "registering model repository 'models_0'");
+//   // Request to load "model_0"
+//   FAIL_TEST_IF_ERR(
+//       TRITONSERVER_ServerLoadModel(server_, "model_0"),
+//       "loading model 'model_0'");
+// }
 
 // TEST_F(RegisterApiTest, RegisterWithMap)
 // {
@@ -149,32 +150,32 @@ TEST_F(RegisterApiTest, Register)
 //       "loading model 'name_0'");
 // }
 
-// TEST_F(RegisterApiTest, RegisterTwice)
-// {
-//   // Registering a startup repository
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "empty_models", nullptr, 0),
-//       TRITONSERVER_ERROR_ALREADY_EXISTS,
-//       "model repository 'empty_models' has been registered",
-//       "registering model repository 'empty_models'");
-// }
+TEST_F(RegisterApiTest, RegisterTwice)
+{
+  // Registering a startup repository
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "empty_models", nullptr, 0),
+      TRITONSERVER_ERROR_ALREADY_EXISTS,
+      "model repository 'empty_models' has already been registered",
+      "registering model repository 'empty_models'");
+}
 
-// TEST_F(RegisterApiTest, RegisterTwice2)
-// {
-//   // Registering the same repository twice
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "models_0", nullptr, 0),
-//       "registering model repository 'models_0'");
+TEST_F(RegisterApiTest, RegisterTwice2)
+{
+  // Registering the same repository twice
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "models_0", nullptr, 0),
+      "registering model repository 'models_0'");
 
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "models_0", nullptr, 0),
-//       TRITONSERVER_ERROR_ALREADY_EXISTS,
-//       "model repository 'models_0' has been registered",
-//       "registering model repository 'models_0'");
-// }
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "models_0", nullptr, 0),
+      TRITONSERVER_ERROR_ALREADY_EXISTS,
+      "model repository 'models_0' has already been registered",
+      "registering model repository 'models_0'");
+}
 
 // TEST_F(RegisterApiTest, RegisterWithMultiMap)
 // {
@@ -415,33 +416,33 @@ TEST_F(RegisterApiTest, Register)
 // }
 
 
-// TEST_F(RegisterApiTest, UnregisterInvalidRepo)
-// {
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "unknown_repo"),
-//       TRITONSERVER_ERROR_INVALID_ARG,
-//       "failed to unregister 'unknown_repo', repository not found",
-//       "unregistering model repository 'unknown_repo'");
-// }
+TEST_F(RegisterApiTest, UnregisterInvalidRepo)
+{
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "unknown_repo"),
+      TRITONSERVER_ERROR_INVALID_ARG,
+      "failed to unregister 'unknown_repo', repository not found",
+      "unregistering model repository 'unknown_repo'");
+}
 
-// TEST_F(RegisterApiTest, Unregister)
-// {
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
-//       "unregistering model repository 'empty_models'");
-// }
+TEST_F(RegisterApiTest, Unregister)
+{
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
+      "unregistering model repository 'empty_models'");
+}
 
-// TEST_F(RegisterApiTest, UnregisterTwice)
-// {
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
-//       "unregistering model repository 'empty_models'");
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
-//       TRITONSERVER_ERROR_INVALID_ARG,
-//       "failed to unregister 'empty_models', repository not found",
-//       "unregistering model repository 'empty_models'");
-// }
+TEST_F(RegisterApiTest, UnregisterTwice)
+{
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
+      "unregistering model repository 'empty_models'");
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
+      TRITONSERVER_ERROR_INVALID_ARG,
+      "failed to unregister 'empty_models', repository not found",
+      "unregistering model repository 'empty_models'");
+}
 
 // TEST_F(RegisterApiTest, UnregisterWithLoadedModel)
 // {
@@ -474,25 +475,25 @@ TEST_F(RegisterApiTest, Register)
 //       "loading model 'model_0'");
 // }
 
-// TEST_F(RegisterApiTest, MultiRegister)
-// {
-//   // Register / unregister a repository "models_0"
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "models_0", nullptr, 0),
-//       "registering model repository 'models_0'");
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "models_0"),
-//       "unregistering model repository 'models_0'");
-//   // Register / unregister "models_0" again
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "models_0", nullptr, 0),
-//       "registering model repository 'models_0'");
-//   FAIL_TEST_IF_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "models_0"),
-//       "unregistering model repository 'models_0'");
-// }
+TEST_F(RegisterApiTest, MultiRegister)
+{
+  // Register / unregister a repository "models_0"
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "models_0", nullptr, 0),
+      "registering model repository 'models_0'");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "models_0"),
+      "unregistering model repository 'models_0'");
+  // Register / unregister "models_0" again
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "models_0", nullptr, 0),
+      "registering model repository 'models_0'");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "models_0"),
+      "unregistering model repository 'models_0'");
+}
 
 // TEST_F(RegisterApiTest, RegisterMulti2)
 // {
@@ -576,121 +577,121 @@ TEST_F(RegisterApiTest, Register)
 //       "loading model 'name_0'");
 // }
 
-// // Test Fixture that runs server with POLLING mode
-// class PollingRegisterApiTest : public ::testing::Test {
-//  protected:
-//   void SetUp() override
-//   {
-//     // Create running server object.
-//     TRITONSERVER_ServerOptions* server_options = nullptr;
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsNew(&server_options),
-//         "creating server options");
-//     // Triton expects at least one model repository is set at start, set to
-//     // an empty repository set ModelControlMode to EXPLICIT to avoid attempting
-//     // to load models.
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsSetModelRepositoryPath(
-//             server_options, "empty_models"),
-//         "setting model repository path");
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsSetModelControlMode(
-//             server_options, TRITONSERVER_MODEL_CONTROL_POLL),
-//         "setting model control mode");
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerNew(&server_, server_options), "creating server");
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsDelete(server_options),
-//         "deleting server options");
-//     ASSERT_TRUE(server_ != nullptr) << "server not created";
-//     bool live = false;
-//     for (int i = 10; ((i > 0) && !live); --i) {
-//       FAIL_TEST_IF_ERR(
-//           TRITONSERVER_ServerIsLive(server_, &live), "Is server live");
-//     }
-//     ASSERT_TRUE(live) << "server not live";
-//   }
+// Test Fixture that runs server with POLLING mode
+class PollingRegisterApiTest : public ::testing::Test {
+ protected:
+  void SetUp() override
+  {
+    // Create running server object.
+    TRITONSERVER_ServerOptions* server_options = nullptr;
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsNew(&server_options),
+        "creating server options");
+    // Triton expects at least one model repository is set at start, set to
+    // an empty repository set ModelControlMode to EXPLICIT to avoid attempting
+    // to load models.
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetModelRepositoryPath(
+            server_options, "empty_models"),
+        "setting model repository path");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetModelControlMode(
+            server_options, TRITONSERVER_MODEL_CONTROL_POLL),
+        "setting model control mode");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerNew(&server_, server_options), "creating server");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsDelete(server_options),
+        "deleting server options");
+    ASSERT_TRUE(server_ != nullptr) << "server not created";
+    bool live = false;
+    for (int i = 10; ((i > 0) && !live); --i) {
+      FAIL_TEST_IF_ERR(
+          TRITONSERVER_ServerIsLive(server_, &live), "Is server live");
+    }
+    ASSERT_TRUE(live) << "server not live";
+  }
 
-//   void TearDown() override
-//   {
-//     FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
-//   }
+  void TearDown() override
+  {
+    FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
+  }
 
-//   TRITONSERVER_Server* server_ = nullptr;
-// };
+  TRITONSERVER_Server* server_ = nullptr;
+};
 
-// TEST_F(PollingRegisterApiTest, unsupport)
-// {
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "empty_models", nullptr, 0),
-//       TRITONSERVER_ERROR_UNSUPPORTED,
-//       "Register API is unsupported in POLL model control mode",
-//       "registering model repository 'empty_models'");
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
-//       TRITONSERVER_ERROR_UNSUPPORTED,
-//       "Unregister API is unsupported in POLL model control mode",
-//       "unregistering model repository 'empty_models'");
-// }
+TEST_F(PollingRegisterApiTest, unsupport)
+{
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "empty_models", nullptr, 0),
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "Register API is unsupported in POLL model control mode",
+      "registering model repository 'empty_models'");
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "Unregister API is unsupported in POLL model control mode",
+      "unregistering model repository 'empty_models'");
+}
 
-// // Test Fixture that runs server with NONE mode
-// class NoneRegisterApiTest : public ::testing::Test {
-//  protected:
-//   void SetUp() override
-//   {
-//     // Create running server object.
-//     TRITONSERVER_ServerOptions* server_options = nullptr;
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsNew(&server_options),
-//         "creating server options");
-//     // Triton expects at least one model repository is set at start, set to
-//     // an empty repository set ModelControlMode to EXPLICIT to avoid attempting
-//     // to load models.
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsSetModelRepositoryPath(
-//             server_options, "empty_models"),
-//         "setting model repository path");
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsSetModelControlMode(
-//             server_options, TRITONSERVER_MODEL_CONTROL_NONE),
-//         "setting model control mode");
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerNew(&server_, server_options), "creating server");
-//     FAIL_TEST_IF_ERR(
-//         TRITONSERVER_ServerOptionsDelete(server_options),
-//         "deleting server options");
-//     ASSERT_TRUE(server_ != nullptr) << "server not created";
-//     bool live = false;
-//     for (int i = 10; ((i > 0) && !live); --i) {
-//       FAIL_TEST_IF_ERR(
-//           TRITONSERVER_ServerIsLive(server_, &live), "Is server live");
-//     }
-//     ASSERT_TRUE(live) << "server not live";
-//   }
+// Test Fixture that runs server with NONE mode
+class NoneRegisterApiTest : public ::testing::Test {
+ protected:
+  void SetUp() override
+  {
+    // Create running server object.
+    TRITONSERVER_ServerOptions* server_options = nullptr;
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsNew(&server_options),
+        "creating server options");
+    // Triton expects at least one model repository is set at start, set to
+    // an empty repository set ModelControlMode to EXPLICIT to avoid attempting
+    // to load models.
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetModelRepositoryPath(
+            server_options, "empty_models"),
+        "setting model repository path");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetModelControlMode(
+            server_options, TRITONSERVER_MODEL_CONTROL_NONE),
+        "setting model control mode");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerNew(&server_, server_options), "creating server");
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsDelete(server_options),
+        "deleting server options");
+    ASSERT_TRUE(server_ != nullptr) << "server not created";
+    bool live = false;
+    for (int i = 10; ((i > 0) && !live); --i) {
+      FAIL_TEST_IF_ERR(
+          TRITONSERVER_ServerIsLive(server_, &live), "Is server live");
+    }
+    ASSERT_TRUE(live) << "server not live";
+  }
 
-//   void TearDown() override
-//   {
-//     FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
-//   }
+  void TearDown() override
+  {
+    FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
+  }
 
-//   TRITONSERVER_Server* server_ = nullptr;
-// };
+  TRITONSERVER_Server* server_ = nullptr;
+};
 
-// TEST_F(NoneRegisterApiTest, unsupport)
-// {
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerRegisterModelRepository(
-//           server_, "empty_models", nullptr, 0),
-//       TRITONSERVER_ERROR_UNSUPPORTED,
-//       "Register API is unsupported in NONE model control mode",
-//       "registering model repository 'empty_models'");
-//   FAIL_TEST_IF_NOT_ERR(
-//       TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
-//       TRITONSERVER_ERROR_UNSUPPORTED,
-//       "Unregister API is unsupported in NONE model control mode",
-//       "unregistering model repository 'empty_models'");
-// }
+TEST_F(NoneRegisterApiTest, unsupport)
+{
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "empty_models", nullptr, 0),
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "Register API is unsupported in NONE model control mode",
+      "registering model repository 'empty_models'");
+  FAIL_TEST_IF_NOT_ERR(
+      TRITONSERVER_ServerUnregisterModelRepository(server_, "empty_models"),
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "Unregister API is unsupported in NONE model control mode",
+      "unregistering model repository 'empty_models'");
+}
 
 }  // namespace
 
