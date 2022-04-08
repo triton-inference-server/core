@@ -344,15 +344,6 @@ class ModelRepositoryManager {
   /// \return True if the node is ready. False otherwise.
   bool CheckNode(DependencyNode* node);
 
-  /// Get the model mappings.
-  /// \return Map with model name as key, pair of repository path and full path
-  // as value.
-  const std::unordered_map<std::string, std::pair<std::string, std::string>>&
-  ModelMappings() const
-  {
-    return model_mappings_;
-  }
-
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);
 

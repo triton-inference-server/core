@@ -1822,15 +1822,22 @@ ModelRepositoryManager::Poll(
       bool exists = false;
       auto model_it = model_mappings_.find(model.first);
       if (model_it != model_mappings_.end()) {
-        auto res =
-            model_to_repository.emplace(model.first, model_it->second.first);
-        if (res.second) {
+        bool exists_in_this_repo = false;
+        auto full_path = model_it->second.second;
+        Status status = FileExists(full_path, &exists_in_this_repo);
+        if (!status.IsOk()) {
+          LOG_ERROR << "failed to poll mapped path '" << full_path
+                    << "' for model '" << model.first
+                    << "': " << status.Message();
+          *all_models_polled = false;
+        }
+        if (exists_in_this_repo) {
+          model_to_repository.emplace(model.first, model_it->second.first);
           exists = true;
         } else {
+          LOG_ERROR << "mapped path '" << full_path
+                    << "' does not exist for model '" << model.first << "'";
           exists = false;
-          model_to_repository.erase(res.first);
-          LOG_ERROR << "failed to poll model '" << model.first
-                    << "': not unique across all model repositories";
           *all_models_polled = false;
         }
       } else {
