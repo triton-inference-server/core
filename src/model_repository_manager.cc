@@ -326,17 +326,15 @@ struct ModelDeleter {
 struct ModelRepositoryManager::ModelInfo {
   ModelInfo(
       const int64_t mtime_nsec, const int64_t prev_mtime_ns,
-      const std::string& model_repository_path, const std::string& model_path)
+      const std::string& model_path)
       : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
-        explicitly_load_(true), model_repository_path_(model_repository_path),
-        model_path_(model_path)
+        explicitly_load_(true), model_path_(model_path)
   {
   }
   int64_t mtime_nsec_;
   int64_t prev_mtime_ns_;
   bool explicitly_load_;
   inference::ModelConfig model_config_;
-  std::string model_repository_path_;
   std::string model_path_;
   // Temporary location to hold agent model list before creating the model
   // model, the ownership must transfer to ModelLifeCycle to ensure
@@ -359,8 +357,8 @@ class ModelRepositoryManager::ModelLifeCycle {
   // be unloaded before loading the specified versions. Otherwise, the versions
   // not specified in the load will be unloaded after the load is finished.
   Status AsyncLoad(
-      const std::string& repository_path, const std::string& model_name,
-      const std::string& model_path, const inference::ModelConfig& model_config,
+      const std::string& model_name, const std::string& model_path,
+      const inference::ModelConfig& model_config,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)> OnComplete);
 
@@ -401,19 +399,17 @@ class ModelRepositoryManager::ModelLifeCycle {
  private:
   struct ModelInfo {
     ModelInfo(
-        const std::string& repository_path, const std::string& model_path,
-        const ModelReadyState state, const ActionType next_action,
+        const std::string& model_path, const ModelReadyState state,
+        const ActionType next_action,
         const inference::ModelConfig& model_config)
-        : repository_path_(repository_path), model_path_(model_path),
-          is_ensemble_(false), state_(state), next_action_(next_action),
-          model_config_(model_config)
+        : model_path_(model_path), is_ensemble_(false), state_(state),
+          next_action_(next_action), model_config_(model_config)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
       is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
 #endif  // TRITON_ENABLE_ENSEMBLE
     }
 
-    std::string repository_path_;
     std::string model_path_;
     bool is_ensemble_;
 
@@ -780,8 +776,8 @@ ModelRepositoryManager::ModelLifeCycle::AsyncUnload(
 
 Status
 ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
-    const std::string& repository_path, const std::string& model_name,
-    const std::string& model_path, const inference::ModelConfig& model_config,
+    const std::string& model_name, const std::string& model_path,
+    const inference::ModelConfig& model_config,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)> OnComplete)
 {
@@ -811,8 +807,8 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
             std::unique_ptr<ModelInfo>(), std::unique_ptr<ModelInfo>())));
     if (res.second) {
       res.first->second.first.reset(new ModelInfo(
-          repository_path, model_path, ModelReadyState::UNKNOWN,
-          ActionType::NO_ACTION, model_config));
+          model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
+          model_config));
     } else {
       auto& serving_model = res.first->second.first;
       std::lock_guard<std::recursive_mutex> lock(serving_model->mtx_);
@@ -820,8 +816,8 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
       // should be performed in background to avoid version down-time
       if (serving_model->state_ == ModelReadyState::READY) {
         res.first->second.second.reset(new ModelInfo(
-            repository_path, model_path, ModelReadyState::UNKNOWN,
-            ActionType::NO_ACTION, model_config));
+            model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
+            model_config));
       }
     }
   }
@@ -853,7 +849,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
 
     std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
     if (versions.find(version) != versions.end()) {
-      model_info->repository_path_ = repository_path;
+      model_info->model_path_ = model_path;
       model_info->model_config_ = model_config;
       model_info->next_action_ = ActionType::LOAD;
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -1432,9 +1428,9 @@ ModelRepositoryManager::LoadModelByDependency()
       auto model_state = model_states.back().get();
       const auto itr = infos_.find(valid_model->model_name_);
       auto status = model_life_cycle_->AsyncLoad(
-          itr->second->model_repository_path_, valid_model->model_name_,
-          itr->second->model_path_, valid_model->model_config_,
-          itr->second->agent_model_list_, [model_state](Status load_status) {
+          valid_model->model_name_, itr->second->model_path_,
+          valid_model->model_config_, itr->second->agent_model_list_,
+          [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();
           });
@@ -1960,8 +1956,7 @@ ModelRepositoryManager::Poll(
     }
 
     if (status.IsOk() && (model_poll_state != STATE_UNMODIFIED)) {
-      model_info.reset(
-          new ModelInfo(mtime_ns, prev_mtime_ns, repository, full_path));
+      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, full_path));
       inference::ModelConfig& model_config = model_info->model_config_;
 
       // Create the associated repo agent models when a model is to be loaded,
@@ -1996,21 +1991,8 @@ ModelRepositoryManager::Poll(
             TRITONREPOAGENT_ArtifactType artifact_type;
             RETURN_IF_ERROR(model_info->agent_model_list_->Back()->Location(
                 &artifact_type, &location));
-            // RepoAgentModel uses model path while model creation needs
-            // repository path, so need to go up one level.
-            // [FIXME] Should just passing model path directly as we don't
-            // really look at the repository path but just create model path
-            // from it
-            auto location_string = std::string(location);
-            size_t pos = location_string.length() - 1;
-            for (; (int64_t)pos >= 0; pos--) {
-              if (location_string[pos] != '/') {
-                break;
-              }
-            }
-            model_info->model_repository_path_ =
-                location_string.substr(0, location_string.rfind('/', pos));
-            full_path = location_string;
+            full_path = std::string(location);
+            model_info->model_path_ = full_path;
           }
         }
       }
