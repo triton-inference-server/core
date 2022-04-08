@@ -1154,8 +1154,8 @@ ModelRepositoryManager::ModelLifeCycle::CreateModel(
   if (!model_config.backend().empty()) {
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
-        server_, model_info->repository_path_, cmdline_config_map_,
-        host_policy_map_, model_name, version, model_config, &model);
+        server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
+        model_name, version, model_config, &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -1853,7 +1853,7 @@ ModelRepositoryManager::Poll(
                 break;
               }
             }
-            if(mapped){
+            if (mapped) {
               continue;
             }
 

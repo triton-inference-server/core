@@ -65,13 +65,6 @@ class RegisterApiTest : public ::testing::Test {
     FAIL_TEST_IF_ERR(
         TRITONSERVER_ServerOptionsNew(&server_options),
         "creating server options");
-    // TODO: Remove. For debugging purposes.
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetLogInfo(server_options, false),
-        "enabling info logs");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_ServerOptionsSetLogVerbose(server_options, 0),
-        "enabling verbose logs");
     // Triton expects at least one model repository is set at start, set to
     // an empty repository set ModelControlMode to EXPLICIT to avoid attempting
     // to load models.
@@ -575,7 +568,7 @@ TEST_F(RegisterApiTest, DifferentMapping)
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       TRITONSERVER_ERROR_INTERNAL,
-      "failed to load 'model_0', no version is available",
+      "failed to load 'model_0', failed to poll from model repository",
       "loading model 'model_0'");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerLoadModel(server_, "name_0"),
