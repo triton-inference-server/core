@@ -1781,7 +1781,7 @@ ModelRepositoryManager::Poll(
     ModelInfoMap* updated_infos, bool* all_models_polled)
 {
   *all_models_polled = true;
-  std::map<std::string, std::string> model_to_repository;
+  std::map<std::string, std::string> model_to_path;
 
   // If no model is specified, poll all models in all model repositories.
   // Otherwise, only poll the specified models
@@ -1796,7 +1796,9 @@ ModelRepositoryManager::Poll(
         *all_models_polled = false;
       } else {
         for (const auto& subdir : subdirs) {
-          if (!model_to_repository.emplace(subdir, repository_path).second) {
+          if (!model_to_path
+                   .emplace(subdir, JoinPath({repository_path, subdir}))
+                   .second) {
             duplicated_models.insert(subdir);
             *all_models_polled = false;
           }
@@ -1805,7 +1807,7 @@ ModelRepositoryManager::Poll(
     }
     // If the model is not unique, mark as deleted to unload it
     for (const auto& model : duplicated_models) {
-      model_to_repository.erase(model);
+      model_to_path.erase(model);
       deleted->insert(model);
       LOG_ERROR << "failed to poll model '" << model
                 << "': not unique across all model repositories";
@@ -1828,7 +1830,7 @@ ModelRepositoryManager::Poll(
           *all_models_polled = false;
         }
         if (exists_in_this_repo) {
-          model_to_repository.emplace(model.first, model_it->second.first);
+          model_to_path.emplace(model.first, model_it->second.second);
           exists = true;
         } else {
           LOG_ERROR << "mapped path '" << full_path
@@ -1860,13 +1862,13 @@ ModelRepositoryManager::Poll(
               continue;
             }
 
-            auto res =
-                model_to_repository.emplace(model.first, repository_path);
+            auto res = model_to_path.emplace(
+                model.first, JoinPath({repository_path, model.first}));
             if (res.second) {
               exists = true;
             } else {
               exists = false;
-              model_to_repository.erase(res.first);
+              model_to_path.erase(res.first);
               LOG_ERROR << "failed to poll model '" << model.first
                         << "': not unique across all model repositories";
               *all_models_polled = false;
@@ -1892,18 +1894,11 @@ ModelRepositoryManager::Poll(
     STATE_INVALID
   };
 
-  for (const auto& pair : model_to_repository) {
+  for (const auto& pair : model_to_path) {
     const auto& child = pair.first;
-    const auto& repository = pair.second;
+    const auto& full_path = pair.second;
 
     auto model_poll_state = STATE_UNMODIFIED;
-    std::string full_path;
-    auto model_it = model_mappings_.find(child);
-    if (model_it != model_mappings_.end()) {
-      full_path = model_it->second.second;
-    } else {
-      full_path = JoinPath({repository, child});
-    }
 
     const auto& mit = models.find(child);
 
@@ -1991,8 +1986,8 @@ ModelRepositoryManager::Poll(
             TRITONREPOAGENT_ArtifactType artifact_type;
             RETURN_IF_ERROR(model_info->agent_model_list_->Back()->Location(
                 &artifact_type, &location));
-            full_path = std::string(location);
-            model_info->model_path_ = full_path;
+            auto latest_path = std::string(location);
+            model_info->model_path_ = latest_path;
           }
         }
       }
