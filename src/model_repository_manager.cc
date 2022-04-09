@@ -1705,7 +1705,8 @@ ModelRepositoryManager::RepositoryIndex(
     std::map<std::string, std::string> models_in_repo;
     for (const auto& mapping_it : model_mappings_) {
       if (mapping_it.second.first == repository_path) {
-        models_in_repo.emplace(mapping_it.second.first, repository_path);
+        models_in_repo.emplace(
+            BaseName(mapping_it.second.second), mapping_it.first);
       }
     }
     std::set<std::string> subdirs;
@@ -2267,7 +2268,6 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
         "repository unregistration is not allowed if model control mode is not "
         "EXPLICIT");
   }
-  bool all_found = true;
   {
     std::lock_guard<std::mutex> lock(poll_mu_);
     if (repository_paths_.erase(repository) != 1) {
@@ -2283,18 +2283,11 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
       }
     }
     for (auto const& model : models_to_delete) {
-      if (model_mappings_.erase(model) != 1) {
-        all_found = false;
-      }
+      model_mappings_.erase(model);
     }
   }
 
   LOG_INFO << "Model repository unregistered: " << repository;
-  if (!all_found) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Not all registered model mappings found for '" + repository + "'");
-  }
   return Status::Success;
 }
 
