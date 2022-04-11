@@ -146,7 +146,6 @@ TritonModel::Create(
       model_config.backend(), backend_libdir, backend_libpath, config,
       &backend));
 
-
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
