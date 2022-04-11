@@ -620,4 +620,20 @@ InferenceServer::PrintBackendAndModelSummary()
 
   return Status::Success;
 }
+
+Status
+InferenceServer::RegisterModelRepository(
+    const std::string& repository,
+    const std::unordered_map<std::string, std::string>& model_mapping)
+{
+  return model_repository_manager_->RegisterModelRepository(
+      repository, model_mapping);
+}
+
+Status
+InferenceServer::UnregisterModelRepository(const std::string& repository)
+{
+  return model_repository_manager_->UnregisterModelRepository(repository);
+}
+
 }}  // namespace triton::core

@@ -218,6 +218,19 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
 
+  // Register model repository path.
+  /// \param repository Path to model repository.
+  /// \param model_mapping Mapping with (overridden) model name as key, subdir
+  /// name as value. \return error status
+  Status RegisterModelRepository(
+      const std::string& repository,
+      const std::unordered_map<std::string, std::string>& model_mapping);
+
+  // Unregister model repository path.
+  /// \param repository Path to model repository.
+  /// \return error status
+  Status UnregisterModelRepository(const std::string& repository);
+
  private:
   struct ModelInfo;
   class ModelLifeCycle;
@@ -323,7 +336,7 @@ class ModelRepositoryManager {
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);
 
-  const std::set<std::string> repository_paths_;
+  std::set<std::string> repository_paths_;
   const bool autofill_;
   const bool polling_enabled_;
   const bool model_control_enabled_;
@@ -336,6 +349,11 @@ class ModelRepositoryManager {
       dependency_graph_;
   std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
       missing_nodes_;
+
+  // Mappings from (overridden) model names to a pair of their repository and
+  // absolute path
+  std::unordered_map<std::string, std::pair<std::string, std::string>>
+      model_mappings_;
 
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };

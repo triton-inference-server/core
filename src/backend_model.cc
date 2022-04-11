@@ -57,7 +57,7 @@ namespace triton { namespace core {
 
 Status
 TritonModel::Create(
-    InferenceServer* server, const std::string& model_repository_path,
+    InferenceServer* server, const std::string& model_path,
     const BackendCmdlineConfigMap& backend_cmdline_config_map,
     const HostPolicyCmdlineConfigMap& host_policy_map,
     const std::string& model_name, const int64_t version,
@@ -78,8 +78,7 @@ TritonModel::Create(
   // 'model_name'. This model holds a handle to the localized content
   // so that it persists as long as the model is loaded.
   std::shared_ptr<LocalizedDirectory> localized_model_dir;
-  RETURN_IF_ERROR(LocalizeDirectory(
-      JoinPath({model_repository_path, model_name}), &localized_model_dir));
+  RETURN_IF_ERROR(LocalizeDirectory(model_path, &localized_model_dir));
 
   // Get some internal configuration values needed for initialization.
   std::string backend_dir;
@@ -105,12 +104,13 @@ TritonModel::Create(
 
   // Get the path to the backend shared library. Search path is
   // version directory, model directory, global backend directory.
-  const auto model_path = localized_model_dir->Path();
-  const auto version_path = JoinPath({model_path, std::to_string(version)});
+  const auto localized_model_path = localized_model_dir->Path();
+  const auto version_path =
+      JoinPath({localized_model_path, std::to_string(version)});
   const std::string global_path =
       JoinPath({backend_dir, specialized_backend_name});
-  const std::vector<std::string> search_paths = {version_path, model_path,
-                                                 global_path};
+  const std::vector<std::string> search_paths = {
+      version_path, localized_model_path, global_path};
 
   std::string backend_libdir;
   std::string backend_libpath;

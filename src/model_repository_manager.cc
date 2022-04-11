@@ -176,13 +176,12 @@ CreateAgentModelListWithLoadAction(
 
 Status
 VersionsToLoad(
-    const std::string model_repository_path, const std::string& name,
+    const std::string model_path, const std::string& name,
     const inference::ModelConfig& model_config, std::set<int64_t>* versions)
 {
   versions->clear();
 
   // Get integral number of the version directory
-  const auto model_path = JoinPath({model_repository_path, name});
   std::set<std::string> subdirs;
   RETURN_IF_ERROR(GetDirectorySubdirs(model_path, &subdirs));
   std::set<int64_t, std::greater<int64_t>> existing_versions;
@@ -327,16 +326,16 @@ struct ModelDeleter {
 struct ModelRepositoryManager::ModelInfo {
   ModelInfo(
       const int64_t mtime_nsec, const int64_t prev_mtime_ns,
-      const std::string& model_repository_path)
+      const std::string& model_path)
       : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
-        explicitly_load_(true), model_repository_path_(model_repository_path)
+        explicitly_load_(true), model_path_(model_path)
   {
   }
   int64_t mtime_nsec_;
   int64_t prev_mtime_ns_;
   bool explicitly_load_;
   inference::ModelConfig model_config_;
-  std::string model_repository_path_;
+  std::string model_path_;
   // Temporary location to hold agent model list before creating the model
   // model, the ownership must transfer to ModelLifeCycle to ensure
   // the list's life cycle is handled properly.
@@ -358,7 +357,7 @@ class ModelRepositoryManager::ModelLifeCycle {
   // be unloaded before loading the specified versions. Otherwise, the versions
   // not specified in the load will be unloaded after the load is finished.
   Status AsyncLoad(
-      const std::string& repository_path, const std::string& model_name,
+      const std::string& model_name, const std::string& model_path,
       const inference::ModelConfig& model_config,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)> OnComplete);
@@ -400,10 +399,10 @@ class ModelRepositoryManager::ModelLifeCycle {
  private:
   struct ModelInfo {
     ModelInfo(
-        const std::string& repository_path, const ModelReadyState state,
+        const std::string& model_path, const ModelReadyState state,
         const ActionType next_action,
         const inference::ModelConfig& model_config)
-        : repository_path_(repository_path), is_ensemble_(false), state_(state),
+        : model_path_(model_path), is_ensemble_(false), state_(state),
           next_action_(next_action), model_config_(model_config)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -411,7 +410,7 @@ class ModelRepositoryManager::ModelLifeCycle {
 #endif  // TRITON_ENABLE_ENSEMBLE
     }
 
-    std::string repository_path_;
+    std::string model_path_;
     bool is_ensemble_;
 
     std::recursive_mutex mtx_;
@@ -777,7 +776,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncUnload(
 
 Status
 ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
-    const std::string& repository_path, const std::string& model_name,
+    const std::string& model_name, const std::string& model_path,
     const inference::ModelConfig& model_config,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)> OnComplete)
@@ -792,7 +791,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
 
   std::set<int64_t> versions;
   RETURN_IF_ERROR(
-      VersionsToLoad(repository_path, model_name, model_config, &versions));
+      VersionsToLoad(model_path, model_name, model_config, &versions));
   if (versions.empty()) {
     return Status(
         Status::Code::INVALID_ARG,
@@ -808,7 +807,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
             std::unique_ptr<ModelInfo>(), std::unique_ptr<ModelInfo>())));
     if (res.second) {
       res.first->second.first.reset(new ModelInfo(
-          repository_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
+          model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
           model_config));
     } else {
       auto& serving_model = res.first->second.first;
@@ -817,7 +816,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
       // should be performed in background to avoid version down-time
       if (serving_model->state_ == ModelReadyState::READY) {
         res.first->second.second.reset(new ModelInfo(
-            repository_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
+            model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
             model_config));
       }
     }
@@ -850,7 +849,7 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
 
     std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
     if (versions.find(version) != versions.end()) {
-      model_info->repository_path_ = repository_path;
+      model_info->model_path_ = model_path;
       model_info->model_config_ = model_config;
       model_info->next_action_ = ActionType::LOAD;
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -861,7 +860,6 @@ ModelRepositoryManager::ModelLifeCycle::AsyncLoad(
       load_tracker->defer_unload_set_.emplace(version);
       continue;
     }
-
     // set version-wise callback before triggering next action
     if (OnComplete != nullptr) {
       model_info->OnComplete_ = [this, model_name, version, model_info,
@@ -1135,7 +1133,6 @@ ModelRepositoryManager::ModelLifeCycle::CreateModel(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
   LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
-  const auto model_path = JoinPath({model_info->repository_path_, model_name});
   // make copy of the current model config in case model config in model info
   // is updated (another poll) during the creation of the model
   inference::ModelConfig model_config;
@@ -1153,15 +1150,15 @@ ModelRepositoryManager::ModelLifeCycle::CreateModel(
   if (!model_config.backend().empty()) {
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
-        server_, model_info->repository_path_, cmdline_config_map_,
-        host_policy_map_, model_name, version, model_config, &model);
+        server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
+        model_name, version, model_config, &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
-          server_, model_path, version, model_config, min_compute_capability_,
-          &is);
+          server_, model_info->model_path_, version, model_config,
+          min_compute_capability_, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to
       // obtained from server because this may happen during server
@@ -1431,7 +1428,7 @@ ModelRepositoryManager::LoadModelByDependency()
       auto model_state = model_states.back().get();
       const auto itr = infos_.find(valid_model->model_name_);
       auto status = model_life_cycle_->AsyncLoad(
-          itr->second->model_repository_path_, valid_model->model_name_,
+          valid_model->model_name_, itr->second->model_path_,
           valid_model->model_config_, itr->second->agent_model_list_,
           [model_state](Status load_status) {
             model_state->status_ = load_status;
@@ -1703,14 +1700,29 @@ ModelRepositoryManager::RepositoryIndex(
   std::set<std::string> seen_models;
   std::set<std::string> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
+    // For any mapped models in this repository, save the mapping
+    // from their subdirectory name to model name.
+    std::map<std::string, std::string> models_in_repo;
+    for (const auto& mapping_it : model_mappings_) {
+      if (mapping_it.second.first == repository_path) {
+        models_in_repo.emplace(
+            BaseName(mapping_it.second.second), mapping_it.first);
+      }
+    }
     std::set<std::string> subdirs;
     RETURN_IF_ERROR(GetDirectorySubdirs(repository_path, &subdirs));
     for (const auto& subdir : subdirs) {
-      if (seen_models.find(subdir) != seen_models.end()) {
-        duplicate_models.insert(subdir);
+      auto model = subdir;
+      auto model_it = models_in_repo.find(subdir);
+      if (model_it != models_in_repo.end()) {
+        model = model_it->second;
       }
 
-      seen_models.insert(subdir);
+      if (seen_models.find(model) != seen_models.end()) {
+        duplicate_models.insert(model);
+      }
+
+      seen_models.insert(model);
     }
   }
 
@@ -1770,7 +1782,7 @@ ModelRepositoryManager::Poll(
     ModelInfoMap* updated_infos, bool* all_models_polled)
 {
   *all_models_polled = true;
-  std::map<std::string, std::string> model_to_repository;
+  std::map<std::string, std::string> model_to_path;
 
   // If no model is specified, poll all models in all model repositories.
   // Otherwise, only poll the specified models
@@ -1785,7 +1797,9 @@ ModelRepositoryManager::Poll(
         *all_models_polled = false;
       } else {
         for (const auto& subdir : subdirs) {
-          if (!model_to_repository.emplace(subdir, repository_path).second) {
+          if (!model_to_path
+                   .emplace(subdir, JoinPath({repository_path, subdir}))
+                   .second) {
             duplicated_models.insert(subdir);
             *all_models_polled = false;
           }
@@ -1794,7 +1808,7 @@ ModelRepositoryManager::Poll(
     }
     // If the model is not unique, mark as deleted to unload it
     for (const auto& model : duplicated_models) {
-      model_to_repository.erase(model);
+      model_to_path.erase(model);
       deleted->insert(model);
       LOG_ERROR << "failed to poll model '" << model
                 << "': not unique across all model repositories";
@@ -1803,27 +1817,64 @@ ModelRepositoryManager::Poll(
     // [DLIS-3487] Model doesn't need to be in repository if model files
     // are provided in flight.
     for (const auto& model : models) {
+      // Check model mapping first to see if matching model to load.
       bool exists = false;
-      for (const auto repository_path : repository_paths_) {
+      auto model_it = model_mappings_.find(model.first);
+      if (model_it != model_mappings_.end()) {
         bool exists_in_this_repo = false;
-        const auto full_path = JoinPath({repository_path, model.first});
+        auto full_path = model_it->second.second;
         Status status = FileExists(full_path, &exists_in_this_repo);
         if (!status.IsOk()) {
-          LOG_ERROR << "failed to poll model repository '" << repository_path
+          LOG_ERROR << "failed to poll mapped path '" << full_path
                     << "' for model '" << model.first
                     << "': " << status.Message();
           *all_models_polled = false;
-        } else if (exists_in_this_repo) {
-          auto res = model_to_repository.emplace(model.first, repository_path);
-          if (res.second) {
-            exists = true;
-          } else {
-            exists = false;
-            model_to_repository.erase(res.first);
-            LOG_ERROR << "failed to poll model '" << model.first
-                      << "': not unique across all model repositories";
+        }
+        if (exists_in_this_repo) {
+          model_to_path.emplace(model.first, model_it->second.second);
+          exists = true;
+        } else {
+          LOG_ERROR << "mapped path '" << full_path
+                    << "' does not exist for model '" << model.first << "'";
+          exists = false;
+          *all_models_polled = false;
+        }
+      } else {
+        for (const auto repository_path : repository_paths_) {
+          bool exists_in_this_repo = false;
+          const auto full_path = JoinPath({repository_path, model.first});
+          Status status = FileExists(full_path, &exists_in_this_repo);
+          if (!status.IsOk()) {
+            LOG_ERROR << "failed to poll model repository '" << repository_path
+                      << "' for model '" << model.first
+                      << "': " << status.Message();
             *all_models_polled = false;
-            break;
+          } else if (exists_in_this_repo) {
+            // Check to make sure this directory is not mapped.
+            // If mapped, continue to next repository path.
+            bool mapped = false;
+            for (auto const& mapping : model_mappings_) {
+              if (mapping.second.second == full_path) {
+                mapped = true;
+                break;
+              }
+            }
+            if (mapped) {
+              continue;
+            }
+
+            auto res = model_to_path.emplace(
+                model.first, JoinPath({repository_path, model.first}));
+            if (res.second) {
+              exists = true;
+            } else {
+              exists = false;
+              model_to_path.erase(res.first);
+              LOG_ERROR << "failed to poll model '" << model.first
+                        << "': not unique across all model repositories";
+              *all_models_polled = false;
+              break;
+            }
           }
         }
       }
@@ -1844,12 +1895,11 @@ ModelRepositoryManager::Poll(
     STATE_INVALID
   };
 
-  for (const auto& pair : model_to_repository) {
+  for (const auto& pair : model_to_path) {
     const auto& child = pair.first;
-    const auto& repository = pair.second;
+    const auto& full_path = pair.second;
 
     auto model_poll_state = STATE_UNMODIFIED;
-    auto full_path = JoinPath({repository, child});
 
     const auto& mit = models.find(child);
 
@@ -1902,7 +1952,7 @@ ModelRepositoryManager::Poll(
     }
 
     if (status.IsOk() && (model_poll_state != STATE_UNMODIFIED)) {
-      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, repository));
+      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, full_path));
       inference::ModelConfig& model_config = model_info->model_config_;
 
       // Create the associated repo agent models when a model is to be loaded,
@@ -1937,21 +1987,8 @@ ModelRepositoryManager::Poll(
             TRITONREPOAGENT_ArtifactType artifact_type;
             RETURN_IF_ERROR(model_info->agent_model_list_->Back()->Location(
                 &artifact_type, &location));
-            // RepoAgentModel uses model path while model creation needs
-            // repository path, so need to go up one level.
-            // [FIXME] Should just passing model path directly as we don't
-            // really look at the repository path but just create model path
-            // from it
-            auto location_string = std::string(location);
-            size_t pos = location_string.length() - 1;
-            for (; (int64_t)pos >= 0; pos--) {
-              if (location_string[pos] != '/') {
-                break;
-              }
-            }
-            model_info->model_repository_path_ =
-                location_string.substr(0, location_string.rfind('/', pos));
-            full_path = location_string;
+            auto latest_path = std::string(location);
+            model_info->model_path_ = latest_path;
           }
         }
       }
@@ -1973,17 +2010,23 @@ ModelRepositoryManager::Poll(
         }
       }
       if (status.IsOk()) {
-        // Make sure the name of the model matches the name of the
-        // directory. This is a somewhat arbitrary requirement but seems
-        // like good practice to require it of the user. It also acts as a
-        // check to make sure we don't have two different models with the
-        // same name.
-        if (model_config.name() != child) {
-          status = Status(
-              Status::Code::INVALID_ARG,
-              "unexpected directory name '" + child + "' for model '" +
-                  model_config.name() +
-                  "', directory name must equal model name");
+        // If the model is mapped, update its config name based on the
+        // mapping.
+        if (model_mappings_.find(child) != model_mappings_.end()) {
+          model_config.set_name(child);
+        } else {
+          // If there is no model mapping, make sure the name of the model
+          // matches the name of the directory. This is a somewhat arbitrary
+          // requirement but seems like good practice to require it of the user.
+          // It also acts as a check to make sure we don't have two different
+          // models with the same name.
+          if (model_config.name() != child) {
+            status = Status(
+                Status::Code::INVALID_ARG,
+                "unexpected directory name '" + child + "' for model '" +
+                    model_config.name() +
+                    "', directory name must equal model name");
+          }
         }
       }
     }
@@ -2159,6 +2202,92 @@ ModelRepositoryManager::UpdateDependencyGraph(
     }
   }
 #endif  // TRITON_ENABLE_ENSEMBLE
+  return Status::Success;
+}
+
+Status
+ModelRepositoryManager::RegisterModelRepository(
+    const std::string& repository,
+    const std::unordered_map<std::string, std::string>& model_mapping)
+{
+  if (!model_control_enabled_) {
+    return Status(
+        Status::Code::UNSUPPORTED,
+        "repository registration is not allowed if model control mode is not "
+        "EXPLICIT");
+  }
+  bool is_directory = false;
+  auto status = IsDirectory(repository, &is_directory);
+  if (!status.IsOk() || !is_directory) {
+    return Status(
+        Status::Code::INVALID_ARG, (std::string("failed to register '") +
+                                    repository + "', repository not found")
+                                       .c_str());
+  }
+
+  {
+    // Serialize all operations that change model state
+    std::lock_guard<std::mutex> lock(poll_mu_);
+
+    // Check repository and mapped models do not yet exist.
+    if (repository_paths_.find(repository) != repository_paths_.end()) {
+      return Status(
+          Status::Code::ALREADY_EXISTS,
+          "model repository '" + repository + "' has already been registered");
+    }
+
+    for (const auto& mapping : model_mapping) {
+      if (model_mappings_.find(mapping.first) != model_mappings_.end()) {
+        return Status(
+            Status::Code::ALREADY_EXISTS,
+            (std::string("failed to register '") + mapping.first +
+             "', there is a conflicting mapping for '" +
+             std::string(mapping.first) + "'")
+                .c_str());
+      }
+    }
+
+    repository_paths_.emplace(repository).second;
+    for (const auto& mapping : model_mapping) {
+      model_mappings_.emplace(
+          mapping.first,
+          std::make_pair(repository, JoinPath({repository, mapping.second})));
+    }
+  }
+
+  LOG_INFO << "Model repository registered: " << repository;
+  return Status::Success;
+}
+
+Status
+ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
+{
+  if (!model_control_enabled_) {
+    return Status(
+        Status::Code::UNSUPPORTED,
+        "repository unregistration is not allowed if model control mode is not "
+        "EXPLICIT");
+  }
+  {
+    std::lock_guard<std::mutex> lock(poll_mu_);
+    if (repository_paths_.erase(repository) != 1) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "failed to unregister '" + repository + "', repository not found");
+    }
+
+    std::set<std::string> models_to_delete;
+    for (auto const& mapping : model_mappings_) {
+      if (mapping.second.first == repository) {
+        models_to_delete.insert(mapping.first);
+      }
+    }
+    for (auto const& model : models_to_delete) {
+      model_mappings_.erase(model);
+    }
+  }
+
+  LOG_INFO << "Model repository unregistered: " << repository;
   return Status::Success;
 }
 

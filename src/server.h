@@ -130,6 +130,14 @@ class InferenceServer {
   // Print backends and models summary
   Status PrintBackendAndModelSummary();
 
+  // Register model repository path and associated mappings
+  Status RegisterModelRepository(
+      const std::string& repository,
+      const std::unordered_map<std::string, std::string>& model_mapping);
+
+  // Unregister model repository path.
+  Status UnregisterModelRepository(const std::string& repository);
+
   // Return the server version.
   const std::string& Version() const { return version_; }
 
