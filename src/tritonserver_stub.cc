@@ -522,6 +522,14 @@ TRITONSERVER_ServerModelIndex()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerRegisterModelRepository()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerUnregisterModelRepository()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerLoadModel()
 {
 }
