@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 11
+#define TRITONSERVER_API_VERSION_MINOR 12
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
