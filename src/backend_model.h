@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -87,6 +87,16 @@ class TritonModel : public Model {
   // Set the scheduler based on the model configuration. The scheduler
   // can only be set once for a backend.
   Status SetConfiguredScheduler();
+
+  // Merges the global backend configs with the specific
+  // backend configs.
+  static Status ResolveBackendConfigs(
+      const BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const std::string& backend_name, BackendCmdlineConfig& config);
+
+  // Sets defaults for some backend configurations when none are specified on
+  // the command line.
+  static Status SetBackendConfigDefaults(BackendCmdlineConfig& config);
 
   Status Initialize();
   Status WarmUp();
