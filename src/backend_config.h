@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "status.h"
 
 namespace triton { namespace core {

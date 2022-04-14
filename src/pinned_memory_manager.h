@@ -30,7 +30,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "status.h"
 
 namespace triton { namespace core {

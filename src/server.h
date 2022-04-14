@@ -34,7 +34,7 @@
 #include <vector>
 
 #include "infer_parameter.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "model_config.pb.h"
 #include "model_repository_manager.h"
 #include "persistent_backend_manager.h"

@@ -28,7 +28,7 @@
 #include <map>
 #include <memory>
 #include "memory.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "status.h"
 
 #pragma once

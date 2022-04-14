@@ -35,7 +35,7 @@
 #include "metric_family.h"
 #include "metrics.h"
 #include "model.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "model_config_utils.h"
 #include "model_repository_manager.h"
 #include "rate_limiter.h"

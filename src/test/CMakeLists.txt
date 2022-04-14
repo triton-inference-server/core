@@ -390,7 +390,6 @@ add_executable(
   ../status.h
   ../filesystem.h
   ../model_config_utils.h
-  ../model_config.h
 )
 
 set_target_properties(

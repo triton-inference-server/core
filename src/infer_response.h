@@ -33,7 +33,7 @@
 #include "constants.h"
 #include "infer_parameter.h"
 #include "infer_trace.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "response_allocator.h"
 #include "status.h"
 #include "tritonserver_apis.h"

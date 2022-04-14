@@ -28,7 +28,7 @@
 #include <list>
 #include "backend_manager.h"
 #include "constants.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "status.h"
 
 namespace triton { namespace core {

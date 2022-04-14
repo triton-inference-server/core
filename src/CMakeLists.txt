@@ -167,7 +167,6 @@ set(
   metric_model_reporter.h
   metrics.h
   metric_family.h
-  model_config.h
   model_config_utils.h
   model.h
   model_repository_manager.h
@@ -427,6 +426,7 @@ target_link_libraries(
     proto-library                    # from repo-common
     triton-common-async-work-queue   # from repo-common
     triton-common-error              # from repo-common
+    triton-common-model-config       # from repo-common
     triton-common-logging            # from repo-common
     triton-common-json               # from repo-common
     triton-common-table-printer      # from repo-common

@@ -30,7 +30,7 @@
 #include <map>
 #include <mutex>
 #include "infer_parameter.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "model_config.pb.h"
 #include "status.h"
 

@@ -135,7 +135,7 @@ CreateAgentModelListWithLoadAction(
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
   std::shared_ptr<TritonRepoAgentModelList> lagent_model_list;
-  if (original_model_config.has_model_repository_agents()) {
+  if (original_triton/common/model_config.has_model_repository_agents()) {
     FileSystemType filesystem_type;
     RETURN_IF_ERROR(GetFileSystemType(original_model_path, &filesystem_type));
     TRITONREPOAGENT_ArtifactType artifact_type =

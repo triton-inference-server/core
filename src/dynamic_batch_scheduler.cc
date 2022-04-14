@@ -32,7 +32,7 @@
 #include <unistd.h>
 #endif
 #include "constants.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "server.h"
 #include "triton/common/logging.h"
 #include "triton/common/nvtx.h"

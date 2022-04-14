@@ -28,7 +28,7 @@
 #include <map>
 #include <thread>
 #include <vector>
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "status.h"
 #include "tritonserver_apis.h"
 

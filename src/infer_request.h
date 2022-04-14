@@ -34,7 +34,7 @@
 #include "infer_stats.h"
 #include "infer_trace.h"
 #include "memory.h"
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "response_allocator.h"
 #include "sequence_state.h"
 #include "status.h"

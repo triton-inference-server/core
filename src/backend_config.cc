@@ -26,7 +26,7 @@
 
 #include "backend_config.h"
 
-#include "model_config.h"
+#include "triton/common/model_config.h"
 #include "status.h"
 #include "triton/common/logging.h"
 
