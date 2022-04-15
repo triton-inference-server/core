@@ -744,7 +744,7 @@ InferenceRequest::Normalize()
     int64_t dynamic_axis = -1;
     size_t element_cnt = 1;
     for (const auto& dim : config_input.dims()) {
-      if (dim == WILDCARD_DIM) {
+      if (dim == triton::common::WILDCARD_DIM) {
         if (dynamic_axis != -1) {
           return Status(
               Status::Code::INVALID_ARG,
@@ -914,14 +914,14 @@ InferenceRequest::Normalize()
         match_config = false;
       } else {
         for (int i = 0; i < config_dims.size(); ++i) {
-          if (input_dims[i] == WILDCARD_DIM) {
+          if (input_dims[i] == triton::common::WILDCARD_DIM) {
             return Status(
                 Status::Code::INVALID_ARG,
                 "All input dimensions should be specified for input '" +
                     pr.first + "' for model '" + ModelName() + "', got " +
                     triton::common::DimsListToString(input.OriginalShape()));
           } else if (
-              (config_dims[i] != WILDCARD_DIM) &&
+              (config_dims[i] != triton::common::WILDCARD_DIM) &&
               (config_dims[i] != input_dims[i])) {
             match_config = false;
             break;
@@ -932,7 +932,7 @@ InferenceRequest::Normalize()
       if (!match_config) {
         triton::common::DimsList full_dims;
         if (model_config.max_batch_size() > 0) {
-          full_dims.Add(WILDCARD_DIM);
+          full_dims.Add(triton::common::WILDCARD_DIM);
         }
         for (int i = 0; i < input_config->dims_size(); ++i) {
           full_dims.Add(input_config->dims(i));
