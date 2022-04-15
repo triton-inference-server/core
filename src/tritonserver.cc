@@ -478,7 +478,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_DataType
 TRITONSERVER_StringToDataType(const char* dtype)
 {
   const size_t len = strlen(dtype);
-  return tc::DataTypeToTriton(tc::ProtocolStringToDataType(dtype, len));
+  return tc::DataTypeToTriton(triton::common::ProtocolStringToDataType(dtype, len));
 }
 
 TRITONAPI_DECLSPEC uint32_t
@@ -2379,7 +2379,7 @@ TRITONSERVER_ServerModelMetadata(
         metadata, triton::common::TritonJson::ValueType::OBJECT);
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-        "datatype", tc::DataTypeToProtocolString(io.data_type())));
+        "datatype", triton::common::DataTypeToProtocolString(io.data_type())));
 
     // Input shape. If the model supports batching then must include
     // '-1' for the batch dimension.
@@ -2405,7 +2405,7 @@ TRITONSERVER_ServerModelMetadata(
         metadata, triton::common::TritonJson::ValueType::OBJECT);
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-        "datatype", tc::DataTypeToProtocolString(io.data_type())));
+        "datatype", triton::common::DataTypeToProtocolString(io.data_type())));
 
     // Output shape. If the model supports batching then must include
     // '-1' for the batch dimension.

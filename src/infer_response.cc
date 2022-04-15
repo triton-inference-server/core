@@ -423,8 +423,8 @@ std::ostream&
 operator<<(std::ostream& out, const InferenceResponse::Output& output)
 {
   out << "output: " << output.Name()
-      << ", type: " << DataTypeToProtocolString(output.DType())
-      << ", shape: " << DimsListToString(output.Shape());
+      << ", type: " << triton::common::DataTypeToProtocolString(output.DType())
+      << ", shape: " << triton::common::DimsListToString(output.Shape());
   return out;
 }
 

@@ -102,13 +102,13 @@ ValidateTensorConsistency(
   // used for both non-batching model and batching model. In that case, it
   // is acceptable if non-batching model shape is [-1, d_0, d_1, ..., d_n]
   // while the batching model shape is [d_0, d_1, ..., d_n].
-  if (!CompareDimsWithWildcard(lhs.dims_, rhs.dims_) &&
-      !CompareDimsWithWildcard(lhs.full_dims_, rhs.full_dims_)) {
+  if (!triton::common::CompareDimsWithWildcard(lhs.dims_, rhs.dims_) &&
+      !triton::common::CompareDimsWithWildcard(lhs.full_dims_, rhs.full_dims_)) {
     return Status(
         Status::Code::INVALID_ARG,
-        message + "inconsistent shape: " + DimsListToString(lhs.full_dims_) +
+        message + "inconsistent shape: " + triton::common::DimsListToString(lhs.full_dims_) +
             " is inferred from model " + lhs.model_name_ + " while " +
-            DimsListToString(rhs.full_dims_) + " is inferred from model " +
+            triton::common::DimsListToString(rhs.full_dims_) + " is inferred from model " +
             rhs.model_name_);
   }
 

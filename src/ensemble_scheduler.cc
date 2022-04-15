@@ -986,7 +986,7 @@ EnsembleContext::ReshapeTensorDims(
   if (config_allow_batching != (tensor_batch_size != 0)) {
     // expect batching but the tensor is generated from nobatching model
     if (config_allow_batching) {
-      if (CompareDimsWithWildcard(config_dims, dims)) {
+      if (triton::common::CompareDimsWithWildcard(config_dims, dims)) {
         // If 'dims' already matches 'config_dims', prepend with batch size 1
         res.push_back(1);
         res.insert(res.end(), dims.begin(), dims.end());
@@ -998,7 +998,7 @@ EnsembleContext::ReshapeTensorDims(
       // Check if the batched tensor can be sent to the non-batching
       // model as one tensor. If not, strip the batch dimension if
       // it is batch size 1
-      if (!CompareDimsWithWildcard(config_dims, dims) &&
+      if (!triton::common::CompareDimsWithWildcard(config_dims, dims) &&
           (tensor_batch_size == 1)) {
         res.assign(dims.begin() + 1, dims.end());
         reshaped = true;

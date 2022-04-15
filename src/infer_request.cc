@@ -389,7 +389,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
     }
 
     if (input.second.DType() == inference::DataType::TYPE_STRING) {
-      int64_t element_count = GetElementCount(input.second.Shape());
+      int64_t element_count = triton::common::GetElementCount(input.second.Shape());
 
       size_t str_byte_size = static_cast<size_t>(4 * element_count);
       max_str_byte_size = std::max(str_byte_size, max_str_byte_size);
@@ -441,7 +441,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
     } else {
       if (inference::DataType::TYPE_STRING == input.second.DType()) {
         new_input->AppendData(
-            data_base, GetElementCount(input.second.Shape()) * 4, mem_type,
+            data_base, triton::common::GetElementCount(input.second.Shape()) * 4, mem_type,
             mem_id);
       } else {
         new_input->AppendData(
@@ -781,7 +781,7 @@ InferenceRequest::Normalize()
       }
     } else if (dynamic_axis != -1) {
       shape[dynamic_axis] = raw_input.Data()->TotalByteSize() / element_cnt /
-                            GetDataTypeByteSize(config_input.data_type());
+                            triton::common::GetDataTypeByteSize(config_input.data_type());
     }
     raw_input.SetMetadata(config_input.name(), config_input.data_type(), shape);
   }
@@ -899,9 +899,9 @@ InferenceRequest::Normalize()
       return Status(
           Status::Code::INVALID_ARG,
           "inference input data-type is '" +
-              std::string(DataTypeToProtocolString(input.DType())) +
+              std::string(triton::common::DataTypeToProtocolString(input.DType())) +
               "', model expects '" +
-              std::string(DataTypeToProtocolString(input_config->data_type())) +
+              std::string(triton::common::DataTypeToProtocolString(input_config->data_type())) +
               "' for '" + ModelName() + "'");
     }
 
@@ -919,7 +919,7 @@ InferenceRequest::Normalize()
                 Status::Code::INVALID_ARG,
                 "All input dimensions should be specified for input '" +
                     pr.first + "' for model '" + ModelName() + "', got " +
-                    DimsListToString(input.OriginalShape()));
+                    triton::common::DimsListToString(input.OriginalShape()));
           } else if (
               (config_dims[i] != WILDCARD_DIM) &&
               (config_dims[i] != input_dims[i])) {
@@ -940,8 +940,8 @@ InferenceRequest::Normalize()
         return Status(
             Status::Code::INVALID_ARG,
             "unexpected shape for input '" + pr.first + "' for model '" +
-                ModelName() + "'. Expected " + DimsListToString(full_dims) +
-                ", got " + DimsListToString(input.OriginalShape()));
+                ModelName() + "'. Expected " + triton::common::DimsListToString(full_dims) +
+                ", got " + triton::common::DimsListToString(input.OriginalShape()));
       }
     }
 
@@ -1406,10 +1406,10 @@ std::ostream&
 operator<<(std::ostream& out, const InferenceRequest::Input& input)
 {
   out << "input: " << input.Name()
-      << ", type: " << DataTypeToProtocolString(input.DType())
-      << ", original shape: " << DimsListToString(input.OriginalShape())
-      << ", batch + shape: " << DimsListToString(input.ShapeWithBatchDim())
-      << ", shape: " << DimsListToString(input.Shape());
+      << ", type: " << triton::common::DataTypeToProtocolString(input.DType())
+      << ", original shape: " << triton::common::DimsListToString(input.OriginalShape())
+      << ", batch + shape: " << triton::common::DimsListToString(input.ShapeWithBatchDim())
+      << ", shape: " << triton::common::DimsListToString(input.Shape());
   if (input.IsShapeTensor()) {
     out << ", is_shape_tensor: True";
   }

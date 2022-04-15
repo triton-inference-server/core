@@ -352,7 +352,7 @@ TritonModelInstance::GenerateWarmupData()
     int64_t max_zero_byte_size = 0;
     int64_t max_random_byte_size = 0;
     for (const auto& input_meta : warmup_setting.inputs()) {
-      auto element_count = GetElementCount(input_meta.second.dims());
+      auto element_count = triton::common::GetElementCount(input_meta.second.dims());
       if (element_count == -1) {
         return Status(
             Status::Code::INVALID_ARG,
@@ -362,7 +362,7 @@ TritonModelInstance::GenerateWarmupData()
       }
 
       int64_t batch_byte_size =
-          element_count * GetDataTypeByteSize(input_meta.second.data_type());
+          element_count * triton::common::GetDataTypeByteSize(input_meta.second.data_type());
       if (batch_byte_size == 0) {
         batch_byte_size = element_count * sizeof(int32_t);
       }
@@ -415,10 +415,10 @@ TritonModelInstance::GenerateWarmupData()
       // Second pass to prepare original inputs.
       std::vector<std::shared_ptr<InferenceRequest::Input>> input_sps;
       for (const auto& input_meta : warmup_setting.inputs()) {
-        auto batch1_element_count = GetElementCount(input_meta.second.dims());
+        auto batch1_element_count = triton::common::GetElementCount(input_meta.second.dims());
         auto batch_byte_size =
             batch1_element_count *
-            GetDataTypeByteSize(input_meta.second.data_type());
+            triton::common::GetDataTypeByteSize(input_meta.second.data_type());
         if (batch_byte_size == 0) {
           batch_byte_size = batch1_element_count * sizeof(int32_t);
         }
