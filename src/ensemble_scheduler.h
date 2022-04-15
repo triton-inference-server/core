@@ -64,7 +64,7 @@ struct EnsembleInfo {
   bool is_decoupled_;
 
   // the ensemble output (re)shape expected by the ensemble
-  std::unordered_map<std::string, DimsList> ensemble_output_shape_;
+  std::unordered_map<std::string, triton::common::DimsList> ensemble_output_shape_;
 
   // Inputs that is marked optional for the ensemble
   std::set<std::string> optional_inputs_;

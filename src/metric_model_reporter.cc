@@ -36,7 +36,7 @@ namespace triton { namespace core {
 Status
 MetricModelReporter::Create(
     const std::string& model_name, const int64_t model_version,
-    const int device, const MetricTagsMap& model_tags,
+    const int device, const triton::common::MetricTagsMap& model_tags,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
   static std::mutex mtx;
@@ -71,7 +71,7 @@ MetricModelReporter::Create(
 
 MetricModelReporter::MetricModelReporter(
     const std::string& model_name, const int64_t model_version,
-    const int device, const MetricTagsMap& model_tags)
+    const int device, const triton::common::MetricTagsMap& model_tags)
 {
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_name, model_version, device, model_tags);
@@ -133,7 +133,7 @@ void
 MetricModelReporter::GetMetricLabels(
     std::map<std::string, std::string>* labels, const std::string& model_name,
     const int64_t model_version, const int device,
-    const MetricTagsMap& model_tags)
+    const triton::common::MetricTagsMap& model_tags)
 {
   labels->insert(std::map<std::string, std::string>::value_type(
       std::string(kMetricsLabelModelName), model_name));

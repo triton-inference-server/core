@@ -57,7 +57,7 @@ class TritonBackend {
   static Status Create(
       const std::string& name, const std::string& dir,
       const std::string& libpath,
-      const BackendCmdlineConfig& backend_cmdline_config,
+      const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
   ~TritonBackend();
 
@@ -148,7 +148,7 @@ class TritonBackendManager {
   static Status CreateBackend(
       const std::string& name, const std::string& dir,
       const std::string& libpath,
-      const BackendCmdlineConfig& backend_cmdline_config,
+      const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
 
   static Status BackendState(

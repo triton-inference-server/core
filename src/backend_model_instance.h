@@ -49,7 +49,7 @@ class InferenceRequest;
 class TritonModelInstance {
  public:
   static Status CreateInstances(
-      TritonModel* model, const HostPolicyCmdlineConfigMap& host_policy_map,
+      TritonModel* model, const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const inference::ModelConfig& model_config, const bool device_blocking);
   ~TritonModelInstance();
 
@@ -57,7 +57,7 @@ class TritonModelInstance {
   size_t Index() const { return index_; }
   TRITONSERVER_InstanceGroupKind Kind() const { return kind_; }
   int32_t DeviceId() const { return device_id_; }
-  const HostPolicyCmdlineConfig& HostPolicy() const { return host_policy_; }
+  const triton::common::HostPolicyCmdlineConfig& HostPolicy() const { return host_policy_; }
   const TritonServerMessage& HostPolicyMessage() const
   {
     return host_policy_message_;
@@ -97,7 +97,7 @@ class TritonModelInstance {
       TritonModel* model, const std::string& name, const size_t index,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
-      const HostPolicyCmdlineConfig& host_policy,
+      const triton::common::HostPolicyCmdlineConfig& host_policy,
       const TritonServerMessage& host_policy_message,
       const std::vector<SecondaryDevice>& secondary_devices);
   static Status CreateInstance(
@@ -105,7 +105,7 @@ class TritonModelInstance {
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
       const std::string& host_policy_name,
-      const HostPolicyCmdlineConfig& host_policy,
+      const triton::common::HostPolicyCmdlineConfig& host_policy,
       const inference::ModelRateLimiter& rate_limiter_config,
       const bool device_blocking,
       std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
@@ -171,7 +171,7 @@ class TritonModelInstance {
   // GPU device to be used by the instance.
   TRITONSERVER_InstanceGroupKind kind_;
   int32_t device_id_;
-  const HostPolicyCmdlineConfig host_policy_;
+  const triton::common::HostPolicyCmdlineConfig host_policy_;
   TritonServerMessage host_policy_message_;
   std::vector<std::string> profile_names_;
   bool passive_;

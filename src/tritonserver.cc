@@ -288,7 +288,7 @@ class TritonServerOptions {
   // setting=value pairs for that backend. The empty backend name ("")
   // is used to communicate configuration information that is used
   // internally.
-  const tc::BackendCmdlineConfigMap& BackendCmdlineConfigMap() const
+  const triton::common::BackendCmdlineConfigMap& BackendCmdlineConfigMap() const
   {
     return backend_cmdline_config_map_;
   }
@@ -299,7 +299,7 @@ class TritonServerOptions {
   TRITONSERVER_Error* SetHostPolicy(
       const std::string& policy_name, const std::string& setting,
       const std::string& value);
-  const tc::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap() const
+  const triton::common::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap() const
   {
     return host_policy_map_;
   }
@@ -325,8 +325,8 @@ class TritonServerOptions {
   double min_compute_capability_;
   std::string backend_dir_;
   std::string repoagent_dir_;
-  tc::BackendCmdlineConfigMap backend_cmdline_config_map_;
-  tc::HostPolicyCmdlineConfigMap host_policy_map_;
+  triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
+  triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
 
 TritonServerOptions::TritonServerOptions()

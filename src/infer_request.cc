@@ -930,7 +930,7 @@ InferenceRequest::Normalize()
       }
 
       if (!match_config) {
-        DimsList full_dims;
+        triton::common::DimsList full_dims;
         if (model_config.max_batch_size() > 0) {
           full_dims.Add(WILDCARD_DIM);
         }

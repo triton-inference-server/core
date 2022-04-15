@@ -43,7 +43,7 @@ namespace {
 struct TensorNode {
   TensorNode(
       const std::string& model_name, const bool batching,
-      const inference::DataType& type, const DimsList& dims)
+      const inference::DataType& type, const triton::common::DimsList& dims)
       : model_name_(model_name), type_(type), dims_(dims), is_decoupled_(false),
         decouple_label_(0), visited_(false)
   {
@@ -63,8 +63,8 @@ struct TensorNode {
 
   std::string model_name_;
   inference::DataType type_;
-  DimsList dims_;
-  DimsList full_dims_;
+  triton::common::DimsList dims_;
+  triton::common::DimsList full_dims_;
   bool is_decoupled_;
   size_t decouple_label_;
   bool visited_;

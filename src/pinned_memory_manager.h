@@ -43,13 +43,13 @@ class PinnedMemoryManager {
   // Options to configure pinned memeory manager.
   struct Options {
     Options(
-        uint64_t b = 0, const HostPolicyCmdlineConfigMap& host_policy_map = {})
+        uint64_t b = 0, const triton::common::HostPolicyCmdlineConfigMap& host_policy_map = {})
         : pinned_memory_pool_byte_size_(b), host_policy_map_(host_policy_map)
     {
     }
 
     uint64_t pinned_memory_pool_byte_size_;
-    HostPolicyCmdlineConfigMap host_policy_map_;
+    triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
   };
 
   ~PinnedMemoryManager();

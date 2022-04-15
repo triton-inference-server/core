@@ -41,16 +41,16 @@ namespace triton { namespace core {
 class PersistentBackendManager {
  public:
   static Status Create(
-      const BackendCmdlineConfigMap& config_map,
+      const triton::common::BackendCmdlineConfigMap& config_map,
       std::shared_ptr<PersistentBackendManager>* manager);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PersistentBackendManager);
   PersistentBackendManager() = default;
-  Status InitPersistentBackends(const BackendCmdlineConfigMap& config_map);
+  Status InitPersistentBackends(const triton::common::BackendCmdlineConfigMap& config_map);
   Status InitPersistentBackend(
       const std::string& backend_name,
-      const BackendCmdlineConfigMap& config_map);
+      const triton::common::BackendCmdlineConfigMap& config_map);
 
   std::list<std::shared_ptr<TritonBackend>> persist_backends_;
 };

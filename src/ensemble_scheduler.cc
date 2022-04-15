@@ -262,7 +262,7 @@ class EnsembleContext {
   // Note that 'dims' will be in full shape as opposed to 'config_dims'.
   // Return the dims after reshape.
   std::vector<int64_t> ReshapeTensorDims(
-      const DimsList& config_dims, const bool config_allow_batching,
+      const triton::common::DimsList& config_dims, const bool config_allow_batching,
       const size_t tensor_batch_size, const std::vector<int64_t>& dims);
 
   // Return the list of step that becomes ready due to tensor update
@@ -973,7 +973,7 @@ EnsembleContext::InitStep(
 
 std::vector<int64_t>
 EnsembleContext::ReshapeTensorDims(
-    const DimsList& config_dims, const bool config_allow_batching,
+    const triton::common::DimsList& config_dims, const bool config_allow_batching,
     const size_t tensor_batch_size, const std::vector<int64_t>& dims)
 {
   bool reshaped = false;

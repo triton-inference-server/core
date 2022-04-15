@@ -66,13 +66,13 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 // NUMA setting will be ignored on Windows platform
 #ifdef _WIN32
 Status
-SetNumaConfigOnThread(const HostPolicyCmdlineConfig& host_policy)
+SetNumaConfigOnThread(const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   return Status::Success;
 }
 
 Status
-SetNumaMemoryPolicy(const HostPolicyCmdlineConfig& host_policy)
+SetNumaMemoryPolicy(const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   return Status::Success;
 }
@@ -93,7 +93,7 @@ ResetNumaMemoryPolicy()
 Status
 SetNumaThreadAffinity(
     std::thread::native_handle_type thread,
-    const HostPolicyCmdlineConfig& host_policy)
+    const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   return Status::Success;
 }
@@ -104,7 +104,7 @@ SetNumaThreadAffinity(
 thread_local bool numa_set = false;
 
 Status
-SetNumaConfigOnThread(const HostPolicyCmdlineConfig& host_policy)
+SetNumaConfigOnThread(const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   // Set thread affinity
   RETURN_IF_ERROR(SetNumaThreadAffinity(pthread_self(), host_policy));
@@ -116,7 +116,7 @@ SetNumaConfigOnThread(const HostPolicyCmdlineConfig& host_policy)
 }
 
 Status
-SetNumaMemoryPolicy(const HostPolicyCmdlineConfig& host_policy)
+SetNumaMemoryPolicy(const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   const auto it = host_policy.find("numa-node");
   if (it != host_policy.end()) {
@@ -166,7 +166,7 @@ ResetNumaMemoryPolicy()
 Status
 SetNumaThreadAffinity(
     std::thread::native_handle_type thread,
-    const HostPolicyCmdlineConfig& host_policy)
+    const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   const auto it = host_policy.find("cpu-cores");
   if (it != host_policy.end()) {

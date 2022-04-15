@@ -39,7 +39,7 @@ static std::mutex mu_;
 
 Status
 PersistentBackendManager::Create(
-    const BackendCmdlineConfigMap& config_map,
+    const triton::common::BackendCmdlineConfigMap& config_map,
     std::shared_ptr<PersistentBackendManager>* manager)
 {
   std::lock_guard<std::mutex> lock(mu_);
@@ -59,7 +59,7 @@ PersistentBackendManager::Create(
 
 Status
 PersistentBackendManager::InitPersistentBackends(
-    const BackendCmdlineConfigMap& config_map)
+    const triton::common::BackendCmdlineConfigMap& config_map)
 {
   for (const auto& be : {"pytorch", "tensorflow", "onnxruntime", "openvino"}) {
     RETURN_IF_ERROR(InitPersistentBackend(be, config_map));
@@ -70,7 +70,7 @@ PersistentBackendManager::InitPersistentBackends(
 
 Status
 PersistentBackendManager::InitPersistentBackend(
-    const std::string& backend_name, const BackendCmdlineConfigMap& config_map)
+    const std::string& backend_name, const triton::common::BackendCmdlineConfigMap& config_map)
 {
   std::string backends_dir;
   std::string specialized_backend_name;
@@ -87,8 +87,8 @@ PersistentBackendManager::InitPersistentBackend(
   bool exists = false;
   RETURN_IF_ERROR(FileExists(backend_libpath, &exists));
   if (exists) {
-    BackendCmdlineConfig empty_backend_cmdline_config;
-    const BackendCmdlineConfig* config;
+    triton::common::BackendCmdlineConfig empty_backend_cmdline_config;
+    const triton::common::BackendCmdlineConfig* config;
     const auto& itr = config_map.find(backend_name);
     if (itr == config_map.end()) {
       config = &empty_backend_cmdline_config;

@@ -346,8 +346,8 @@ class ModelRepositoryManager::ModelLifeCycle {
  public:
   static Status Create(
       InferenceServer* server, const double min_compute_capability,
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const HostPolicyCmdlineConfigMap& host_policy_map,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       std::unique_ptr<ModelLifeCycle>* life_cycle);
 
   ~ModelLifeCycle() { map_.clear(); }
@@ -431,8 +431,8 @@ class ModelRepositoryManager::ModelLifeCycle {
 
   ModelLifeCycle(
       const double min_compute_capability, InferenceServer* server,
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const HostPolicyCmdlineConfigMap& host_policy_map)
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
       : min_compute_capability_(min_compute_capability), server_(server),
         cmdline_config_map_(backend_cmdline_config_map),
         host_policy_map_(host_policy_map)
@@ -470,15 +470,15 @@ class ModelRepositoryManager::ModelLifeCycle {
   std::recursive_mutex map_mtx_;
 
   InferenceServer* server_;
-  const BackendCmdlineConfigMap cmdline_config_map_;
-  const HostPolicyCmdlineConfigMap host_policy_map_;
+  const triton::common::BackendCmdlineConfigMap cmdline_config_map_;
+  const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
 
 Status
 ModelRepositoryManager::ModelLifeCycle::Create(
     InferenceServer* server, const double min_compute_capability,
-    const BackendCmdlineConfigMap& backend_cmdline_config_map,
-    const HostPolicyCmdlineConfigMap& host_policy_map,
+    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     std::unique_ptr<ModelLifeCycle>* life_cycle)
 {
   std::unique_ptr<ModelLifeCycle> local_life_cycle(new ModelLifeCycle(
@@ -1262,10 +1262,10 @@ ModelRepositoryManager::Create(
     InferenceServer* server, const std::string& server_version,
     const std::set<std::string>& repository_paths,
     const std::set<std::string>& startup_models, const bool strict_model_config,
-    const BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const bool polling_enabled, const bool model_control_enabled,
     const double min_compute_capability,
-    const HostPolicyCmdlineConfigMap& host_policy_map,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
 {
   // The rest only matters if repository path is valid directory

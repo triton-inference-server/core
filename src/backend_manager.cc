@@ -51,7 +51,7 @@ namespace triton { namespace core {
 Status
 TritonBackend::Create(
     const std::string& name, const std::string& dir, const std::string& libpath,
-    const BackendCmdlineConfig& backend_cmdline_config,
+    const triton::common::BackendCmdlineConfig& backend_cmdline_config,
     std::shared_ptr<TritonBackend>* backend)
 {
   // Create the JSON representation of the backend configuration.
@@ -325,7 +325,7 @@ TritonBackendManager::Singleton()
 Status
 TritonBackendManager::CreateBackend(
     const std::string& name, const std::string& dir, const std::string& libpath,
-    const BackendCmdlineConfig& backend_cmdline_config,
+    const triton::common::BackendCmdlineConfig& backend_cmdline_config,
     std::shared_ptr<TritonBackend>* backend)
 {
   TritonBackendManager& singleton_manager = Singleton();
