@@ -175,7 +175,7 @@ TritonModel::Create(
   bool device_blocking = false;
   if (local_model->backend_->ExecutionPolicy() ==
       TRITONBACKEND_EXECUTION_DEVICE_BLOCKING) {
-    if (triton/common/model_config.has_sequence_batching()) {
+    if (model_config.has_sequence_batching()) {
       LOG_INFO << "Overriding execution policy to "
                   "\"TRITONBACKEND_EXECUTION_BLOCKING\" for sequence model \""
                << model_config.name() << "\"";
