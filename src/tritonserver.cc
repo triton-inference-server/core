@@ -383,7 +383,7 @@ TritonServerOptions::AddBackendConfig(
     const std::string& backend_name, const std::string& setting,
     const std::string& value)
 {
-  tc::BackendCmdlineConfig& cc = backend_cmdline_config_map_[backend_name];
+  triton::common::BackendCmdlineConfig& cc = backend_cmdline_config_map_[backend_name];
   cc.push_back(std::make_pair(setting, value));
 
   return nullptr;  // success
@@ -404,7 +404,7 @@ TritonServerOptions::SetHostPolicy(
             .c_str());
   }
 
-  tc::HostPolicyCmdlineConfig& hp = host_policy_map_[policy_name];
+  triton::common::HostPolicyCmdlineConfig& hp = host_policy_map_[policy_name];
   hp[setting] = value;
 
   return nullptr;  // success
