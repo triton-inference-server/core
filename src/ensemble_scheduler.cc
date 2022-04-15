@@ -32,6 +32,7 @@
 #include "cuda_utils.h"
 #include "metrics.h"
 #include "model.h"
+#include "model_config_utils.h"
 #include "server.h"
 #include "triton/common/logging.h"
 

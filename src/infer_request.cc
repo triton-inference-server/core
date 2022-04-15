@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <deque>
 #include "model.h"
+#include "model_config_utils.h"
 #include "server.h"
 #include "triton/common/logging.h"
 #ifdef TRITON_ENABLE_TRACING
