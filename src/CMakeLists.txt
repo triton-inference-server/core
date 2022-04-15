@@ -123,7 +123,6 @@ set(
   metrics.cc
   metric_family.cc
   model.cc
-  model_config.cc
   model_config_utils.cc
   model_repository_manager.cc
   numa_utils.cc

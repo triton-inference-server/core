@@ -384,7 +384,6 @@ add_executable(
   ../status.cc
   ../filesystem.cc
   ../model_config_utils.cc
-  ../model_config.cc
   ../repo_agent.h
   ../shared_library.h
   ../status.h
