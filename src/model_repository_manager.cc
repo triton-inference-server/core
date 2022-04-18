@@ -1303,13 +1303,27 @@ ModelRepositoryManager::Create(
     // model loading / unloading error will be printed but ignored
     RETURN_IF_ERROR(local_manager->PollAndUpdateInternal(&all_models_polled));
   } else {
-    std::unordered_map<std::string, std::vector<const InferenceParameter*>>
-        models;
-    for (const auto& model_name : startup_models) {
-      models[model_name];
+    // Support loading all models with model name "*" wildcard. This does
+    // not imply support any pattern matching currently.
+    auto it = startup_models.find("*");
+    if (it != set::end()) {
+      // "*" must be the only model specified if using this feature, otherwise throw an error
+      if (startup_models.size() > 1) {
+        return Status(Status::Code::INVALID_ARG, "Wildcard startup model '*' must be the only startup model specified.");
+      }
+      // TODO: LOAD ALL MODELS
+      // TODO: Cleanup
     }
-    RETURN_IF_ERROR(local_manager->LoadUnloadModels(
-        models, ActionType::LOAD, false, &all_models_polled));
+    // Load each specified startup_model
+    else {
+      std::unordered_map<std::string, std::vector<const InferenceParameter*>>
+          models;
+      for (const auto& model_name : startup_models) {
+        models[model_name];
+      }
+      RETURN_IF_ERROR(local_manager->LoadUnloadModels(
+          models, ActionType::LOAD, false, &all_models_polled));
+    }
   }
 
   *model_repository_manager = std::move(local_manager);
