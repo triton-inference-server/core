@@ -83,7 +83,7 @@ class TritonRepoAgent {
     return model_fini_fn_;
   }
 
- private:
+ protected:
   DISALLOW_COPY_AND_ASSIGN(TritonRepoAgent);
 
   TritonRepoAgent(const std::string& name)
