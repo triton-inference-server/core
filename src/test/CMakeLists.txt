@@ -411,11 +411,11 @@ target_include_directories(
 target_link_libraries(
   repo_agent_test
   PRIVATE
-    triton-common-error       # from repo-common
-    triton-common-model-config# from repo-common
-    triton-common-json        # from repo-common
-    triton-common-logging     # from repo-common
-    proto-library             # from repo-common
+    triton-common-error        # from repo-common
+    triton-common-model-config # from repo-common
+    triton-common-json         # from repo-common
+    triton-common-logging      # from repo-common
+    proto-library              # from repo-common
     GTest::gtest
     GTest::gtest_main
     protobuf::libprotobuf
