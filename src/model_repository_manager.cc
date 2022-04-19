@@ -2247,7 +2247,7 @@ ModelRepositoryManager::RegisterModelRepository(
       }
     }
 
-    repository_paths_.emplace(repository).second;
+    repository_paths_.emplace(repository);
     for (const auto& mapping : model_mapping) {
       model_mappings_.emplace(
           mapping.first,
