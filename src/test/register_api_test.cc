@@ -697,7 +697,7 @@ TEST_F(RegisterApiTest, DifferentMapping)
   // 'models_0/model_0'";
 }
 
-TEST_F(RegisterApiTest, RegisterCheckIndex)
+TEST_F(RegisterApiTest, CorrectIndex)
 {
   // Registering a repository "models_0" where contains "model_0", but with
   // different name mapping
@@ -742,6 +742,39 @@ TEST_F(RegisterApiTest, RegisterCheckIndex)
       "serializing index to Json");
   const std::string search_msg =
       "[{\"name\":\"name_0\",\"version\":\"1\",\"state\":\"READY\"}]";
+  const std::string serialized_index(base, byte_size);
+  EXPECT_EQ(serialized_index, search_msg)
+      << "Returned index does not equal expected index";
+}
+
+TEST_F(RegisterApiTest, CorrectIndexNotLoaded)
+{
+  // Registering a repository "models_0" where contains "model_0", but with
+  // different name mapping
+  const char* override_name = "name_0";
+  std::shared_ptr<TRITONSERVER_Parameter> managed_param(
+      TRITONSERVER_ParameterNew(
+          "model_0", TRITONSERVER_PARAMETER_STRING, override_name),
+      TRITONSERVER_ParameterDelete);
+  ASSERT_TRUE(managed_param != nullptr) << "failed to create name mapping pair";
+  std::vector<const TRITONSERVER_Parameter*> name_map{managed_param.get()};
+
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerRegisterModelRepository(
+          server_, "models_0", name_map.data(), name_map.size()),
+      "registering model repository 'models_0'");
+
+  TRITONSERVER_Message* repository_index;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIndex(server_, 0, &repository_index),
+      "checking model indexes");
+  const char* base = nullptr;
+  size_t byte_size = 0;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MessageSerializeToJson(repository_index, &base, &byte_size),
+      "serializing index to Json");
+  const std::string search_msg =
+      "[{\"name\":\"name_0\"}]";
   const std::string serialized_index(base, byte_size);
   EXPECT_EQ(serialized_index, search_msg)
       << "Returned index does not equal expected index";
