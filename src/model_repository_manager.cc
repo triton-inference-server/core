@@ -1297,33 +1297,35 @@ ModelRepositoryManager::Create(
           model_control_enabled, min_compute_capability,
           std::move(life_cycle)));
 
+  // Support loading all models on startup in model control mode with
+  // special startup_model name "*". This does not imply support for pattern
+  // matching in model names.
+  bool load_all_models_on_startup = false;
+  if (startup_models.find("*") != startup_models.end()) {
+    if (startup_models.size() > 1) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Wildcard model name '*' must be the ONLY startup model "
+          "specified if at all.");
+    }
+
+    load_all_models_on_startup = true;
+  }
+
   bool all_models_polled = true;
-  if (!model_control_enabled) {
+  if (!model_control_enabled || load_all_models_on_startup) {
     // only error happens before model load / unload will be return
     // model loading / unloading error will be printed but ignored
     RETURN_IF_ERROR(local_manager->PollAndUpdateInternal(&all_models_polled));
   } else {
-    // Support loading all models with model name "*" wildcard. This does
-    // not imply support any pattern matching currently.
-    auto it = startup_models.find("*");
-    if (it != set::end()) {
-      // "*" must be the only model specified if using this feature, otherwise throw an error
-      if (startup_models.size() > 1) {
-        return Status(Status::Code::INVALID_ARG, "Wildcard startup model '*' must be the only startup model specified.");
-      }
-      // TODO: LOAD ALL MODELS
-      // TODO: Cleanup
-    }
     // Load each specified startup_model
-    else {
-      std::unordered_map<std::string, std::vector<const InferenceParameter*>>
-          models;
-      for (const auto& model_name : startup_models) {
-        models[model_name];
-      }
-      RETURN_IF_ERROR(local_manager->LoadUnloadModels(
-          models, ActionType::LOAD, false, &all_models_polled));
+    std::unordered_map<std::string, std::vector<const InferenceParameter*>>
+        models;
+    for (const auto& model_name : startup_models) {
+      models[model_name];
     }
+    RETURN_IF_ERROR(local_manager->LoadUnloadModels(
+        models, ActionType::LOAD, false, &all_models_polled));
   }
 
   *model_repository_manager = std::move(local_manager);
