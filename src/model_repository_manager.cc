@@ -1297,12 +1297,29 @@ ModelRepositoryManager::Create(
           model_control_enabled, min_compute_capability,
           std::move(life_cycle)));
 
+  // Support loading all models on startup in explicit model control mode with
+  // special startup_model name "*". This does not imply support for pattern
+  // matching in model names.
+  bool load_all_models_on_startup = false;
+  if ((startup_models.find("*") != startup_models.end()) &&
+      model_control_enabled) {
+    if (startup_models.size() > 1) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Wildcard model name '*' must be the ONLY startup model "
+          "if specified at all.");
+    }
+
+    load_all_models_on_startup = true;
+  }
+
   bool all_models_polled = true;
-  if (!model_control_enabled) {
+  if (!model_control_enabled || load_all_models_on_startup) {
     // only error happens before model load / unload will be return
     // model loading / unloading error will be printed but ignored
     RETURN_IF_ERROR(local_manager->PollAndUpdateInternal(&all_models_polled));
   } else {
+    // Load each specified startup_model
     std::unordered_map<std::string, std::vector<const InferenceParameter*>>
         models;
     for (const auto& model_name : startup_models) {
