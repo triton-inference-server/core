@@ -1297,16 +1297,17 @@ ModelRepositoryManager::Create(
           model_control_enabled, min_compute_capability,
           std::move(life_cycle)));
 
-  // Support loading all models on startup in model control mode with
+  // Support loading all models on startup in explicit model control mode with
   // special startup_model name "*". This does not imply support for pattern
   // matching in model names.
   bool load_all_models_on_startup = false;
-  if (startup_models.find("*") != startup_models.end()) {
+  if ((startup_models.find("*") != startup_models.end()) &&
+      model_control_enabled) {
     if (startup_models.size() > 1) {
       return Status(
           Status::Code::INVALID_ARG,
           "Wildcard model name '*' must be the ONLY startup model "
-          "specified if at all.");
+          "if specified at all.");
     }
 
     load_all_models_on_startup = true;
