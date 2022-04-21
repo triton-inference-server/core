@@ -109,7 +109,7 @@ class TritonRepoAgentModel {
   static Status Create(
       const TRITONREPOAGENT_ArtifactType type, const std::string& location,
       const inference::ModelConfig& config,
-      const std::shared_ptr<TritonRepoAgent> agent,
+      const std::shared_ptr<TritonRepoAgent>& agent,
       const TritonRepoAgent::Parameters& agent_parameters,
       std::unique_ptr<TritonRepoAgentModel>* agent_model);
   ~TritonRepoAgentModel();
@@ -137,7 +137,7 @@ class TritonRepoAgentModel {
   TritonRepoAgentModel(
       const TRITONREPOAGENT_ArtifactType type, const std::string& location,
       const inference::ModelConfig& config,
-      const std::shared_ptr<TritonRepoAgent> agent,
+      const std::shared_ptr<TritonRepoAgent>& agent,
       const TritonRepoAgent::Parameters& agent_parameters)
       : state_(nullptr), config_(config), agent_(agent),
         agent_parameters_(agent_parameters), type_(type), location_(location),

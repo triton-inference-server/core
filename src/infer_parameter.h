@@ -64,6 +64,10 @@ class InferenceParameter {
   //   TRITONSERVER_PARAMETER_BOOL -> bool*
   const void* ValuePointer() const;
 
+  // Return the parameter value string, the return value is valid only if
+  // Type() returns TRITONSERVER_PARAMETER_STRING
+  const std::string& ValueString() const { return value_string_; }
+
  private:
   friend std::ostream& operator<<(
       std::ostream& out, const InferenceParameter& parameter);

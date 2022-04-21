@@ -336,6 +336,9 @@ class ModelRepositoryManager {
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);
 
+  bool ModelDirectoryOverride(
+      const std::vector<const InferenceParameter*>& model_params);
+
   std::set<std::string> repository_paths_;
   const bool autofill_;
   const bool polling_enabled_;

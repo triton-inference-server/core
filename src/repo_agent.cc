@@ -158,7 +158,7 @@ Status
 TritonRepoAgentModel::Create(
     const TRITONREPOAGENT_ArtifactType type, const std::string& location,
     const inference::ModelConfig& config,
-    const std::shared_ptr<TritonRepoAgent> agent,
+    const std::shared_ptr<TritonRepoAgent>& agent,
     const TritonRepoAgent::Parameters& agent_parameters,
     std::unique_ptr<TritonRepoAgentModel>* agent_model)
 {
