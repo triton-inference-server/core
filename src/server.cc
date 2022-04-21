@@ -136,17 +136,19 @@ InferenceServer::Init()
     return status;
   }
 
-  // Some backends have difficulty being loaded/unloaded dynamically,
-  // for example, non-deterministic hanging while trying to initialize
-  // a shared library. The hangs seems to be related to other
-  // simultaneous activity, so to avoid we synchronously load these
-  // backends once at server startup and leave them loaded (by
-  // maintaining a reference to them).
-  status = PersistentBackendManager::Create(
-      backend_cmdline_config_map_, &persist_backend_manager_);
-  if (status.IsOk() && (buffer_manager_thread_count_ > 0)) {
+  status = TritonBackendManager::Create(&backend_manager_);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
+
+  if (buffer_manager_thread_count_ > 0) {
     status = CommonErrorToStatus(triton::common::AsyncWorkQueue::Initialize(
         buffer_manager_thread_count_));
+    if (!status.IsOk()) {
+      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+      return status;
+    }
   }
 
   std::unique_ptr<RateLimiter> local_rate_limiter;
@@ -157,7 +159,6 @@ InferenceServer::Init()
       ignore_resources_and_priority, rate_limit_resource_map_,
       &local_rate_limiter);
   rate_limiter_ = std::move(local_rate_limiter);
-
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
@@ -174,6 +175,11 @@ InferenceServer::Init()
     std::unique_ptr<RequestResponseCache> local_response_cache;
     status = RequestResponseCache::Create(
         response_cache_byte_size_, &local_response_cache);
+    if (!status.IsOk()) {
+      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+      return status;
+    }
+
     response_cache_ = std::move(local_response_cache);
   }
 
@@ -190,6 +196,7 @@ InferenceServer::Init()
       }
     }
   }
+
   CudaMemoryManager::Options cuda_options(
       min_supported_compute_capability_, cuda_memory_pool_size_);
   status = CudaMemoryManager::Create(cuda_options);
@@ -558,7 +565,7 @@ InferenceServer::PrintBackendAndModelSummary()
 
   std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>
       backend_state;
-  RETURN_IF_ERROR(TritonBackendManager::BackendState(&backend_state));
+  RETURN_IF_ERROR(backend_manager_->BackendState(&backend_state));
 
   for (const auto& backend_pair : *backend_state) {
     std::vector<std::string> backend_record;

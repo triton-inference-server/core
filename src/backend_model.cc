@@ -142,7 +142,7 @@ TritonModel::Create(
   RETURN_IF_ERROR(SetBackendConfigDefaults(config));
 
   std::shared_ptr<TritonBackend> backend;
-  RETURN_IF_ERROR(TritonBackendManager::CreateBackend(
+  RETURN_IF_ERROR(server->BackendManager()->CreateBackend(
       model_config.backend(), backend_libdir, backend_libpath, config,
       &backend));
 
