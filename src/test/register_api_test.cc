@@ -773,8 +773,7 @@ TEST_F(RegisterApiTest, CorrectIndexNotLoaded)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MessageSerializeToJson(repository_index, &base, &byte_size),
       "serializing index to Json");
-  const std::string search_msg =
-      "[{\"name\":\"name_0\"}]";
+  const std::string search_msg = "[{\"name\":\"name_0\"}]";
   const std::string serialized_index(base, byte_size);
   EXPECT_EQ(serialized_index, search_msg)
       << "Returned index does not equal expected index";
