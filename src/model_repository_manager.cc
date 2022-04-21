@@ -2182,11 +2182,10 @@ ModelRepositoryManager::Poll(
       }
 
       if (status.IsOk()) {
-        // If enabled, try to automatically generate missing parts of
-        // the model configuration (autofill) from the model
-        // definition. In all cases normalize and validate the config.
+        // Try to automatically generate missing parts of the model
+        // configuration (autofill) that don't require model detail
         status = GetNormalizedModelConfig(
-            model_info->model_path_, min_compute_capability_,
+            child, model_info->model_path_, min_compute_capability_,
             &model_info->model_config_);
       }
       if (status.IsOk()) {

@@ -73,8 +73,8 @@ Status GetTypedSequenceControlProperties(
 /// \param config Returns the normalized model configuration.
 /// \return The error status.
 Status GetNormalizedModelConfig(
-    const std::string& path, const double min_compute_capability,
-    inference::ModelConfig* config);
+    const std::string& model_name, const std::string& path,
+    const double min_compute_capability, inference::ModelConfig* config);
 
 /// Auto-complete backend related fields (platform, backend and default model
 /// filename) if not set, note that only Triton recognized backends will be
