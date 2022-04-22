@@ -101,11 +101,9 @@ TritonBackend::TritonBackend(
     const TritonServerMessage& backend_config)
     : name_(name), dir_(dir), libpath_(libpath),
       backend_config_(backend_config),
-      exec_policy_(TRITONBACKEND_EXECUTION_BLOCKING), state_(nullptr),
-      unload_enabled_(false)
+      exec_policy_(TRITONBACKEND_EXECUTION_BLOCKING), state_(nullptr)
 {
   ClearHandles();
-  SetUnloadEnabled(true);
 }
 
 TritonBackend::~TritonBackend()
@@ -120,27 +118,7 @@ TritonBackend::~TritonBackend()
         "failed finalizing backend");
   }
 
-  LOG_STATUS_ERROR(UnloadBackendLibrary(), "failed unloading backend");
-}
-
-void
-TritonBackend::SetUnloadEnabled(const bool enable)
-{
-  // If TRITONSERVER_DISABLE_BACKEND_UNLOAD defined, do not allow
-  // backend shared libraries to be unloaded. This is used, for
-  // example, by memory leak testing so that the shared library is
-  // available for stack trace generation when the server exits.
-  if (enable && !unload_enabled_) {
-    const char* dstr = getenv("TRITONSERVER_DISABLE_BACKEND_UNLOAD");
-    if (dstr != nullptr) {
-      LOG_VERBOSE(1) << "TRITONSERVER_DISABLE_BACKEND_UNLOAD disables "
-                        "shared-library unload for backend '"
-                     << Name() << "'";
-      return;
-    }
-  }
-
-  unload_enabled_ = enable;
+  ClearHandles();
 }
 
 void
@@ -210,20 +188,6 @@ TritonBackend::LoadBackendLibrary()
   inst_init_fn_ = iifn;
   inst_fini_fn_ = iffn;
   inst_exec_fn_ = iefn;
-
-  return Status::Success;
-}
-
-Status
-TritonBackend::UnloadBackendLibrary()
-{
-  if (unload_enabled_) {
-    std::unique_ptr<SharedLibrary> slib;
-    RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->CloseLibraryHandle(dlhandle_));
-  }
-
-  ClearHandles();
 
   return Status::Success;
 }
@@ -315,11 +279,26 @@ TRITONBACKEND_BackendSetState(TRITONBACKEND_Backend* backend, void* state)
 //
 // TritonBackendManager
 //
-TritonBackendManager&
-TritonBackendManager::Singleton()
+
+static std::weak_ptr<TritonBackendManager> backend_manager_;
+static std::mutex mu_;
+
+Status
+TritonBackendManager::Create(
+    std::shared_ptr<TritonBackendManager>* manager)
 {
-  static TritonBackendManager triton_backend_manager;
-  return triton_backend_manager;
+  std::lock_guard<std::mutex> lock(mu_);
+
+  // If there is already a manager then we just use it...
+  *manager = backend_manager_.lock();
+  if (*manager != nullptr) {
+    return Status::Success;
+  }
+
+  manager->reset(new TritonBackendManager());
+  backend_manager_ = *manager;
+
+  return Status::Success;
 }
 
 Status
@@ -328,27 +307,17 @@ TritonBackendManager::CreateBackend(
     const BackendCmdlineConfig& backend_cmdline_config,
     std::shared_ptr<TritonBackend>* backend)
 {
-  TritonBackendManager& singleton_manager = Singleton();
-  std::lock_guard<std::mutex> lock(singleton_manager.mu_);
+  std::lock_guard<std::mutex> lock(mu_);
 
-  const auto& itr = singleton_manager.backend_map_.find(libpath);
-  if (itr != singleton_manager.backend_map_.end()) {
-    // Found in map. If the weak_ptr is still valid that means that
-    // there are other models using the backend and we just reuse that
-    // same backend. If the weak_ptr is not valid then backend has
-    // been unloaded so we need to remove the weak_ptr from the map
-    // and create the backend again.
-    *backend = itr->second.lock();
-    if (*backend != nullptr) {
-      return Status::Success;
-    }
-
-    singleton_manager.backend_map_.erase(itr);
+  const auto& itr = backend_map_.find(libpath);
+  if (itr != backend_map_.end()) {
+    *backend = itr->second;
+    return Status::Success;
   }
 
   RETURN_IF_ERROR(TritonBackend::Create(
       name, dir, libpath, backend_cmdline_config, backend));
-  singleton_manager.backend_map_.insert({libpath, *backend});
+  backend_map_.insert({libpath, *backend});
 
   return Status::Success;
 }
@@ -358,24 +327,22 @@ TritonBackendManager::BackendState(
     std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>*
         backend_state)
 {
-  TritonBackendManager& singleton_manager = Singleton();
-  std::lock_guard<std::mutex> lock(singleton_manager.mu_);
+  std::lock_guard<std::mutex> lock(mu_);
 
   std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>
       backend_state_map(
           new std::unordered_map<std::string, std::vector<std::string>>);
-  for (const auto& backend_pair : singleton_manager.backend_map_) {
+  for (const auto& backend_pair : backend_map_) {
     auto& libpath = backend_pair.first;
-    auto backend = backend_pair.second.lock();
+    auto backend = backend_pair.second;
 
-    if (backend != nullptr) {
-      const char* backend_config;
-      size_t backend_config_size;
-      backend->BackendConfig().Serialize(&backend_config, &backend_config_size);
-      backend_state_map->insert(
-          {backend->Name(), std::vector<std::string>{libpath, backend_config}});
-    }
+    const char* backend_config;
+    size_t backend_config_size;
+    backend->BackendConfig().Serialize(&backend_config, &backend_config_size);
+    backend_state_map->insert(
+        {backend->Name(), std::vector<std::string>{libpath, backend_config}});
   }
+
   *backend_state = std::move(backend_state_map);
 
   return Status::Success;
