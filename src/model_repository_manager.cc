@@ -113,9 +113,8 @@ class LocalizeRepoAgent : public TritonRepoAgent {
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
+          bool found_config = false;
           for (const auto& file : files) {
-            // [FIXME] do we actually need this?
-            // The config has been read by this point?
             if (file->Name() == "config") {
               if (file->Type() != TRITONSERVER_PARAMETER_STRING) {
                 return TRITONSERVER_ErrorNew(
@@ -128,6 +127,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                   file->ValueString(), 1 /* config_version */, &config));
               RETURN_TRITONSERVER_ERROR_IF_ERROR(WriteTextProto(
                   JoinPath({temp_dir, kModelConfigPbTxt}), config));
+              found_config = true;
             } else if (file->Name().rfind(file_prefix, 0) == 0) {
               if (file->Type() != TRITONSERVER_PARAMETER_STRING) {
                 return TRITONSERVER_ErrorNew(
@@ -173,6 +173,12 @@ class LocalizeRepoAgent : public TritonRepoAgent {
               RETURN_TRITONSERVER_ERROR_IF_ERROR(
                   WriteBinaryFile(file_path, binary.data(), decoded_size));
             }
+          }
+          if (!found_config) {
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                "Load parameter 'config' must be specified for model file "
+                "override");
           }
           // Commit the temporary directory
           RETURN_TRITONSERVER_ERROR_IF_ERROR(agent_model->SetLocation(
@@ -246,9 +252,9 @@ CreateAgentModelListWithLoadAction(
     const std::string& original_model_path,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
-  std::shared_ptr<TritonRepoAgentModelList> lagent_model_list;
   if (original_model_config.has_model_repository_agents()) {
     // Trick to append user specified repo agent on top of internal ones
+    std::shared_ptr<TritonRepoAgentModelList> lagent_model_list;
     if (*agent_model_list != nullptr) {
       lagent_model_list = std::move(*agent_model_list);
     } else {
@@ -287,8 +293,8 @@ CreateAgentModelListWithLoadAction(
       RETURN_IF_ERROR(agent_model->InvokeAgent(TRITONREPOAGENT_ACTION_LOAD));
       lagent_model_list->AddAgentModel(std::move(agent_model));
     }
+    *agent_model_list = std::move(lagent_model_list);
   }
-  *agent_model_list = std::move(lagent_model_list);
   return Status::Success;
 }
 
@@ -1629,9 +1635,14 @@ ModelRepositoryManager::LoadUnloadModel(
 
   bool polled = true;
   RETURN_IF_ERROR(LoadUnloadModels(models, type, unload_dependents, &polled));
-
   // Check if model is loaded / unloaded properly
   const auto& model_name = models.begin()->first;
+  if (!polled) {
+    return Status(
+        Status::Code::INTERNAL, "failed to load '" + model_name +
+                                    "', failed to poll from model repository");
+  }
+
   const auto version_states = model_life_cycle_->VersionStates(model_name);
   if (type == ActionType::LOAD) {
     if (version_states.empty()) {
@@ -2133,7 +2144,7 @@ ModelRepositoryManager::Poll(
               override_config, 1 /* config_version */,
               &model_info->model_config_);
           parsed_config = status.IsOk();
-        } else {
+        } else if (override_parameter->Name().rfind(file_prefix, 0) != 0) {
           status = Status(
               Status::Code::INVALID_ARG,
               "Unrecognized load parameter '" + override_parameter->Name() +
