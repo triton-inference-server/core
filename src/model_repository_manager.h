@@ -283,6 +283,19 @@ class ModelRepositoryManager {
       std::set<std::string>* modified, std::set<std::string>* unmodified,
       ModelInfoMap* updated_infos, bool* all_models_polled);
 
+  /// Helper function for Poll() to initialize ModelInfo for the model.
+  /// \param name The name of the model.
+  /// \param path The model path. Empty path means the model is provided via
+  /// 'params'
+  /// \param params The model parameters provided for polling model.
+  /// \param info Return the updated ModelInfo. 'nullptr' will be returned if
+  /// existing ModelInfo for the model should be reused.
+  /// \return The error status.
+  Status InitializeModelInfo(
+      const std::string& name, const std::string& path,
+      const std::vector<const InferenceParameter*>& params,
+      std::unique_ptr<ModelInfo>* info);
+
   /// Load models based on the dependency graph. The function will iteratively
   /// load models that all the models they depend on has been loaded, and unload
   /// models if their dependencies are no longer satisfied.
