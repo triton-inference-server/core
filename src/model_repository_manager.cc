@@ -89,6 +89,7 @@ namespace {
 
 static std::string file_prefix = "file:";
 
+// Internal repo agent used for model file override
 class LocalizeRepoAgent : public TritonRepoAgent {
  public:
   LocalizeRepoAgent()
@@ -2036,17 +2037,8 @@ ModelRepositoryManager::Poll(
     }
   }
 
-  // State of the model in terms of polling. If error happens during polling
-  // an individual model, its state will fallback to different states to be
-  // ignored from the polling. i.e. STATE_ADDED -> STATE_INVALID,
-  // STATE_MODIFIED -> STATE_UNMODIFIED.
-  enum ModelPollState {
-    STATE_ADDED,
-    STATE_MODIFIED,
-    STATE_UNMODIFIED,
-    STATE_INVALID
-  };
-
+  // Poll each of the models. If error happens during polling the model,
+  // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
     std::unique_ptr<ModelInfo> model_info;
     const auto& mit = models.find(pair.first);
@@ -2065,7 +2057,7 @@ ModelRepositoryManager::Poll(
             "unexpected model info for model '" + pair.first + "'");
       }
 
-      // unmodified
+      // Classify load state and set updated info
       if (model_info == nullptr) {
         ret.first->second.reset(new ModelInfo(*iitr->second));
         unmodified->insert(pair.first);
@@ -2093,7 +2085,6 @@ bool
 ModelRepositoryManager::ModelDirectoryOverride(
     const std::vector<const InferenceParameter*>& model_params)
 {
-  // [FIXME] format way to construct / validate model params
   for (const auto& param : model_params) {
     if (param->Name().rfind(file_prefix, 0) == 0) {
       // param name starts with prefix if user provides override file
@@ -2115,9 +2106,6 @@ ModelRepositoryManager::InitializeModelInfo(
   bool unmodified = false;
 
   const auto iitr = infos_.find(name);
-  // If 'name' is a new model or an existing model that has been
-  // modified since the last time it was polled, then need to
-  // (re)load, normalize and validate the configuration.
   // Set 'prev_mtime_ns_' if there is existing ModelInfo
   if (iitr != infos_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
@@ -2203,32 +2191,29 @@ ModelRepositoryManager::InitializeModelInfo(
   // Create the associated repo agent models when a model is to be loaded,
   // this must be done before normalizing model config as agents might
   // redirect to use the model config at a different location
-  {
-    if (!parsed_config) {
-      const auto config_path =
-          JoinPath({linfo->model_path_, kModelConfigPbTxt});
-      bool model_config_exists = false;
-      RETURN_IF_ERROR(FileExists(config_path, &model_config_exists));
-      // model config can be missing if auto fill is set
-      if (autofill_ && !model_config_exists) {
-        linfo->model_config_.Clear();
-      } else {
-        RETURN_IF_ERROR(ReadTextProto(config_path, &linfo->model_config_));
-        parsed_config = true;
-      }
+  if (!parsed_config) {
+    const auto config_path = JoinPath({linfo->model_path_, kModelConfigPbTxt});
+    bool model_config_exists = false;
+    RETURN_IF_ERROR(FileExists(config_path, &model_config_exists));
+    // model config can be missing if auto fill is set
+    if (autofill_ && !model_config_exists) {
+      linfo->model_config_.Clear();
+    } else {
+      RETURN_IF_ERROR(ReadTextProto(config_path, &linfo->model_config_));
+      parsed_config = true;
     }
-    if (parsed_config) {
-      RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
-          linfo->model_config_, linfo->model_path_, &linfo->agent_model_list_));
-      if (linfo->agent_model_list_ != nullptr) {
-        // Get the latest repository path
-        const char* location;
-        TRITONREPOAGENT_ArtifactType artifact_type;
-        RETURN_IF_ERROR(linfo->agent_model_list_->Back()->Location(
-            &artifact_type, &location));
-        auto latest_path = std::string(location);
-        linfo->model_path_ = latest_path;
-      }
+  }
+  if (parsed_config) {
+    RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
+        linfo->model_config_, linfo->model_path_, &linfo->agent_model_list_));
+    if (linfo->agent_model_list_ != nullptr) {
+      // Get the latest repository path
+      const char* location;
+      TRITONREPOAGENT_ArtifactType artifact_type;
+      RETURN_IF_ERROR(linfo->agent_model_list_->Back()->Location(
+          &artifact_type, &location));
+      auto latest_path = std::string(location);
+      linfo->model_path_ = latest_path;
     }
   }
 
