@@ -138,7 +138,8 @@ class FileSystem {
   virtual Status WriteTextFile(
       const std::string& path, const std::string& contents) = 0;
   virtual Status WriteBinaryFile(
-      const std::string& path, const char* contents, size_t content_len) = 0;
+      const std::string& path, const char* contents,
+      const size_t content_len) = 0;
   virtual Status MakeDirectory(
       const std::string& dir, const bool recursive) = 0;
   virtual Status MakeTemporaryDirectory(std::string* temp_dir) = 0;
@@ -165,7 +166,7 @@ class LocalFileSystem : public FileSystem {
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
-      size_t content_len) override;
+      const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
@@ -332,7 +333,7 @@ LocalFileSystem::WriteTextFile(
 
 Status
 LocalFileSystem::WriteBinaryFile(
-    const std::string& path, const char* contents, size_t content_len)
+    const std::string& path, const char* contents, const size_t content_len)
 {
   std::ofstream out(path, std::ios::out | std::ios::binary);
   if (!out) {
@@ -489,7 +490,7 @@ class GCSFileSystem : public FileSystem {
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
-      size_t content_len) override;
+      const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
@@ -851,7 +852,7 @@ GCSFileSystem::WriteTextFile(
 
 Status
 GCSFileSystem::WriteBinaryFile(
-    const std::string& path, const char* contents, size_t content_len)
+    const std::string& path, const char* contents, const size_t content_len)
 {
   return Status(
       Status::Code::UNSUPPORTED,
@@ -913,7 +914,7 @@ class ASFileSystem : public FileSystem {
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
-      size_t content_len) override;
+      const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
@@ -1250,7 +1251,7 @@ ASFileSystem::WriteTextFile(
 
 Status
 ASFileSystem::WriteBinaryFile(
-    const std::string& path, const char* contents, size_t content_len)
+    const std::string& path, const char* contents, const size_t content_len)
 {
   return Status(
       Status::Code::UNSUPPORTED,
@@ -1312,7 +1313,7 @@ class S3FileSystem : public FileSystem {
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
-      size_t content_len) override;
+      const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
@@ -1863,7 +1864,7 @@ S3FileSystem::WriteTextFile(
 
 Status
 S3FileSystem::WriteBinaryFile(
-    const std::string& path, const char* contents, size_t content_len)
+    const std::string& path, const char* contents, const size_t content_len)
 {
   return Status(
       Status::Code::UNSUPPORTED,
@@ -2167,7 +2168,7 @@ WriteTextProto(const std::string& path, const google::protobuf::Message& msg)
 
 Status
 WriteBinaryFile(
-    const std::string& path, const char* contents, size_t content_len)
+    const std::string& path, const char* contents, const size_t content_len)
 {
   FileSystem* fs;
   RETURN_IF_ERROR(GetFileSystem(path, &fs));

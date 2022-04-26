@@ -2116,7 +2116,7 @@ ModelRepositoryManager::InitializeModelInfo(
   // Set 'mtime_nsec_' and override 'model_path_' if current path is empty
   // (file override is specified)
   if (linfo->model_path_.empty()) {
-    // Need to localize the override files, use repo agent to manager
+    // Need to localize the override files, use repo agent to manage
     // the lifecycle of the localized files
     std::shared_ptr<TritonRepoAgent> localize_agent(new LocalizeRepoAgent());
     std::unique_ptr<TritonRepoAgentModel> localize_agent_model;

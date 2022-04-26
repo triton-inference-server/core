@@ -154,7 +154,7 @@ Status WriteTextFile(const std::string& path, const std::string& contents);
 /// \param content_len The size of the content.
 /// \return Error status
 Status WriteBinaryFile(
-    const std::string& path, const char* contents, size_t content_len);
+    const std::string& path, const char* contents, const size_t content_len);
 
 /// Read a prototext file.
 /// \param path The path of the file.
