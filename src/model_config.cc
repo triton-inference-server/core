@@ -473,11 +473,11 @@ ProtocolStringToDataType(const char* dtype, size_t len)
       if (!strcmp(dtype + 2, "TES")) {
         return inference::DataType::TYPE_STRING;
       }
-    } else if (dtype[1] == "O") {
+    } else if (dtype[1] == 'O') {
       if (!strcmp(dtype + 2, "OL")) {
         return inference::DataType::TYPE_BOOL;
       }
-    } else if (dtype[1] == "F") {
+    } else if (dtype[1] == 'F') {
       if (!strcmp(dtype + 2, "16")) {
         return inference::DataType::TYPE_BF16;
       }
