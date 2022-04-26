@@ -125,7 +125,8 @@ typedef enum TRITONSERVER_datatype_enum {
   TRITONSERVER_TYPE_FP16,
   TRITONSERVER_TYPE_FP32,
   TRITONSERVER_TYPE_FP64,
-  TRITONSERVER_TYPE_BYTES
+  TRITONSERVER_TYPE_BYTES,
+  TRITONSERVER_TYPE_BF16
 } TRITONSERVER_DataType;
 
 /// Get the string representation of a data type. The returned string
