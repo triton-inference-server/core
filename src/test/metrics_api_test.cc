@@ -110,6 +110,9 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
       "Creating new metric");
+  for (const auto label : labels) {
+    TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
+  }
 
   // Value should be zero initially
   value_ = -1;
@@ -190,6 +193,9 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
       "Creating new metric");
+  for (const auto label : labels) {
+    TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
+  }
 
   // Value should be zero initially
   value_ = -1;
