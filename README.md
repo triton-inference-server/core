@@ -33,7 +33,7 @@
 This repository holds the source code and headers for the library that
 implements the core functionality of Triton. The *core* library can be
 built as described below and used directly via its [C
-API](https://github.com/triton-inference-server/server/blob/main/docs/inference_protocols.md#c-api). To
+API](https://github.com/triton-inference-server/server/blob/main/docs/inference_protocols.md#in-process-triton-server-api). To
 be useful the core library must be paired with one or more backends.
 You can learn more about backends in the [backend
 repo](https://github.com/triton-inference-server/backend).
