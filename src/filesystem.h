@@ -148,6 +148,14 @@ Status LocalizeDirectory(
 /// \return Error status
 Status WriteTextFile(const std::string& path, const std::string& contents);
 
+/// Write binary to a file.
+/// \param path The path of the file.
+/// \param contents The contents to write to the file.
+/// \param content_len The size of the content.
+/// \return Error status
+Status WriteBinaryFile(
+    const std::string& path, const char* contents, const size_t content_len);
+
 /// Read a prototext file.
 /// \param path The path of the file.
 /// \param msg Returns the protobuf message for the file.
@@ -167,6 +175,13 @@ Status WriteTextProto(
 /// \return Error status
 Status ReadBinaryProto(
     const std::string& path, google::protobuf::MessageLite* msg);
+
+/// Create a directory of the specified path.
+/// \param dir The path to the directory.
+/// \param recursive Whether the parent directories will be created
+/// if not exist.
+/// \return Error status if the directory can't be created
+Status MakeDirectory(const std::string& dir, const bool recursive);
 
 /// Create a temporary directory of the specified filesystem type.
 /// \param type The type of the filesystem.

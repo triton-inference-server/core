@@ -49,6 +49,10 @@
 #include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
 
+extern "C" {
+#include <b64/cdecode.h>
+}
+
 namespace triton { namespace core {
 
 const std::string&
@@ -82,6 +86,121 @@ ModelReadyStateString(ModelReadyState state)
 }
 
 namespace {
+
+static std::string file_prefix = "file:";
+
+// Internal repo agent used for model file override
+class LocalizeRepoAgent : public TritonRepoAgent {
+ public:
+  LocalizeRepoAgent()
+      : TritonRepoAgent("ModelRepositoryManager::LocalizeRepoAgent")
+  {
+    // Callbacks below interact with TritonRepoAgentModel directly knowing that
+    // it is the internal implementation of TRITONREPOAGENT_AgentModel
+    model_action_fn_ = [](TRITONREPOAGENT_Agent* agent,
+                          TRITONREPOAGENT_AgentModel* model,
+                          const TRITONREPOAGENT_ActionType action_type)
+        -> TRITONSERVER_Error* {
+      auto agent_model = reinterpret_cast<TritonRepoAgentModel*>(model);
+      switch (action_type) {
+        case TRITONREPOAGENT_ACTION_LOAD: {
+          // localize the override files for model loading,
+          // as currently the model is expected to load from local directory
+          const char* temp_dir_cstr = nullptr;
+          RETURN_TRITONSERVER_ERROR_IF_ERROR(
+              agent_model->AcquireMutableLocation(
+                  TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
+          const std::string temp_dir = temp_dir_cstr;
+          const auto& files =
+              *reinterpret_cast<std::vector<const InferenceParameter*>*>(
+                  agent_model->State());
+          bool found_config = false;
+          for (const auto& file : files) {
+            if (file->Name() == "config") {
+              if (file->Type() != TRITONSERVER_PARAMETER_STRING) {
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG,
+                    "Config parameter 'config' must have string type for its "
+                    "value");
+              }
+              inference::ModelConfig config;
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(JsonToModelConfig(
+                  file->ValueString(), 1 /* config_version */, &config));
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(WriteTextProto(
+                  JoinPath({temp_dir, kModelConfigPbTxt}), config));
+              found_config = true;
+            } else if (file->Name().rfind(file_prefix, 0) == 0) {
+              if (file->Type() != TRITONSERVER_PARAMETER_STRING) {
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG,
+                    (std::string("File parameter '") + file->Name() +
+                     "' must have string type for its value")
+                        .c_str());
+              }
+
+              // Save model file to the instructed directory
+              // mkdir
+              const std::string file_path =
+                  JoinPath({temp_dir, file->Name().substr(file_prefix.size())});
+              const std::string dir = DirName(file_path);
+              bool dir_exist = false;
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(FileExists(dir, &dir_exist));
+              if (dir_exist) {
+                bool is_dir = false;
+                RETURN_TRITONSERVER_ERROR_IF_ERROR(IsDirectory(dir, &is_dir));
+                if (!is_dir) {
+                  return TRITONSERVER_ErrorNew(
+                      TRITONSERVER_ERROR_INVALID_ARG,
+                      (std::string("Invalid file parameter '") + file->Name() +
+                       "', directory has been created as a file")
+                          .c_str());
+                }
+              } else {
+                RETURN_TRITONSERVER_ERROR_IF_ERROR(
+                    MakeDirectory(dir, true /* recursive */));
+              }
+
+              // Decode base64
+              base64_decodestate s;
+              base64_init_decodestate(&s);
+
+              // The decoded can not be larger than the input...
+              std::vector<char> binary(file->ValueString().size() + 1);
+              size_t decoded_size = base64_decode_block(
+                  file->ValueString().c_str(), file->ValueString().size(),
+                  binary.data(), &s);
+
+              // write
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(
+                  WriteBinaryFile(file_path, binary.data(), decoded_size));
+            }
+          }
+          if (!found_config) {
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                "Load parameter 'config' must be specified for model file "
+                "override");
+          }
+          // Commit the temporary directory
+          RETURN_TRITONSERVER_ERROR_IF_ERROR(agent_model->SetLocation(
+              TRITONREPOAGENT_ARTIFACT_FILESYSTEM, temp_dir_cstr));
+          break;
+        }
+        default:
+          break;
+      }
+      return nullptr;  // success
+    };
+
+    model_fini_fn_ =
+        [](TRITONREPOAGENT_Agent* agent,
+           TRITONREPOAGENT_AgentModel* model) -> TRITONSERVER_Error* {
+      auto agent_model = reinterpret_cast<TritonRepoAgentModel*>(model);
+      RETURN_TRITONSERVER_ERROR_IF_ERROR(agent_model->DeleteMutableLocation());
+      return nullptr;  // success
+    };
+  }
+};
 
 // Helper class to manage the lifecycle of a list of associated agent models
 class TritonRepoAgentModelList {
@@ -134,8 +253,15 @@ CreateAgentModelListWithLoadAction(
     const std::string& original_model_path,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
-  std::shared_ptr<TritonRepoAgentModelList> lagent_model_list;
   if (original_model_config.has_model_repository_agents()) {
+    // Trick to append user specified repo agent on top of internal ones
+    std::shared_ptr<TritonRepoAgentModelList> lagent_model_list;
+    if (*agent_model_list != nullptr) {
+      lagent_model_list = std::move(*agent_model_list);
+    } else {
+      lagent_model_list.reset(new TritonRepoAgentModelList());
+    }
+
     FileSystemType filesystem_type;
     RETURN_IF_ERROR(GetFileSystemType(original_model_path, &filesystem_type));
     TRITONREPOAGENT_ArtifactType artifact_type =
@@ -145,7 +271,6 @@ CreateAgentModelListWithLoadAction(
     }
     const char* location = original_model_path.c_str();
     inference::ModelConfig model_config = original_model_config;
-    lagent_model_list.reset(new TritonRepoAgentModelList());
     for (const auto& agent_config :
          original_model_config.model_repository_agents().agents()) {
       std::shared_ptr<TritonRepoAgent> agent;
@@ -169,8 +294,8 @@ CreateAgentModelListWithLoadAction(
       RETURN_IF_ERROR(agent_model->InvokeAgent(TRITONREPOAGENT_ACTION_LOAD));
       lagent_model_list->AddAgentModel(std::move(agent_model));
     }
+    *agent_model_list = std::move(lagent_model_list);
   }
-  *agent_model_list = std::move(lagent_model_list);
   return Status::Success;
 }
 
@@ -331,6 +456,7 @@ struct ModelRepositoryManager::ModelInfo {
         explicitly_load_(true), model_path_(model_path)
   {
   }
+  ModelInfo() : mtime_nsec_(0), prev_mtime_ns_(0), explicitly_load_(true) {}
   int64_t mtime_nsec_;
   int64_t prev_mtime_ns_;
   bool explicitly_load_;
@@ -1510,9 +1636,14 @@ ModelRepositoryManager::LoadUnloadModel(
 
   bool polled = true;
   RETURN_IF_ERROR(LoadUnloadModels(models, type, unload_dependents, &polled));
-
   // Check if model is loaded / unloaded properly
   const auto& model_name = models.begin()->first;
+  if (!polled) {
+    return Status(
+        Status::Code::INTERNAL, "failed to load '" + model_name +
+                                    "', failed to poll from model repository");
+  }
+
   const auto version_states = model_life_cycle_->VersionStates(model_name);
   if (type == ActionType::LOAD) {
     if (version_states.empty()) {
@@ -1799,6 +1930,8 @@ ModelRepositoryManager::Poll(
     ModelInfoMap* updated_infos, bool* all_models_polled)
 {
   *all_models_polled = true;
+  // empty path is the special case to indicate the model should be loaded
+  // from override file content in 'models'.
   std::map<std::string, std::string> model_to_path;
 
   // If no model is specified, poll all models in all model repositories.
@@ -1831,9 +1964,12 @@ ModelRepositoryManager::Poll(
                 << "': not unique across all model repositories";
     }
   } else {
-    // [DLIS-3487] Model doesn't need to be in repository if model files
-    // are provided in flight.
     for (const auto& model : models) {
+      // Skip repository polling if override model files
+      if (ModelDirectoryOverride(model.second)) {
+        model_to_path.emplace(model.first, "");
+        continue;
+      }
       // Check model mapping first to see if matching model to load.
       bool exists = false;
       auto model_it = model_mappings_.find(model.first);
@@ -1901,189 +2037,221 @@ ModelRepositoryManager::Poll(
     }
   }
 
-  // State of the model in terms of polling. If error happens during polling
-  // an individual model, its state will fallback to different states to be
-  // ignored from the polling. i.e. STATE_ADDED -> STATE_INVALID,
-  // STATE_MODIFIED -> STATE_UNMODIFIED.
-  enum ModelPollState {
-    STATE_ADDED,
-    STATE_MODIFIED,
-    STATE_UNMODIFIED,
-    STATE_INVALID
-  };
-
+  // Poll each of the models. If error happens during polling the model,
+  // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
-    const auto& child = pair.first;
-    const auto& full_path = pair.second;
-
-    auto model_poll_state = STATE_UNMODIFIED;
-
-    const auto& mit = models.find(child);
-
     std::unique_ptr<ModelInfo> model_info;
-    const auto iitr = infos_.find(child);
-    // If 'child' is a new model or an existing model that has been
-    // modified since the last time it was polled, then need to
-    // (re)load, normalize and validate the configuration.
-    int64_t mtime_ns;
-    int64_t prev_mtime_ns = 0;
-    if (iitr == infos_.end()) {
-      mtime_ns = GetModifiedTime(std::string(full_path));
-      model_poll_state = STATE_ADDED;
-    } else {
-      mtime_ns = iitr->second->mtime_nsec_;
-      prev_mtime_ns = mtime_ns;
-      if (IsModified(std::string(full_path), &mtime_ns)) {
-        model_poll_state = STATE_MODIFIED;
-      }
-    }
+    const auto& mit = models.find(pair.first);
+    static std::vector<const InferenceParameter*> empty_params;
+    auto status = InitializeModelInfo(
+        pair.first, pair.second,
+        ((mit == models.end()) ? empty_params : mit->second), &model_info);
 
-    Status status = Status::Success;
-
-    // Check if there is config override
-    std::string override_config;
-    if ((mit != models.end()) && (!mit->second.empty())) {
-      for (const auto& override_parameter : mit->second) {
-        if ((override_parameter->Name() == "config") &&
-            (override_parameter->Type() == TRITONSERVER_PARAMETER_STRING)) {
-          override_config = std::string(reinterpret_cast<const char*>(
-              override_parameter->ValuePointer()));
-          // When override happens, make modification time be less than
-          // the actual time in file system so that next load without override
-          // will trigger re-load to undo the override while the files may still
-          // be unchanged.
-          mtime_ns -= 1;
-          if (model_poll_state != STATE_ADDED) {
-            model_poll_state = STATE_MODIFIED;
-          }
-        } else {
-          status = Status(
-              Status::Code::INVALID_ARG,
-              "Unrecognized load parameter '" + override_parameter->Name() +
-                  "' with type '" +
-                  TRITONSERVER_ParameterTypeString(override_parameter->Type()) +
-                  "'");
-          break;
-        }
-      }
-    }
-
-    if (status.IsOk() && (model_poll_state != STATE_UNMODIFIED)) {
-      model_info.reset(new ModelInfo(mtime_ns, prev_mtime_ns, full_path));
-      inference::ModelConfig& model_config = model_info->model_config_;
-
-      // Create the associated repo agent models when a model is to be loaded,
-      // this must be done before normalizing model config as agents might
-      // redirect to use the model config at a different location
-      {
-        bool parsed_config = false;
-        if (override_config.empty()) {
-          const auto config_path = JoinPath({full_path, kModelConfigPbTxt});
-          bool model_config_exists;
-          status = FileExists(config_path, &model_config_exists);
-          if (status.IsOk()) {
-            // model config can be missing if auto fill is set
-            if (autofill_ && !model_config_exists) {
-              model_config.Clear();
-            } else {
-              status = ReadTextProto(config_path, &model_config);
-              parsed_config = status.IsOk();
-            }
-          }
-        } else {
-          status = JsonToModelConfig(
-              override_config, 1 /* config_version */, &model_config);
-          parsed_config = status.IsOk();
-        }
-        if (parsed_config) {
-          status = CreateAgentModelListWithLoadAction(
-              model_config, full_path, &model_info->agent_model_list_);
-          if (status.IsOk() && model_info->agent_model_list_ != nullptr) {
-            // Get the latest repository path
-            const char* location;
-            TRITONREPOAGENT_ArtifactType artifact_type;
-            RETURN_IF_ERROR(model_info->agent_model_list_->Back()->Location(
-                &artifact_type, &location));
-            auto latest_path = std::string(location);
-            model_info->model_path_ = latest_path;
-          }
-        }
-      }
-
-      if (status.IsOk()) {
-        // If enabled, try to automatically generate missing parts of
-        // the model configuration (autofill) from the model
-        // definition. In all cases normalize and validate the config.
-        status = GetNormalizedModelConfig(
-            full_path, min_compute_capability_, &model_config);
-      }
-      if (status.IsOk()) {
-        // Note that the model inputs and outputs are not validated until
-        // the model model is intialized as they may not be auto-completed
-        // until model is intialized.
-        status = ValidateModelConfig(model_config, min_compute_capability_);
-        if (status.IsOk() && (!autofill_)) {
-          status = ValidateModelIOConfig(model_config);
-        }
-      }
-      if (status.IsOk()) {
-        // If the model is mapped, update its config name based on the
-        // mapping.
-        if (model_mappings_.find(child) != model_mappings_.end()) {
-          model_config.set_name(child);
-        } else {
-          // If there is no model mapping, make sure the name of the model
-          // matches the name of the directory. This is a somewhat arbitrary
-          // requirement but seems like good practice to require it of the user.
-          // It also acts as a check to make sure we don't have two different
-          // models with the same name.
-          if (model_config.name() != child) {
-            status = Status(
-                Status::Code::INVALID_ARG,
-                "unexpected directory name '" + child + "' for model '" +
-                    model_config.name() +
-                    "', directory name must equal model name");
-          }
-        }
-      }
-    }
-
-    if (!status.IsOk()) {
-      if (model_poll_state == STATE_MODIFIED) {
-        model_poll_state = STATE_UNMODIFIED;
-      } else {
-        model_poll_state = STATE_INVALID;
-      }
-    }
-
-    if (model_poll_state != STATE_INVALID) {
-      const auto& ret = updated_infos->emplace(child, nullptr);
+    const auto& iitr = infos_.find(pair.first);
+    const bool invalid_add = (!status.IsOk()) && (iitr == infos_.end());
+    if (!invalid_add) {
+      const auto& ret = updated_infos->emplace(pair.first, nullptr);
       if (!ret.second) {
         return Status(
             Status::Code::ALREADY_EXISTS,
-            "unexpected model info for model '" + child + "'");
+            "unexpected model info for model '" + pair.first + "'");
       }
 
-      if (model_poll_state == STATE_UNMODIFIED) {
+      // Classify load state and set updated info
+      if (model_info == nullptr) {
         ret.first->second.reset(new ModelInfo(*iitr->second));
-        unmodified->insert(child);
+        unmodified->insert(pair.first);
       } else {
         ret.first->second = std::move(model_info);
-        if (model_poll_state == STATE_ADDED) {
-          added->insert(child);
+        if (iitr != infos_.end()) {
+          modified->insert(pair.first);
         } else {
-          modified->insert(child);
+          added->insert(pair.first);
         }
       }
     }
 
     if (!status.IsOk()) {
-      LOG_ERROR << "Poll failed for model directory '" << child
+      LOG_ERROR << "Poll failed for model directory '" << pair.first
                 << "': " << status.Message();
       *all_models_polled = false;
     }
   }
 
+  return Status::Success;
+}
+
+bool
+ModelRepositoryManager::ModelDirectoryOverride(
+    const std::vector<const InferenceParameter*>& model_params)
+{
+  for (const auto& param : model_params) {
+    if (param->Name().rfind(file_prefix, 0) == 0) {
+      // param name starts with prefix if user provides override file
+      return true;
+    }
+  }
+  return false;
+}
+
+Status
+ModelRepositoryManager::InitializeModelInfo(
+    const std::string& name, const std::string& path,
+    const std::vector<const InferenceParameter*>& params,
+    std::unique_ptr<ModelInfo>* info)
+{
+  std::unique_ptr<ModelInfo> linfo(new ModelInfo());
+  linfo->model_path_ = path;
+
+  bool unmodified = false;
+
+  const auto iitr = infos_.find(name);
+  // Set 'prev_mtime_ns_' if there is existing ModelInfo
+  if (iitr != infos_.end()) {
+    linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
+  } else {
+    linfo->prev_mtime_ns_ = 0;
+  }
+
+  // Set 'mtime_nsec_' and override 'model_path_' if current path is empty
+  // (file override is specified)
+  if (linfo->model_path_.empty()) {
+    // Need to localize the override files, use repo agent to manage
+    // the lifecycle of the localized files
+    std::shared_ptr<TritonRepoAgent> localize_agent(new LocalizeRepoAgent());
+    std::unique_ptr<TritonRepoAgentModel> localize_agent_model;
+    RETURN_IF_ERROR(TritonRepoAgentModel::Create(
+        TRITONREPOAGENT_ARTIFACT_FILESYSTEM, "", inference::ModelConfig(),
+        localize_agent, {}, &localize_agent_model));
+
+    // Set agent model state so the repo agent can access the encoded files
+    // Using const_cast here but we are safe as the RepoAgent will not
+    // modify the state
+    localize_agent_model->SetState(
+        const_cast<void*>(reinterpret_cast<const void*>(&params)));
+    RETURN_IF_ERROR(
+        localize_agent_model->InvokeAgent(TRITONREPOAGENT_ACTION_LOAD));
+
+    const char* location;
+    TRITONREPOAGENT_ArtifactType type;
+    RETURN_IF_ERROR(localize_agent_model->Location(&type, &location));
+
+    // For file override, set 'mtime_nsec_' to minimum value so that
+    // the next load without override will trigger re-load to undo
+    // the override while the local files may still be unchanged.
+    linfo->mtime_nsec_ = 0;
+    linfo->model_path_ = location;
+    linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
+    linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
+  } else {
+    if (iitr == infos_.end()) {
+      linfo->mtime_nsec_ = GetModifiedTime(std::string(linfo->model_path_));
+    } else {
+      // Check the current timestamps to determine if model actually has been
+      // modified
+      linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
+      unmodified =
+          !IsModified(std::string(linfo->model_path_), &linfo->mtime_nsec_);
+    }
+  }
+
+  // Set 'model_config_'
+  bool parsed_config = false;
+  // Check if there is config override
+  for (const auto& override_parameter : params) {
+    if ((override_parameter->Name() == "config") &&
+        (override_parameter->Type() == TRITONSERVER_PARAMETER_STRING)) {
+      // When override happens, set 'mtime_nsec_' to minimum value so that
+      // the next load without override will trigger re-load to undo
+      // the override while the local files may still be unchanged.
+      linfo->mtime_nsec_ = 0;
+      unmodified = false;
+
+      const std::string& override_config = override_parameter->ValueString();
+      RETURN_IF_ERROR(JsonToModelConfig(
+          override_config, 1 /* config_version */, &linfo->model_config_));
+      parsed_config = true;
+      break;
+    } else if (override_parameter->Name().rfind(file_prefix, 0) != 0) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Unrecognized load parameter '" + override_parameter->Name() +
+              "' with type '" +
+              TRITONSERVER_ParameterTypeString(override_parameter->Type()) +
+              "'");
+    }
+  }
+
+  // Polling model is considered unmodified by this point and can be returned
+  // with info == nullptr
+  if (unmodified) {
+    return Status::Success;
+  }
+
+  // Create the associated repo agent models when a model is to be loaded,
+  // this must be done before normalizing model config as agents might
+  // redirect to use the model config at a different location
+  if (!parsed_config) {
+    const auto config_path = JoinPath({linfo->model_path_, kModelConfigPbTxt});
+    bool model_config_exists = false;
+    RETURN_IF_ERROR(FileExists(config_path, &model_config_exists));
+    // model config can be missing if auto fill is set
+    if (autofill_ && !model_config_exists) {
+      linfo->model_config_.Clear();
+    } else {
+      RETURN_IF_ERROR(ReadTextProto(config_path, &linfo->model_config_));
+      parsed_config = true;
+    }
+  }
+  if (parsed_config) {
+    RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
+        linfo->model_config_, linfo->model_path_, &linfo->agent_model_list_));
+    if (linfo->agent_model_list_ != nullptr) {
+      // Get the latest repository path
+      const char* location;
+      TRITONREPOAGENT_ArtifactType artifact_type;
+      RETURN_IF_ERROR(linfo->agent_model_list_->Back()->Location(
+          &artifact_type, &location));
+      auto latest_path = std::string(location);
+      linfo->model_path_ = latest_path;
+    }
+  }
+
+  // Try to automatically generate missing parts of the model
+  // configuration (autofill) that don't require model detail
+  RETURN_IF_ERROR(GetNormalizedModelConfig(
+      name, linfo->model_path_, min_compute_capability_,
+      &linfo->model_config_));
+
+  // Note that the model inputs and outputs are not validated until
+  // the model model is intialized as they may not be auto-completed
+  // until model is intialized.
+  RETURN_IF_ERROR(
+      ValidateModelConfig(linfo->model_config_, min_compute_capability_));
+  if (!autofill_) {
+    RETURN_IF_ERROR(ValidateModelIOConfig(linfo->model_config_));
+  }
+
+  // If the model is mapped, update its config name based on the
+  // mapping.
+  if (model_mappings_.find(name) != model_mappings_.end()) {
+    linfo->model_config_.set_name(name);
+  } else {
+    // If there is no model mapping, make sure the name of the model
+    // matches the name of the directory. This is a somewhat arbitrary
+    // requirement but seems like good practice to require it of the user.
+    // It also acts as a check to make sure we don't have two different
+    // models with the same name.
+    if (linfo->model_config_.name() != name) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "unexpected directory name '" + name + "' for model '" +
+              linfo->model_config_.name() +
+              "', directory name must equal model name");
+    }
+  }
+
+  *info = std::move(linfo);
   return Status::Success;
 }
 

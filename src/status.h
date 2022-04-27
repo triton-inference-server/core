@@ -83,4 +83,15 @@ Status CommonErrorToStatus(const triton::common::Error& error);
     }                                                            \
   } while (false)
 
+// If status is non-OK, return the corresponding TRITONSERVER_Error.
+#define RETURN_TRITONSERVER_ERROR_IF_ERROR(S)            \
+  do {                                                   \
+    const Status& status__ = (S);                        \
+    if (!status__.IsOk()) {                              \
+      return TRITONSERVER_ErrorNew(                      \
+          StatusCodeToTritonCode(status__.StatusCode()), \
+          status__.Message().c_str());                   \
+    }                                                    \
+  } while (false)
+
 }}  // namespace triton::core

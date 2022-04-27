@@ -137,6 +137,11 @@ class FileSystem {
       std::shared_ptr<LocalizedDirectory>* localized) = 0;
   virtual Status WriteTextFile(
       const std::string& path, const std::string& contents) = 0;
+  virtual Status WriteBinaryFile(
+      const std::string& path, const char* contents,
+      const size_t content_len) = 0;
+  virtual Status MakeDirectory(
+      const std::string& dir, const bool recursive) = 0;
   virtual Status MakeTemporaryDirectory(std::string* temp_dir) = 0;
   virtual Status DeleteDirectory(const std::string& path) = 0;
 };
@@ -159,6 +164,10 @@ class LocalFileSystem : public FileSystem {
       std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
+  Status WriteBinaryFile(
+      const std::string& path, const char* contents,
+      const size_t content_len) override;
+  Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
 };
@@ -323,6 +332,56 @@ LocalFileSystem::WriteTextFile(
 }
 
 Status
+LocalFileSystem::WriteBinaryFile(
+    const std::string& path, const char* contents, const size_t content_len)
+{
+  std::ofstream out(path, std::ios::out | std::ios::binary);
+  if (!out) {
+    return Status(
+        Status::Code::INTERNAL, "failed to open binary file for write " + path +
+                                    ": " + strerror(errno));
+  }
+
+  out.write(contents, content_len);
+
+  return Status::Success;
+}
+
+Status
+LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+{
+#ifdef _WIN32
+  if (mkdir(dir.c_str()) == -1)
+#else
+  if (mkdir(dir.c_str(), S_IRWXU) == -1)
+#endif
+  {
+    // Only allow the error due to parent directory does not exist
+    // if 'recursive' is requested
+    if ((errno == ENOENT) && (!dir.empty()) && recursive) {
+      RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive));
+      // Retry the creation
+#ifdef _WIN32
+      if (mkdir(dir.c_str()) == -1)
+#else
+      if (mkdir(dir.c_str(), S_IRWXU) == -1)
+#endif
+      {
+        return Status(
+            Status::Code::INTERNAL, "Failed to create directory '" + dir +
+                                        "', errno:" + strerror(errno));
+      }
+    } else {
+      return Status(
+          Status::Code::INTERNAL,
+          "Failed to create directory '" + dir + "', errno:" + strerror(errno));
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
 LocalFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
 {
 #ifdef _WIN32
@@ -429,6 +488,10 @@ class GCSFileSystem : public FileSystem {
       std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
+  Status WriteBinaryFile(
+      const std::string& path, const char* contents,
+      const size_t content_len) override;
+  Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
 
@@ -783,8 +846,25 @@ GCSFileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
   return Status(
-      Status::Code::INTERNAL,
+      Status::Code::UNSUPPORTED,
       "Write text file operation not yet implemented " + path);
+}
+
+Status
+GCSFileSystem::WriteBinaryFile(
+    const std::string& path, const char* contents, const size_t content_len)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Write text file operation not yet implemented " + path);
+}
+
+Status
+GCSFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Make temporary directory operation not yet implemented");
 }
 
 Status
@@ -816,19 +896,26 @@ class ASFileSystem : public FileSystem {
   ASFileSystem(const std::string& s3_path);
   Status CheckClient();
 
-  Status FileExists(const std::string& path, bool* exists);
-  Status IsDirectory(const std::string& path, bool* is_dir);
-  Status FileModificationTime(const std::string& path, int64_t* mtime_ns);
+  Status FileExists(const std::string& path, bool* exists) override;
+  Status IsDirectory(const std::string& path, bool* is_dir) override;
+  Status FileModificationTime(
+      const std::string& path, int64_t* mtime_ns) override;
   Status GetDirectoryContents(
-      const std::string& path, std::set<std::string>* contents);
+      const std::string& path, std::set<std::string>* contents) override;
   Status GetDirectorySubdirs(
-      const std::string& path, std::set<std::string>* subdirs);
+      const std::string& path, std::set<std::string>* subdirs) override;
   Status GetDirectoryFiles(
-      const std::string& path, std::set<std::string>* files);
-  Status ReadTextFile(const std::string& path, std::string* contents);
+      const std::string& path, std::set<std::string>* files) override;
+  Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizeDirectory(
-      const std::string& path, std::shared_ptr<LocalizedDirectory>* localized);
-  Status WriteTextFile(const std::string& path, const std::string& contents);
+      const std::string& path,
+      std::shared_ptr<LocalizedDirectory>* localized) override;
+  Status WriteTextFile(
+      const std::string& path, const std::string& contents) override;
+  Status WriteBinaryFile(
+      const std::string& path, const char* contents,
+      const size_t content_len) override;
+  Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
 
@@ -1163,6 +1250,23 @@ ASFileSystem::WriteTextFile(
 }
 
 Status
+ASFileSystem::WriteBinaryFile(
+    const std::string& path, const char* contents, const size_t content_len)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Write text file operation not yet implemented " + path);
+}
+
+Status
+ASFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Make directory operation not yet implemented");
+}
+
+Status
 ASFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
 {
   return Status(
@@ -1207,6 +1311,10 @@ class S3FileSystem : public FileSystem {
       std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
+  Status WriteBinaryFile(
+      const std::string& path, const char* contents,
+      const size_t content_len) override;
+  Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeleteDirectory(const std::string& path) override;
 
@@ -1750,8 +1858,25 @@ S3FileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
   return Status(
-      Status::Code::INTERNAL,
+      Status::Code::UNSUPPORTED,
       "Write text file operation not yet implemented " + path);
+}
+
+Status
+S3FileSystem::WriteBinaryFile(
+    const std::string& path, const char* contents, const size_t content_len)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Write text file operation not yet implemented " + path);
+}
+
+Status
+S3FileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Make directory operation not yet implemented");
 }
 
 Status
@@ -2042,6 +2167,15 @@ WriteTextProto(const std::string& path, const google::protobuf::Message& msg)
 }
 
 Status
+WriteBinaryFile(
+    const std::string& path, const char* contents, const size_t content_len)
+{
+  FileSystem* fs;
+  RETURN_IF_ERROR(GetFileSystem(path, &fs));
+  return fs->WriteBinaryFile(path, contents, content_len);
+}
+
+Status
 ReadBinaryProto(const std::string& path, google::protobuf::MessageLite* msg)
 {
   std::string msg_str;
@@ -2056,6 +2190,14 @@ ReadBinaryProto(const std::string& path, google::protobuf::MessageLite* msg)
   }
 
   return Status::Success;
+}
+
+Status
+MakeDirectory(const std::string& dir, const bool recursive)
+{
+  FileSystem* fs;
+  RETURN_IF_ERROR(GetFileSystem(dir, &fs));
+  return fs->MakeDirectory(dir, recursive);
 }
 
 Status
