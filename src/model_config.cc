@@ -469,18 +469,22 @@ ProtocolStringToDataType(const char* dtype, size_t len)
       return inference::DataType::TYPE_FP64;
     }
   } else if (*dtype == 'B') {
-    if (dtype[1] == 'Y') {
-      if (!strcmp(dtype + 2, "TES")) {
-        return inference::DataType::TYPE_STRING;
-      }
-    } else if (dtype[1] == 'O') {
-      if (!strcmp(dtype + 2, "OL")) {
-        return inference::DataType::TYPE_BOOL;
-      }
-    } else if (dtype[1] == 'F') {
-      if (!strcmp(dtype + 2, "16")) {
-        return inference::DataType::TYPE_BF16;
-      }
+    switch (dtype[1]) {
+      case 'Y':
+        if (!strcmp(dtype + 2, "TES")) {
+          return inference::DataType::TYPE_STRING;
+        }
+        break;
+      case 'O':
+        if (!strcmp(dtype + 2, "OL")) {
+          return inference::DataType::TYPE_BOOL;
+        }
+        break;
+      case 'F':
+        if (!strcmp(dtype + 2, "16")) {
+          return inference::DataType::TYPE_BF16;
+        }
+        break;
     }
   }
 
