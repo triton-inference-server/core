@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -66,6 +66,8 @@ GetDataTypeByteSize(const inference::DataType dtype)
       return 8;
     case inference::DataType::TYPE_STRING:
       return 0;
+    case inference::DataType::TYPE_BF16:
+      return 2;
     default:
       break;
   }
@@ -412,6 +414,8 @@ DataTypeToProtocolString(const inference::DataType dtype)
       return "FP64";
     case inference::DataType::TYPE_STRING:
       return "BYTES";
+    case inference::DataType::TYPE_BF16:
+      return "BF16";
     default:
       break;
   }
@@ -465,12 +469,22 @@ ProtocolStringToDataType(const char* dtype, size_t len)
       return inference::DataType::TYPE_FP64;
     }
   } else if (*dtype == 'B') {
-    if (dtype[1] == 'Y') {
-      if (!strcmp(dtype + 2, "TES")) {
-        return inference::DataType::TYPE_STRING;
-      }
-    } else if (!strcmp(dtype + 1, "OOL")) {
-      return inference::DataType::TYPE_BOOL;
+    switch (dtype[1]) {
+      case 'Y':
+        if (!strcmp(dtype + 2, "TES")) {
+          return inference::DataType::TYPE_STRING;
+        }
+        break;
+      case 'O':
+        if (!strcmp(dtype + 2, "OL")) {
+          return inference::DataType::TYPE_BOOL;
+        }
+        break;
+      case 'F':
+        if (!strcmp(dtype + 2, "16")) {
+          return inference::DataType::TYPE_BF16;
+        }
+        break;
     }
   }
 
@@ -507,6 +521,8 @@ DataTypeToTriton(const inference::DataType dtype)
       return TRITONSERVER_TYPE_FP64;
     case inference::DataType::TYPE_STRING:
       return TRITONSERVER_TYPE_BYTES;
+    case inference::DataType::TYPE_BF16:
+      return TRITONSERVER_TYPE_BF16;
     default:
       break;
   }
@@ -544,6 +560,8 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
       return inference::DataType::TYPE_FP64;
     case TRITONSERVER_TYPE_BYTES:
       return inference::DataType::TYPE_STRING;
+    case TRITONSERVER_TYPE_BF16:
+      return inference::DataType::TYPE_BF16;
     default:
       break;
   }

@@ -467,6 +467,8 @@ TRITONSERVER_DataTypeString(TRITONSERVER_DataType datatype)
       return "FP64";
     case TRITONSERVER_TYPE_BYTES:
       return "BYTES";
+    case TRITONSERVER_TYPE_BF16:
+      return "BF16";
     default:
       break;
   }
@@ -492,6 +494,7 @@ TRITONSERVER_DataTypeByteSize(TRITONSERVER_DataType datatype)
     case TRITONSERVER_TYPE_INT16:
     case TRITONSERVER_TYPE_UINT16:
     case TRITONSERVER_TYPE_FP16:
+    case TRITONSERVER_TYPE_BF16:
       return 2;
     case TRITONSERVER_TYPE_INT32:
     case TRITONSERVER_TYPE_UINT32:
