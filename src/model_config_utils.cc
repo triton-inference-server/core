@@ -658,7 +658,7 @@ GetNormalizedModelConfig(
   else if (config->platform() == kEnsemblePlatform) {
     return Status(
         Status::Code::INVALID_ARG,
-        "Ensembel model '" + config->name() + "' must have platform type '" +
+        "Ensemble model '" + config->name() + "' must have platform type '" +
             config->platform() + "' and empty backend type");
   }
 #endif  // TRITON_ENABLE_ENSEMBLE
