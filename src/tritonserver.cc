@@ -577,6 +577,15 @@ TRITONSERVER_ParameterNew(
   return reinterpret_cast<TRITONSERVER_Parameter*>(lparam.release());
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Parameter*
+TRITONSERVER_ParameterBytesNew(
+    const char* name, const void* byte_ptr, const uint64_t size)
+{
+  std::unique_ptr<tc::InferenceParameter> lparam(
+      new tc::InferenceParameter(name, byte_ptr, size));
+  return reinterpret_cast<TRITONSERVER_Parameter*>(lparam.release());
+}
+
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ParameterDelete(TRITONSERVER_Parameter* parameter)
 {
