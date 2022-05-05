@@ -645,7 +645,7 @@ DynamicBatchScheduler::CacheLookUp(
   // Lookup request in cache
   std::unique_ptr<InferenceResponse> local_response;
   request->ResponseFactory().CreateResponse(&local_response);
-  status = cache->Lookup(local_response.get(), request.get());
+  auto status = cache->Lookup(local_response.get(), request.get());
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
 #ifdef TRITON_ENABLE_STATS

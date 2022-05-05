@@ -150,7 +150,7 @@ RequestResponseCache::Lookup(
       *request, total_lookup_latency_ns_, ScopedTimerType::LOOKUP);
 
   // Use existing request hash if already set, otherwise hash the request
-  RETURN_IF_ERROR(HashRequestIfUnset(request));
+  RETURN_IF_ERROR(HashAndSet(request));
   const uint64_t key = request->CacheKey();
 
   num_lookups_++;
@@ -197,7 +197,7 @@ RequestResponseCache::Insert(
       *request, total_insertion_latency_ns_, ScopedTimerType::INSERTION);
 
   // Use existing request hash if already set, otherwise hash the request
-  RETURN_IF_ERROR(HashRequestIfUnset(request));
+  RETURN_IF_ERROR(HashAndSet(request));
   const uint64_t key = request->CacheKey();
 
   // Exit early if key already exists in cache
@@ -515,7 +515,7 @@ RequestResponseCache::Hash(const InferenceRequest& request, uint64_t* key)
 }
 
 Status
-RequestResponseCache::HashRequestIfUnset(InferenceRequest* request)
+RequestResponseCache::HashAndSet(InferenceRequest* request)
 {
   if (!request->CacheKeyIsSet()) {
     uint64_t key = 0;

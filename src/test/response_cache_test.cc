@@ -303,17 +303,6 @@ InferenceRequest::SequenceId::SequenceId(uint64_t sequence_index)
 
 namespace {
 
-// Test Fixture
-class RequestResponseCacheTest : public ::testing::Test {
- protected:
-  void SetUp() override {}
-  void TearDown() override {}
-
- public:
-  tc::Model* model = nullptr;
-  uint64_t model_version = 1;
-};
-
 // Helpers
 void
 check_status(tc::Status status)
@@ -338,6 +327,101 @@ reset_response(
   check_status(request->ResponseFactory().CreateResponse(response));
 }
 
+// Test Fixture
+class RequestResponseCacheTest : public ::testing::Test {
+ protected:
+  void SetUp() override
+  {
+    // Setup sample requests for each test to use
+    // Create request
+    std::cout << "Create request" << std::endl;
+    request0 = new tc::InferenceRequest(model, model_version);
+    request1 = new tc::InferenceRequest(model, model_version);
+    request2 = new tc::InferenceRequest(model, model_version);
+    request3 = new tc::InferenceRequest(model, model_version);
+    request4 = new tc::InferenceRequest(model, model_version);
+    request5 = new tc::InferenceRequest(model, model_version);
+
+    // Create inputs
+    std::cout << "Create inputs" << std::endl;
+    inference::DataType dtype = inference::DataType::TYPE_INT32;
+    std::vector<int64_t> shape{1, 4};
+    tc::InferenceRequest::Input* input0 = nullptr;
+    tc::InferenceRequest::Input* input1 = nullptr;
+    tc::InferenceRequest::Input* input2 = nullptr;
+    tc::InferenceRequest::Input* input3_0 = nullptr;
+    tc::InferenceRequest::Input* input3_1 = nullptr;
+    tc::InferenceRequest::Input* input4_0 = nullptr;
+    tc::InferenceRequest::Input* input4_1 = nullptr;
+    tc::InferenceRequest::Input* input5 = nullptr;
+
+    // Add input to requests
+    std::cout << "Add input to request" << std::endl;
+    // Create three requests with same input name, two with same data, one with
+    // different data
+    request0->AddOriginalInput("input", dtype, shape, &input0);
+    request1->AddOriginalInput("input", dtype, shape, &input1);
+    request2->AddOriginalInput("input", dtype, shape, &input2);
+    // Create two requests with the same two inputs but inserted in different
+    // order
+    request3->AddOriginalInput("input0", dtype, shape, &input3_0);
+    request3->AddOriginalInput("input1", dtype, shape, &input3_1);
+    request4->AddOriginalInput("input1", dtype, shape, &input4_1);
+    request4->AddOriginalInput("input0", dtype, shape, &input4_0);
+    // Create an extra unique request for insert/evict tests
+    request5->AddOriginalInput("input", dtype, shape, &input5);
+    ASSERT_NE(input0, nullptr);
+    ASSERT_NE(input1, nullptr);
+    ASSERT_NE(input2, nullptr);
+    ASSERT_NE(input3_0, nullptr);
+    ASSERT_NE(input3_1, nullptr);
+    ASSERT_NE(input4_0, nullptr);
+    ASSERT_NE(input4_1, nullptr);
+    ASSERT_NE(input5, nullptr);
+
+    // Add data to input
+    int data0[4] = {1, 2, 3, 4};
+    int data1[4] = {5, 6, 7, 8};
+    int data2[4] = {5, 6, 7, 8};
+    int data5[4] = {9, 10, 11, 12};
+    TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+    int64_t memory_type_id = 0;
+    uint64_t input_size = sizeof(int) * 4;
+    input0->AppendData(data0, input_size, memory_type, memory_type_id);
+    input1->AppendData(data1, input_size, memory_type, memory_type_id);
+    input2->AppendData(data2, input_size, memory_type, memory_type_id);
+    input3_0->AppendData(data0, input_size, memory_type, memory_type_id);
+    input3_1->AppendData(data1, input_size, memory_type, memory_type_id);
+    input4_0->AppendData(data0, input_size, memory_type, memory_type_id);
+    input4_1->AppendData(data1, input_size, memory_type, memory_type_id);
+    input5->AppendData(data5, input_size, memory_type, memory_type_id);
+
+    // PrepareForInference for use of ImmutableInputs()
+    check_status(request0->PrepareForInference());
+    check_status(request1->PrepareForInference());
+    check_status(request2->PrepareForInference());
+    check_status(request3->PrepareForInference());
+    check_status(request4->PrepareForInference());
+    check_status(request5->PrepareForInference());
+  }
+
+  void TearDown() override
+  {
+    delete request0;
+    delete request1;
+    delete request2;
+    delete request3;
+    delete request4;
+    delete request5;
+  }
+
+ public:
+  tc::Model* model = nullptr;
+  uint64_t model_version = 1;
+  tc::InferenceRequest *request0, *request1, *request2, *request3, *request4,
+      *request5;
+};
+
 // Test hashing for consistency on same request
 TEST_F(RequestResponseCacheTest, TestHashing)
 {
@@ -347,88 +431,29 @@ TEST_F(RequestResponseCacheTest, TestHashing)
   std::unique_ptr<tc::RequestResponseCache> cache;
   tc::RequestResponseCache::Create(cache_size, &cache);
 
-  // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
-  tc::InferenceRequest request1(model, model_version);
-  tc::InferenceRequest request2(model, model_version);
-  tc::InferenceRequest request3(model, model_version);
-  tc::InferenceRequest request4(model, model_version);
-
-  // Create inputs
-  std::cout << "Create inputs" << std::endl;
-  inference::DataType dtype = inference::DataType::TYPE_INT32;
-  std::vector<int64_t> shape{1, 4};
-  tc::InferenceRequest::Input* input0 = nullptr;
-  tc::InferenceRequest::Input* input1 = nullptr;
-  tc::InferenceRequest::Input* input2 = nullptr;
-  tc::InferenceRequest::Input* input3_0 = nullptr;
-  tc::InferenceRequest::Input* input3_1 = nullptr;
-  tc::InferenceRequest::Input* input4_0 = nullptr;
-  tc::InferenceRequest::Input* input4_1 = nullptr;
-
-  // Add input to requests
-  std::cout << "Add input to request" << std::endl;
-  // Create three requests with same input name, two with same data, one with
-  // different data
-  request0.AddOriginalInput("input", dtype, shape, &input0);
-  request1.AddOriginalInput("input", dtype, shape, &input1);
-  request2.AddOriginalInput("input", dtype, shape, &input2);
-  // Create two requests with the same two inputs but inserted in different
-  // order
-  request3.AddOriginalInput("input0", dtype, shape, &input3_0);
-  request3.AddOriginalInput("input1", dtype, shape, &input3_1);
-  request4.AddOriginalInput("input1", dtype, shape, &input4_1);
-  request4.AddOriginalInput("input0", dtype, shape, &input4_0);
-  ASSERT_NE(input0, nullptr);
-  ASSERT_NE(input1, nullptr);
-  ASSERT_NE(input2, nullptr);
-  ASSERT_NE(input3_0, nullptr);
-  ASSERT_NE(input3_1, nullptr);
-  ASSERT_NE(input4_0, nullptr);
-  ASSERT_NE(input4_1, nullptr);
-
-  // Add data to input
-  int data0[4] = {1, 2, 3, 4};
-  int data1[4] = {5, 6, 7, 8};
-  int data2[4] = {5, 6, 7, 8};
-  TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
-  int64_t memory_type_id = 0;
-  uint64_t input_size = sizeof(int) * 4;
-  input0->AppendData(data0, input_size, memory_type, memory_type_id);
-  input1->AppendData(data1, input_size, memory_type, memory_type_id);
-  input2->AppendData(data2, input_size, memory_type, memory_type_id);
-  input3_0->AppendData(data0, input_size, memory_type, memory_type_id);
-  input3_1->AppendData(data1, input_size, memory_type, memory_type_id);
-  input4_0->AppendData(data0, input_size, memory_type, memory_type_id);
-  input4_1->AppendData(data1, input_size, memory_type, memory_type_id);
-
-  // PrepareForInference for use of ImmutableInputs()
-  check_status(request0.PrepareForInference());
-  check_status(request1.PrepareForInference());
-  check_status(request2.PrepareForInference());
-  check_status(request3.PrepareForInference());
-  check_status(request4.PrepareForInference());
-
   // Compare hashes
   std::cout << "Compare hashes" << std::endl;
-  check_status(cache->HashIfUnset(request0));
-  check_status(cache->HashIfUnset(request1));
-  check_status(cache->HashIfUnset(request2));
-  check_status(cache->HashIfUnset(request3));
-  check_status(cache->HashIfUnset(request4));
+  check_status(cache->HashAndSet(request0));
+  check_status(cache->HashAndSet(request1));
+  check_status(cache->HashAndSet(request2));
+  check_status(cache->HashAndSet(request3));
+  check_status(cache->HashAndSet(request4));
+  check_status(cache->HashAndSet(request5));
 
   std::cout << "request0->CacheKey(): " << request0->CacheKey() << std::endl;
   std::cout << "request1->CacheKey(): " << request1->CacheKey() << std::endl;
   std::cout << "request2->CacheKey(): " << request2->CacheKey() << std::endl;
   std::cout << "request3->CacheKey(): " << request3->CacheKey() << std::endl;
   std::cout << "request4->CacheKey(): " << request4->CacheKey() << std::endl;
+  std::cout << "request5->CacheKey(): " << request4->CacheKey() << std::endl;
   // Different input data should have different hashes
   ASSERT_NE(request0->CacheKey(), request1->CacheKey());
   // Same input data should have same hashes
   ASSERT_EQ(request1->CacheKey(), request2->CacheKey());
   // Two requests with same two inputs but added in different orders
   ASSERT_EQ(request3->CacheKey(), request4->CacheKey());
+  // Assert uniqueness of extra request
+  ASSERT_EQ(request0->CacheKey(), request5->CacheKey());
 }
 
 // Test cache too small for entry
@@ -442,7 +467,7 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
 
   // Create request
   std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 1025};
@@ -451,7 +476,7 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
 
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0.ResponseFactory().CreateResponse(&response0));
+  check_status(request0->ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -470,7 +495,7 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
   std::memcpy(buffer, output0.data(), output_size);
 
   std::cout << "Insert response0 into cache" << std::endl;
-  auto status = cache->Insert(*response0, &request0);
+  auto status = cache->Insert(*response0, request0);
   // We expect insertion to fail here since cache is too small
   std::cout << status.Message() << std::endl;
   ASSERT_FALSE(status.IsOk())
@@ -487,9 +512,10 @@ TEST_F(RequestResponseCacheTest, TestEviction)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
+  // TODO: Remove
   // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // std::cout << "Create request" << std::endl;
+  // tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 100};
@@ -498,7 +524,7 @@ TEST_F(RequestResponseCacheTest, TestEviction)
 
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0.ResponseFactory().CreateResponse(&response0));
+  check_status(request0->ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -516,29 +542,29 @@ TEST_F(RequestResponseCacheTest, TestEviction)
   std::memcpy(buffer, output0.data(), output_size);
 
   std::cout << "Lookup request0 in empty cache" << std::endl;
-  auto status = cache->Lookup(nullptr, &request0);
+  auto status = cache->Lookup(nullptr, request0);
   // This hash not in cache yet
   ASSERT_FALSE(status.IsOk()) << "hash [" +
                                      std::to_string(request0->CacheKey()) +
                                      "] should not be in cache";
   std::cout << "Insert response0 into cache" << std::endl;
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request0));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 1u);
   ASSERT_EQ(cache->NumEvictions(), 0u);
 
   /* TODO: Insert unique requests for next 3 */
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request1));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 0u);
 
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request3));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 1u);
 
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request5));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 2u);
@@ -556,9 +582,10 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
+  // TODO: Remove
   // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // std::cout << "Create request" << std::endl;
+  // tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 100};
@@ -567,7 +594,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
 
   std::cout << "Create response object to insert into cache" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response_in;
-  check_status(request0.ResponseFactory().CreateResponse(&response_in));
+  check_status(request0->ResponseFactory().CreateResponse(&response_in));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -594,7 +621,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
     /* TODO: Insert unique requests */
     threads.emplace_back(std::thread(
         &tc::RequestResponseCache::Insert, cache.get(), std::ref(*response_in),
-        &request0));
+        request0));
   }
 
   // Join threads
@@ -622,9 +649,10 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
+  // TODO: Remove
   // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // std::cout << "Create request" << std::endl;
+  // tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
@@ -633,7 +661,7 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
 
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0.ResponseFactory().CreateResponse(&response0));
+  check_status(request0->ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -657,7 +685,7 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
   // Insert [thread_count] entries into cache sequentially
   for (size_t idx = 0; idx < thread_count; idx++) {
     /* TODO: Insert unique requests */
-    cache->Insert(*response0, &request0);
+    cache->Insert(*response0, request0);
   }
 
   // Assert all entries were put into cache and no evictions occurred yet
@@ -698,9 +726,10 @@ TEST_F(RequestResponseCacheTest, TestLRU)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
+  // TODO: Remove
   // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // std::cout << "Create request" << std::endl;
+  // tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
@@ -709,7 +738,7 @@ TEST_F(RequestResponseCacheTest, TestLRU)
 
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0.ResponseFactory().CreateResponse(&response0));
+  check_status(request0->ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -729,66 +758,67 @@ TEST_F(RequestResponseCacheTest, TestLRU)
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response_test;
-  check_status(request0.ResponseFactory().CreateResponse(&response_test));
+  check_status(request0->ResponseFactory().CreateResponse(&response_test));
 
   // Insert 3 items into cache: 0, 1, 2
   /* TODO: Insert Unique requests */
-  check_status(cache->Insert(*response0, &request0));
-  check_status(cache->Insert(*response0, &request0));
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request0));
+  check_status(cache->Insert(*response0, request1));
+  check_status(cache->Insert(*response0, request3));
 
   // Verify items 0, 1, 2, in cache
   // TODO: Lookup request0, request1, request2
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request0));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request1));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request3));
 
   // Evict item from cache, should be item 0 since it was looked up last
   cache->Evict();
   // Assert Lookup for item 0 fails but items 1, 2 succeed
-  reset_response(&response_test, &request0);
+  reset_response(&response_test, request1);
   tc::Status status;
   // TODO: Lookup request0, request1, request2
-  status = cache->Lookup(response_test.get(), &request0);
+  status = cache->Lookup(response_test.get(), request0);
   ASSERT_FALSE(status.IsOk());
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request1));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request3));
 
   // Insert item 3, 4
   // TODO: Insert request3, request4
-  check_status(cache->Insert(*response0, &request0));
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request5));
+  // TODO: more unique requests, 6, ...
+  check_status(cache->Insert(*response0, request6));
 
   // Evict twice, assert items 1 and 2 were evicted
   cache->Evict();
   cache->Evict();
-  reset_response(&response_test, &request0);
+  reset_response(&response_test, request0);
   // TODO: Lookup request1 request2
-  status = cache->Lookup(response_test.get(), &request0);
+  status = cache->Lookup(response_test.get(), request0);
   ASSERT_FALSE(status.IsOk());
-  reset_response(&response_test, &request0);
-  status = cache->Lookup(response_test.get(), &request0);
+  reset_response(&response_test, request0);
+  status = cache->Lookup(response_test.get(), request0);
   ASSERT_FALSE(status.IsOk());
 
   // Lookup items 3 and 4
-  reset_response(&response_test, &request0);
+  reset_response(&response_test, request0);
   // TODO: Lookup request3, request4
-  check_status(cache->Lookup(response_test.get(), &request0));
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
+  check_status(cache->Lookup(response_test.get(), request0));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request0));
 
   // Evict, assert item 3 was evicted
   cache->Evict();
-  reset_response(&response_test, &request0);
-  status = cache->Lookup(response_test.get(), &request0);
+  reset_response(&response_test, request0);
+  status = cache->Lookup(response_test.get(), request0);
   ASSERT_FALSE(status.IsOk());
-  reset_response(&response_test, &request0);
-  check_status(cache->Lookup(response_test.get(), &request0));
+  reset_response(&response_test, request0);
+  check_status(cache->Lookup(response_test.get(), request0));
 }
 
 // Test looking up from cache with multiple threads in parallel
@@ -802,9 +832,10 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
+  // TODO: Remove
   // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // std::cout << "Create request" << std::endl;
+  // tc::InferenceRequest request0(model, model_version);
 
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   std::vector<int64_t> shape{1, 4};
@@ -813,7 +844,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
 
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0.ResponseFactory().CreateResponse(&response0));
+  check_status(request0->ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -847,13 +878,13 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   for (size_t idx = 0; idx < thread_count; idx++) {
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
-    check_status(request0.ResponseFactory().CreateResponse(&response));
+    check_status(request0->ResponseFactory().CreateResponse(&response));
     responses.push_back(std::move(response));
     // Copy unique data for each response to buffer inserted into cache
     std::memcpy(buffer, test_outputs[idx].data(), output_size);
     // Insert response for each thread
     // TODO: Insert unique requests
-    cache->Insert(*response0, &request0);
+    cache->Insert(*response0, request0);
   }
 
   // Assert all entries were put into cache and no evictions occurred yet
@@ -868,8 +899,8 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(std::thread(
-        &tc::RequestResponseCache::Lookup, cache.get(), idx,
-        responses[idx].get(), &request0));
+        &tc::RequestResponseCache::Lookup, cache.get(), responses[idx].get(),
+        request0));
   }
 
   // Join threads
@@ -919,9 +950,10 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
+  // TODO: Remove
   // Create request
-  std::cout << "Create request" << std::endl;
-  tc::InferenceRequest request0(model, model_version);
+  // std::cout << "Create request" << std::endl;
+  // tc::InferenceRequest request0(model, model_version);
 
   // Create input
   std::cout << "Create inputs" << std::endl;
@@ -930,10 +962,10 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   tc::InferenceRequest::Input* input0 = nullptr;
   // Add input to request
   std::cout << "Add input to request" << std::endl;
-  request0.AddOriginalInput("input", dtype, shape, &input0);
+  request0->AddOriginalInput("input", dtype, shape, &input0);
   ASSERT_NE(input0, nullptr);
   // PrepareForInference for use of ImmutableInputs()
-  check_status(request0.PrepareForInference());
+  check_status(request0->PrepareForInference());
 
   // Add data to input
   std::vector<int> data0 = {1, 2, 3, 4};
@@ -944,7 +976,7 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
 
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0.ResponseFactory().CreateResponse(&response0));
+  check_status(request0->ResponseFactory().CreateResponse(&response0));
 
   std::cout << "Add output metadata to response object" << std::endl;
   tc::InferenceResponse::Output* response_output = nullptr;
@@ -966,14 +998,14 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   std::memcpy(buffer, output0.data(), output_size);
 
   std::cout << "Lookup request0 in empty cache" << std::endl;
-  auto status = cache->Lookup(nullptr, &request0);
+  auto status = cache->Lookup(nullptr, request0);
   // This hash not in cache yet
   ASSERT_FALSE(status.IsOk()) << "hash [" +
                                      std::to_string(request0->CacheKey()) +
                                      "] should not be in cache";
   std::cout << "Insert response into cache with request0" << std::endl;
   // Insertion should succeed
-  check_status(cache->Insert(*response0, &request0));
+  check_status(cache->Insert(*response0, request0));
   cache_stats(cache);
 
   // Check cache stats
@@ -988,18 +1020,18 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
       << "ERROR: Total insertion latency should be non-zero";
 
   // Duplicate insertion should fail since request0 already exists in cache
-  status = cache->Insert(*response0, &request0);
+  status = cache->Insert(*response0, request0);
   ASSERT_FALSE(status.IsOk())
       << "Inserting duplicate item in cache should fail";
 
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response_test;
-  check_status(request0.ResponseFactory().CreateResponse(&response_test));
+  check_status(request0->ResponseFactory().CreateResponse(&response_test));
 
   // Lookup should now succeed
   std::cout << "Lookup request0 in cache after insertion" << std::endl;
-  check_status(cache->Lookup(response_test.get(), &request0));
+  check_status(cache->Lookup(response_test.get(), request0));
 
   // Check cache stats again
   auto total_lookup_latency2 = cache->TotalLookupLatencyNs();
