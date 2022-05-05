@@ -654,6 +654,14 @@ GetNormalizedModelConfig(
                                          config->platform() + "' for " +
                                          config->name());
   }
+#ifdef TRITON_ENABLE_ENSEMBLE
+  else if (config->platform() == kEnsemblePlatform) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Ensemble model '" + config->name() + "' must have platform type '" +
+            config->platform() + "' and empty backend type");
+  }
+#endif  // TRITON_ENABLE_ENSEMBLE
 
   // If version_policy is not specified, default to Latest 1 version.
   if (!config->has_version_policy()) {
