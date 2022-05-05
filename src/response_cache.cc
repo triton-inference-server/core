@@ -150,8 +150,8 @@ RequestResponseCache::Lookup(
       *request, total_lookup_latency_ns_, ScopedTimerType::LOOKUP);
 
   // Use existing request hash if already set, otherwise hash the request
-  uint64_t key = 0;
-  RETURN_IF_ERROR(GetRequestHash(request, &key));
+  RETURN_IF_ERROR(HashRequestIfUnset(request));
+  const uint64_t key = request->CacheKey();
 
   num_lookups_++;
   LOG_VERBOSE(1) << "Looking up key [" + std::to_string(key) + "] in cache.";
@@ -197,8 +197,8 @@ RequestResponseCache::Insert(
       *request, total_insertion_latency_ns_, ScopedTimerType::INSERTION);
 
   // Use existing request hash if already set, otherwise hash the request
-  uint64_t key = 0;
-  RETURN_IF_ERROR(GetRequestHash(request, &key));
+  RETURN_IF_ERROR(HashRequestIfUnset(request));
+  const uint64_t key = request->CacheKey();
 
   // Exit early if key already exists in cache
   auto iter = cache_.find(key);
@@ -515,13 +515,12 @@ RequestResponseCache::Hash(const InferenceRequest& request, uint64_t* key)
 }
 
 Status
-RequestResponseCache::GetRequestHash(InferenceRequest* request, uint64_t* key)
+RequestResponseCache::HashRequestIfUnset(InferenceRequest* request)
 {
-  if (request->CacheKeyIsSet()) {
-    *key = request->CacheKey();
-  } else {
-    RETURN_IF_ERROR(Hash(request, key));
-    request->SetCacheKey(*key);
+  if (!request->CacheKeyIsSet()) {
+    uint64_t key = 0;
+    RETURN_IF_ERROR(Hash(*request, &key));
+    request->SetCacheKey(key);
   }
   return Status::Success;
 }

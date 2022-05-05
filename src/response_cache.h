@@ -68,9 +68,10 @@ class RequestResponseCache {
   // Create the request/response cache object
   static Status Create(
       uint64_t cache_size, std::unique_ptr<RequestResponseCache>* cache);
-  // Hash inference request to access cache and store it in "key"
+  // Hash inference request to access cache and store it in "request->CacheKey"
   // Return Status object indicating success or failure.
-  Status Hash(const InferenceRequest& request, uint64_t* key);
+  Status HashRequestIfUnset(const InferenceRequest& request, uint64_t* key);
+
   // Lookup 'request' hash in cache and return the inference response in
   // 'response' on cache hit or nullptr on cache miss
   // Return Status object indicating success or failure.
@@ -164,6 +165,8 @@ class RequestResponseCache {
   Status HashInputBuffers(const InferenceRequest::Input* input, size_t* seed);
   // Helper function to hash each input in "request"
   Status HashInputs(const InferenceRequest& request, size_t* seed);
+  // Helper function to hash request and store it in "key"
+  Status Hash(const InferenceRequest& request, uint64_t* key);
 
   // Cache buffer
   void* buffer_;
