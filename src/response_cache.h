@@ -71,16 +71,13 @@ class RequestResponseCache {
   // Hash inference request to access cache and store it in "key"
   // Return Status object indicating success or failure.
   Status Hash(const InferenceRequest& request, uint64_t* key);
-  // Lookup 'key' in cache and return the inference response in 'ptr' on cache
-  // hit or nullptr on cache miss Return Status object indicating success or
-  // failure.
-  Status Lookup(
-      const uint64_t key, InferenceResponse* ptr, InferenceRequest* request);
+  // Lookup 'request' hash in cache and return the inference response in
+  // 'response' on cache hit or nullptr on cache miss
+  // Return Status object indicating success or failure.
+  Status Lookup(InferenceResponse* ptr, InferenceRequest* request);
   // Insert response into cache, evict entries to make space if necessary
   // Return Status object indicating success or failure.
-  Status Insert(
-      const uint64_t key, const InferenceResponse& response,
-      InferenceRequest* request);
+  Status Insert(const InferenceResponse& response, InferenceRequest* request);
   // Evict entry from cache based on policy
   // Return Status object indicating success or failure.
   Status Evict();

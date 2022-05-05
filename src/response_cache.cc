@@ -135,7 +135,7 @@ RequestResponseCache::~RequestResponseCache()
 
 Status
 RequestResponseCache::Lookup(
-    const uint64_t key, InferenceResponse* ptr, InferenceRequest* request)
+    InferenceResponse* response, InferenceRequest* request)
 {
   // Lock on cache lookup
   std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
@@ -148,6 +148,10 @@ RequestResponseCache::Lookup(
   // Capture start latency now and end latency when timer goes out of scope
   ScopedTimer timer(
       *request, total_lookup_latency_ns_, ScopedTimerType::LOOKUP);
+
+  // Use existing request hash if already set, otherwise hash the request
+  uint64_t key = 0;
+  RETURN_IF_ERROR(GetRequestHash(request, &key));
 
   num_lookups_++;
   LOG_VERBOSE(1) << "Looking up key [" + std::to_string(key) + "] in cache.";
@@ -164,10 +168,10 @@ RequestResponseCache::Lookup(
   num_hits_++;
   LOG_VERBOSE(1) << "HIT for key [" + std::to_string(key) + "] in cache.";
 
-  // Populate passed-in "ptr" from cache entry
+  // Populate passed-in "response" from cache entry
   auto entry = iter->second;
   // Build InferenceResponse from CacheEntry
-  RETURN_IF_ERROR(BuildInferenceResponse(entry, ptr));
+  RETURN_IF_ERROR(BuildInferenceResponse(entry, response));
 
   // Update this key to front of LRU list
   UpdateLRU(iter);
@@ -178,8 +182,7 @@ RequestResponseCache::Lookup(
 
 Status
 RequestResponseCache::Insert(
-    const uint64_t key, const InferenceResponse& response,
-    InferenceRequest* request)
+    const InferenceResponse& response, InferenceRequest* request)
 {
   // Lock on cache insertion
   std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
@@ -192,6 +195,10 @@ RequestResponseCache::Insert(
   // Capture start latency now and end latency when timer goes out of scope
   ScopedTimer timer(
       *request, total_insertion_latency_ns_, ScopedTimerType::INSERTION);
+
+  // Use existing request hash if already set, otherwise hash the request
+  uint64_t key = 0;
+  RETURN_IF_ERROR(GetRequestHash(request, &key));
 
   // Exit early if key already exists in cache
   auto iter = cache_.find(key);
@@ -504,6 +511,18 @@ RequestResponseCache::Hash(const InferenceRequest& request, uint64_t* key)
   boost::hash_combine(seed, request.ActualModelVersion());
   RETURN_IF_ERROR(HashInputs(request, &seed));
   *key = static_cast<uint64_t>(seed);
+  return Status::Success;
+}
+
+Status
+RequestResponseCache::GetRequestHash(InferenceRequest* request, uint64_t* key)
+{
+  if (request->CacheKeyIsSet()) {
+    *key = request->CacheKey();
+  } else {
+    RETURN_IF_ERROR(Hash(request, key));
+    request->SetCacheKey(*key);
+  }
   return Status::Success;
 }
 
