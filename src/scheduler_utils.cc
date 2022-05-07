@@ -78,7 +78,8 @@ CompareWithRequiredEqualInputs(
     if (itr != required_equal_inputs.end()) {
       if (itr->second.first != nullptr) {
         // Make sure shape of input tensors is equal.
-        if (!triton::common::CompareDims(itr->second.first->Shape(), input->Shape())) {
+        if (!triton::common::CompareDims(
+                itr->second.first->Shape(), input->Shape())) {
           return false;
         }
 

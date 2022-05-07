@@ -66,7 +66,8 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 // NUMA setting will be ignored on Windows platform
 #ifdef _WIN32
 Status
-SetNumaConfigOnThread(const triton::common::HostPolicyCmdlineConfig& host_policy)
+SetNumaConfigOnThread(
+    const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   return Status::Success;
 }
@@ -104,7 +105,8 @@ SetNumaThreadAffinity(
 thread_local bool numa_set = false;
 
 Status
-SetNumaConfigOnThread(const triton::common::HostPolicyCmdlineConfig& host_policy)
+SetNumaConfigOnThread(
+    const triton::common::HostPolicyCmdlineConfig& host_policy)
 {
   // Set thread affinity
   RETURN_IF_ERROR(SetNumaThreadAffinity(pthread_self(), host_policy));

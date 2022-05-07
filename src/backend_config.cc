@@ -26,9 +26,9 @@
 
 #include "backend_config.h"
 
-#include "triton/common/model_config.h"
 #include "status.h"
 #include "triton/common/logging.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -36,7 +36,8 @@ namespace {
 
 Status
 GetTFSpecializedBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map, std::string* specialized_name)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::string* specialized_name)
 {
   std::string tf_version_str = "1";
   const auto& itr = config_map.find("tensorflow");
@@ -58,7 +59,8 @@ GetTFSpecializedBackendName(
 
 Status
 GetOVSpecializedBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map, std::string* specialized_name)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::string* specialized_name)
 {
   std::string ov_version_str = "2021_4";
   const auto& itr = config_map.find("openvino");
@@ -186,8 +188,8 @@ BackendConfigurationAutoCompleteConfig(
 
 Status
 BackendConfigurationSpecializeBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map, const std::string& backend_name,
-    std::string* specialized_name)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    const std::string& backend_name, std::string* specialized_name)
 {
   *specialized_name = backend_name;
   if (backend_name == "tensorflow") {

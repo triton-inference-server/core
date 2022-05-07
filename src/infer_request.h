@@ -34,10 +34,10 @@
 #include "infer_stats.h"
 #include "infer_trace.h"
 #include "memory.h"
-#include "triton/common/model_config.h"
 #include "response_allocator.h"
 #include "sequence_state.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {

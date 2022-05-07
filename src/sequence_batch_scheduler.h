@@ -35,13 +35,13 @@
 #include <unordered_map>
 #include "backend_model.h"
 #include "backend_model_instance.h"
-#include "triton/common/model_config.h"
 #include "model_config.pb.h"
 #include "rate_limiter.h"
 #include "scheduler.h"
 #include "scheduler_utils.h"
 #include "sequence_state.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 

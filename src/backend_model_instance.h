@@ -49,7 +49,8 @@ class InferenceRequest;
 class TritonModelInstance {
  public:
   static Status CreateInstances(
-      TritonModel* model, const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      TritonModel* model,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const inference::ModelConfig& model_config, const bool device_blocking);
   ~TritonModelInstance();
 
@@ -57,7 +58,10 @@ class TritonModelInstance {
   size_t Index() const { return index_; }
   TRITONSERVER_InstanceGroupKind Kind() const { return kind_; }
   int32_t DeviceId() const { return device_id_; }
-  const triton::common::HostPolicyCmdlineConfig& HostPolicy() const { return host_policy_; }
+  const triton::common::HostPolicyCmdlineConfig& HostPolicy() const
+  {
+    return host_policy_;
+  }
   const TritonServerMessage& HostPolicyMessage() const
   {
     return host_policy_message_;

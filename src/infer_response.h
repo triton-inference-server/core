@@ -33,9 +33,9 @@
 #include "constants.h"
 #include "infer_parameter.h"
 #include "infer_trace.h"
-#include "triton/common/model_config.h"
 #include "response_allocator.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {

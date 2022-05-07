@@ -314,7 +314,8 @@ ValidateIOShape(
     }
 
     const int64_t dims_size = triton::common::GetElementCount(io.dims());
-    const int64_t reshape_size = triton::common::GetElementCount(io.reshape().shape());
+    const int64_t reshape_size =
+        triton::common::GetElementCount(io.reshape().shape());
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.

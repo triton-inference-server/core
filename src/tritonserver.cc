@@ -35,7 +35,6 @@
 #include "metric_family.h"
 #include "metrics.h"
 #include "model.h"
-#include "triton/common/model_config.h"
 #include "model_config_utils.h"
 #include "model_repository_manager.h"
 #include "rate_limiter.h"
@@ -44,6 +43,7 @@
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/logging.h"
+#include "triton/common/model_config.h"
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
@@ -299,7 +299,8 @@ class TritonServerOptions {
   TRITONSERVER_Error* SetHostPolicy(
       const std::string& policy_name, const std::string& setting,
       const std::string& value);
-  const triton::common::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap() const
+  const triton::common::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap()
+      const
   {
     return host_policy_map_;
   }
@@ -383,7 +384,8 @@ TritonServerOptions::AddBackendConfig(
     const std::string& backend_name, const std::string& setting,
     const std::string& value)
 {
-  triton::common::BackendCmdlineConfig& cc = backend_cmdline_config_map_[backend_name];
+  triton::common::BackendCmdlineConfig& cc =
+      backend_cmdline_config_map_[backend_name];
   cc.push_back(std::make_pair(setting, value));
 
   return nullptr;  // success
@@ -480,7 +482,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_DataType
 TRITONSERVER_StringToDataType(const char* dtype)
 {
   const size_t len = strlen(dtype);
-  return tc::DataTypeToTriton(triton::common::ProtocolStringToDataType(dtype, len));
+  return tc::DataTypeToTriton(
+      triton::common::ProtocolStringToDataType(dtype, len));
 }
 
 TRITONAPI_DECLSPEC uint32_t

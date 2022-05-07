@@ -28,17 +28,19 @@
 #include <map>
 #include <thread>
 #include <vector>
-#include "triton/common/model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
 
 // Helper function to set memory policy and thread affinity on current thread
-Status SetNumaConfigOnThread(const triton::common::HostPolicyCmdlineConfig& host_policy);
+Status SetNumaConfigOnThread(
+    const triton::common::HostPolicyCmdlineConfig& host_policy);
 
 // Restrict the memory allocation to specific NUMA node.
-Status SetNumaMemoryPolicy(const triton::common::HostPolicyCmdlineConfig& host_policy);
+Status SetNumaMemoryPolicy(
+    const triton::common::HostPolicyCmdlineConfig& host_policy);
 
 // Retrieve the node mask used to set memory policy for the current thread
 Status GetNumaMemoryPolicyNodeMask(unsigned long* node_mask);

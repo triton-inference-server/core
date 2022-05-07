@@ -28,8 +28,8 @@
 #include <list>
 #include "backend_manager.h"
 #include "constants.h"
-#include "triton/common/model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -47,7 +47,8 @@ class PersistentBackendManager {
  private:
   DISALLOW_COPY_AND_ASSIGN(PersistentBackendManager);
   PersistentBackendManager() = default;
-  Status InitPersistentBackends(const triton::common::BackendCmdlineConfigMap& config_map);
+  Status InitPersistentBackends(
+      const triton::common::BackendCmdlineConfigMap& config_map);
   Status InitPersistentBackend(
       const std::string& backend_name,
       const triton::common::BackendCmdlineConfigMap& config_map);

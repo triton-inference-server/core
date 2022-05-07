@@ -25,8 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "triton/common/model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -44,7 +44,8 @@ Status BackendConfigurationParseStringToBool(const std::string& str, bool* val);
 
 /// Get the global backends directory from the backend configuration.
 Status BackendConfigurationGlobalBackendsDirectory(
-    const triton::common::BackendCmdlineConfigMap& config_map, std::string* dir);
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::string* dir);
 
 /// Get the minimum compute capability from the backend configuration.
 Status BackendConfigurationMinComputeCapability(
@@ -60,8 +61,8 @@ Status BackendConfigurationAutoCompleteConfig(
 /// convert to either "tensorflow1" or "tensorflow2" depending on how
 /// tritonserver is run.
 Status BackendConfigurationSpecializeBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map, const std::string& backend_name,
-    std::string* specialized_name);
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    const std::string& backend_name, std::string* specialized_name);
 
 /// Return the shared library name for a backend.
 Status BackendConfigurationBackendLibraryName(

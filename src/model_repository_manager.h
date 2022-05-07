@@ -30,9 +30,9 @@
 #include <map>
 #include <mutex>
 #include "infer_parameter.h"
-#include "triton/common/model_config.h"
 #include "model_config.pb.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 

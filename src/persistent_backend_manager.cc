@@ -70,7 +70,8 @@ PersistentBackendManager::InitPersistentBackends(
 
 Status
 PersistentBackendManager::InitPersistentBackend(
-    const std::string& backend_name, const triton::common::BackendCmdlineConfigMap& config_map)
+    const std::string& backend_name,
+    const triton::common::BackendCmdlineConfigMap& config_map)
 {
   std::string backends_dir;
   std::string specialized_backend_name;

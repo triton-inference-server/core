@@ -197,7 +197,8 @@ TritonModel::Create(
 Status
 TritonModel::ResolveBackendConfigs(
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-    const std::string& backend_name, triton::common::BackendCmdlineConfig& config)
+    const std::string& backend_name,
+    triton::common::BackendCmdlineConfig& config)
 {
   const auto& global_itr = backend_cmdline_config_map.find(std::string());
   const auto& specific_itr = backend_cmdline_config_map.find(backend_name);
@@ -215,8 +216,10 @@ TritonModel::ResolveBackendConfigs(
   } else if (
       specific_itr != backend_cmdline_config_map.end() &&
       global_itr != backend_cmdline_config_map.end()) {
-    triton::common::BackendCmdlineConfig global_backend_config = global_itr->second;
-    triton::common::BackendCmdlineConfig specific_backend_config = specific_itr->second;
+    triton::common::BackendCmdlineConfig global_backend_config =
+        global_itr->second;
+    triton::common::BackendCmdlineConfig specific_backend_config =
+        specific_itr->second;
 
     std::sort(global_backend_config.begin(), global_backend_config.end());
     std::sort(specific_backend_config.begin(), specific_backend_config.end());
@@ -267,7 +270,8 @@ const std::unordered_map<std::string, std::string> backend_config_defaults(
     {{"default-max-batch-size", "4"}});
 
 Status
-TritonModel::SetBackendConfigDefaults(triton::common::BackendCmdlineConfig& config)
+TritonModel::SetBackendConfigDefaults(
+    triton::common::BackendCmdlineConfig& config)
 {
   auto backend_config_defaults_copy = backend_config_defaults;
 
@@ -345,7 +349,9 @@ TritonModel::SetConfiguredScheduler()
   for (const auto input : config_.input()) {
     if (input.is_shape_tensor()) {
       enforce_equal_shape_tensors.insert({input.name(), true});
-    } else if (!input.allow_ragged_batch() && (triton::common::GetElementCount(input) == -1)) {
+    } else if (
+        !input.allow_ragged_batch() &&
+        (triton::common::GetElementCount(input) == -1)) {
       enforce_equal_shape_tensors.insert({input.name(), false});
     }
   }

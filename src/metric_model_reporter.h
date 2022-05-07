@@ -25,8 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "triton/common/model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 #ifdef TRITON_ENABLE_METRICS
 #include "prometheus/registry.h"
