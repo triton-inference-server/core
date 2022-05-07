@@ -631,13 +631,9 @@ GetTypedSequenceControlProperties(
 
 Status
 GetNormalizedModelConfig(
-    const std::string& path, const double min_compute_capability,
-    inference::ModelConfig* config)
+    const std::string& model_name, const std::string& path,
+    const double min_compute_capability, inference::ModelConfig* config)
 {
-  // If the model name is not given in the configuration, set if based
-  // on the model path.
-  const std::string model_name(BaseName(path));
-
   // Server-side autofill only sets certain backend fields for the models that
   // belong to limited backends for backwards-compatibility. See TensorRT
   // backend, ONNX Runtime backend, TensorFLow backend, and PyTorch backend.
@@ -658,6 +654,14 @@ GetNormalizedModelConfig(
                                          config->platform() + "' for " +
                                          config->name());
   }
+#ifdef TRITON_ENABLE_ENSEMBLE
+  else if (config->platform() == kEnsemblePlatform) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Ensemble model '" + config->name() + "' must have platform type '" +
+            config->platform() + "' and empty backend type");
+  }
+#endif  // TRITON_ENABLE_ENSEMBLE
 
   // If version_policy is not specified, default to Latest 1 version.
   if (!config->has_version_policy()) {

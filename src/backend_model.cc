@@ -142,7 +142,7 @@ TritonModel::Create(
   RETURN_IF_ERROR(SetBackendConfigDefaults(config));
 
   std::shared_ptr<TritonBackend> backend;
-  RETURN_IF_ERROR(TritonBackendManager::CreateBackend(
+  RETURN_IF_ERROR(server->BackendManager()->CreateBackend(
       model_config.backend(), backend_libdir, backend_libpath, config,
       &backend));
 
@@ -273,8 +273,8 @@ TritonModel::SetBackendConfigDefaults(triton::common::BackendCmdlineConfig& conf
 
   for (auto& setting : config) {
     if (setting.first.compare("default-max-batch-size") == 0) {
-      LOG_VERBOSE(1) << "Found overwritten default setting: "
-                     << setting.first << "," << setting.second;
+      LOG_VERBOSE(1) << "Found overwritten default setting: " << setting.first
+                     << "," << setting.second;
       backend_config_defaults_copy.erase(setting.first);
     }
 

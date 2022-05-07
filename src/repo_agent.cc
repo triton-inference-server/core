@@ -46,21 +46,6 @@
 
 namespace triton { namespace core {
 
-namespace {
-
-// If status is non-OK, return the corresponding TRITONSERVER_Error.
-#define RETURN_TRITONSERVER_ERROR_IF_ERROR(S)            \
-  do {                                                   \
-    const Status& status__ = (S);                        \
-    if (!status__.IsOk()) {                              \
-      return TRITONSERVER_ErrorNew(                      \
-          StatusCodeToTritonCode(status__.StatusCode()), \
-          status__.Message().c_str());                   \
-    }                                                    \
-  } while (false)
-
-}  // namespace
-
 std::string
 TritonRepoAgentLibraryName(const std::string& agent_name)
 {
@@ -173,7 +158,7 @@ Status
 TritonRepoAgentModel::Create(
     const TRITONREPOAGENT_ArtifactType type, const std::string& location,
     const inference::ModelConfig& config,
-    const std::shared_ptr<TritonRepoAgent> agent,
+    const std::shared_ptr<TritonRepoAgent>& agent,
     const TritonRepoAgent::Parameters& agent_parameters,
     std::unique_ptr<TritonRepoAgentModel>* agent_model)
 {

@@ -127,7 +127,6 @@ set(
   model_repository_manager.cc
   numa_utils.cc
   payload.cc
-  persistent_backend_manager.cc
   pinned_memory_manager.cc
   rate_limiter.cc
   repo_agent.cc
@@ -171,7 +170,6 @@ set(
   model_repository_manager.h
   numa_utils.h
   payload.h
-  persistent_backend_manager.h
   pinned_memory_manager.h
   rate_limiter.h
   repo_agent.h
@@ -437,8 +435,16 @@ if (NOT WIN32)
   target_link_libraries(
     triton-core
     PRIVATE
+      b64
       dl
       numa
+  )
+else()
+  find_library(B64_LIBRARY NAMES b64)
+  target_link_libraries(
+    triton-core
+    PRIVATE
+      ${B64_LIBRARY}
   )
 endif()
 

@@ -33,11 +33,11 @@
 #include <thread>
 #include <vector>
 
+#include "backend_manager.h"
 #include "infer_parameter.h"
 #include "triton/common/model_config.h"
 #include "model_config.pb.h"
 #include "model_repository_manager.h"
-#include "persistent_backend_manager.h"
 #include "rate_limiter.h"
 #include "response_cache.h"
 #include "status.h"
@@ -264,8 +264,12 @@ class InferenceServer {
         model_name, model_version, model);
   }
 
+  // Get the Backend Manager
+  const std::shared_ptr<TritonBackendManager>& BackendManager() { return backend_manager_; }
+
   // Return the pointer to RateLimiter object.
   std::shared_ptr<RateLimiter> GetRateLimiter() { return rate_limiter_; }
+
   // Return the pointer to response cache object.
   std::shared_ptr<RequestResponseCache> GetResponseCache()
   {
@@ -307,7 +311,7 @@ class InferenceServer {
 
   std::shared_ptr<RateLimiter> rate_limiter_;
   std::unique_ptr<ModelRepositoryManager> model_repository_manager_;
-  std::shared_ptr<PersistentBackendManager> persist_backend_manager_;
+  std::shared_ptr<TritonBackendManager> backend_manager_;
   std::shared_ptr<RequestResponseCache> response_cache_;
 };
 

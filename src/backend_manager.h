@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -74,9 +74,6 @@ class TritonBackend {
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
 
-  bool UnloadEnabled() const { return unload_enabled_; }
-  void SetUnloadEnabled(const bool enable);
-
   TritonModelInitFn_t ModelInitFn() const { return model_init_fn_; }
   TritonModelFiniFn_t ModelFiniFn() const { return model_fini_fn_; }
   TritonModelInstanceInitFn_t ModelInstanceInitFn() const
@@ -104,7 +101,6 @@ class TritonBackend {
 
   void ClearHandles();
   Status LoadBackendLibrary();
-  Status UnloadBackendLibrary();
 
   // The name of the backend.
   const std::string name_;
@@ -134,10 +130,6 @@ class TritonBackend {
 
   // Opaque state associated with the backend.
   void* state_;
-
-  // Should the backend shared library be unloaded (e.g. dlclose) when
-  // the backend is no longer needed.
-  bool unload_enabled_;
 };
 
 //
@@ -145,13 +137,16 @@ class TritonBackend {
 //
 class TritonBackendManager {
  public:
-  static Status CreateBackend(
+  static Status Create(
+      std::shared_ptr<TritonBackendManager>* manager);
+
+  Status CreateBackend(
       const std::string& name, const std::string& dir,
       const std::string& libpath,
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
 
-  static Status BackendState(
+  Status BackendState(
       std::unique_ptr<
           std::unordered_map<std::string, std::vector<std::string>>>*
           backend_state);
@@ -159,9 +154,7 @@ class TritonBackendManager {
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonBackendManager);
   TritonBackendManager() = default;
-  static TritonBackendManager& Singleton();
-  std::mutex mu_;
-  std::unordered_map<std::string, std::weak_ptr<TritonBackend>> backend_map_;
+  std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
 };
 
 }}  // namespace triton::core
