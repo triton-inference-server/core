@@ -705,7 +705,7 @@ class InferenceRequest {
   uint32_t batch_size_;
   uint32_t priority_;
   uint64_t timeout_us_;
-  uint64_t cache_key_;
+  uint64_t cache_key_ = 0;
   // Helper to determine if request was successfully hashed
   // and cache_key_ field is valid
   bool cache_key_is_set_ = false;
