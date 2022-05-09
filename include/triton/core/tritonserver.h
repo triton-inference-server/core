@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 12
+#define TRITONSERVER_API_VERSION_MINOR 13
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -181,7 +181,8 @@ TRITONSERVER_DECLSPEC const char* TRITONSERVER_MemoryTypeString(
 typedef enum TRITONSERVER_parametertype_enum {
   TRITONSERVER_PARAMETER_STRING,
   TRITONSERVER_PARAMETER_INT,
-  TRITONSERVER_PARAMETER_BOOL
+  TRITONSERVER_PARAMETER_BOOL,
+  TRITONSERVER_PARAMETER_BYTES
 } TRITONSERVER_ParameterType;
 
 /// Get the string representation of a parmeter type. The returned
@@ -200,9 +201,24 @@ TRITONSERVER_DECLSPEC const char* TRITONSERVER_ParameterTypeString(
 /// \param name The parameter name.
 /// \param type The parameter type.
 /// \param value The pointer to the value.
-/// \return A new TRITONSERVER_Error object.
+/// \return A new TRITONSERVER_Parameter object. 'nullptr' will be returned if
+/// 'type' is 'TRITONSERVER_PARAMETER_BYTES'. The caller should use
+/// TRITONSERVER_ParameterBytesNew to create parameter with bytes type.
 TRITONSERVER_DECLSPEC TRITONSERVER_Parameter* TRITONSERVER_ParameterNew(
     const char* name, const TRITONSERVER_ParameterType type, const void* value);
+
+/// Create a new parameter object with type TRITONSERVER_PARAMETER_BYTES.
+/// The caller takes ownership of the TRITONSERVER_Parameter object and must
+/// call TRITONSERVER_ParameterDelete to release the object. The object only
+/// maintains a shallow copy of the 'byte_ptr' so the data content must be
+/// valid until the parameter object is deleted.
+///
+/// \param name The parameter name.
+/// \param byte_ptr The pointer to the data content.
+/// \param size The size of the data content.
+/// \return A new TRITONSERVER_Error object.
+TRITONSERVER_DECLSPEC TRITONSERVER_Parameter* TRITONSERVER_ParameterBytesNew(
+    const char* name, const void* byte_ptr, const uint64_t size);
 
 /// Delete an parameter object.
 ///

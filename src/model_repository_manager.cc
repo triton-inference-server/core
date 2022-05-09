@@ -49,10 +49,6 @@
 #include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
 
-extern "C" {
-#include <b64/cdecode.h>
-}
-
 namespace triton { namespace core {
 
 const std::string&
@@ -130,11 +126,11 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                   JoinPath({temp_dir, kModelConfigPbTxt}), config));
               found_config = true;
             } else if (file->Name().rfind(file_prefix, 0) == 0) {
-              if (file->Type() != TRITONSERVER_PARAMETER_STRING) {
+              if (file->Type() != TRITONSERVER_PARAMETER_BYTES) {
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
                     (std::string("File parameter '") + file->Name() +
-                     "' must have string type for its value")
+                     "' must have bytes type for its value")
                         .c_str());
               }
 
@@ -160,19 +156,11 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                     MakeDirectory(dir, true /* recursive */));
               }
 
-              // Decode base64
-              base64_decodestate s;
-              base64_init_decodestate(&s);
-
-              // The decoded can not be larger than the input...
-              std::vector<char> binary(file->ValueString().size() + 1);
-              size_t decoded_size = base64_decode_block(
-                  file->ValueString().c_str(), file->ValueString().size(),
-                  binary.data(), &s);
-
               // write
-              RETURN_TRITONSERVER_ERROR_IF_ERROR(
-                  WriteBinaryFile(file_path, binary.data(), decoded_size));
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(WriteBinaryFile(
+                  file_path,
+                  reinterpret_cast<const char*>(file->ValuePointer()),
+                  file->ValueByteSize()));
             }
           }
           if (!found_config) {

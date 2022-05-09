@@ -39,6 +39,8 @@ InferenceParameter::ValuePointer() const
       return reinterpret_cast<const void*>(&value_int64_);
     case TRITONSERVER_PARAMETER_BOOL:
       return reinterpret_cast<const void*>(&value_bool_);
+    case TRITONSERVER_PARAMETER_BYTES:
+      return reinterpret_cast<const void*>(value_bytes_);
     default:
       break;
   }

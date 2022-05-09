@@ -435,16 +435,8 @@ if (NOT WIN32)
   target_link_libraries(
     triton-core
     PRIVATE
-      b64
       dl
       numa
-  )
-else()
-  find_library(B64_LIBRARY NAMES b64)
-  target_link_libraries(
-    triton-core
-    PRIVATE
-      ${B64_LIBRARY}
   )
 endif()
 

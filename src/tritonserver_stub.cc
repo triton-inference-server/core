@@ -62,6 +62,10 @@ TRITONSERVER_ParameterNew()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ParameterBytesNew()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ParameterDelete()
 {
 }
