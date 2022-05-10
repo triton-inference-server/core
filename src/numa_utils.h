@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,17 +28,19 @@
 #include <map>
 #include <thread>
 #include <vector>
-#include "model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
 
 // Helper function to set memory policy and thread affinity on current thread
-Status SetNumaConfigOnThread(const HostPolicyCmdlineConfig& host_policy);
+Status SetNumaConfigOnThread(
+    const triton::common::HostPolicyCmdlineConfig& host_policy);
 
 // Restrict the memory allocation to specific NUMA node.
-Status SetNumaMemoryPolicy(const HostPolicyCmdlineConfig& host_policy);
+Status SetNumaMemoryPolicy(
+    const triton::common::HostPolicyCmdlineConfig& host_policy);
 
 // Retrieve the node mask used to set memory policy for the current thread
 Status GetNumaMemoryPolicyNodeMask(unsigned long* node_mask);
@@ -49,7 +51,7 @@ Status ResetNumaMemoryPolicy();
 // Set a thread affinity to be on specific cpus.
 Status SetNumaThreadAffinity(
     std::thread::native_handle_type thread,
-    const HostPolicyCmdlineConfig& host_policy);
+    const triton::common::HostPolicyCmdlineConfig& host_policy);
 
 
 }}  // namespace triton::core

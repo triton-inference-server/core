@@ -30,9 +30,9 @@
 #include <map>
 #include <mutex>
 #include "infer_parameter.h"
-#include "model_config.h"
 #include "model_config.pb.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -145,10 +145,10 @@ class ModelRepositoryManager {
       const std::set<std::string>& repository_paths,
       const std::set<std::string>& startup_models,
       const bool strict_model_config,
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const bool polling_enabled, const bool model_control_enabled,
       const double min_compute_capability,
-      const HostPolicyCmdlineConfigMap& host_policy_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
 
   /// Poll the model repository to determine the new set of models and

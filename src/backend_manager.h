@@ -30,9 +30,9 @@
 #include <string>
 #include <unordered_map>
 #include "constants.h"
-#include "model_config.h"
 #include "server_message.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
@@ -57,7 +57,7 @@ class TritonBackend {
   static Status Create(
       const std::string& name, const std::string& dir,
       const std::string& libpath,
-      const BackendCmdlineConfig& backend_cmdline_config,
+      const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
   ~TritonBackend();
 
@@ -137,13 +137,12 @@ class TritonBackend {
 //
 class TritonBackendManager {
  public:
-  static Status Create(
-      std::shared_ptr<TritonBackendManager>* manager);
+  static Status Create(std::shared_ptr<TritonBackendManager>* manager);
 
   Status CreateBackend(
       const std::string& name, const std::string& dir,
       const std::string& libpath,
-      const BackendCmdlineConfig& backend_cmdline_config,
+      const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
 
   Status BackendState(

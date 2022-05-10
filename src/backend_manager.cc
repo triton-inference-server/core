@@ -51,7 +51,7 @@ namespace triton { namespace core {
 Status
 TritonBackend::Create(
     const std::string& name, const std::string& dir, const std::string& libpath,
-    const BackendCmdlineConfig& backend_cmdline_config,
+    const triton::common::BackendCmdlineConfig& backend_cmdline_config,
     std::shared_ptr<TritonBackend>* backend)
 {
   // Create the JSON representation of the backend configuration.
@@ -284,8 +284,7 @@ static std::weak_ptr<TritonBackendManager> backend_manager_;
 static std::mutex mu_;
 
 Status
-TritonBackendManager::Create(
-    std::shared_ptr<TritonBackendManager>* manager)
+TritonBackendManager::Create(std::shared_ptr<TritonBackendManager>* manager)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -304,7 +303,7 @@ TritonBackendManager::Create(
 Status
 TritonBackendManager::CreateBackend(
     const std::string& name, const std::string& dir, const std::string& libpath,
-    const BackendCmdlineConfig& backend_cmdline_config,
+    const triton::common::BackendCmdlineConfig& backend_cmdline_config,
     std::shared_ptr<TritonBackend>* backend)
 {
   std::lock_guard<std::mutex> lock(mu_);

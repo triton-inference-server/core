@@ -25,13 +25,23 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "model_config.h"
 #include "model_config.pb.h"
 #include "status.h"
+#include "triton/common/model_config.h"
+#include "tritonserver_apis.h"
 
 namespace triton { namespace core {
 
-/// Get version of a model from the path containing the model
+/// Enumeration for the different backend types.
+enum BackendType {
+  BACKEND_TYPE_UNKNOWN = 0,
+  BACKEND_TYPE_TENSORRT = 1,
+  BACKEND_TYPE_TENSORFLOW = 2,
+  BACKEND_TYPE_ONNXRUNTIME = 3,
+  BACKEND_TYPE_PYTORCH = 4
+};
+
+// Get version of a model from the path containing the model
 /// definition file.
 /// \param path The path to the model definition file.
 /// \param version Returns the version.
@@ -198,5 +208,27 @@ Status ModelConfigToJson(
 Status JsonToModelConfig(
     const std::string& json_config, const uint32_t config_version,
     inference::ModelConfig* protobuf_config);
+
+/// Get the BackendType value for a platform name.
+/// \param platform_name The platform name.
+/// \return The BackendType or BackendType::UNKNOWN if the platform string
+/// is not recognized.
+BackendType GetBackendTypeFromPlatform(const std::string& platform_name);
+
+/// Get the BackendType value for a backend name.
+/// \param backend_name The backend name.
+/// \return The BackendType or BackendType::UNKNOWN if the platform string
+/// is not recognized.
+BackendType GetBackendType(const std::string& backend_name);
+
+/// Get the Triton server data type corresponding to a data type.
+/// \param dtype The data type.
+/// \return The Triton server data type.
+TRITONSERVER_DataType DataTypeToTriton(const inference::DataType dtype);
+
+/// Get the data type corresponding to a Triton server data type.
+/// \param dtype The Triton server data type.
+/// \return The data type.
+inference::DataType TritonToDataType(const TRITONSERVER_DataType dtype);
 
 }}  // namespace triton::core

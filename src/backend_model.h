@@ -48,8 +48,8 @@ class TritonModel : public Model {
  public:
   static Status Create(
       InferenceServer* server, const std::string& model_path,
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const HostPolicyCmdlineConfigMap& host_policy_map,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const std::string& model_name, const int64_t version,
       const inference::ModelConfig& model_config,
       std::unique_ptr<TritonModel>* model);
@@ -91,12 +91,14 @@ class TritonModel : public Model {
   // Merges the global backend configs with the specific
   // backend configs.
   static Status ResolveBackendConfigs(
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const std::string& backend_name, BackendCmdlineConfig& config);
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const std::string& backend_name,
+      triton::common::BackendCmdlineConfig& config);
 
   // Sets defaults for some backend configurations when none are specified on
   // the command line.
-  static Status SetBackendConfigDefaults(BackendCmdlineConfig& config);
+  static Status SetBackendConfigDefaults(
+      triton::common::BackendCmdlineConfig& config);
 
   Status Initialize();
   Status WarmUp();

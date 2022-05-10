@@ -25,8 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 #ifdef TRITON_ENABLE_METRICS
 #include "prometheus/registry.h"
@@ -42,7 +42,7 @@ class MetricModelReporter {
 #ifdef TRITON_ENABLE_METRICS
   static Status Create(
       const std::string& model_name, const int64_t model_version,
-      const int device, const MetricTagsMap& model_tags,
+      const int device, const triton::common::MetricTagsMap& model_tags,
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
@@ -108,12 +108,12 @@ class MetricModelReporter {
  private:
   MetricModelReporter(
       const std::string& model_name, const int64_t model_version,
-      const int device, const MetricTagsMap& model_tags);
+      const int device, const triton::common::MetricTagsMap& model_tags);
 
   static void GetMetricLabels(
       std::map<std::string, std::string>* labels, const std::string& model_name,
       const int64_t model_version, const int device,
-      const MetricTagsMap& model_tags);
+      const triton::common::MetricTagsMap& model_tags);
   prometheus::Counter* CreateCounterMetric(
       prometheus::Family<prometheus::Counter>& family,
       const std::map<std::string, std::string>& labels);
