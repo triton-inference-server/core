@@ -384,13 +384,11 @@ add_executable(
   ../status.cc
   ../filesystem.cc
   ../model_config_utils.cc
-  ../model_config.cc
   ../repo_agent.h
   ../shared_library.h
   ../status.h
   ../filesystem.h
   ../model_config_utils.h
-  ../model_config.h
 )
 
 set_target_properties(
@@ -413,10 +411,11 @@ target_include_directories(
 target_link_libraries(
   repo_agent_test
   PRIVATE
-    triton-common-error       # from repo-common
-    triton-common-json        # from repo-common
-    triton-common-logging     # from repo-common
-    proto-library             # from repo-common
+    triton-common-error        # from repo-common
+    triton-common-model-config # from repo-common
+    triton-common-json         # from repo-common
+    triton-common-logging      # from repo-common
+    proto-library              # from repo-common
     GTest::gtest
     GTest::gtest_main
     protobuf::libprotobuf

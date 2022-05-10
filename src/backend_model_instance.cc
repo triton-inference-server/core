@@ -124,7 +124,7 @@ TritonModelInstance::TritonModelInstance(
     TritonModel* model, const std::string& name, const size_t index,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,
-    const HostPolicyCmdlineConfig& host_policy,
+    const triton::common::HostPolicyCmdlineConfig& host_policy,
     const TritonServerMessage& host_policy_message,
     const std::vector<SecondaryDevice>& secondary_devices)
     : model_(model), name_(name), index_(index), kind_(kind),
@@ -164,10 +164,11 @@ TritonModelInstance::~TritonModelInstance()
 
 Status
 TritonModelInstance::CreateInstances(
-    TritonModel* model, const HostPolicyCmdlineConfigMap& host_policy_map,
+    TritonModel* model,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const inference::ModelConfig& model_config, const bool device_blocking)
 {
-  static HostPolicyCmdlineConfig empty_host_policy;
+  static triton::common::HostPolicyCmdlineConfig empty_host_policy;
 
   // This structure is used to allocate TritonBackendThread to instances on same
   // device for device blocking execution policy.
@@ -221,7 +222,7 @@ TritonModelInstance::CreateInstances(
       }
       for (const auto is : instance_setting) {
         const std::string& policy_name = std::get<0>(is);
-        const HostPolicyCmdlineConfig* host_policy;
+        const triton::common::HostPolicyCmdlineConfig* host_policy;
         const auto policy_it = host_policy_map.find(policy_name);
         if (policy_it != host_policy_map.end()) {
           host_policy = &policy_it->second;
@@ -249,7 +250,7 @@ TritonModelInstance::CreateInstance(
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,
     const std::string& host_policy_name,
-    const HostPolicyCmdlineConfig& host_policy,
+    const triton::common::HostPolicyCmdlineConfig& host_policy,
     const inference::ModelRateLimiter& rate_limiter_config,
     const bool device_blocking,
     std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
@@ -352,7 +353,8 @@ TritonModelInstance::GenerateWarmupData()
     int64_t max_zero_byte_size = 0;
     int64_t max_random_byte_size = 0;
     for (const auto& input_meta : warmup_setting.inputs()) {
-      auto element_count = GetElementCount(input_meta.second.dims());
+      auto element_count =
+          triton::common::GetElementCount(input_meta.second.dims());
       if (element_count == -1) {
         return Status(
             Status::Code::INVALID_ARG,
@@ -362,7 +364,8 @@ TritonModelInstance::GenerateWarmupData()
       }
 
       int64_t batch_byte_size =
-          element_count * GetDataTypeByteSize(input_meta.second.data_type());
+          element_count *
+          triton::common::GetDataTypeByteSize(input_meta.second.data_type());
       if (batch_byte_size == 0) {
         batch_byte_size = element_count * sizeof(int32_t);
       }
@@ -415,10 +418,11 @@ TritonModelInstance::GenerateWarmupData()
       // Second pass to prepare original inputs.
       std::vector<std::shared_ptr<InferenceRequest::Input>> input_sps;
       for (const auto& input_meta : warmup_setting.inputs()) {
-        auto batch1_element_count = GetElementCount(input_meta.second.dims());
+        auto batch1_element_count =
+            triton::common::GetElementCount(input_meta.second.dims());
         auto batch_byte_size =
             batch1_element_count *
-            GetDataTypeByteSize(input_meta.second.data_type());
+            triton::common::GetDataTypeByteSize(input_meta.second.data_type());
         if (batch_byte_size == 0) {
           batch_byte_size = batch1_element_count * sizeof(int32_t);
         }

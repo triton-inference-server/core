@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -33,9 +33,9 @@
 #include "constants.h"
 #include "infer_parameter.h"
 #include "infer_trace.h"
-#include "model_config.h"
 #include "response_allocator.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {

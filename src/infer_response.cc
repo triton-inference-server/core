@@ -1,4 +1,4 @@
-// Copyright 2020-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -27,6 +27,7 @@
 #include "infer_response.h"
 
 #include "model.h"
+#include "model_config_utils.h"
 #include "server.h"
 #include "triton/common/logging.h"
 
@@ -422,8 +423,8 @@ std::ostream&
 operator<<(std::ostream& out, const InferenceResponse::Output& output)
 {
   out << "output: " << output.Name()
-      << ", type: " << DataTypeToProtocolString(output.DType())
-      << ", shape: " << DimsListToString(output.Shape());
+      << ", type: " << triton::common::DataTypeToProtocolString(output.DType())
+      << ", shape: " << triton::common::DimsListToString(output.Shape());
   return out;
 }
 

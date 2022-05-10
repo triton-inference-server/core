@@ -35,12 +35,12 @@
 
 #include "backend_manager.h"
 #include "infer_parameter.h"
-#include "model_config.h"
 #include "model_config.pb.h"
 #include "model_repository_manager.h"
 #include "rate_limiter.h"
 #include "response_cache.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -237,12 +237,14 @@ class InferenceServer {
   }
 
   // Set a backend command-line configuration
-  void SetBackendCmdlineConfig(const BackendCmdlineConfigMap& bc)
+  void SetBackendCmdlineConfig(
+      const triton::common::BackendCmdlineConfigMap& bc)
   {
     backend_cmdline_config_map_ = bc;
   }
 
-  void SetHostPolicyCmdlineConfig(const HostPolicyCmdlineConfigMap& hp)
+  void SetHostPolicyCmdlineConfig(
+      const triton::common::HostPolicyCmdlineConfigMap& hp)
   {
     host_policy_map_ = hp;
   }
@@ -265,7 +267,10 @@ class InferenceServer {
   }
 
   // Get the Backend Manager
-  const std::shared_ptr<TritonBackendManager>& BackendManager() { return backend_manager_; }
+  const std::shared_ptr<TritonBackendManager>& BackendManager()
+  {
+    return backend_manager_;
+  }
 
   // Return the pointer to RateLimiter object.
   std::shared_ptr<RateLimiter> GetRateLimiter() { return rate_limiter_; }
@@ -293,8 +298,8 @@ class InferenceServer {
   bool response_cache_enabled_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_supported_compute_capability_;
-  BackendCmdlineConfigMap backend_cmdline_config_map_;
-  HostPolicyCmdlineConfigMap host_policy_map_;
+  triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
+  triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
   std::string repoagent_dir_;
   RateLimitMode rate_limit_mode_;
   RateLimiter::ResourceMap rate_limit_resource_map_;
