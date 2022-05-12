@@ -96,7 +96,7 @@ MetricFamily::Remove(void* metric)
   {
     std::lock_guard<std::mutex> lk(mtx_);
     const auto it = metric_ref_cnt_.find(metric);
-    if (it != metric_ref_cnt_.end() {
+    if (it != metric_ref_cnt_.end()) {
       --it->second;
       if (it->second == 0) {
         metric_ref_cnt_.erase(it);
@@ -142,6 +142,7 @@ Metric::Metric(
     std::vector<const InferenceParameter*> labels)
 {
   family_ = reinterpret_cast<MetricFamily*>(family);
+  kind_ = family_->Kind();
 
   // Create map of labels from InferenceParameters
   std::map<std::string, std::string> label_map;
