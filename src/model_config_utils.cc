@@ -292,11 +292,11 @@ ValidateIOShape(
 
   for (auto dim : io.dims()) {
     // Dimension cannot be 0.
-    if ((dim < 1) && (dim != WILDCARD_DIM)) {
+    if ((dim < 1) && (dim != triton::common::WILDCARD_DIM)) {
       return Status(
           Status::Code::INVALID_ARG,
           message_prefix + "dimension must be integer >= 1, or " +
-              std::to_string(WILDCARD_DIM) +
+              std::to_string(triton::common::WILDCARD_DIM) +
               " to indicate a variable-size dimension");
     }
   }
@@ -304,17 +304,18 @@ ValidateIOShape(
   if (io.has_reshape()) {
     // Zeros are not allowed in reshape.
     for (auto dim : io.reshape().shape()) {
-      if ((dim < 1) && (dim != WILDCARD_DIM)) {
+      if ((dim < 1) && (dim != triton::common::WILDCARD_DIM)) {
         return Status(
             Status::Code::INVALID_ARG,
             message_prefix + "reshape dimensions must be integer >= 1, or " +
-                std::to_string(WILDCARD_DIM) +
+                std::to_string(triton::common::WILDCARD_DIM) +
                 " to indicate a variable-size dimension");
       }
     }
 
-    const int64_t dims_size = GetElementCount(io.dims());
-    const int64_t reshape_size = GetElementCount(io.reshape().shape());
+    const int64_t dims_size = triton::common::GetElementCount(io.dims());
+    const int64_t reshape_size =
+        triton::common::GetElementCount(io.reshape().shape());
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.

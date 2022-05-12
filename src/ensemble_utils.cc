@@ -1,4 +1,4 @@
-// Copyright 2018-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -43,7 +43,7 @@ namespace {
 struct TensorNode {
   TensorNode(
       const std::string& model_name, const bool batching,
-      const inference::DataType& type, const DimsList& dims)
+      const inference::DataType& type, const triton::common::DimsList& dims)
       : model_name_(model_name), type_(type), dims_(dims), is_decoupled_(false),
         decouple_label_(0), visited_(false)
   {
@@ -63,8 +63,8 @@ struct TensorNode {
 
   std::string model_name_;
   inference::DataType type_;
-  DimsList dims_;
-  DimsList full_dims_;
+  triton::common::DimsList dims_;
+  triton::common::DimsList full_dims_;
   bool is_decoupled_;
   size_t decouple_label_;
   bool visited_;
@@ -102,14 +102,16 @@ ValidateTensorConsistency(
   // used for both non-batching model and batching model. In that case, it
   // is acceptable if non-batching model shape is [-1, d_0, d_1, ..., d_n]
   // while the batching model shape is [d_0, d_1, ..., d_n].
-  if (!CompareDimsWithWildcard(lhs.dims_, rhs.dims_) &&
-      !CompareDimsWithWildcard(lhs.full_dims_, rhs.full_dims_)) {
+  if (!triton::common::CompareDimsWithWildcard(lhs.dims_, rhs.dims_) &&
+      !triton::common::CompareDimsWithWildcard(
+          lhs.full_dims_, rhs.full_dims_)) {
     return Status(
         Status::Code::INVALID_ARG,
-        message + "inconsistent shape: " + DimsListToString(lhs.full_dims_) +
+        message + "inconsistent shape: " +
+            triton::common::DimsListToString(lhs.full_dims_) +
             " is inferred from model " + lhs.model_name_ + " while " +
-            DimsListToString(rhs.full_dims_) + " is inferred from model " +
-            rhs.model_name_);
+            triton::common::DimsListToString(rhs.full_dims_) +
+            " is inferred from model " + rhs.model_name_);
   }
 
   return Status::Success;
