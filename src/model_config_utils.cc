@@ -1918,4 +1918,131 @@ JsonToModelConfig(
   return Status::Success;
 }
 
+BackendType
+GetBackendTypeFromPlatform(const std::string& platform_name)
+{
+  if ((platform_name == kTensorFlowGraphDefPlatform) ||
+      (platform_name == kTensorFlowSavedModelPlatform)) {
+    return BackendType::BACKEND_TYPE_TENSORFLOW;
+  }
+
+  if (platform_name == kTensorRTPlanPlatform) {
+    return BackendType::BACKEND_TYPE_TENSORRT;
+  }
+
+  if (platform_name == kOnnxRuntimeOnnxPlatform) {
+    return BackendType::BACKEND_TYPE_ONNXRUNTIME;
+  }
+
+  if (platform_name == kPyTorchLibTorchPlatform) {
+    return BackendType::BACKEND_TYPE_PYTORCH;
+  }
+
+  return BackendType::BACKEND_TYPE_UNKNOWN;
+}
+
+/// Get the BackendType value for a backend name.
+/// \param backend_name The backend name.
+/// \return The BackendType or BackendType::UNKNOWN if the platform string
+/// is not recognized.
+BackendType
+GetBackendType(const std::string& backend_name)
+{
+  if (backend_name == kTensorFlowBackend) {
+    return BackendType::BACKEND_TYPE_TENSORFLOW;
+  }
+
+  if (backend_name == kTensorRTBackend) {
+    return BackendType::BACKEND_TYPE_TENSORRT;
+  }
+
+  if (backend_name == kOnnxRuntimeBackend) {
+    return BackendType::BACKEND_TYPE_ONNXRUNTIME;
+  }
+
+  if (backend_name == kPyTorchBackend) {
+    return BackendType::BACKEND_TYPE_PYTORCH;
+  }
+
+  return BackendType::BACKEND_TYPE_UNKNOWN;
+}
+
+TRITONSERVER_DataType
+DataTypeToTriton(const inference::DataType dtype)
+{
+  switch (dtype) {
+    case inference::DataType::TYPE_BOOL:
+      return TRITONSERVER_TYPE_BOOL;
+    case inference::DataType::TYPE_UINT8:
+      return TRITONSERVER_TYPE_UINT8;
+    case inference::DataType::TYPE_UINT16:
+      return TRITONSERVER_TYPE_UINT16;
+    case inference::DataType::TYPE_UINT32:
+      return TRITONSERVER_TYPE_UINT32;
+    case inference::DataType::TYPE_UINT64:
+      return TRITONSERVER_TYPE_UINT64;
+    case inference::DataType::TYPE_INT8:
+      return TRITONSERVER_TYPE_INT8;
+    case inference::DataType::TYPE_INT16:
+      return TRITONSERVER_TYPE_INT16;
+    case inference::DataType::TYPE_INT32:
+      return TRITONSERVER_TYPE_INT32;
+    case inference::DataType::TYPE_INT64:
+      return TRITONSERVER_TYPE_INT64;
+    case inference::DataType::TYPE_FP16:
+      return TRITONSERVER_TYPE_FP16;
+    case inference::DataType::TYPE_FP32:
+      return TRITONSERVER_TYPE_FP32;
+    case inference::DataType::TYPE_FP64:
+      return TRITONSERVER_TYPE_FP64;
+    case inference::DataType::TYPE_STRING:
+      return TRITONSERVER_TYPE_BYTES;
+    case inference::DataType::TYPE_BF16:
+      return TRITONSERVER_TYPE_BF16;
+    default:
+      break;
+  }
+
+  return TRITONSERVER_TYPE_INVALID;
+}
+
+inference::DataType
+TritonToDataType(const TRITONSERVER_DataType dtype)
+{
+  switch (dtype) {
+    case TRITONSERVER_TYPE_BOOL:
+      return inference::DataType::TYPE_BOOL;
+    case TRITONSERVER_TYPE_UINT8:
+      return inference::DataType::TYPE_UINT8;
+    case TRITONSERVER_TYPE_UINT16:
+      return inference::DataType::TYPE_UINT16;
+    case TRITONSERVER_TYPE_UINT32:
+      return inference::DataType::TYPE_UINT32;
+    case TRITONSERVER_TYPE_UINT64:
+      return inference::DataType::TYPE_UINT64;
+    case TRITONSERVER_TYPE_INT8:
+      return inference::DataType::TYPE_INT8;
+    case TRITONSERVER_TYPE_INT16:
+      return inference::DataType::TYPE_INT16;
+    case TRITONSERVER_TYPE_INT32:
+      return inference::DataType::TYPE_INT32;
+    case TRITONSERVER_TYPE_INT64:
+      return inference::DataType::TYPE_INT64;
+    case TRITONSERVER_TYPE_FP16:
+      return inference::DataType::TYPE_FP16;
+    case TRITONSERVER_TYPE_FP32:
+      return inference::DataType::TYPE_FP32;
+    case TRITONSERVER_TYPE_FP64:
+      return inference::DataType::TYPE_FP64;
+    case TRITONSERVER_TYPE_BYTES:
+      return inference::DataType::TYPE_STRING;
+    case TRITONSERVER_TYPE_BF16:
+      return inference::DataType::TYPE_BF16;
+    default:
+      break;
+  }
+
+  return inference::DataType::TYPE_INVALID;
+}
+
 }}  // namespace triton::core
