@@ -267,7 +267,7 @@ TritonModel::ResolveBackendConfigs(
 
 
 const std::unordered_map<std::string, std::string> backend_config_defaults(
-    {{"default-max-batch-size", "4"}});
+    {{"default-max-batch-size", "2"}});
 
 Status
 TritonModel::SetBackendConfigDefaults(
