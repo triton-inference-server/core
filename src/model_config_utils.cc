@@ -1998,6 +1998,8 @@ DataTypeToTriton(const inference::DataType dtype)
       return TRITONSERVER_TYPE_FP64;
     case inference::DataType::TYPE_STRING:
       return TRITONSERVER_TYPE_BYTES;
+    case inference::DataType::TYPE_BF16:
+      return TRITONSERVER_TYPE_BF16;
     default:
       break;
   }
@@ -2035,6 +2037,8 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
       return inference::DataType::TYPE_FP64;
     case TRITONSERVER_TYPE_BYTES:
       return inference::DataType::TYPE_STRING;
+    case TRITONSERVER_TYPE_BF16:
+      return inference::DataType::TYPE_BF16;
     default:
       break;
   }
