@@ -948,12 +948,9 @@ AutoCompleteBackendFields(
 
   // Python
   if (config->backend().empty()) {
-    if ((config->platform() == kPythonPlatform) ||
-        (config->default_model_filename() == kPythonFilename)) {
+    if (config->default_model_filename() == kPythonFilename) {
       config->set_backend(kPythonBackend);
-    } else if (
-        config->platform().empty() &&
-        config->default_model_filename().empty() && has_version) {
+    } else if (config->default_model_filename().empty() && has_version) {
       if (version_dir_content.find(kPythonFilename) !=
           version_dir_content.end()) {
         config->set_backend(kPythonBackend);
@@ -961,9 +958,6 @@ AutoCompleteBackendFields(
     }
   }
   if (config->backend() == kPythonBackend) {
-    if (config->platform().empty()) {
-      config->set_platform(kPythonPlatform);
-    }
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kPythonFilename);
     }
