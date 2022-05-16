@@ -153,6 +153,7 @@ class TritonModelInstance {
     WarmupData(const std::string& sample_name) : sample_name_(sample_name) {}
 
     std::string sample_name_;
+    // [WIP] use one request
     std::vector<std::unique_ptr<InferenceRequest>> requests_;
 
     // Placeholder for input data
