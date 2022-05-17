@@ -309,7 +309,6 @@ RequestResponseCache::BuildCacheEntry(
     TRITONSERVER_MemoryType response_memory_type;
     int64_t response_memory_type_id;
     void* userp;
-    // TODO: How to handle different memory types? GPU vs CPU vs Pinned, etc.
     RETURN_IF_ERROR(response_output.DataBuffer(
         &response_buffer, &response_byte_size, &response_memory_type,
         &response_memory_type_id, &userp));
@@ -363,7 +362,7 @@ RequestResponseCache::BuildCacheEntry(
       }
 
       // Copy data from response buffer to cache entry output buffer
-      // TODO: Handle different memory types: GPU, SHM, Pinned, etc.
+      // TODO: Handle other memory types
       std::memcpy(cache_output.buffer_, response_buffer, response_byte_size);
 
       // Set output metadata
@@ -393,8 +392,7 @@ RequestResponseCache::BuildInferenceResponse(
   {
     std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
 
-    // TODO: What should we do if [response] already contains
-    //       some outputs? Currently it will just append outputs
+    // Inference response outputs should be empty so we can append to them
     if (response->Outputs().size() != 0) {
       return Status(
           Status::Code::INTERNAL,
@@ -413,7 +411,6 @@ RequestResponseCache::BuildInferenceResponse(
             "InferenceResponse::Output pointer as nullptr");
       }
 
-      // TODO: Assuming CPU memory only for now
       TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
       int64_t memory_type_id = 0;
 
@@ -435,9 +432,7 @@ RequestResponseCache::BuildInferenceResponse(
             Status::Code::INTERNAL, "failed to allocate buffer for output '" +
                                         cache_output.name_ + "'");
       }
-
-      // TODO: No out of scope issue here? With underlying
-      //       allocated_buffer_ == buffer ?
+      // Copy cached output buffer to allocated response output buffer
       std::memcpy(buffer, cache_output.buffer_, cache_output.buffer_size_);
 
       // TODO: Add field to InferenceResponse to indicate this was from cache
