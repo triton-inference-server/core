@@ -450,8 +450,8 @@ class RequestResponseCacheTest : public ::testing::Test {
 
     // Generate a set of random requests to use for various tests
     for (size_t idx; idx < thread_count; idx++) {
-      // Ensure data survives lifetime of the tests
       std::vector<int>* data = new std::vector<int>(generate_data(4));
+      // Ensure data survives lifetime of tests. Automatically cleaned up
       random_data.emplace_back(data);
 
       std::vector<Tensor> inputs{ Tensor{ "input", *data } };
@@ -483,7 +483,6 @@ class RequestResponseCacheTest : public ::testing::Test {
     delete request2;
     delete request3;
     delete request4;
-    for (auto d : random_data ) { delete d; }
     for (auto r : random_requests) { delete r; }
   }
 
@@ -500,7 +499,7 @@ class RequestResponseCacheTest : public ::testing::Test {
   std::vector<Tensor> inputs0, inputs1, inputs2, inputs3, inputs4, inputs100;
   std::vector<Tensor> outputs0, outputs100;
   tc::InferenceRequest *request0, *request1, *request2, *request3, *request4;
-  std::vector<std::vector<int>*> random_data;
+  std::vector<std::unique_ptr<std::vector<int>>> random_data;
   std::vector<tc::InferenceRequest*> random_requests;
   std::unique_ptr<tc::InferenceResponse> response0, response100;
 };
@@ -837,48 +836,6 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
-  // Create input
-  std::cout << "Create inputs" << std::endl;
-  inference::DataType dtype = inference::DataType::TYPE_INT32;
-  std::vector<int64_t> shape{1, 4};
-  tc::InferenceRequest::Input* input0 = nullptr;
-  // Add input to request
-  std::cout << "Add input to request" << std::endl;
-  request0->AddOriginalInput("input", dtype, shape, &input0);
-  ASSERT_NE(input0, nullptr);
-  // PrepareForInference for use of ImmutableInputs()
-  check_status(request0->PrepareForInference());
-
-  // Add data to input
-  std::vector<int> data0 = {1, 2, 3, 4};
-  TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
-  int64_t memory_type_id = 0;
-  uint64_t input_size = sizeof(int) * data0.size();
-  input0->AppendData(data0.data(), input_size, memory_type, memory_type_id);
-
-  std::cout << "Create response object" << std::endl;
-  std::unique_ptr<tc::InferenceResponse> response0;
-  check_status(request0->ResponseFactory().CreateResponse(&response0));
-
-  std::cout << "Add output metadata to response object" << std::endl;
-  tc::InferenceResponse::Output* response_output = nullptr;
-  std::vector<int> output0 = {2, 4, 6, 8};
-  uint64_t output_size = sizeof(int) * output0.size();
-  std::cout << "Example InferenceResponse outputs:" << std::endl;
-  for (const auto& output : output0) {
-    std::cout << output << std::endl;
-  }
-  std::cout << "Output size bytes: " << output_size << std::endl;
-  check_status(response0->AddOutput("output", dtype, shape, &response_output));
-
-  std::cout << "Allocate output data buffer for response object" << std::endl;
-  void* buffer;
-  check_status(response_output->AllocateDataBuffer(
-      &buffer, output_size, &memory_type, &memory_type_id));
-  ASSERT_NE(buffer, nullptr);
-  // Copy data from output to response buffer
-  std::memcpy(buffer, output0.data(), output_size);
-
   std::cout << "Lookup request0 in empty cache" << std::endl;
   auto status = cache->Lookup(nullptr, request0);
   // This hash not in cache yet
@@ -926,6 +883,9 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   ASSERT_TRUE(total_insertion_latency2 > total_insertion_latency)
       << "ERROR: Total insertion latency should increase";
 
+  // Grab output from sample response for comparison
+  const auto& response0_output = response0->Outputs()[0];
+
   // Fetch output buffer details
   const void* response_buffer = nullptr;
   size_t response_byte_size = 0;
@@ -935,9 +895,9 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   // TODO: How to handle different memory types? GPU vs CPU vs Pinned, etc.
   // TODO: Handle multiple outputs more generically
   for (const auto& response_test_output : response_test->Outputs()) {
-    ASSERT_EQ(response_test_output.Name(), response_output->Name());
-    ASSERT_EQ(response_test_output.DType(), response_output->DType());
-    ASSERT_EQ(response_test_output.Shape(), response_output->Shape());
+    ASSERT_EQ(response_test_output.Name(), response0_output.Name());
+    ASSERT_EQ(response_test_output.DType(), response0_output.DType());
+    ASSERT_EQ(response_test_output.Shape(), response0_output.Shape());
     check_status(response_test_output.DataBuffer(
         &response_buffer, &response_byte_size, &response_memory_type,
         &response_memory_type_id, &userp));
@@ -947,8 +907,8 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   int* cache_output = (int*)response_buffer;
   std::cout << "Check output buffer data from cache entry:" << std::endl;
   for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-    std::cout << cache_output[i] << " == " << output0[i] << std::endl;
-    ASSERT_EQ(cache_output[i], output0[i]);
+    std::cout << cache_output[i] << " == " << outputs0[0].data[i] << std::endl;
+    ASSERT_EQ(cache_output[i], outputs0[0].data[i]);
   }
 
   // Simple Evict() test
