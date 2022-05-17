@@ -567,6 +567,8 @@ TritonModelInstance::WarmUp()
                    << "' instance " << Name() << " is running warmup sample '"
                    << sample.sample_name_ << "'";
 
+    // request/response complete is asynchronous so use promise to wait for
+    // completion. Also collects error message from the responses in a vector.
     std::vector<std::promise<void>> request_complete(sample.requests_.size());
     std::vector<std::string> response_errors;
     std::vector<std::pair<std::promise<void>, std::vector<std::string>*>>
