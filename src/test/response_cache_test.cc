@@ -425,24 +425,16 @@ class RequestResponseCacheTest : public ::testing::Test {
  protected:
   void SetUp() override
   {
-    // Sample inputs
+    // Sample input data
     data0 = {1, 2, 3, 4};
     data1 = {5, 6, 7, 8};
-    data2 = {9, 10, 11, 12};
 
-    Tensor tensor0 = {"input", data0};
-    Tensor tensor1 = {"input", data1};
-    Tensor tensor2 = {"input", data1};
-    Tensor tensor3_0 = {"input0", data0};
-    Tensor tensor3_1 = {"input1", data1};
-    Tensor tensor4_0 = {"input0", data0};
-    Tensor tensor4_1 = {"input1", data1};
-
-    inputs0 = std::vector<Tensor>{tensor0};
-    inputs1 = std::vector<Tensor>{tensor1};
-    inputs2 = std::vector<Tensor>{tensor2};
-    inputs3 = std::vector<Tensor>{tensor3_0, tensor3_1};
-    inputs4 = std::vector<Tensor>{tensor4_1, tensor4_0};
+    // Sample input vectors
+    inputs0 = std::vector<Tensor>{{"input", data0}};
+    inputs1 = std::vector<Tensor>{{"input", data1}};
+    inputs2 = std::vector<Tensor>{{"input", data1}};
+    inputs3 = std::vector<Tensor>{{"input0", data0}, {"input1", data1}};
+    inputs4 = std::vector<Tensor>{{"input1", data1}, {"input0", data0}};
 
     // Create three requests with same input name, two with same data, one with
     // different data
@@ -491,9 +483,9 @@ class RequestResponseCacheTest : public ::testing::Test {
     response0 = GenerateResponse(
         request0, dtype, memory_type, memory_type_id, outputs0);
     ASSERT_NE(response0, nullptr);
-    response100 = GenerateResponse(
+    response_400bytes = GenerateResponse(
         request0, dtype, memory_type, memory_type_id, outputs100);
-    ASSERT_NE(response100, nullptr);
+    ASSERT_NE(response_400bytes, nullptr);
   }
 
   void TearDown() override
@@ -517,13 +509,13 @@ class RequestResponseCacheTest : public ::testing::Test {
   size_t thread_count = 10;
   uint64_t output0_size;
 
-  std::vector<int> data0, data1, data2, data100;
+  std::vector<int> data0, data1, data100;
   std::vector<Tensor> inputs0, inputs1, inputs2, inputs3, inputs4, inputs100;
   std::vector<Tensor> outputs0, outputs100;
   tc::InferenceRequest *request0, *request1, *request2, *request3, *request4;
   std::vector<std::unique_ptr<std::vector<int>>> random_data;
   std::vector<tc::InferenceRequest*> random_requests;
-  std::unique_ptr<tc::InferenceResponse> response0, response100;
+  std::unique_ptr<tc::InferenceResponse> response0, response_400bytes;
 };
 
 // Test hashing for consistency on same request
@@ -566,6 +558,8 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
   tc::RequestResponseCache::Create(cache_size, &cache);
 
   // Set output data to be larger than cache size
+  // NOTE: This is not 1 byte larger than cache_size, the cache_size + 1 is to
+  // be clear it will always be larger than cache even if the dtype is changed.
   std::vector<int> large_data(cache_size + 1, 0);
   std::cout << "Create large_response (larger than cache) of size: "
             << large_data.size() << std::endl;
@@ -598,22 +592,22 @@ TEST_F(RequestResponseCacheTest, TestEviction)
       << "hash [" + std::to_string(random_requests[0]->CacheKey()) +
              "] should not be in cache";
   std::cout << "Insert response into cache" << std::endl;
-  check_status(cache->Insert(*response100, random_requests[0]));
+  check_status(cache->Insert(*response_400bytes, random_requests[0]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 1u);
   ASSERT_EQ(cache->NumEvictions(), 0u);
 
-  check_status(cache->Insert(*response100, random_requests[1]));
+  check_status(cache->Insert(*response_400bytes, random_requests[1]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 0u);
 
-  check_status(cache->Insert(*response100, random_requests[2]));
+  check_status(cache->Insert(*response_400bytes, random_requests[2]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 1u);
 
-  check_status(cache->Insert(*response100, random_requests[3]));
+  check_status(cache->Insert(*response_400bytes, random_requests[3]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 2u);
@@ -637,8 +631,8 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(std::thread(
-        &tc::RequestResponseCache::Insert, cache.get(), std::ref(*response100),
-        random_requests[idx]));
+        &tc::RequestResponseCache::Insert, cache.get(),
+        std::ref(*response_400bytes), random_requests[idx]));
   }
 
   // Join threads
