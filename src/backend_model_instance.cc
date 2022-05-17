@@ -95,9 +95,9 @@ WarmupResponseComplete(
     TRITONSERVER_InferenceResponse* iresponse, const uint32_t flags,
     void* userp)
 {
+  auto res_pair = reinterpret_cast<
+      std::pair<std::promise<void>, std::vector<std::string>*>*>(userp);
   if (iresponse != nullptr) {
-    auto res_pair = reinterpret_cast<
-        std::pair<std::promise<void>, std::vector<std::string>*>*>(userp);
     auto err = TRITONSERVER_InferenceResponseError(iresponse);
     if (err != nullptr) {
       // The error vector is shared by all requests in the batch for now
@@ -108,14 +108,14 @@ WarmupResponseComplete(
       }
       TRITONSERVER_ErrorDelete(err);
     }
-    // Last response
-    if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) != 0) {
-      res_pair->first.set_value();
-    }
     // Just delete the response, warmup doesn't check for correctness
     LOG_TRITONSERVER_ERROR(
         TRITONSERVER_InferenceResponseDelete(iresponse),
         "deleting warmup response");
+  }
+  // Last response
+  if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) != 0) {
+    res_pair->first.set_value();
   }
 }
 
