@@ -71,15 +71,17 @@ class RequestResponseCache {
   // Hash inference request to access cache and store it in
   // "request->CacheKey()", or return "request->CacheKey()" if already set
   // Return Status object indicating success or failure.
-  Status HashAndSet(InferenceRequest* request);
+  Status HashAndSet(InferenceRequest* const request);
 
   // Lookup 'request' hash in cache and return the inference response in
   // 'response' on cache hit or nullptr on cache miss
   // Return Status object indicating success or failure.
-  Status Lookup(InferenceResponse* ptr, InferenceRequest* request);
+  Status Lookup(
+      InferenceResponse* const response, InferenceRequest* const request);
   // Insert response into cache, evict entries to make space if necessary
   // Return Status object indicating success or failure.
-  Status Insert(const InferenceResponse& response, InferenceRequest* request);
+  Status Insert(
+      const InferenceResponse& response, InferenceRequest* const request);
   // Evict entry from cache based on policy
   // Return Status object indicating success or failure.
   Status Evict();
@@ -158,10 +160,11 @@ class RequestResponseCache {
   // Update LRU ordering on lookup
   void UpdateLRU(std::unordered_map<uint64_t, CacheEntry>::iterator&);
   // Build CacheEntry from InferenceResponse
-  Status BuildCacheEntry(const InferenceResponse& response, CacheEntry* entry);
+  Status BuildCacheEntry(
+      const InferenceResponse& response, CacheEntry* const entry);
   // Build InferenceResponse from CacheEntry
   Status BuildInferenceResponse(
-      const CacheEntry& entry, InferenceResponse* response);
+      const CacheEntry& entry, InferenceResponse* const response);
   // Helper function to hash data buffers used by "input"
   Status HashInputBuffers(const InferenceRequest::Input* input, size_t* seed);
   // Helper function to hash each input in "request"

@@ -135,7 +135,7 @@ RequestResponseCache::~RequestResponseCache()
 
 Status
 RequestResponseCache::Lookup(
-    InferenceResponse* response, InferenceRequest* request)
+    InferenceResponse* const response, InferenceRequest* const request)
 {
   // Lock on cache lookup
   std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
@@ -182,7 +182,7 @@ RequestResponseCache::Lookup(
 
 Status
 RequestResponseCache::Insert(
-    const InferenceResponse& response, InferenceRequest* request)
+    const InferenceResponse& response, InferenceRequest* const request)
 {
   // Lock on cache insertion
   std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
@@ -297,7 +297,7 @@ RequestResponseCache::UpdateLRU(
 
 Status
 RequestResponseCache::BuildCacheEntry(
-    const InferenceResponse& response, CacheEntry* entry)
+    const InferenceResponse& response, CacheEntry* const entry)
 {
   // Build cache entry data from response outputs
   for (const auto& response_output : response.Outputs()) {
@@ -382,7 +382,7 @@ RequestResponseCache::BuildCacheEntry(
 
 Status
 RequestResponseCache::BuildInferenceResponse(
-    const CacheEntry& entry, InferenceResponse* response)
+    const CacheEntry& entry, InferenceResponse* const response)
 {
   if (response == nullptr) {
     return Status(Status::Code::INTERNAL, "invalid response ptr passed in");
@@ -510,7 +510,7 @@ RequestResponseCache::Hash(const InferenceRequest& request, uint64_t* key)
 }
 
 Status
-RequestResponseCache::HashAndSet(InferenceRequest* request)
+RequestResponseCache::HashAndSet(InferenceRequest* const request)
 {
   if (!request->CacheKeyIsSet()) {
     uint64_t key = 0;
