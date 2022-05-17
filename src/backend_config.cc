@@ -26,9 +26,9 @@
 
 #include "backend_config.h"
 
-#include "model_config.h"
 #include "status.h"
 #include "triton/common/logging.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -36,7 +36,8 @@ namespace {
 
 Status
 GetTFSpecializedBackendName(
-    const BackendCmdlineConfigMap& config_map, std::string* specialized_name)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::string* specialized_name)
 {
   std::string tf_version_str = "1";
   const auto& itr = config_map.find("tensorflow");
@@ -58,7 +59,8 @@ GetTFSpecializedBackendName(
 
 Status
 GetOVSpecializedBackendName(
-    const BackendCmdlineConfigMap& config_map, std::string* specialized_name)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::string* specialized_name)
 {
   std::string ov_version_str = "2021_4";
   const auto& itr = config_map.find("openvino");
@@ -74,7 +76,7 @@ GetOVSpecializedBackendName(
 
 Status
 BackendConfiguration(
-    const BackendCmdlineConfig& config, const std::string& key,
+    const triton::common::BackendCmdlineConfig& config, const std::string& key,
     std::string* val)
 {
   for (const auto& pr : config) {
@@ -126,7 +128,7 @@ BackendConfigurationParseStringToBool(const std::string& str, bool* val)
 
 Status
 BackendConfigurationGlobalBackendsDirectory(
-    const BackendCmdlineConfigMap& config_map, std::string* dir)
+    const triton::common::BackendCmdlineConfigMap& config_map, std::string* dir)
 {
   const auto& itr = config_map.find(std::string());
   if (itr == config_map.end()) {
@@ -142,7 +144,7 @@ BackendConfigurationGlobalBackendsDirectory(
 
 Status
 BackendConfigurationMinComputeCapability(
-    const BackendCmdlineConfigMap& config_map, double* mcc)
+    const triton::common::BackendCmdlineConfigMap& config_map, double* mcc)
 {
 #ifdef TRITON_ENABLE_GPU
   *mcc = TRITON_MIN_COMPUTE_CAPABILITY;
@@ -167,7 +169,7 @@ BackendConfigurationMinComputeCapability(
 
 Status
 BackendConfigurationAutoCompleteConfig(
-    const BackendCmdlineConfigMap& config_map, bool* acc)
+    const triton::common::BackendCmdlineConfigMap& config_map, bool* acc)
 {
   const auto& itr = config_map.find(std::string());
   if (itr == config_map.end()) {
@@ -186,8 +188,8 @@ BackendConfigurationAutoCompleteConfig(
 
 Status
 BackendConfigurationSpecializeBackendName(
-    const BackendCmdlineConfigMap& config_map, const std::string& backend_name,
-    std::string* specialized_name)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    const std::string& backend_name, std::string* specialized_name)
 {
   *specialized_name = backend_name;
   if (backend_name == "tensorflow") {

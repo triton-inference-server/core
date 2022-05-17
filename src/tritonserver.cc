@@ -35,7 +35,6 @@
 #include "metric_family.h"
 #include "metrics.h"
 #include "model.h"
-#include "model_config.h"
 #include "model_config_utils.h"
 #include "model_repository_manager.h"
 #include "rate_limiter.h"
@@ -44,6 +43,7 @@
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/logging.h"
+#include "triton/common/model_config.h"
 #include "triton/common/nvtx.h"
 #include "triton/common/table_printer.h"
 #include "triton/common/triton_json.h"
@@ -288,7 +288,7 @@ class TritonServerOptions {
   // setting=value pairs for that backend. The empty backend name ("")
   // is used to communicate configuration information that is used
   // internally.
-  const tc::BackendCmdlineConfigMap& BackendCmdlineConfigMap() const
+  const triton::common::BackendCmdlineConfigMap& BackendCmdlineConfigMap() const
   {
     return backend_cmdline_config_map_;
   }
@@ -299,7 +299,8 @@ class TritonServerOptions {
   TRITONSERVER_Error* SetHostPolicy(
       const std::string& policy_name, const std::string& setting,
       const std::string& value);
-  const tc::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap() const
+  const triton::common::HostPolicyCmdlineConfigMap& HostPolicyCmdlineConfigMap()
+      const
   {
     return host_policy_map_;
   }
@@ -325,8 +326,8 @@ class TritonServerOptions {
   double min_compute_capability_;
   std::string backend_dir_;
   std::string repoagent_dir_;
-  tc::BackendCmdlineConfigMap backend_cmdline_config_map_;
-  tc::HostPolicyCmdlineConfigMap host_policy_map_;
+  triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
+  triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
 
 TritonServerOptions::TritonServerOptions()
@@ -383,7 +384,8 @@ TritonServerOptions::AddBackendConfig(
     const std::string& backend_name, const std::string& setting,
     const std::string& value)
 {
-  tc::BackendCmdlineConfig& cc = backend_cmdline_config_map_[backend_name];
+  triton::common::BackendCmdlineConfig& cc =
+      backend_cmdline_config_map_[backend_name];
   cc.push_back(std::make_pair(setting, value));
 
   return nullptr;  // success
@@ -404,7 +406,7 @@ TritonServerOptions::SetHostPolicy(
             .c_str());
   }
 
-  tc::HostPolicyCmdlineConfig& hp = host_policy_map_[policy_name];
+  triton::common::HostPolicyCmdlineConfig& hp = host_policy_map_[policy_name];
   hp[setting] = value;
 
   return nullptr;  // success
@@ -480,7 +482,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_DataType
 TRITONSERVER_StringToDataType(const char* dtype)
 {
   const size_t len = strlen(dtype);
-  return tc::DataTypeToTriton(tc::ProtocolStringToDataType(dtype, len));
+  return tc::DataTypeToTriton(
+      triton::common::ProtocolStringToDataType(dtype, len));
 }
 
 TRITONAPI_DECLSPEC uint32_t
@@ -574,6 +577,15 @@ TRITONSERVER_ParameterNew(
     default:
       break;
   }
+  return reinterpret_cast<TRITONSERVER_Parameter*>(lparam.release());
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Parameter*
+TRITONSERVER_ParameterBytesNew(
+    const char* name, const void* byte_ptr, const uint64_t size)
+{
+  std::unique_ptr<tc::InferenceParameter> lparam(
+      new tc::InferenceParameter(name, byte_ptr, size));
   return reinterpret_cast<TRITONSERVER_Parameter*>(lparam.release());
 }
 
@@ -2382,7 +2394,7 @@ TRITONSERVER_ServerModelMetadata(
         metadata, triton::common::TritonJson::ValueType::OBJECT);
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-        "datatype", tc::DataTypeToProtocolString(io.data_type())));
+        "datatype", triton::common::DataTypeToProtocolString(io.data_type())));
 
     // Input shape. If the model supports batching then must include
     // '-1' for the batch dimension.
@@ -2408,7 +2420,7 @@ TRITONSERVER_ServerModelMetadata(
         metadata, triton::common::TritonJson::ValueType::OBJECT);
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef("name", io.name().c_str()));
     RETURN_IF_STATUS_ERROR(io_metadata.AddStringRef(
-        "datatype", tc::DataTypeToProtocolString(io.data_type())));
+        "datatype", triton::common::DataTypeToProtocolString(io.data_type())));
 
     // Output shape. If the model supports batching then must include
     // '-1' for the batch dimension.

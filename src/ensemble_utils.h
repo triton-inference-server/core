@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -29,10 +29,10 @@
 
 #include <deque>
 #include <unordered_map>
-#include "model_config.h"
 #include "model_config.pb.h"
 #include "model_repository_manager.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 

@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -78,7 +78,8 @@ CompareWithRequiredEqualInputs(
     if (itr != required_equal_inputs.end()) {
       if (itr->second.first != nullptr) {
         // Make sure shape of input tensors is equal.
-        if (!CompareDims(itr->second.first->Shape(), input->Shape())) {
+        if (!triton::common::CompareDims(
+                itr->second.first->Shape(), input->Shape())) {
           return false;
         }
 

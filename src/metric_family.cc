@@ -61,6 +61,73 @@ MetricFamily::MetricFamily(
   kind_ = kind;
 }
 
+void*
+MetricFamily::Add(std::map<std::string, std::string> label_map)
+{
+  void* metric = nullptr;
+  switch (kind_) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      auto counter_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
+      auto counter_ptr = &counter_family_ptr->Add(label_map);
+      metric = reinterpret_cast<void*>(counter_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      auto gauge_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
+      auto gauge_ptr = &gauge_family_ptr->Add(label_map);
+      metric = reinterpret_cast<void*>(gauge_ptr);
+      break;
+    }
+    default:
+      throw std::invalid_argument(
+          "Unsupported family kind passed to Metric constructor.");
+  }
+
+  std::lock_guard<std::mutex> lk(mtx_);
+  ++metric_ref_cnt_[metric];
+  return metric;
+}
+
+void
+MetricFamily::Remove(void* metric)
+{
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    const auto it = metric_ref_cnt_.find(metric);
+    if (it != metric_ref_cnt_.end()) {
+      --it->second;
+      if (it->second == 0) {
+        metric_ref_cnt_.erase(it);
+      } else {
+        // Done as it is not the last reference
+        return;
+      }
+    }
+  }
+  switch (kind_) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      auto counter_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
+      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric);
+      counter_family_ptr->Remove(counter_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      auto gauge_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
+      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric);
+      gauge_family_ptr->Remove(gauge_ptr);
+      break;
+    }
+    default:
+      // Invalid kind should be caught in constructor
+      LOG_ERROR << "Unsupported kind in Metric destructor.";
+      break;
+  }
+}
+
 MetricFamily::~MetricFamily()
 {
   // NOTE: registry->Remove() not added until until prometheus-cpp v1.0 which
@@ -91,53 +158,12 @@ Metric::Metric(
         std::string(reinterpret_cast<const char*>(param->ValuePointer()));
   }
 
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      auto counter_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(
-              family_->Family());
-      auto counter_ptr = &counter_family_ptr->Add(label_map);
-      metric_ = reinterpret_cast<void*>(counter_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      auto gauge_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(
-              family_->Family());
-      auto gauge_ptr = &gauge_family_ptr->Add(label_map);
-      metric_ = reinterpret_cast<void*>(gauge_ptr);
-      break;
-    }
-    default:
-      throw std::invalid_argument(
-          "Unsupported family kind passed to Metric constructor.");
-  }
+  metric_ = family_->Add(label_map);
 }
 
 Metric::~Metric()
 {
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      auto counter_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(
-              family_->Family());
-      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
-      counter_family_ptr->Remove(counter_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      auto gauge_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(
-              family_->Family());
-      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
-      gauge_family_ptr->Remove(gauge_ptr);
-      break;
-    }
-    default:
-      // Invalid kind should be caught in constructor
-      LOG_ERROR << "Unsupported kind in Metric destructor.";
-      break;
-  }
+  family_->Remove(metric_);
 }
 
 TRITONSERVER_Error*

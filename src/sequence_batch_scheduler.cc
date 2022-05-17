@@ -243,8 +243,9 @@ SequenceBatchScheduler::GenerateInitialStateData(
   auto& initial_state_data = initial_state_pair.first->second;
 
   // Calculate total memory byte size
-  auto element_count = GetElementCount(initial_state.dims());
-  size_t dtype_byte_size = GetDataTypeByteSize(initial_state.data_type());
+  auto element_count = triton::common::GetElementCount(initial_state.dims());
+  size_t dtype_byte_size =
+      triton::common::GetDataTypeByteSize(initial_state.data_type());
   size_t total_byte_size = element_count * dtype_byte_size;
 
   // Custom handling for TYPE_BYTES
@@ -342,7 +343,7 @@ GetBooleanOverrideInputs(
   if (support_batching) {
     tensor_shape_with_batch_dim.push_back(1);
   }
-  const size_t size_p = GetDataTypeByteSize(tensor_datatype);
+  const size_t size_p = triton::common::GetDataTypeByteSize(tensor_datatype);
 
   auto true_p =
       std::make_shared<AllocatedMemory>(size_p, TRITONSERVER_MEMORY_CPU, 0);
@@ -987,7 +988,7 @@ SequenceBatch::SetControlTensors(
   // Set correlation ID control tensor if requested by the model.
   if (seq_slot_corrid_override_ != nullptr) {
     auto& seq_corr_id = seq_slot_corrid_override_;
-    size_t size_p = GetDataTypeByteSize(seq_corr_id->DType());
+    size_t size_p = triton::common::GetDataTypeByteSize(seq_corr_id->DType());
     if (seq_corr_id->DType() == inference::DataType::TYPE_STRING) {
       // 4 bytes for length of string plus pre-defined max string correlation id
       // length in bytes
@@ -1537,7 +1538,8 @@ OldestSequenceBatch::OldestSequenceBatch(
   // TODO: Provide appropriate request_cache_enable flag when caching
   // is enabled for sequence models.
   Status status = DynamicBatchScheduler::Create(
-      model_instance->Model(), model_instance, GetCpuNiceLevel(config),
+      model_instance->Model(), model_instance,
+      triton::common::GetCpuNiceLevel(config),
       true /* dynamic_batching_enabled */, config.max_batch_size(),
       enforce_equal_shape_tensors_, true /* preserve_ordering */,
       false /* response_cache_enable */, preferred_batch_sizes,

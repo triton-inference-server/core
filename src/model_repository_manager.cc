@@ -49,10 +49,6 @@
 #include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
 
-extern "C" {
-#include <b64/cdecode.h>
-}
-
 namespace triton { namespace core {
 
 const std::string&
@@ -130,11 +126,11 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                   JoinPath({temp_dir, kModelConfigPbTxt}), config));
               found_config = true;
             } else if (file->Name().rfind(file_prefix, 0) == 0) {
-              if (file->Type() != TRITONSERVER_PARAMETER_STRING) {
+              if (file->Type() != TRITONSERVER_PARAMETER_BYTES) {
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
                     (std::string("File parameter '") + file->Name() +
-                     "' must have string type for its value")
+                     "' must have bytes type for its value")
                         .c_str());
               }
 
@@ -160,19 +156,11 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                     MakeDirectory(dir, true /* recursive */));
               }
 
-              // Decode base64
-              base64_decodestate s;
-              base64_init_decodestate(&s);
-
-              // The decoded can not be larger than the input...
-              std::vector<char> binary(file->ValueString().size() + 1);
-              size_t decoded_size = base64_decode_block(
-                  file->ValueString().c_str(), file->ValueString().size(),
-                  binary.data(), &s);
-
               // write
-              RETURN_TRITONSERVER_ERROR_IF_ERROR(
-                  WriteBinaryFile(file_path, binary.data(), decoded_size));
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(WriteBinaryFile(
+                  file_path,
+                  reinterpret_cast<const char*>(file->ValuePointer()),
+                  file->ValueByteSize()));
             }
           }
           if (!found_config) {
@@ -472,8 +460,8 @@ class ModelRepositoryManager::ModelLifeCycle {
  public:
   static Status Create(
       InferenceServer* server, const double min_compute_capability,
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const HostPolicyCmdlineConfigMap& host_policy_map,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       std::unique_ptr<ModelLifeCycle>* life_cycle);
 
   ~ModelLifeCycle() { map_.clear(); }
@@ -557,8 +545,8 @@ class ModelRepositoryManager::ModelLifeCycle {
 
   ModelLifeCycle(
       const double min_compute_capability, InferenceServer* server,
-      const BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const HostPolicyCmdlineConfigMap& host_policy_map)
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
       : min_compute_capability_(min_compute_capability), server_(server),
         cmdline_config_map_(backend_cmdline_config_map),
         host_policy_map_(host_policy_map)
@@ -596,15 +584,15 @@ class ModelRepositoryManager::ModelLifeCycle {
   std::recursive_mutex map_mtx_;
 
   InferenceServer* server_;
-  const BackendCmdlineConfigMap cmdline_config_map_;
-  const HostPolicyCmdlineConfigMap host_policy_map_;
+  const triton::common::BackendCmdlineConfigMap cmdline_config_map_;
+  const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
 
 Status
 ModelRepositoryManager::ModelLifeCycle::Create(
     InferenceServer* server, const double min_compute_capability,
-    const BackendCmdlineConfigMap& backend_cmdline_config_map,
-    const HostPolicyCmdlineConfigMap& host_policy_map,
+    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     std::unique_ptr<ModelLifeCycle>* life_cycle)
 {
   std::unique_ptr<ModelLifeCycle> local_life_cycle(new ModelLifeCycle(
@@ -1388,10 +1376,10 @@ ModelRepositoryManager::Create(
     InferenceServer* server, const std::string& server_version,
     const std::set<std::string>& repository_paths,
     const std::set<std::string>& startup_models, const bool strict_model_config,
-    const BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const bool polling_enabled, const bool model_control_enabled,
     const double min_compute_capability,
-    const HostPolicyCmdlineConfigMap& host_policy_map,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
 {
   // The rest only matters if repository path is valid directory
