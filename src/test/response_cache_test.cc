@@ -25,8 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gtest/gtest.h"
 
-#include <thread>
 #include <random>
+#include <thread>
 #include "memory.h"
 #include "response_cache.h"
 #include "triton/common/logging.h"
@@ -325,7 +325,7 @@ reset_response(
     std::unique_ptr<tc::InferenceResponse>* response,
     tc::InferenceRequest* request)
 {
-  check_status(request->ResponseFactory().CreateResponse(response)); 
+  check_status(request->ResponseFactory().CreateResponse(response));
 }
 
 // Only support 1-Dimensional data to keep it simple
@@ -335,77 +335,89 @@ struct Tensor {
 };
 
 // Only support 1-Dimensional data to keep it simple
-std::unique_ptr<tc::InferenceResponse> GenerateResponse(const tc::InferenceRequest* request, inference::DataType dtype, TRITONSERVER_MemoryType memory_type, int64_t memory_type_id, const std::vector<Tensor>& outputs)
+std::unique_ptr<tc::InferenceResponse>
+GenerateResponse(
+    const tc::InferenceRequest* request, inference::DataType dtype,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
+    const std::vector<Tensor>& outputs)
 {
-
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response;
   check_status(request->ResponseFactory().CreateResponse(&response));
 
   std::cout << "Add output metadata to response object" << std::endl;
   for (const auto& tensor : outputs) {
-      if (tensor.data.size() == 0) {
-        std::cout << "[ERROR] Can't generate a request with no output data" << std::endl;
-        return nullptr;
-      }
+    if (tensor.data.size() == 0) {
+      std::cout << "[ERROR] Can't generate a request with no output data"
+                << std::endl;
+      return nullptr;
+    }
 
-      tc::InferenceResponse::Output* response_output = nullptr;
-      std::vector<int64_t> shape{1, -1};
-      shape[1] = tensor.data.size();
-      uint64_t output_size = sizeof(tensor.data[0]) * tensor.data.size();
-      std::cout << "Output size bytes: " << output_size << std::endl;
-      check_status(response->AddOutput(tensor.name, dtype, shape, &response_output));
+    tc::InferenceResponse::Output* response_output = nullptr;
+    std::vector<int64_t> shape{1, -1};
+    shape[1] = tensor.data.size();
+    uint64_t output_size = sizeof(tensor.data[0]) * tensor.data.size();
+    std::cout << "Output size bytes: " << output_size << std::endl;
+    check_status(
+        response->AddOutput(tensor.name, dtype, shape, &response_output));
 
-      std::cout << "Allocate output data buffer for response object" << std::endl;
-      void* buffer;
-      check_status(response_output->AllocateDataBuffer(
-          &buffer, output_size, &memory_type, &memory_type_id));
-      if (buffer == nullptr) {
-        std::cout << "[ERROR] buffer was nullptr;" << std::endl;
-        return nullptr;
-      }
-      // Copy data from output to response buffer
-      std::memcpy(buffer, tensor.data.data(), output_size);
+    std::cout << "Allocate output data buffer for response object" << std::endl;
+    void* buffer;
+    check_status(response_output->AllocateDataBuffer(
+        &buffer, output_size, &memory_type, &memory_type_id));
+    if (buffer == nullptr) {
+      std::cout << "[ERROR] buffer was nullptr;" << std::endl;
+      return nullptr;
+    }
+    // Copy data from output to response buffer
+    std::memcpy(buffer, tensor.data.data(), output_size);
   }
 
   return response;
 }
 
 // Only support 1-Dimensional data to keep it simple
-tc::InferenceRequest* GenerateRequest(tc::Model* model, uint64_t model_version, inference::DataType dtype, TRITONSERVER_MemoryType memory_type, int64_t memory_type_id, const std::vector<Tensor>& inputs)
+tc::InferenceRequest*
+GenerateRequest(
+    tc::Model* model, uint64_t model_version, inference::DataType dtype,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
+    const std::vector<Tensor>& inputs)
 {
-    auto request = new tc::InferenceRequest(model, model_version);
-    for (const auto& tensor : inputs) {
-      if (tensor.data.size() == 0) {
-        std::cout << "[ERROR] Can't generate a request with no input data" << std::endl;
-        return nullptr;
-      }
-
-      tc::InferenceRequest::Input* request_input = nullptr;
-      std::vector<int64_t> shape{1, -1};
-      shape[1] = tensor.data.size();
-      request->AddOriginalInput(tensor.name, dtype, shape, &request_input);
-      if (request_input == nullptr) {
-        std::cout << "[ERROR] request_input was nullptr" << std::endl;
-        return nullptr;
-      }
-
-      uint64_t input_size = sizeof(tensor.data[0]) * tensor.data.size();
-      request_input->AppendData(tensor.data.data(), input_size, memory_type, memory_type_id);
+  auto request = new tc::InferenceRequest(model, model_version);
+  for (const auto& tensor : inputs) {
+    if (tensor.data.size() == 0) {
+      std::cout << "[ERROR] Can't generate a request with no input data"
+                << std::endl;
+      return nullptr;
     }
-    // PrepareForInference for use of ImmutableInputs()
-    check_status(request->PrepareForInference());
-    return request;
+
+    tc::InferenceRequest::Input* request_input = nullptr;
+    std::vector<int64_t> shape{1, -1};
+    shape[1] = tensor.data.size();
+    request->AddOriginalInput(tensor.name, dtype, shape, &request_input);
+    if (request_input == nullptr) {
+      std::cout << "[ERROR] request_input was nullptr" << std::endl;
+      return nullptr;
+    }
+
+    uint64_t input_size = sizeof(tensor.data[0]) * tensor.data.size();
+    request_input->AppendData(
+        tensor.data.data(), input_size, memory_type, memory_type_id);
+  }
+  // PrepareForInference for use of ImmutableInputs()
+  check_status(request->PrepareForInference());
+  return request;
 }
 
-static std::vector<int> generate_data(size_t size)
+static std::vector<int>
+generate_data(size_t size)
 {
-    static std::default_random_engine generator;
-    static std::uniform_int_distribution<int> dist(0, 1000);
+  static std::default_random_engine generator;
+  static std::uniform_int_distribution<int> dist(0, 1000);
 
-    std::vector<int> data(size);
-    std::generate(data.begin(), data.end(), []() { return dist(generator); });
-    return data;
+  std::vector<int> data(size);
+  std::generate(data.begin(), data.end(), []() { return dist(generator); });
+  return data;
 }
 
 // Test Fixture
@@ -418,29 +430,34 @@ class RequestResponseCacheTest : public ::testing::Test {
     data1 = {5, 6, 7, 8};
     data2 = {9, 10, 11, 12};
 
-    Tensor tensor0 = { "input", data0 };
-    Tensor tensor1 = { "input", data1 };
-    Tensor tensor2 = { "input", data1 };
-    Tensor tensor3_0 = { "input0", data0 };
-    Tensor tensor3_1 = { "input1", data1 };
-    Tensor tensor4_0 = { "input0", data0 };
-    Tensor tensor4_1 = { "input1", data1 };
+    Tensor tensor0 = {"input", data0};
+    Tensor tensor1 = {"input", data1};
+    Tensor tensor2 = {"input", data1};
+    Tensor tensor3_0 = {"input0", data0};
+    Tensor tensor3_1 = {"input1", data1};
+    Tensor tensor4_0 = {"input0", data0};
+    Tensor tensor4_1 = {"input1", data1};
 
-    inputs0 = std::vector<Tensor>{ tensor0 };
-    inputs1 = std::vector<Tensor>{ tensor1 };
-    inputs2 = std::vector<Tensor>{ tensor2 };
-    inputs3 = std::vector<Tensor>{ tensor3_0, tensor3_1 };
-    inputs4 = std::vector<Tensor>{ tensor4_1, tensor4_0 };
+    inputs0 = std::vector<Tensor>{tensor0};
+    inputs1 = std::vector<Tensor>{tensor1};
+    inputs2 = std::vector<Tensor>{tensor2};
+    inputs3 = std::vector<Tensor>{tensor3_0, tensor3_1};
+    inputs4 = std::vector<Tensor>{tensor4_1, tensor4_0};
 
     // Create three requests with same input name, two with same data, one with
     // different data
-    request0 = GenerateRequest(model, model_version, dtype, memory_type, memory_type_id, inputs0);
-    request1 = GenerateRequest(model, model_version, dtype, memory_type, memory_type_id, inputs1);
-    request2 = GenerateRequest(model, model_version, dtype, memory_type, memory_type_id, inputs2);
+    request0 = GenerateRequest(
+        model, model_version, dtype, memory_type, memory_type_id, inputs0);
+    request1 = GenerateRequest(
+        model, model_version, dtype, memory_type, memory_type_id, inputs1);
+    request2 = GenerateRequest(
+        model, model_version, dtype, memory_type, memory_type_id, inputs2);
     // Create two requests with the same two inputs but inserted in different
     // order
-    request3 = GenerateRequest(model, model_version, dtype, memory_type, memory_type_id, inputs3);
-    request4 = GenerateRequest(model, model_version, dtype, memory_type, memory_type_id, inputs4);
+    request3 = GenerateRequest(
+        model, model_version, dtype, memory_type, memory_type_id, inputs3);
+    request4 = GenerateRequest(
+        model, model_version, dtype, memory_type, memory_type_id, inputs4);
     // Verify requests were created correctly
     ASSERT_NE(request0, nullptr);
     ASSERT_NE(request1, nullptr);
@@ -454,25 +471,28 @@ class RequestResponseCacheTest : public ::testing::Test {
       // Ensure data survives lifetime of tests. Automatically cleaned up
       random_data.emplace_back(data);
 
-      std::vector<Tensor> inputs{ Tensor{ "input", *data } };
-      auto request = GenerateRequest(model, model_version, dtype, memory_type, memory_type_id, inputs);
+      std::vector<Tensor> inputs{Tensor{"input", *data}};
+      auto request = GenerateRequest(
+          model, model_version, dtype, memory_type, memory_type_id, inputs);
       ASSERT_NE(request, nullptr);
       random_requests.emplace_back(request);
     }
 
     // Sample outputs
-    Tensor output_tensor0 = { "output", data0 };
+    Tensor output_tensor0 = {"output", data0};
     output0_size = sizeof(int) * data0.size();
-    outputs0 = std::vector<Tensor>{ output_tensor0 };
+    outputs0 = std::vector<Tensor>{output_tensor0};
     // Response of 100 ints, taking ~400 bytes at a time
     data100 = std::vector<int>(100, 0);
-    Tensor output_tensor100 = { "output", data100 };
-    outputs100 = std::vector<Tensor>{ output_tensor100 };
+    Tensor output_tensor100 = {"output", data100};
+    outputs100 = std::vector<Tensor>{output_tensor100};
 
     // Sample responses
-    response0 = GenerateResponse(request0, dtype, memory_type, memory_type_id, outputs0);
+    response0 = GenerateResponse(
+        request0, dtype, memory_type, memory_type_id, outputs0);
     ASSERT_NE(response0, nullptr);
-    response100 = GenerateResponse(request0, dtype, memory_type, memory_type_id, outputs100);
+    response100 = GenerateResponse(
+        request0, dtype, memory_type, memory_type_id, outputs100);
     ASSERT_NE(response100, nullptr);
   }
 
@@ -483,7 +503,9 @@ class RequestResponseCacheTest : public ::testing::Test {
     delete request2;
     delete request3;
     delete request4;
-    for (auto r : random_requests) { delete r; }
+    for (auto r : random_requests) {
+      delete r;
+    }
   }
 
  public:
@@ -544,12 +566,12 @@ TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
   tc::RequestResponseCache::Create(cache_size, &cache);
 
   // Set output data to be larger than cache size
-  std::vector<int> large_data(cache_size+1, 0);
-  std::cout << "Create large_response (larger than cache) of size: " << large_data.size() << std::endl;
-  std::vector<Tensor> large_outputs{
-    Tensor{"output", large_data}
-  };
-  auto large_response = GenerateResponse(request0, dtype, memory_type, memory_type_id, large_outputs);
+  std::vector<int> large_data(cache_size + 1, 0);
+  std::cout << "Create large_response (larger than cache) of size: "
+            << large_data.size() << std::endl;
+  std::vector<Tensor> large_outputs{Tensor{"output", large_data}};
+  auto large_response = GenerateResponse(
+      request0, dtype, memory_type, memory_type_id, large_outputs);
 
   std::cout << "Insert large_response into cache" << std::endl;
   auto status = cache->Insert(*large_response, request0);
@@ -572,9 +594,9 @@ TEST_F(RequestResponseCacheTest, TestEviction)
   std::cout << "Lookup random_requests[0] in empty cache" << std::endl;
   auto status = cache->Lookup(nullptr, random_requests[0]);
   // This hash not in cache yet
-  ASSERT_FALSE(status.IsOk()) << "hash [" +
-                                     std::to_string(random_requests[0]->CacheKey()) +
-                                     "] should not be in cache";
+  ASSERT_FALSE(status.IsOk())
+      << "hash [" + std::to_string(random_requests[0]->CacheKey()) +
+             "] should not be in cache";
   std::cout << "Insert response into cache" << std::endl;
   check_status(cache->Insert(*response100, random_requests[0]));
   cache_stats(cache);
@@ -625,8 +647,8 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
     threads[idx].join();
   }
 
-  // Cache size only has room for 2 entries of 100 ints, so we expect 2 entries and N-2
-  // evictions for N threads
+  // Cache size only has room for 2 entries of 100 ints, so we expect 2 entries
+  // and N-2 evictions for N threads
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u) << "NumEntries: " << cache->NumEntries();
   ASSERT_EQ(cache->NumEvictions(), (uint64_t)(thread_count - 2u))
@@ -764,7 +786,8 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   for (size_t idx = 0; idx < thread_count; idx++) {
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
-    check_status(random_requests[idx]->ResponseFactory().CreateResponse(&response));
+    check_status(
+        random_requests[idx]->ResponseFactory().CreateResponse(&response));
     responses.push_back(std::move(response));
     // Insert response for each thread
     cache->Insert(*response0, random_requests[idx]);
@@ -818,8 +841,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
       std::cout << "Check output buffer data from cache entry for thread ["
                 << idx << "]:" << std::endl;
       for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-        std::cout << cache_output[i] << " == " << data0[i]
-                  << std::endl;
+        std::cout << cache_output[i] << " == " << data0[i] << std::endl;
         ASSERT_EQ(cache_output[i], data0[i]);
       }
     }
