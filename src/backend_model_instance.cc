@@ -389,6 +389,9 @@ TritonModelInstance::GenerateWarmupData()
           max_zero_byte_size = std::max(batch_byte_size, max_zero_byte_size);
           break;
         case inference::ModelWarmup_Input::InputDataTypeCase::kRandomData: {
+          // Because Triton expects STRING type to be in special format
+          // (prepend 4 bytes to specify string length), so using zero data
+          // for simplicity (4 bytes * element count of zeros).
           if (input_meta.second.data_type() ==
               inference::DataType::TYPE_STRING) {
             max_zero_byte_size = std::max(batch_byte_size, max_zero_byte_size);
