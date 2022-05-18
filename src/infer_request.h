@@ -313,6 +313,8 @@ class InferenceRequest {
   void SetTimeoutMicroseconds(uint64_t t) { timeout_us_ = t; }
 
   uint64_t CacheKey() const { return cache_key_; }
+  // It is up to the user to update the cache_key_ if modifying any hashable
+  // fields of the request after cache_key_is_set_ has been set to true.
   void SetCacheKey(uint64_t key)
   {
     cache_key_ = key;

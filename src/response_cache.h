@@ -68,8 +68,10 @@ class RequestResponseCache {
   // Create the request/response cache object
   static Status Create(
       uint64_t cache_size, std::unique_ptr<RequestResponseCache>* cache);
-  // Hash inference request to access cache and store it in
-  // "request->CacheKey()", or return "request->CacheKey()" if already set
+  // Hash inference request for cache access and store it in "request" object.
+  // This will also be called internally in Lookup/Insert if the request hasn't
+  // already stored it's hash. It is up to the user to update the hash in the
+  // request if modifying any hashed fields of the request object after storing.
   // Return Status object indicating success or failure.
   Status HashAndSet(InferenceRequest* const request);
 
