@@ -610,17 +610,22 @@ DynamicBatchScheduler::DelegateResponse(
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->GetResponseCache();
           auto status = cache->Insert(*response, raw_request_ptr);
-          if (status.IsOk()) {
+          // Cache Hit
+          if (status.StatusCode() == Status::Code::ALREADY_EXISTS) {
+            // Do nothing as we already update cache hit statistics on Lookup
+          }
+          // Cache Miss or failure to insert
+          else {
 #ifdef TRITON_ENABLE_STATS
-            // Cache miss
+            // Update cache miss statistics even on failure to insert
+            // as we still spend time on lookup and attempting to insert
             raw_request_ptr->ReportStatisticsCacheMiss(reporter_.get());
 #endif  // TRITON_ENABLE_STATS
-          } else if (status.StatusCode() == Status::Code::ALREADY_EXISTS) {
-            /* Cache hit */
-          } else {
-            LOG_ERROR << "Failed to insert request_hash ["
-                      << raw_request_ptr->CacheKey()
-                      << "] into response cache: " << status.Message();
+            if (!status.IsOk()) {
+              LOG_ERROR << "Failed to insert request_hash ["
+                        << raw_request_ptr->CacheKey()
+                        << "] into response cache: " << status.Message();
+            }
           }
         }
 
