@@ -68,19 +68,22 @@ class RequestResponseCache {
   // Create the request/response cache object
   static Status Create(
       uint64_t cache_size, std::unique_ptr<RequestResponseCache>* cache);
-  // Hash inference request to access cache and store it in "key"
+  // Hash inference request for cache access and store it in "request" object.
+  // This will also be called internally in Lookup/Insert if the request hasn't
+  // already stored it's hash. It is up to the user to update the hash in the
+  // request if modifying any hashed fields of the request object after storing.
   // Return Status object indicating success or failure.
-  Status Hash(const InferenceRequest& request, uint64_t* key);
-  // Lookup 'key' in cache and return the inference response in 'ptr' on cache
-  // hit or nullptr on cache miss Return Status object indicating success or
-  // failure.
+  Status HashAndSet(InferenceRequest* const request);
+
+  // Lookup 'request' hash in cache and return the inference response in
+  // 'response' on cache hit or nullptr on cache miss
+  // Return Status object indicating success or failure.
   Status Lookup(
-      const uint64_t key, InferenceResponse* ptr, InferenceRequest* request);
+      InferenceResponse* const response, InferenceRequest* const request);
   // Insert response into cache, evict entries to make space if necessary
   // Return Status object indicating success or failure.
   Status Insert(
-      const uint64_t key, const InferenceResponse& response,
-      InferenceRequest* request);
+      const InferenceResponse& response, InferenceRequest* const request);
   // Evict entry from cache based on policy
   // Return Status object indicating success or failure.
   Status Evict();
@@ -159,14 +162,17 @@ class RequestResponseCache {
   // Update LRU ordering on lookup
   void UpdateLRU(std::unordered_map<uint64_t, CacheEntry>::iterator&);
   // Build CacheEntry from InferenceResponse
-  Status BuildCacheEntry(const InferenceResponse& response, CacheEntry* entry);
+  Status BuildCacheEntry(
+      const InferenceResponse& response, CacheEntry* const entry);
   // Build InferenceResponse from CacheEntry
   Status BuildInferenceResponse(
-      const CacheEntry& entry, InferenceResponse* response);
+      const CacheEntry& entry, InferenceResponse* const response);
   // Helper function to hash data buffers used by "input"
   Status HashInputBuffers(const InferenceRequest::Input* input, size_t* seed);
   // Helper function to hash each input in "request"
   Status HashInputs(const InferenceRequest& request, size_t* seed);
+  // Helper function to hash request and store it in "key"
+  Status Hash(const InferenceRequest& request, uint64_t* key);
 
   // Cache buffer
   void* buffer_;

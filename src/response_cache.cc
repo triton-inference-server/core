@@ -135,7 +135,7 @@ RequestResponseCache::~RequestResponseCache()
 
 Status
 RequestResponseCache::Lookup(
-    const uint64_t key, InferenceResponse* ptr, InferenceRequest* request)
+    InferenceResponse* const response, InferenceRequest* const request)
 {
   // Lock on cache lookup
   std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
@@ -148,6 +148,12 @@ RequestResponseCache::Lookup(
   // Capture start latency now and end latency when timer goes out of scope
   ScopedTimer timer(
       *request, total_lookup_latency_ns_, ScopedTimerType::LOOKUP);
+
+  // Hash the request and set cache key if it hasn't already been set
+  if (!request->CacheKeyIsSet()) {
+    RETURN_IF_ERROR(HashAndSet(request));
+  }
+  const uint64_t key = request->CacheKey();
 
   num_lookups_++;
   LOG_VERBOSE(1) << "Looking up key [" + std::to_string(key) + "] in cache.";
@@ -164,10 +170,10 @@ RequestResponseCache::Lookup(
   num_hits_++;
   LOG_VERBOSE(1) << "HIT for key [" + std::to_string(key) + "] in cache.";
 
-  // Populate passed-in "ptr" from cache entry
+  // Populate passed-in "response" from cache entry
   auto entry = iter->second;
   // Build InferenceResponse from CacheEntry
-  RETURN_IF_ERROR(BuildInferenceResponse(entry, ptr));
+  RETURN_IF_ERROR(BuildInferenceResponse(entry, response));
 
   // Update this key to front of LRU list
   UpdateLRU(iter);
@@ -178,8 +184,7 @@ RequestResponseCache::Lookup(
 
 Status
 RequestResponseCache::Insert(
-    const uint64_t key, const InferenceResponse& response,
-    InferenceRequest* request)
+    const InferenceResponse& response, InferenceRequest* const request)
 {
   // Lock on cache insertion
   std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
@@ -192,6 +197,12 @@ RequestResponseCache::Insert(
   // Capture start latency now and end latency when timer goes out of scope
   ScopedTimer timer(
       *request, total_insertion_latency_ns_, ScopedTimerType::INSERTION);
+
+  // Hash the request and set cache key if it hasn't already been set
+  if (!request->CacheKeyIsSet()) {
+    RETURN_IF_ERROR(HashAndSet(request));
+  }
+  const uint64_t key = request->CacheKey();
 
   // Exit early if key already exists in cache
   auto iter = cache_.find(key);
@@ -290,7 +301,7 @@ RequestResponseCache::UpdateLRU(
 
 Status
 RequestResponseCache::BuildCacheEntry(
-    const InferenceResponse& response, CacheEntry* entry)
+    const InferenceResponse& response, CacheEntry* const entry)
 {
   // Build cache entry data from response outputs
   for (const auto& response_output : response.Outputs()) {
@@ -302,7 +313,6 @@ RequestResponseCache::BuildCacheEntry(
     TRITONSERVER_MemoryType response_memory_type;
     int64_t response_memory_type_id;
     void* userp;
-    // TODO: How to handle different memory types? GPU vs CPU vs Pinned, etc.
     RETURN_IF_ERROR(response_output.DataBuffer(
         &response_buffer, &response_byte_size, &response_memory_type,
         &response_memory_type_id, &userp));
@@ -356,7 +366,7 @@ RequestResponseCache::BuildCacheEntry(
       }
 
       // Copy data from response buffer to cache entry output buffer
-      // TODO: Handle different memory types: GPU, SHM, Pinned, etc.
+      // TODO: Handle other memory types
       std::memcpy(cache_output.buffer_, response_buffer, response_byte_size);
 
       // Set output metadata
@@ -376,7 +386,7 @@ RequestResponseCache::BuildCacheEntry(
 
 Status
 RequestResponseCache::BuildInferenceResponse(
-    const CacheEntry& entry, InferenceResponse* response)
+    const CacheEntry& entry, InferenceResponse* const response)
 {
   if (response == nullptr) {
     return Status(Status::Code::INTERNAL, "invalid response ptr passed in");
@@ -386,8 +396,7 @@ RequestResponseCache::BuildInferenceResponse(
   {
     std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
 
-    // TODO: What should we do if [response] already contains
-    //       some outputs? Currently it will just append outputs
+    // Inference response outputs should be empty so we can append to them
     if (response->Outputs().size() != 0) {
       return Status(
           Status::Code::INTERNAL,
@@ -406,7 +415,6 @@ RequestResponseCache::BuildInferenceResponse(
             "InferenceResponse::Output pointer as nullptr");
       }
 
-      // TODO: Assuming CPU memory only for now
       TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
       int64_t memory_type_id = 0;
 
@@ -428,9 +436,7 @@ RequestResponseCache::BuildInferenceResponse(
             Status::Code::INTERNAL, "failed to allocate buffer for output '" +
                                         cache_output.name_ + "'");
       }
-
-      // TODO: No out of scope issue here? With underlying
-      //       allocated_buffer_ == buffer ?
+      // Copy cached output buffer to allocated response output buffer
       std::memcpy(buffer, cache_output.buffer_, cache_output.buffer_size_);
 
       // TODO: Add field to InferenceResponse to indicate this was from cache
@@ -504,6 +510,15 @@ RequestResponseCache::Hash(const InferenceRequest& request, uint64_t* key)
   boost::hash_combine(seed, request.ActualModelVersion());
   RETURN_IF_ERROR(HashInputs(request, &seed));
   *key = static_cast<uint64_t>(seed);
+  return Status::Success;
+}
+
+Status
+RequestResponseCache::HashAndSet(InferenceRequest* const request)
+{
+  uint64_t key = 0;
+  RETURN_IF_ERROR(Hash(*request, &key));
+  request->SetCacheKey(key);
   return Status::Success;
 }
 

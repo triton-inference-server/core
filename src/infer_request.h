@@ -313,7 +313,14 @@ class InferenceRequest {
   void SetTimeoutMicroseconds(uint64_t t) { timeout_us_ = t; }
 
   uint64_t CacheKey() const { return cache_key_; }
-  void SetCacheKey(uint64_t key) { cache_key_ = key; }
+  // It is up to the user to update the cache_key_ if modifying any hashable
+  // fields of the request after cache_key_is_set_ has been set to true.
+  void SetCacheKey(uint64_t key)
+  {
+    cache_key_ = key;
+    cache_key_is_set_ = true;
+  }
+  bool CacheKeyIsSet() const { return cache_key_is_set_; }
 
 #ifdef TRITON_ENABLE_TRACING
   const std::shared_ptr<InferenceTraceProxy>& Trace() const { return trace_; }
@@ -700,7 +707,10 @@ class InferenceRequest {
   uint32_t batch_size_;
   uint32_t priority_;
   uint64_t timeout_us_;
-  uint64_t cache_key_;
+  uint64_t cache_key_ = 0;
+  // Helper to determine if request was successfully hashed
+  // and cache_key_ field is valid
+  bool cache_key_is_set_ = false;
 
   std::unordered_map<std::string, Input> original_inputs_;
   std::unordered_map<std::string, std::shared_ptr<Input>> override_inputs_;
