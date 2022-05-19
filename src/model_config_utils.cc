@@ -950,7 +950,9 @@ AutoCompleteBackendFields(
   if (config->backend().empty()) {
     if (config->default_model_filename() == kPythonFilename) {
       config->set_backend(kPythonBackend);
-    } else if (config->default_model_filename().empty() && has_version) {
+    } else if (
+        config->platform().empty() &&
+        config->default_model_filename().empty() && has_version) {
       if (version_dir_content.find(kPythonFilename) !=
           version_dir_content.end()) {
         config->set_backend(kPythonBackend);
