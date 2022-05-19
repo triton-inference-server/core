@@ -95,13 +95,27 @@ WarmupResponseComplete(
     TRITONSERVER_InferenceResponse* iresponse, const uint32_t flags,
     void* userp)
 {
+  auto res_pair = reinterpret_cast<
+      std::pair<std::promise<void>, std::vector<std::string>*>*>(userp);
   if (iresponse != nullptr) {
-    LOG_TRITONSERVER_ERROR(
-        TRITONSERVER_InferenceResponseError(iresponse), "warmup error");
+    auto err = TRITONSERVER_InferenceResponseError(iresponse);
+    if (err != nullptr) {
+      // The error vector is shared by all requests in the batch for now
+      static std::mutex res_mtx;
+      {
+        std::lock_guard<std::mutex> lk(res_mtx);
+        res_pair->second->emplace_back(TRITONSERVER_ErrorMessage(err));
+      }
+      TRITONSERVER_ErrorDelete(err);
+    }
     // Just delete the response, warmup doesn't check for correctness
     LOG_TRITONSERVER_ERROR(
         TRITONSERVER_InferenceResponseDelete(iresponse),
         "deleting warmup response");
+  }
+  // Last response
+  if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) != 0) {
+    res_pair->first.set_value();
   }
 }
 
@@ -110,7 +124,7 @@ WarmupRequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
   if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
-    TRITONSERVER_InferenceRequestDelete(request);
+    // Don't need to release request here, it is managed in WarmupData
     if (userp != nullptr) {
       auto warmup_promise = reinterpret_cast<std::promise<void>*>(userp);
       warmup_promise->set_value();
@@ -296,8 +310,8 @@ TritonModelInstance::CreateInstance(
     RETURN_IF_ERROR(local_instance->GenerateWarmupData());
     RETURN_IF_ERROR(model->Server()->GetRateLimiter()->RegisterModelInstance(
         local_instance.get(), rate_limiter_config));
-    local_instance->SetBackendThread(
-        kind, device_id, device_blocking, device_to_thread_map);
+    RETURN_IF_ERROR(local_instance->SetBackendThread(
+        kind, device_id, device_blocking, device_to_thread_map));
   }
 
   RETURN_IF_ERROR(model->AddInstance(std::move(local_instance), passive));
@@ -329,7 +343,7 @@ TritonModelInstance::SetBackendThread(
   } else {
     triton_backend_thread_->AddModelInstance(this);
   }
-  triton_backend_thread_->InitAndWarmUpModelInstance(this);
+  RETURN_IF_ERROR(triton_backend_thread_->InitAndWarmUpModelInstance(this));
 
   return Status::Success;
 }
@@ -375,6 +389,9 @@ TritonModelInstance::GenerateWarmupData()
           max_zero_byte_size = std::max(batch_byte_size, max_zero_byte_size);
           break;
         case inference::ModelWarmup_Input::InputDataTypeCase::kRandomData: {
+          // Because Triton expects STRING type to be in special format
+          // (prepend 4 bytes to specify string length), so using zero data
+          // for simplicity (4 bytes * element count of zeros).
           if (input_meta.second.data_type() ==
               inference::DataType::TYPE_STRING) {
             max_zero_byte_size = std::max(batch_byte_size, max_zero_byte_size);
@@ -409,7 +426,10 @@ TritonModelInstance::GenerateWarmupData()
       random_buffer[offset] = rand();
     }
 
-    // Prepare the inference request for the specified sample.
+    // Prepare the inference request for the specified sample, not using
+    // in-process C API because the request doesn't go through the same pipeline
+    // (i.e. no normalization / scheduler) so we need to prepare the request to
+    // the state just before calling instance execute function.
     for (size_t cnt = 0; cnt < warmup_setting.batch_size(); cnt++) {
       warmup_data.requests_.emplace_back(
           new InferenceRequest(model_, model_->Version()));
@@ -507,9 +527,6 @@ TritonModelInstance::GenerateWarmupData()
       for (const auto& sp : input_sps) {
         RETURN_IF_ERROR(lrequest->AddOverrideInput(sp));
       }
-
-      RETURN_IF_ERROR(lrequest->SetResponseCallback(
-          &warmup_allocator, nullptr, WarmupResponseComplete, nullptr));
     }
   }
 
@@ -547,20 +564,27 @@ TritonModelInstance::Initialize()
 Status
 TritonModelInstance::WarmUp()
 {
+  Status warmup_status = Status::Success;
   for (auto& sample : warmup_samples_) {
     LOG_VERBOSE(1) << "model '" << sample.requests_.back()->ModelName()
                    << "' instance " << Name() << " is running warmup sample '"
                    << sample.sample_name_ << "'";
 
-    std::promise<void> warmup_promise;
-    bool first_sample = true;
+    // request/response complete is asynchronous so use promise to wait for
+    // completion. Also collects error message from the responses in a vector.
+    std::vector<std::promise<void>> request_complete(sample.requests_.size());
+    std::vector<std::string> response_errors;
+    std::vector<std::pair<std::promise<void>, std::vector<std::string>*>>
+        response_complete(sample.requests_.size());
 
-    std::vector<TRITONBACKEND_Request*> triton_requests(1024);
-    triton_requests.clear();
-    for (auto& request : sample.requests_) {
-      request->SetReleaseCallback(
-          WarmupRequestComplete, first_sample ? &warmup_promise : nullptr);
-      first_sample = false;
+    std::vector<TRITONBACKEND_Request*> triton_requests;
+    for (size_t i = 0; i < sample.requests_.size(); ++i) {
+      auto& request = sample.requests_[i];
+      request->SetReleaseCallback(WarmupRequestComplete, &request_complete[i]);
+      response_complete[i].second = &response_errors;
+      request->SetResponseCallback(
+          &warmup_allocator, nullptr, WarmupResponseComplete,
+          &response_complete[i]);
       // Capture timestamp before run to avoid incorrect accumulation from
       // sequential warmup runs
 #ifdef TRITON_ENABLE_STATS
@@ -568,15 +592,36 @@ TritonModelInstance::WarmUp()
 #endif  // TRITON_ENABLE_STATS
       request->CaptureQueueStartNs();
       triton_requests.push_back(
-          reinterpret_cast<TRITONBACKEND_Request*>(request.release()));
+          reinterpret_cast<TRITONBACKEND_Request*>(request.get()));
     }
 
     Execute(triton_requests);
 
-    warmup_promise.get_future().get();
+    // Wait for warmup sample to complete and check error
+    for (size_t i = 0; i < sample.requests_.size(); ++i) {
+      request_complete[i].get_future().get();
+      response_complete[i].first.get_future().get();
+    }
+    if (response_errors.size() != 0) {
+      std::string err_str =
+          "failed to run warmup sample '" + sample.sample_name_ + "': ";
+      for (const auto& error : response_errors) {
+        err_str += (error + "; ");
+      }
+      // End warmup as soon as there is failing sample
+      LOG_VERBOSE(1) << "model '" << sample.requests_.back()->ModelName()
+                     << "' instance " << Name()
+                     << " failed to run warmup sample '" << sample.sample_name_
+                     << "'";
+      warmup_status = Status(Status::Code::INVALID_ARG, err_str);
+      break;
+    }
   }
 
-  return Status::Success;
+  // Done with the warmup samples
+  warmup_samples_.clear();
+
+  return warmup_status;
 }
 
 void

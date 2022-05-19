@@ -153,6 +153,9 @@ class TritonModelInstance {
     WarmupData(const std::string& sample_name) : sample_name_(sample_name) {}
 
     std::string sample_name_;
+    // Using a batch of requests to satisfy batch size, this provides better
+    // alignment on the batch expected by the model, especially for sequence
+    // model.
     std::vector<std::unique_ptr<InferenceRequest>> requests_;
 
     // Placeholder for input data
