@@ -91,7 +91,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 9
+#define TRITONBACKEND_API_VERSION_MINOR 10
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -974,12 +974,12 @@ TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config);
 
 /// Set the model configuration in Triton server. Only the inputs, outputs,
-/// and max batch size can be changed. Any other changes to the model
-/// configuration will be ignored by Triton. This function can only be called
-/// from TRITONBACKEND_ModelInitialize, calling in any other context will result
-/// in an error being returned. The function does not take ownership of the
-/// message object and so the caller should call TRITONSERVER_MessageDelete to
-/// release the object once the function returns.
+/// max batch size, and dynamic batcher can be changed. Any other changes to the
+/// model configuration will be ignored by Triton. This function can only be
+/// called from TRITONBACKEND_ModelInitialize, calling in any other context will
+/// result in an error being returned. The function does not take ownership of
+/// the message object and so the caller should call TRITONSERVER_MessageDelete
+/// to release the object once the function returns.
 ///
 /// \param model The model.
 /// \param config_version The format version of the model configuration.
