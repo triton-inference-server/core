@@ -330,6 +330,9 @@ TritonModel::UpdateModelConfig(
   auto outputs_config = config.mutable_output();
   *outputs_config = updated_config.output();
 
+  auto dynamic_batching_config = config.mutable_dynamic_batching();
+  *dynamic_batching_config = updated_config.dynamic_batching();
+
   RETURN_IF_ERROR(SetModelConfig(config));
   return Status::Success;
 }
