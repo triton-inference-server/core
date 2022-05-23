@@ -974,7 +974,7 @@ TRITONBACKEND_ModelAutoCompleteConfig(
     TRITONBACKEND_Model* model, bool* auto_complete_config);
 
 /// Set the model configuration in Triton server. Only the inputs, outputs,
-/// max batch size, and dynamic batcher can be changed. Any other changes to the
+/// max batch size, and scheduling choice can be changed. Any other changes to the
 /// model configuration will be ignored by Triton. This function can only be
 /// called from TRITONBACKEND_ModelInitialize, calling in any other context will
 /// result in an error being returned. The function does not take ownership of

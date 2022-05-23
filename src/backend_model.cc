@@ -330,7 +330,6 @@ TritonModel::UpdateModelConfig(
   auto outputs_config = config.mutable_output();
   *outputs_config = updated_config.output();
 
-  // TODO: update docs
   if (config.scheduling_choice_case() != updated_config.scheduling_choice_case()) {
     if (updated_config.has_dynamic_batching()) {
       auto dynamic_batching_config = config.mutable_dynamic_batching();
