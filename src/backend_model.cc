@@ -330,8 +330,22 @@ TritonModel::UpdateModelConfig(
   auto outputs_config = config.mutable_output();
   *outputs_config = updated_config.output();
 
-  auto dynamic_batching_config = config.mutable_dynamic_batching();
-  *dynamic_batching_config = updated_config.dynamic_batching();
+  // TODO: update docs
+  if (config.scheduling_choice_case() != updated_config.scheduling_choice_case()) {
+    if (updated_config.has_dynamic_batching()) {
+      auto dynamic_batching_config = config.mutable_dynamic_batching();
+      *dynamic_batching_config = updated_config.dynamic_batching();
+    } else if (updated_config.has_sequence_batching()) {
+      auto sequence_batching_config = config.mutable_sequence_batching();
+      *sequence_batching_config = updated_config.sequence_batching();
+    } else if (updated_config.has_ensemble_scheduling()) {
+      auto ensemble_scheduling_config = config.mutable_ensemble_scheduling();
+      *ensemble_scheduling_config = updated_config.ensemble_scheduling();
+    } else {
+      // updated_config is empty
+      config.clear_scheduling_choice();
+    }
+  }
 
   RETURN_IF_ERROR(SetModelConfig(config));
   return Status::Success;
