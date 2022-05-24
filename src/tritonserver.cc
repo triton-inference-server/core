@@ -1258,7 +1258,6 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
   return nullptr;  // Success
 }
 
-// Set verbose logging level. Level zero disables verbose logging.
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogFormat(
     TRITONSERVER_ServerOptions* options, const TRITONSERVER_LogFormat format)
