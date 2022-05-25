@@ -116,7 +116,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-      ${GTEST_INCLUDE_DIRS}
+      ${GTEST_INCLUDE_DIR}
       ${CNMEM_PATH}/include
   )
 
@@ -180,7 +180,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${GTEST_INCLUDE_DIRS}
+    ${GTEST_INCLUDE_DIR}
 )
 
 target_link_libraries(
@@ -227,7 +227,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-      ${GTEST_INCLUDE_DIRS}
+      ${GTEST_INCLUDE_DIR}
       ${CNMEM_PATH}/include
   )
 
@@ -294,7 +294,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-      ${GTEST_INCLUDE_DIRS}
+      ${GTEST_INCLUDE_DIR}
       ${CNMEM_PATH}/include
   )
 
@@ -356,7 +356,7 @@ set_target_properties(
 target_include_directories(
   async_work_queue_test
   PRIVATE
-    ${GTEST_INCLUDE_DIRS}
+    ${GTEST_INCLUDE_DIR}
 )
 
 target_link_libraries(
@@ -405,7 +405,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${GTEST_INCLUDE_DIRS}
+    ${GTEST_INCLUDE_DIR}
 )
 
 target_link_libraries(
@@ -450,7 +450,7 @@ if(${TRITON_ENABLE_METRICS})
     PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-      ${GTEST_INCLUDE_DIRS}
+      ${GTEST_INCLUDE_DIR}
   )
 
   target_compile_definitions(
@@ -500,7 +500,7 @@ target_include_directories(
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${GTEST_INCLUDE_DIRS}
+    ${GTEST_INCLUDE_DIR}
 )
 
 target_link_libraries(

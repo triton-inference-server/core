@@ -23,8 +23,9 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "gtest/gtest.h"
 
+#include "repo_agent.h"
+#include <gtest/gtest.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fstream>
@@ -33,7 +34,6 @@
 #include <map>
 #include <memory>
 #include "filesystem.h"
-#include "repo_agent.h"
 #include "server_message.h"
 #include "shared_library.h"
 
