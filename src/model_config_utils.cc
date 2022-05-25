@@ -966,6 +966,33 @@ AutoCompleteBackendFields(
     return Status::Success;
   }
 
+  // Custom Backend
+  // For now only do the narrowest case which is no info given in the model config
+  if (config->backend().empty() && config->platform().empty() && config->default_model_filename().empty()) {
+    LOG_VERBOSE(1) << "Could not infer triton supported backend so attempting autofill of custom backend.";
+    // Since we lazily load the backends, we let the model tell us what backend to load. 
+    // We must assume that if the model name conforms to the required shape, 
+    // we parse the backend name out of the model file name. i.e. model.identity
+    // will set the backend to "identity".
+    // 
+    // Question: Do we need to confirm all models in this path have the same 
+    // backend or can we have different versions of the model load different backends?
+    // Answer: We cannot load multiple backends for different model versions. The config.pbtxt
+    // is under the model_name scope and as such the defined backend in that config file 
+    // will be the configuration for all versions (less any version specific configuration 
+    // we allow).
+    // 
+    // We can check for conflicts in the model naming since the config file didn't provide 
+    // us this information.
+    const std::string delimiter = ".";
+    size_t pos = model_name.find(delimeter, 0);
+    if (pos == std::string::npos) {
+      return Status(INVALID_ARG, ("Invalid model name: Could not determine backend for model '" + model_name + "' with no backend in model configuration. Expected model name of the form 'model.<backend_name>'."));
+    }
+    const std::string backend_name = model_name.substr(pos, std::string::npos);
+    config.set_backend(backend_name);
+  }
+
   return Status::Success;
 }
 
