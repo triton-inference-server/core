@@ -974,16 +974,6 @@ AutoCompleteBackendFields(
     // We must assume that if the model name conforms to the required shape, 
     // we parse the backend name out of the model file name. i.e. model.identity
     // will set the backend to "identity".
-    // 
-    // Question: Do we need to confirm all models in this path have the same 
-    // backend or can we have different versions of the model load different backends?
-    // Answer: We cannot load multiple backends for different model versions. The config.pbtxt
-    // is under the model_name scope and as such the defined backend in that config file 
-    // will be the configuration for all versions (less any version specific configuration 
-    // we allow).
-    // 
-    // We can check for conflicts in the model naming since the config file didn't provide 
-    // us this information.
     const std::string delimeter = ".";
     size_t pos = model_name.find(delimeter, 0);
     if (pos == std::string::npos) {
