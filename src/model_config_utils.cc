@@ -987,7 +987,7 @@ AutoCompleteBackendFields(
     const std::string delimeter = ".";
     size_t pos = model_name.find(delimeter, 0);
     if (pos == std::string::npos) {
-      return Status(Error::INVALID_ARG, ("Invalid model name: Could not determine backend for model '" + model_name + "' with no backend in model configuration. Expected model name of the form 'model.<backend_name>'."));
+      return Status(triton::common::Error::INVALID_ARG, ("Invalid model name: Could not determine backend for model '" + model_name + "' with no backend in model configuration. Expected model name of the form 'model.<backend_name>'."));
     }
     const std::string backend_name = model_name.substr(pos, std::string::npos);
     config->set_backend(backend_name);
