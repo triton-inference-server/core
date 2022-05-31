@@ -340,19 +340,16 @@ TritonModel::UpdateModelConfig(
     } else if (updated_config.has_ensemble_scheduling()) {
       auto ensemble_scheduling_config = config.mutable_ensemble_scheduling();
       *ensemble_scheduling_config = updated_config.ensemble_scheduling();
-    } else {
-      // updated_config is empty
-      config.clear_scheduling_choice();
-    }
+    }  // else do nothing
   } else if (
       config.scheduling_choice_case() !=
       updated_config.scheduling_choice_case()) {
     return Status(
         triton::common::Error::Code::INTERNAL,
-        (std::string("Failed to overwrite scheduling choice, ") +
-         std::to_string(updated_config.scheduling_choice_case()) +
-         std::string(", from updated config to config, ") +
-         std::to_string(config.scheduling_choice_case()))
+        (std::string("Cannot update scheduling choice from ") +
+         std::to_string(config.scheduling_choice_case()) + std::string(" to ") +
+         std::to_string(config.scheduling_choice_case()) +
+         std::string(" when auto-completing."))
             .c_str());
   }  // else do nothing
 
