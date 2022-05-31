@@ -344,7 +344,11 @@ TritonModel::UpdateModelConfig(
       // updated_config is empty
       config.clear_scheduling_choice();
     }
-  }
+  } else if (config.scheduling_choice_case() != updated_config.scheduling_choice_case()){
+    return Status(triton::common::Error::Code::INTERNAL,
+      (std::string("Failed to overwrite scheduling choice, ") + std::to_string(updated_config.scheduling_choice_case()) + 
+      std::string(", from updated config to config, ") + std::to_string(config.scheduling_choice_case())).c_str());
+  } // else do nothing
 
   RETURN_IF_ERROR(SetModelConfig(config));
   return Status::Success;
