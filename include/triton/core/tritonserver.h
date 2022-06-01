@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 13
+#define TRITONSERVER_API_VERSION_MINOR 14
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -256,6 +256,19 @@ typedef enum TRITONSERVER_loglevel_enum {
   TRITONSERVER_LOG_ERROR,
   TRITONSERVER_LOG_VERBOSE
 } TRITONSERVER_LogLevel;
+
+///
+/// Format of logging.
+///
+/// TRITONSERVER_LOG_DEFAULT: the log severity (L) and timestamp will be
+/// logged as "LMMDD hh:mm:ss.ssssss".
+///
+/// TRITONSERVER_LOG_ISO8601: the log format will be "YYYY-MM-DDThh:mm:ssZ L".
+///
+typedef enum TRITONSERVER_logformat_enum {
+  TRITONSERVER_LOG_DEFAULT,
+  TRITONSERVER_LOG_ISO8601
+} TRITONSERVER_LogFormat;
 
 /// Is a log level enabled?
 ///
@@ -1761,6 +1774,15 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogWarn(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
     TRITONSERVER_ServerOptions* options, bool log);
+
+/// Set the logging format.
+///
+/// \param options The server options object.
+/// \param format The logging format.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogFormat(
+    TRITONSERVER_ServerOptions* options, const TRITONSERVER_LogFormat format);
 
 /// Set verbose logging level. Level zero disables verbose logging.
 ///

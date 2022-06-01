@@ -1259,6 +1259,27 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogFormat(
+    TRITONSERVER_ServerOptions* options, const TRITONSERVER_LogFormat format)
+{
+#ifdef TRITON_ENABLE_LOGGING
+  // Logging is global for now...
+  switch (format) {
+    case TRITONSERVER_LOG_DEFAULT:
+      LOG_SET_FORMAT(triton::common::Logger::Format::kDEFAULT);
+      break;
+    case TRITONSERVER_LOG_ISO8601:
+      LOG_SET_FORMAT(triton::common::Logger::Format::kISO8601);
+      break;
+  }
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
+#endif             // TRITON_ENABLE_LOGGING
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetrics(
     TRITONSERVER_ServerOptions* options, bool metrics)
 {
