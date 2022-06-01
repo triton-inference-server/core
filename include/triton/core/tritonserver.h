@@ -263,7 +263,7 @@ typedef enum TRITONSERVER_loglevel_enum {
 /// TRITONSERVER_LOG_DEFAULT: the log severity (L) and timestamp will be
 /// logged as "LMMDD hh:mm:ss.ssssss".
 ///
-/// TRITONSERVER_LOG_ISO8601: the log format will be "YYYY-MM-DDThh:mm:ss L".
+/// TRITONSERVER_LOG_ISO8601: the log format will be "YYYY-MM-DDThh:mm:ssZ L".
 ///
 typedef enum TRITONSERVER_logformat_enum {
   TRITONSERVER_LOG_DEFAULT,
