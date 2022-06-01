@@ -946,6 +946,26 @@ AutoCompleteBackendFields(
     return Status::Success;
   }
 
+  // Python
+  if (config->backend().empty()) {
+    if (config->default_model_filename() == kPythonFilename) {
+      config->set_backend(kPythonBackend);
+    } else if (
+        config->platform().empty() &&
+        config->default_model_filename().empty() && has_version) {
+      if (version_dir_content.find(kPythonFilename) !=
+          version_dir_content.end()) {
+        config->set_backend(kPythonBackend);
+      }
+    }
+  }
+  if (config->backend() == kPythonBackend) {
+    if (config->default_model_filename().empty()) {
+      config->set_default_model_filename(kPythonFilename);
+    }
+    return Status::Success;
+  }
+
   return Status::Success;
 }
 
