@@ -786,8 +786,9 @@ GetNormalizedModelConfig(
 
 Status
 SetDefaultInstanceCount(
-    ::inference::ModelInstanceGroup* group, std::string& backend)
+    ::inference::ModelInstanceGroup* group, const std::string& backend)
 {
+  const int default_cpu_instance_count = 2;
   if (group->kind() == inference::ModelInstanceGroup::KIND_CPU) {
     // Some backends don't perform well with multiple
     // model instances such as pytorch so we want to
@@ -796,13 +797,13 @@ SetDefaultInstanceCount(
     if (backend.compare(kPyTorchBackend) == 0) {
       group->set_count(1);
     } else {
-      group->set_count(2)
+      group->set_count(default_cpu_instance_count);
     }
   } else {
     group->set_count(1);
   }
 
-  return nullptr;  // Success
+  return Status::Success;
 }
 
 Status

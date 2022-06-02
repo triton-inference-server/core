@@ -86,6 +86,14 @@ Status GetNormalizedModelConfig(
     const std::string& model_name, const std::string& path,
     const double min_compute_capability, inference::ModelConfig* config);
 
+/// Auto-complete the instance count based on instance kind and backend name.
+/// For KIND_CPU the default instance count is 2 except for the pytorch backend.
+/// \param group The instance group to set the count for.
+/// \param backned The backend name to check against.
+/// \return The error status.
+Status SetDefaultInstanceCount(
+    ::inference::ModelInstanceGroup* group, const std::string& backend);
+
 /// Auto-complete backend related fields (platform, backend and default model
 /// filename) if not set, note that only Triton recognized backends will be
 /// checked.
