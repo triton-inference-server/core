@@ -330,6 +330,29 @@ TritonModel::UpdateModelConfig(
   auto outputs_config = config.mutable_output();
   *outputs_config = updated_config.output();
 
+  if (!config.scheduling_choice_case()) {
+    if (updated_config.has_dynamic_batching()) {
+      auto dynamic_batching_config = config.mutable_dynamic_batching();
+      *dynamic_batching_config = updated_config.dynamic_batching();
+    } else if (updated_config.has_sequence_batching()) {
+      auto sequence_batching_config = config.mutable_sequence_batching();
+      *sequence_batching_config = updated_config.sequence_batching();
+    } else if (updated_config.has_ensemble_scheduling()) {
+      auto ensemble_scheduling_config = config.mutable_ensemble_scheduling();
+      *ensemble_scheduling_config = updated_config.ensemble_scheduling();
+    }  // else do nothing
+  } else if (
+      config.scheduling_choice_case() !=
+      updated_config.scheduling_choice_case()) {
+    return Status(
+        triton::common::Error::Code::INTERNAL,
+        (std::string("Cannot update scheduling choice from ") +
+         std::to_string(config.scheduling_choice_case()) + std::string(" to ") +
+         std::to_string(config.scheduling_choice_case()) +
+         std::string(" when auto-completing."))
+            .c_str());
+  }  // else do nothing
+
   RETURN_IF_ERROR(SetModelConfig(config));
   return Status::Success;
 }
