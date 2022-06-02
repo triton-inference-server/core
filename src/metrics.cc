@@ -389,7 +389,12 @@ Metrics::PollDcgmMetrics()
     return false;
   }
 
-  dcgmUpdateAllFields(dcgm_metadata_.dcgm_handle_, 1 /* wait for update*/);
+  if (dcgmUpdateAllFields(
+          dcgm_metadata_.dcgm_handle_, 1 /* wait for update*/) != DCGM_ST_OK) {
+    LOG_WARNING << "error polling GPU metrics, GPU metrics will not be "
+                << "updated";
+    return false;
+  }
   for (unsigned int didx = 0;
        didx < dcgm_metadata_.available_cuda_gpu_ids_.size(); ++didx) {
     uint32_t cuda_id = dcgm_metadata_.available_cuda_gpu_ids_[didx];
@@ -461,6 +466,7 @@ Metrics::PollDcgmMetrics()
           gpu_energy_consumption_[didx]->Increment(
               (double)(energy - dcgm_metadata_.last_energy_[didx]) * 0.001);
           dcgm_metadata_.last_energy_[didx] = energy;
+          LOG_VERBOSE(1) << "[DO NOT MERGE] Debug: current energy: " << energy;
         } else {
           dcgm_metadata_.energy_fail_cnt_[didx]++;
           energy = 0;
