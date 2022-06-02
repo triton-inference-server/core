@@ -768,7 +768,7 @@ GetNormalizedModelConfig(
 
       // Count
       if (group.count() < 1) {
-        group.set_count(1);
+        RETURN_IF_ERROR(SetDefaultInstanceCount(&group, config->backend()));
       }
 
       // GPUs
@@ -782,6 +782,27 @@ GetNormalizedModelConfig(
   }
 
   return Status::Success;
+}
+
+Status
+SetDefaultInstanceCount(
+    ::inference::ModelInstanceGroup* group, std::string& backend)
+{
+  if (group->kind() == inference::ModelInstanceGroup::KIND_CPU) {
+    // Some backends don't perform well with multiple
+    // model instances such as pytorch so we want to
+    // default to a different value. Add other similar backends
+    // to this check.
+    if (backend.compare(kPyTorchBackend) == 0) {
+      group->set_count(1);
+    } else {
+      group->set_count(2)
+    }
+  } else {
+    group->set_count(1);
+  }
+
+  return nullptr;  // Success
 }
 
 Status
