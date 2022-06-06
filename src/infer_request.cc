@@ -261,11 +261,11 @@ InferenceRequest::RespondIfError(
   std::unique_ptr<InferenceResponse> response;
   LOG_STATUS_ERROR(
       request->response_factory_.CreateResponse(&response),
-      (IdString() + "failed to create error response").c_str());
+      (this->IdString() + "failed to create error response").c_str());
   LOG_STATUS_ERROR(
       InferenceResponse::SendWithStatus(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
-      (IdString() + "failed to send error response").c_str());
+      (this->IdString() + "failed to send error response").c_str());
 
   // If releasing the request then invoke the release callback which
   // gives ownership to the callback. So can't access 'request' after
@@ -362,7 +362,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
 
     if (from_data_byte_size != byte_size) {
       LOG_WARNING
-          << IdString() << "The byte size of shape tensor to be copied does not match";
+          << this->IdString() << "The byte size of shape tensor to be copied does not match";
     }
 
     // Copy the shape values to the input buffer
@@ -1248,7 +1248,7 @@ InferenceRequest::Input::SetData(const std::shared_ptr<Memory>& data)
   if (data_->TotalByteSize() != 0) {
     return Status(
         Status::Code::INVALID_ARG,
-        IdString() + "input '" + name_ + "' already has data, can't overwrite");
+        this->IdString() + "input '" + name_ + "' already has data, can't overwrite");
   }
 
   data_ = data;
@@ -1263,7 +1263,7 @@ InferenceRequest::Input::SetData(
   if (host_policy_data_map_.find(host_policy_name) !=
       host_policy_data_map_.end()) {
     return Status(
-        Status::Code::INVALID_ARG, IdString() + "input '" + name_ +
+        Status::Code::INVALID_ARG, this->IdString() + "input '" + name_ +
                                        "' already has data for host policy '" +
                                        host_policy_name + "', can't overwrite");
   }
