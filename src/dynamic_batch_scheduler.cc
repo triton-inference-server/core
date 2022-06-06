@@ -166,7 +166,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   if (stop_) {
     return Status(
         Status::Code::UNAVAILABLE,
-        "Server is stopping, scheduler for model has stopped accepting new "
+        request.IdString() + "Server is stopping, scheduler for model has stopped accepting new "
         "inference requests");
   }
   // If queue start timestamp hasn't been set, queue timer starts at
@@ -374,7 +374,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
                 // The queue is empty which conflicts with pending batch
                 // count. Send the current batch if any and reset related
                 // variables.
-                LOG_ERROR << "Failed to retrieve request from scheduler queue: "
+                LOG_ERROR << request.IdString() << "Failed to retrieve request from scheduler queue: "
                           << status.Message();
                 queue_.ResetCursor();
                 queued_batch_size_ = 0;
@@ -620,7 +620,7 @@ DynamicBatchScheduler::DelegateResponse(
 #endif  // TRITON_ENABLE_STATS
 
             if (!status.IsOk()) {
-              LOG_ERROR << "Failed to insert request_hash ["
+              LOG_ERROR << raw_request_ptr->IdString() << "Failed to insert request_hash ["
                         << raw_request_ptr->CacheKey()
                         << "] into response cache: " << status.Message();
             }

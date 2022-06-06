@@ -221,7 +221,7 @@ RequestResponseCache::Insert(
   auto cache_pair = cache_.insert({key, entry});
   // Exit early if cache insertion failed
   if (!cache_pair.second) {
-    LOG_ERROR << "Failed to insert key into map.";
+    LOG_ERROR << request.IdString() << "Failed to insert key into map.";
     return Status(Status::Code::INTERNAL, request.IdString() + "Cache insertion failed");
   }
   // Update LRU with new cache entry

@@ -131,7 +131,7 @@ Status
 PriorityQueue::PolicyQueue::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
   if ((max_queue_size_ != 0) && (Size() >= max_queue_size_)) {
-    return Status(Status::Code::UNAVAILABLE, "Exceeds maximum queue size");
+    return Status(Status::Code::UNAVAILABLE, request->IdString() +"Exceeds maximum queue size");
   }
 
   queue_.emplace_back(std::move(request));
@@ -316,7 +316,7 @@ PriorityQueue::Dequeue(std::unique_ptr<InferenceRequest>* request)
     break;
   }
 
-  return Status(Status::Code::UNAVAILABLE, "dequeue on empty queue");
+  return Status(Status::Code::UNAVAILABLE, request->IdString() + "dequeue on empty queue");
 }
 
 void
