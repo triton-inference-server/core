@@ -269,6 +269,9 @@ class TritonServerOptions {
     buffer_manager_thread_count_ = c;
   }
 
+  unsigned int ModelLoadThreadCount() const { return model_load_thread_count_; }
+  void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
+
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
 
@@ -1200,6 +1203,16 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
+    TRITONSERVER_ServerOptions* options, unsigned int thread_count)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelLoadThreadCount(thread_count);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogInfo(
     TRITONSERVER_ServerOptions* options, bool log)
 {
@@ -2018,6 +2031,7 @@ TRITONSERVER_ServerNew(
   lserver->SetHostPolicyCmdlineConfig(loptions->HostPolicyCmdlineConfigMap());
   lserver->SetRepoAgentDir(loptions->RepoAgentDir());
   lserver->SetBufferManagerThreadCount(loptions->BufferManagerThreadCount());
+  lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.

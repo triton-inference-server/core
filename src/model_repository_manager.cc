@@ -40,6 +40,10 @@
 #include "repo_agent.h"
 #include "triton/common/logging.h"
 
+// Thread Pool
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
+
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif
@@ -462,6 +466,7 @@ class ModelRepositoryManager::ModelLifeCycle {
       InferenceServer* server, const double min_compute_capability,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      const uint32_t model_load_thread_count,
       std::unique_ptr<ModelLifeCycle>* life_cycle);
 
   ~ModelLifeCycle() { map_.clear(); }
@@ -586,6 +591,9 @@ class ModelRepositoryManager::ModelLifeCycle {
   InferenceServer* server_;
   const triton::common::BackendCmdlineConfigMap cmdline_config_map_;
   const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+
+  // Fixed-size thread pool to load models at desired concurrency
+  boost::asio::thread_pool load_pool_;
 };
 
 Status
@@ -593,6 +601,7 @@ ModelRepositoryManager::ModelLifeCycle::Create(
     InferenceServer* server, const double min_compute_capability,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+    const uint32_t model_load_thread_count,
     std::unique_ptr<ModelLifeCycle>* life_cycle)
 {
   std::unique_ptr<ModelLifeCycle> local_life_cycle(new ModelLifeCycle(
@@ -600,6 +609,7 @@ ModelRepositoryManager::ModelLifeCycle::Create(
       host_policy_map));
 
   *life_cycle = std::move(local_life_cycle);
+  load_pool_ = boost::asio::thread_pool(model_load_thread_count);
   return Status::Success;
 }
 
@@ -1191,18 +1201,10 @@ ModelRepositoryManager::ModelLifeCycle::Load(
       LOG_INFO << "loading: " << model_name << ":" << version;
       model_info->state_ = ModelReadyState::LOADING;
       model_info->state_reason_.clear();
-      {
-        // FIXME WAR for glibc bug when spawning threads too
-        // quickly. https://sourceware.org/bugzilla/show_bug.cgi?id=19329
-        // We should instead use a thread-pool here with the number of
-        // threads chosen to provide the required amount of load
-        // parallelism. DLIS-1833.
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::thread worker(
-            &ModelRepositoryManager::ModelLifeCycle::CreateModel, this,
-            model_name, version, model_info);
-        worker.detach();
-      }
+      // Load model asynchronously via thread pool
+      boost::asio::post(load_pool_, [this, model_name, version, model_info]() {
+        CreateModel(model_name, version, model_info);
+      });
       break;
   }
 
@@ -1380,6 +1382,7 @@ ModelRepositoryManager::Create(
     const bool polling_enabled, const bool model_control_enabled,
     const double min_compute_capability,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+    const uint32_t model_load_thread_count,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
 {
   // The rest only matters if repository path is valid directory
@@ -1402,7 +1405,7 @@ ModelRepositoryManager::Create(
   std::unique_ptr<ModelLifeCycle> life_cycle;
   RETURN_IF_ERROR(ModelLifeCycle::Create(
       server, min_compute_capability, backend_cmdline_config_map,
-      host_policy_map, &life_cycle));
+      host_policy_map, model_load_thread_count, &life_cycle));
 
   // Not setting the smart pointer directly to simplify clean up
   std::unique_ptr<ModelRepositoryManager> local_manager(

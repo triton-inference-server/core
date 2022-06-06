@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 14
+#define TRITONSERVER_API_VERSION_MINOR 15
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1749,6 +1749,15 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
+    TRITONSERVER_ServerOptions* options, unsigned int thread_count);
+
+/// Set the number of threads used to concurrently Load/Unload models in server
+/// options.
+///
+/// \param thread_count The number of threads.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
 /// Enable or disable info level logging.

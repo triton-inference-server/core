@@ -138,6 +138,8 @@ class ModelRepositoryManager {
   /// \param min_compute_capability The minimum support CUDA compute
   /// capability.
   /// \param host_policy_map The host policy setting used when loading models.
+  /// \param model_load_thread_count The number of threads to allocate to the
+  /// thread pool for concurrently loading/unloading models.
   /// \param model_repository_manager Return the model repository manager.
   /// \return The error status.
   static Status Create(
@@ -149,6 +151,7 @@ class ModelRepositoryManager {
       const bool polling_enabled, const bool model_control_enabled,
       const double min_compute_capability,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      const uint32_t model_load_thread_count,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
 
   /// Poll the model repository to determine the new set of models and
@@ -157,8 +160,8 @@ class ModelRepositoryManager {
   Status PollAndUpdate();
 
   /// Load or unload a specified model.
-  /// \parm models The models and the parameters to be loaded or unloaded
-  /// \parm type The type action to be performed. If the action is LOAD and
+  /// \param models The models and the parameters to be loaded or unloaded
+  /// \param type The type action to be performed. If the action is LOAD and
   /// the model has been loaded, the model will be re-loaded.
   /// \return error status. Return "NOT_FOUND" if it tries to load
   /// a non-existing model or if it tries to unload a model that hasn't been
@@ -221,7 +224,8 @@ class ModelRepositoryManager {
   // Register model repository path.
   /// \param repository Path to model repository.
   /// \param model_mapping Mapping with (overridden) model name as key, subdir
-  /// name as value. \return error status
+  /// name as value.
+  /// \return error status
   Status RegisterModelRepository(
       const std::string& repository,
       const std::unordered_map<std::string, std::string>& model_mapping);
