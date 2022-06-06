@@ -316,7 +316,7 @@ PriorityQueue::Dequeue(std::unique_ptr<InferenceRequest>* request)
     break;
   }
 
-  return Status(Status::Code::UNAVAILABLE, request->IdString() + "dequeue on empty queue");
+  return Status(Status::Code::UNAVAILABLE, (*request)->IdString() + "dequeue on empty queue");
 }
 
 void
