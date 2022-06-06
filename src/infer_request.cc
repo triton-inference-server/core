@@ -51,7 +51,7 @@ NullResponseAlloc(
 {
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_INTERNAL,
-      "unexpected allocation for null request, no output should be requested.";
+      "unexpected allocation for null request, no output should be requested.");
 }
 
 TRITONSERVER_Error*
