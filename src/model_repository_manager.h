@@ -151,7 +151,7 @@ class ModelRepositoryManager {
       const bool polling_enabled, const bool model_control_enabled,
       const double min_compute_capability,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const uint32_t model_load_thread_count,
+      const unsigned int model_load_thread_count,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
 
   /// Poll the model repository to determine the new set of models and

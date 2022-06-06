@@ -466,7 +466,7 @@ class ModelRepositoryManager::ModelLifeCycle {
       InferenceServer* server, const double min_compute_capability,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const uint32_t model_load_thread_count,
+      const unsigned int model_load_thread_count,
       std::unique_ptr<ModelLifeCycle>* life_cycle);
 
   ~ModelLifeCycle() { map_.clear(); }
@@ -551,11 +551,13 @@ class ModelRepositoryManager::ModelLifeCycle {
   ModelLifeCycle(
       const double min_compute_capability, InferenceServer* server,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      const unsigned int model_load_thread_count)
       : min_compute_capability_(min_compute_capability), server_(server),
         cmdline_config_map_(backend_cmdline_config_map),
         host_policy_map_(host_policy_map)
   {
+    load_pool_.reset(new boost::asio::thread_pool(model_load_thread_count));
   }
 
   // Function called after model state / next action is updated.
@@ -593,7 +595,7 @@ class ModelRepositoryManager::ModelLifeCycle {
   const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 
   // Fixed-size thread pool to load models at desired concurrency
-  boost::asio::thread_pool load_pool_;
+  std::unique_ptr<boost::asio::thread_pool> load_pool_;
 };
 
 Status
@@ -601,15 +603,14 @@ ModelRepositoryManager::ModelLifeCycle::Create(
     InferenceServer* server, const double min_compute_capability,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const uint32_t model_load_thread_count,
+    const unsigned int model_load_thread_count,
     std::unique_ptr<ModelLifeCycle>* life_cycle)
 {
   std::unique_ptr<ModelLifeCycle> local_life_cycle(new ModelLifeCycle(
       min_compute_capability, server, backend_cmdline_config_map,
-      host_policy_map));
+      host_policy_map, model_load_thread_count));
 
   *life_cycle = std::move(local_life_cycle);
-  load_pool_ = boost::asio::thread_pool(model_load_thread_count);
   return Status::Success;
 }
 
@@ -1202,7 +1203,7 @@ ModelRepositoryManager::ModelLifeCycle::Load(
       model_info->state_ = ModelReadyState::LOADING;
       model_info->state_reason_.clear();
       // Load model asynchronously via thread pool
-      boost::asio::post(load_pool_, [this, model_name, version, model_info]() {
+      boost::asio::post(*load_pool_, [this, model_name, version, model_info]() {
         CreateModel(model_name, version, model_info);
       });
       break;
@@ -1382,7 +1383,7 @@ ModelRepositoryManager::Create(
     const bool polling_enabled, const bool model_control_enabled,
     const double min_compute_capability,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const uint32_t model_load_thread_count,
+    const unsigned int model_load_thread_count,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
 {
   // The rest only matters if repository path is valid directory

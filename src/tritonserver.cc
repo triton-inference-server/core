@@ -325,6 +325,7 @@ class TritonServerOptions {
   uint64_t pinned_memory_pool_size_;
   uint64_t response_cache_byte_size_;
   unsigned int buffer_manager_thread_count_;
+  unsigned int model_load_thread_count_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
