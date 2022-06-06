@@ -293,7 +293,7 @@ class InferenceRequest {
   void SetId(const std::string& i) { id_ = i; }
   // Return string for logging request ID
   std::string IdString() const {
-    return std::string("[request id: " << Id() << "]");
+    return std::string("[request id: ") + Id() + "]";
   }
 
   // Flags for the request, union of TRITONSERVER_RequestFlag.
