@@ -557,6 +557,7 @@ class ModelRepositoryManager::ModelLifeCycle {
         cmdline_config_map_(backend_cmdline_config_map),
         host_policy_map_(host_policy_map)
   {
+    LOG_INFO << "Creating load_pool_ with thread_count: " << model_load_thread_count;
     load_pool_.reset(new boost::asio::thread_pool(model_load_thread_count));
   }
 
@@ -1202,10 +1203,14 @@ ModelRepositoryManager::ModelLifeCycle::Load(
       LOG_INFO << "loading: " << model_name << ":" << version;
       model_info->state_ = ModelReadyState::LOADING;
       model_info->state_reason_.clear();
-      // Load model asynchronously via thread pool
-      boost::asio::post(*load_pool_, [this, model_name, version, model_info]() {
-        CreateModel(model_name, version, model_info);
-      });
+      {
+        LOG_INFO << "Submitting job to load_pool_ ";
+        // Load model asynchronously via thread pool
+        boost::asio::post(*load_pool_, [this, model_name, version, model_info]() {
+          CreateModel(model_name, version, model_info);
+        });
+        LOG_INFO << "Job submitted to load_pool_ ";
+      }
       break;
   }
 
@@ -1249,6 +1254,8 @@ Status
 ModelRepositoryManager::ModelLifeCycle::CreateModel(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
+  // TODO: Remove
+  LOG_INFO << "CreateModel() '" << model_name << "' version " << version;
   LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
   // make copy of the current model config in case model config in model info
   // is updated (another poll) during the creation of the model
