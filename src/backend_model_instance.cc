@@ -487,7 +487,7 @@ TritonModelInstance::GenerateWarmupData()
           }
           default:
             return Status(
-                Status::Code::INVALID_ARG, lrequest.IdString() + "warmup setting expects input '" +
+                Status::Code::INVALID_ARG, lrequest->IdString() + "warmup setting expects input '" +
                                                input_meta.first +
                                                "' to have input_data_type set");
         }
