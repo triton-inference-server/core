@@ -1319,6 +1319,12 @@ InferenceRequest::Input::DataBufferForHostPolicy(
   return Status::Success;
 }
 
+std::string
+InferenceRequest::IdString() const
+{
+  return std::string("[request id: " << Id() << "]")
+}
+
 size_t
 InferenceRequest::Input::DataBufferCountForHostPolicy(
     const std::string& host_policy_name) const

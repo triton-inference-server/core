@@ -670,6 +670,9 @@ class InferenceRequest {
   {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
+
+  // Return string for logging request ID ("request id: <id>"
+  std::string IdString() const;
 #endif  // TRITON_ENABLE_STATS
 
  private:
