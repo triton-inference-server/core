@@ -961,6 +961,15 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestDelete(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestId(
     TRITONSERVER_InferenceRequest* inference_request, const char** id);
 
+/// Get the ID string for a request. The format is [request: <request>].
+/// This is used for logging the request ID.
+///
+/// \param inference_request The request object.
+/// \param request_string Returns the logging string for the ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestId(
+    TRITONSERVER_InferenceRequest* inference_request, const char** id);
+
 /// Set the ID for a request.
 ///
 /// \param inference_request The request object.
