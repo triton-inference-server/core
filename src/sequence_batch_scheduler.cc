@@ -128,7 +128,7 @@ SequenceBatchScheduler::Create(
   uint32_t index = 0;
   for (const auto& instance : instances) {
     bool init_state;
-    std::shared_ptr<SequenceBatch> sb;
+    std::unique_ptr<SequenceBatch> sb;
 
     // Create the SequenceBatch derivative that handles the requested
     // scheduling strategy.
@@ -145,7 +145,7 @@ SequenceBatchScheduler::Create(
     }
 
     if (init_state) {
-      sched->batchers_.push_back(sb);
+      sched->batchers_.push_back(std::move(sb));
       // All sequence slots in the batcher are initially ready for a
       // new sequence.
       for (size_t b = 0; b < seq_slot_cnt; ++b) {
@@ -320,6 +320,11 @@ SequenceBatchScheduler::~SequenceBatchScheduler()
   if ((reaper_thread_ != nullptr) && reaper_thread_->joinable()) {
     reaper_thread_->join();
   }
+
+  // Release 'batchers_' before other member variables because 'batchers_'
+  // can access 'this' and we need to make sure the member variables live
+  // longer than 'batchers_'
+  batchers_.clear();
 }
 
 
