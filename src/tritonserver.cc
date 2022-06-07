@@ -1421,7 +1421,7 @@ TRITONSERVER_InferenceRequestId(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceRequestRequestIdString(
+TRITONSERVER_InferenceRequestIdString(
     TRITONSERVER_InferenceRequest* inference_request,
     const char** request_string)
 {

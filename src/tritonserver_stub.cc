@@ -610,7 +610,7 @@ TRITONBACKEND_RequestId()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceRequestRequestIdString()
+TRITONBACKEND_RequestIdString()
 {
 }
 TRITONAPI_DECLSPEC void
