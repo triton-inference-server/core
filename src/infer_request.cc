@@ -86,8 +86,7 @@ NullRequestComplete(
 {
   if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
     LOG_TRITONSERVER_ERROR(
-        TRITONSERVER_InferenceRequestDelete(request),
-        "deleting null request");
+        TRITONSERVER_InferenceRequestDelete(request), "deleting null request");
   }
 }
 
@@ -144,9 +143,9 @@ InferenceRequest::TraceInputTensors(
 
     if (buffer_count == 0) {
       LOG_STATUS_ERROR(
-          status,
-          IdString() + TRITONSERVER_InferenceTraceActivityString(activity) +
-              ": " + msg + ": tensor: " + name + ": no buffer chunk");
+          status, IdString() +
+                      TRITONSERVER_InferenceTraceActivityString(activity) +
+                      ": " + msg + ": tensor: " + name + ": no buffer chunk");
       continue;
     }
 
@@ -155,10 +154,10 @@ InferenceRequest::TraceInputTensors(
           0, &buffer, &buffer_size, &src_memory_type, &src_memory_type_id);
       if (!status.IsOk()) {
         LOG_STATUS_ERROR(
-            status,
-            IdString() + TRITONSERVER_InferenceTraceActivityString(activity) +
-                ": " + msg + ": tensor: " + name +
-                ": fail to get data buffer: " + status.Message());
+            status, IdString() +
+                        TRITONSERVER_InferenceTraceActivityString(activity) +
+                        ": " + msg + ": tensor: " + name +
+                        ": fail to get data buffer: " + status.Message());
         return status;
       }
 
@@ -187,10 +186,10 @@ InferenceRequest::TraceInputTensors(
           b, &buffer, &buffer_size, &src_memory_type, &src_memory_type_id);
       if (!status.IsOk()) {
         LOG_STATUS_ERROR(
-            status,
-            IdString() + TRITONSERVER_InferenceTraceActivityString(activity) +
-                ": " + msg + ": tensor: " + name +
-                ": fail to get data buffer: " + status.Message());
+            status, IdString() +
+                        TRITONSERVER_InferenceTraceActivityString(activity) +
+                        ": " + msg + ": tensor: " + name +
+                        ": fail to get data buffer: " + status.Message());
         return status;
       }
 
@@ -200,10 +199,10 @@ InferenceRequest::TraceInputTensors(
           buffer, base + offset, nullptr, &cuda_used);
       if (!status.IsOk()) {
         LOG_STATUS_ERROR(
-            status,
-            IdString() + TRITONSERVER_InferenceTraceActivityString(activity) +
-                ": " + msg + ": tensor: " + name +
-                ": fail to copy buffer: " + status.Message());
+            status, IdString() +
+                        TRITONSERVER_InferenceTraceActivityString(activity) +
+                        ": " + msg + ": tensor: " + name +
+                        ": fail to copy buffer: " + status.Message());
         return status;
       }
 
@@ -228,7 +227,8 @@ InferenceRequest::OutputBufferProperties(
   const auto allocator = response_factory_.Allocator();
   if ((allocator == nullptr) || (allocator->QueryFn() == nullptr)) {
     return Status(
-        Status::Code::UNAVAILABLE, (IdString() + "Output properties are not available").c_str());
+        Status::Code::UNAVAILABLE,
+        (IdString() + "Output properties are not available").c_str());
   } else {
     RETURN_IF_TRITONSERVER_ERROR(allocator->QueryFn()(
         reinterpret_cast<TRITONSERVER_ResponseAllocator*>(
@@ -362,7 +362,8 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
 
     if (from_data_byte_size != byte_size) {
       LOG_WARNING
-          << lrequest->IdString() << "The byte size of shape tensor to be copied does not match";
+          << lrequest->IdString()
+          << "The byte size of shape tensor to be copied does not match";
     }
 
     // Copy the shape values to the input buffer
@@ -536,7 +537,8 @@ InferenceRequest::AddRawInput(
   if (original_inputs_.size() != 0) {
     return Status(
         Status::Code::INVALID_ARG,
-        IdString() + "raw input '" + name + "' can't be added to request with other inputs");
+        IdString() + "raw input '" + name +
+            "' can't be added to request with other inputs");
   }
   const auto& pr = original_inputs_.emplace(
       std::piecewise_construct, std::forward_as_tuple(name),
@@ -610,8 +612,8 @@ Status
 InferenceRequest::AddOverrideInput(
     const std::shared_ptr<InferenceRequest::Input>& input)
 {
-  LOG_VERBOSE(1) << IdString() << "adding input override for " << input->Name() << ": "
-                 << *this;
+  LOG_VERBOSE(1) << IdString() << "adding input override for " << input->Name()
+                 << ": " << *this;
 
   const auto& pr =
       override_inputs_.emplace(std::make_pair(input->Name(), input));
@@ -625,8 +627,8 @@ InferenceRequest::AddOverrideInput(
     res.first->second = input.get();
   }
 
-  LOG_VERBOSE(1) << IdString() << "added input override for " << input->Name() << ": "
-                 << *this;
+  LOG_VERBOSE(1) << IdString() << "added input override for " << input->Name()
+                 << ": " << *this;
 
   return Status::Success;
 }
@@ -735,8 +737,8 @@ InferenceRequest::Normalize()
     if (raw_input_name_ != it->first) {
       return Status(
           Status::Code::INVALID_ARG,
-          IdString() + "Unexpected reference name for raw input '" + raw_input_name_ +
-              "' got '" + it->first + "'");
+          IdString() + "Unexpected reference name for raw input '" +
+              raw_input_name_ + "' got '" + it->first + "'");
     }
     const auto& config_input = model_config.input(0);
     auto& raw_input = it->second;
@@ -751,7 +753,8 @@ InferenceRequest::Normalize()
         if (dynamic_axis != -1) {
           return Status(
               Status::Code::INVALID_ARG,
-              IdString() + "The shape of the raw input '" + config_input.name() +
+              IdString() + "The shape of the raw input '" +
+                  config_input.name() +
                   "' can not be deduced because there are more than one "
                   "variable-sized dimension");
         }
@@ -765,8 +768,9 @@ InferenceRequest::Normalize()
       const bool has_one_element = (dynamic_axis == -1) && (element_cnt == 1);
       if (!has_one_element) {
         return Status(
-            Status::Code::INVALID_ARG,
-            IdString() + "For BYTE datatype raw input, the model must have input shape [1]");
+            Status::Code::INVALID_ARG, IdString() +
+                                           "For BYTE datatype raw input, the "
+                                           "model must have input shape [1]");
       }
       // In the case of BYTE data type, we will prepend the byte size to follow
       // the Triton convention.
@@ -778,9 +782,10 @@ InferenceRequest::Normalize()
       // Will need to extend Input::PrependData() if needed.
       if (!raw_input.HostPolicyData().empty()) {
         return Status(
-            Status::Code::INVALID_ARG,
-            IdString() + "Raw input with data associated with a host policy setting is not "
-            "currently supported");
+            Status::Code::INVALID_ARG, IdString() +
+                                           "Raw input with data associated "
+                                           "with a host policy setting is not "
+                                           "currently supported");
       }
     } else if (dynamic_axis != -1) {
       shape[dynamic_axis] =
@@ -923,7 +928,8 @@ InferenceRequest::Normalize()
           if (input_dims[i] == triton::common::WILDCARD_DIM) {
             return Status(
                 Status::Code::INVALID_ARG,
-                IdString() + "All input dimensions should be specified for input '" +
+                IdString() +
+                    "All input dimensions should be specified for input '" +
                     pr.first + "' for model '" + ModelName() + "', got " +
                     triton::common::DimsListToString(input.OriginalShape()));
           } else if (
@@ -945,8 +951,8 @@ InferenceRequest::Normalize()
         }
         return Status(
             Status::Code::INVALID_ARG,
-            IdString() + "unexpected shape for input '" + pr.first + "' for model '" +
-                ModelName() + "'. Expected " +
+            IdString() + "unexpected shape for input '" + pr.first +
+                "' for model '" + ModelName() + "'. Expected " +
                 triton::common::DimsListToString(full_dims) + ", got " +
                 triton::common::DimsListToString(input.OriginalShape()));
       }
@@ -1079,7 +1085,8 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
   INFER_STATS_DECL_TIMESTAMP(request_end_ns);
 
   if (cache_lookup_start_ns_ >= cache_lookup_end_ns_) {
-    LOG_WARNING << IdString() << "Cache lookup timestamps were not set correctly. Cache "
+    LOG_WARNING << IdString()
+                << "Cache lookup timestamps were not set correctly. Cache "
                    "lookup duration stats may be incorrect.";
   }
   const uint64_t cache_lookup_duration_ns =
@@ -1103,11 +1110,13 @@ InferenceRequest::ReportStatisticsCacheMiss(
     MetricModelReporter* metric_reporter)
 {
   if (cache_lookup_start_ns_ >= cache_lookup_end_ns_) {
-    LOG_WARNING << IdString() << "Cache lookup timestamps were not set correctly. Cache "
+    LOG_WARNING << IdString()
+                << "Cache lookup timestamps were not set correctly. Cache "
                    "lookup duration stats may be incorrect.";
   }
   if (cache_insertion_start_ns_ >= cache_insertion_end_ns_) {
-    LOG_WARNING << IdString() << "Cache insertion timestamps were not set correctly. Cache "
+    LOG_WARNING << IdString()
+                << "Cache insertion timestamps were not set correctly. Cache "
                    "insertion duration stats may be incorrect.";
   }
 
