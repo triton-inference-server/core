@@ -186,6 +186,10 @@ TRITONSERVER_InferenceRequestId()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestIdString()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestSetId()
 {
 }

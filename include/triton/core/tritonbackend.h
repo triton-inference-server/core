@@ -372,6 +372,14 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBufferAttributes(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
     TRITONBACKEND_Request* request, const char** id);
 
+/// Get the ID of the request as a string formatted for logging.
+///
+/// \param request The inference request.
+/// \param formatted_id Returns the formatted string of the ID.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestIdString(
+    TRITONBACKEND_Request* request, const char** formatted_id);
+
 /// Get the correlation ID of the request if it is an unsigned integer.
 /// Zero indicates that the request does not have a correlation ID.
 /// Returns failure if correlation ID for given request is not an unsigned
