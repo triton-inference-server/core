@@ -342,6 +342,8 @@ TritonServerOptions::TritonServerOptions()
       gpu_metrics_(true), metrics_interval_(2000), exit_timeout_(30),
       pinned_memory_pool_size_(1 << 28), response_cache_byte_size_(0),
       buffer_manager_thread_count_(0),
+      model_load_thread_count_(
+          std::max(2u, 2 * std::thread::hardware_concurrency())),
 #ifdef TRITON_ENABLE_GPU
       min_compute_capability_(TRITON_MIN_COMPUTE_CAPABILITY),
 #else

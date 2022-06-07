@@ -1751,8 +1751,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
-/// Set the number of threads used to concurrently Load/Unload models in server
-/// options.
+/// Set the number of threads to concurrently load models in a server options.
 ///
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.

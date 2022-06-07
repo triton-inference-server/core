@@ -139,7 +139,7 @@ class ModelRepositoryManager {
   /// capability.
   /// \param host_policy_map The host policy setting used when loading models.
   /// \param model_load_thread_count The number of threads to allocate to the
-  /// thread pool for concurrently loading/unloading models.
+  /// thread pool for concurrently loading models.
   /// \param model_repository_manager Return the model repository manager.
   /// \return The error status.
   static Status Create(
