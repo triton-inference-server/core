@@ -557,8 +557,6 @@ class ModelRepositoryManager::ModelLifeCycle {
         cmdline_config_map_(backend_cmdline_config_map),
         host_policy_map_(host_policy_map)
   {
-    LOG_VERBOSE(2) << "Creating load_pool_ with thread_count: "
-                   << model_load_thread_count;
     load_pool_.reset(
         new boost::asio::thread_pool(std::max(1u, model_load_thread_count)));
   }
