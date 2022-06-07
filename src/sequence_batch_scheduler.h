@@ -148,7 +148,7 @@ class SequenceBatchScheduler : public Scheduler {
   bool reaper_thread_exit_;
 
   // The SequenceBatchs being managed by this scheduler.
-  std::vector<std::shared_ptr<SequenceBatch>> batchers_;
+  std::vector<std::unique_ptr<SequenceBatch>> batchers_;
 
   // Map from a request's correlation ID to the BatcherSequenceSlot
   // assigned to that correlation ID.
