@@ -320,6 +320,11 @@ SequenceBatchScheduler::~SequenceBatchScheduler()
   if ((reaper_thread_ != nullptr) && reaper_thread_->joinable()) {
     reaper_thread_->join();
   }
+
+  // Release 'batchers_' before other member variables because 'batchers_'
+  // can access 'this' and we need to make sure the member variables live
+  // longer than 'batchers_'
+  batchers_.clear();
 }
 
 
