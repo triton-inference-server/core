@@ -467,7 +467,13 @@ class ModelRepositoryManager::ModelLifeCycle {
       const unsigned int model_load_thread_count,
       std::unique_ptr<ModelLifeCycle>* life_cycle);
 
-  ~ModelLifeCycle() { map_.clear(); }
+  ~ModelLifeCycle()
+  {
+    // Explicitly clean up thread pool first to clean up any pending callbacks
+    // that may modify model lifecycle members
+    load_pool_.reset();
+    map_.clear();
+  }
 
   // Start loading model with specified versions asynchronously.
   // If 'defer_unload' is false, all versions that are being served will
