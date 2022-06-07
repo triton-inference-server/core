@@ -28,6 +28,8 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
 #include <deque>
 #include <future>
 #include <stdexcept>
@@ -39,10 +41,6 @@
 #include "model_config_utils.h"
 #include "repo_agent.h"
 #include "triton/common/logging.h"
-
-// Thread Pool
-#include <boost/asio/post.hpp>
-#include <boost/asio/thread_pool.hpp>
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>

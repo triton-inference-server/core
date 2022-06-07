@@ -1745,6 +1745,7 @@ TRITONSERVER_ServerOptionsSetExitTimeout(
 
 /// Set the number of threads used in buffer manager in a server options.
 ///
+/// \param options The server options object.
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
@@ -1753,6 +1754,7 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
 
 /// Set the number of threads to concurrently load models in a server options.
 ///
+/// \param options The server options object.
 /// \param thread_count The number of threads.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
