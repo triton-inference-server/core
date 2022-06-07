@@ -790,14 +790,17 @@ SetDefaultInstanceCount(
 {
   const int default_cpu_instance_count = 2;
   if (group->kind() == inference::ModelInstanceGroup::KIND_CPU) {
-    // Some backends don't perform well with multiple
-    // model instances such as pytorch so we want to
-    // default to a different value. Add other similar backends
-    // to this check.
-    if (backend.compare(kPyTorchBackend) == 0) {
-      group->set_count(1);
-    } else {
+    // Backends opt into the default_cpu_instance_count since
+    // some backends don't perform well/have high overhead
+    // when using multiple instances.
+    bool use_default_cpu_instance_count =
+        (backend.compare(kTensorRTBackend) == 0) ||
+        (backend.compare(kTensorFlowBackend) == 0) ||
+        (backend.compare(kOnnxRuntimeBackend) == 0);
+    if (use_default_cpu_instance_count) {
       group->set_count(default_cpu_instance_count);
+    } else {
+      group->set_count(1);
     }
   } else {
     group->set_count(1);
