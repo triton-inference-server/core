@@ -406,7 +406,8 @@ TritonModelInstance::GenerateWarmupData()
       }
     }
 
-    warmup_samples_.emplace_back(warmup_setting.name());
+    warmup_samples_.emplace_back(
+        warmup_setting.name(), warmup_setting.repeat_count());
     auto& warmup_data = warmup_samples_.back();
     // Create buffers for synthetic data
     TRITONSERVER_MemoryType type;
@@ -564,64 +565,66 @@ TritonModelInstance::Initialize()
 Status
 TritonModelInstance::WarmUp()
 {
-  Status warmup_status = Status::Success;
-  for (auto& sample : warmup_samples_) {
-    LOG_VERBOSE(1) << "model '" << sample.requests_.back()->ModelName()
-                   << "' instance " << Name() << " is running warmup sample '"
-                   << sample.sample_name_ << "'";
+  // move samples to local variable for scoped cleanup
+  std::vector<triton::core::TritonModelInstance::WarmupData> lwarmup_samples;
+  lwarmup_samples.swap(warmup_samples_);
 
-    // request/response complete is asynchronous so use promise to wait for
-    // completion. Also collects error message from the responses in a vector.
-    std::vector<std::promise<void>> request_complete(sample.requests_.size());
-    std::vector<std::string> response_errors;
-    std::vector<std::pair<std::promise<void>, std::vector<std::string>*>>
-        response_complete(sample.requests_.size());
-
-    std::vector<TRITONBACKEND_Request*> triton_requests;
-    for (size_t i = 0; i < sample.requests_.size(); ++i) {
-      auto& request = sample.requests_[i];
-      request->SetReleaseCallback(WarmupRequestComplete, &request_complete[i]);
-      response_complete[i].second = &response_errors;
-      request->SetResponseCallback(
-          &warmup_allocator, nullptr, WarmupResponseComplete,
-          &response_complete[i]);
-      // Capture timestamp before run to avoid incorrect accumulation from
-      // sequential warmup runs
-#ifdef TRITON_ENABLE_STATS
-      request->CaptureRequestStartNs();
-#endif  // TRITON_ENABLE_STATS
-      request->CaptureQueueStartNs();
-      triton_requests.push_back(
-          reinterpret_cast<TRITONBACKEND_Request*>(request.get()));
-    }
-
-    Execute(triton_requests);
-
-    // Wait for warmup sample to complete and check error
-    for (size_t i = 0; i < sample.requests_.size(); ++i) {
-      request_complete[i].get_future().get();
-      response_complete[i].first.get_future().get();
-    }
-    if (response_errors.size() != 0) {
-      std::string err_str =
-          "failed to run warmup sample '" + sample.sample_name_ + "': ";
-      for (const auto& error : response_errors) {
-        err_str += (error + "; ");
-      }
-      // End warmup as soon as there is failing sample
+  for (auto& sample : lwarmup_samples) {
+    for (size_t iteration = 1; iteration <= sample.repeat_count_; ++iteration) {
       LOG_VERBOSE(1) << "model '" << sample.requests_.back()->ModelName()
-                     << "' instance " << Name()
-                     << " failed to run warmup sample '" << sample.sample_name_
-                     << "'";
-      warmup_status = Status(Status::Code::INVALID_ARG, err_str);
-      break;
+                     << "' instance " << Name() << " is running warmup sample '"
+                     << sample.sample_name_ << "' for iteration " << iteration;
+
+      // request/response complete is asynchronous so use promise to wait for
+      // completion. Also collects error message from the responses in a vector.
+      std::vector<std::promise<void>> request_complete(sample.requests_.size());
+      std::vector<std::string> response_errors;
+      std::vector<std::pair<std::promise<void>, std::vector<std::string>*>>
+          response_complete(sample.requests_.size());
+
+      std::vector<TRITONBACKEND_Request*> triton_requests;
+      for (size_t i = 0; i < sample.requests_.size(); ++i) {
+        auto& request = sample.requests_[i];
+        request->SetReleaseCallback(
+            WarmupRequestComplete, &request_complete[i]);
+        response_complete[i].second = &response_errors;
+        request->SetResponseCallback(
+            &warmup_allocator, nullptr, WarmupResponseComplete,
+            &response_complete[i]);
+        // Capture timestamp before run to avoid incorrect accumulation from
+        // sequential warmup runs
+#ifdef TRITON_ENABLE_STATS
+        request->CaptureRequestStartNs();
+#endif  // TRITON_ENABLE_STATS
+        request->CaptureQueueStartNs();
+        triton_requests.push_back(
+            reinterpret_cast<TRITONBACKEND_Request*>(request.get()));
+      }
+
+      Execute(triton_requests);
+
+      // Wait for warmup sample to complete and check error
+      for (size_t i = 0; i < sample.requests_.size(); ++i) {
+        request_complete[i].get_future().get();
+        response_complete[i].first.get_future().get();
+      }
+      if (response_errors.size() != 0) {
+        std::string err_str =
+            "failed to run warmup sample '" + sample.sample_name_ + "': ";
+        for (const auto& error : response_errors) {
+          err_str += (error + "; ");
+        }
+        // End warmup as soon as there is failing sample
+        LOG_VERBOSE(1) << "model '" << sample.requests_.back()->ModelName()
+                       << "' instance " << Name()
+                       << " failed to run warmup sample '"
+                       << sample.sample_name_ << "'";
+        return Status(Status::Code::INVALID_ARG, err_str);
+      }
     }
   }
 
-  // Done with the warmup samples
-  warmup_samples_.clear();
-
-  return warmup_status;
+  return Status::Success;
 }
 
 void
