@@ -593,15 +593,6 @@ TRITONBACKEND_RequestId(TRITONBACKEND_Request* request, const char** id)
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_RequestIdString(
-    TRITONBACKEND_Request* request, const char** formatted_id)
-{
-  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  *formatted_id = tr->IdString().c_str();
-  return nullptr;  // success
-}
-
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestCorrelationId(TRITONBACKEND_Request* request, uint64_t* id)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);

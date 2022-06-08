@@ -91,7 +91,7 @@ struct TRITONBACKEND_ModelInstance;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 11
+#define TRITONBACKEND_API_VERSION_MINOR 10
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -371,14 +371,6 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBufferAttributes(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
     TRITONBACKEND_Request* request, const char** id);
-
-/// Get the ID of the request as a string formatted for logging.
-///
-/// \param request The inference request.
-/// \param formatted_id Returns the formatted string of the ID.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestIdString(
-    TRITONBACKEND_Request* request, const char** formatted_id);
 
 /// Get the correlation ID of the request if it is an unsigned integer.
 /// Zero indicates that the request does not have a correlation ID.

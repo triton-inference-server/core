@@ -1421,16 +1421,6 @@ TRITONSERVER_InferenceRequestId(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceRequestIdString(
-    TRITONSERVER_InferenceRequest* inference_request, const char** formatted_id)
-{
-  tc::InferenceRequest* lrequest =
-      reinterpret_cast<tc::InferenceRequest*>(inference_request);
-  *formatted_id = lrequest->IdString().c_str();
-  return nullptr;  // Success
-}
-
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetId(
     TRITONSERVER_InferenceRequest* inference_request, const char* id)
 {

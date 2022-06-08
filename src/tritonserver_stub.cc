@@ -186,10 +186,6 @@ TRITONSERVER_InferenceRequestId()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceRequestIdString()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestSetId()
 {
 }
@@ -611,10 +607,6 @@ TRITONBACKEND_OutputBufferAttributes()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestId()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_RequestIdString()
 {
 }
 TRITONAPI_DECLSPEC void
