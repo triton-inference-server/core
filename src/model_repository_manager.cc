@@ -28,6 +28,8 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
 #include <deque>
 #include <future>
 #include <stdexcept>
@@ -39,7 +41,6 @@
 #include "model_config_utils.h"
 #include "repo_agent.h"
 #include "triton/common/logging.h"
-#include "triton/common/thread_pool.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
@@ -561,7 +562,7 @@ class ModelRepositoryManager::ModelLifeCycle {
         host_policy_map_(host_policy_map)
   {
     load_pool_.reset(
-        new triton::common::ThreadPool(std::max(1u, model_load_thread_count)));
+        new boost::asio::thread_pool(std::max(1u, model_load_thread_count)));
   }
 
   // Function called after model state / next action is updated.
@@ -599,7 +600,7 @@ class ModelRepositoryManager::ModelLifeCycle {
   const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 
   // Fixed-size thread pool to load models at specified concurrency
-  std::unique_ptr<triton::common::ThreadPool> load_pool_;
+  std::unique_ptr<boost::asio::thread_pool> load_pool_;
 };
 
 Status
@@ -1207,7 +1208,7 @@ ModelRepositoryManager::ModelLifeCycle::Load(
       model_info->state_ = ModelReadyState::LOADING;
       model_info->state_reason_.clear();
       // Load model asynchronously via thread pool
-      load_pool_->enqueue([this, model_name, version, model_info]() {
+      boost::asio::post(*load_pool_, [this, model_name, version, model_info]() {
         CreateModel(model_name, version, model_info);
       });
       break;
