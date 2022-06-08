@@ -561,7 +561,7 @@ class ModelRepositoryManager::ModelLifeCycle {
         host_policy_map_(host_policy_map)
   {
     load_pool_.reset(
-        new triton::comon::ThreadPool(std::max(1u, model_load_thread_count)));
+        new triton::common::ThreadPool(std::max(1u, model_load_thread_count)));
   }
 
   // Function called after model state / next action is updated.

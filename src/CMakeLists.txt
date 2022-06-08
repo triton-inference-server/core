@@ -422,6 +422,7 @@ target_link_libraries(
   PRIVATE
     proto-library                    # from repo-common
     triton-common-async-work-queue   # from repo-common
+    triton-common-thread-pool        # from repo-common
     triton-common-error              # from repo-common
     triton-common-model-config       # from repo-common
     triton-common-logging            # from repo-common
