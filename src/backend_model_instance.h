@@ -152,7 +152,7 @@ class TritonModelInstance {
   struct WarmupData {
     WarmupData(const std::string& sample_name, const size_t repeat_count)
         : sample_name_(sample_name),
-          repeat_count_(std::max(repeat_count, (size_t)1))
+          repeat_count_(std::max(repeat_count, size_t{1}))
     {
     }
 
