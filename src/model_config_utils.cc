@@ -791,12 +791,11 @@ SetDefaultInstanceCount(
   const int default_cpu_instance_count = 2;
   if (group->kind() == inference::ModelInstanceGroup::KIND_CPU) {
     // Backends opt into the default_cpu_instance_count since
-    // some backends don't perform well/have high overhead
+    // some backends (pytorch, OpenVINO) don't perform well/have high overhead
     // when using multiple instances.
-    bool use_default_cpu_instance_count =
-        (backend.compare(kTensorRTBackend) == 0) ||
-        (backend.compare(kTensorFlowBackend) == 0) ||
-        (backend.compare(kOnnxRuntimeBackend) == 0);
+    bool use_default_cpu_instance_count = (backend == kTensorRTBackend) ||
+                                          (backend == kTensorFlowBackend) ||
+                                          (backend == kOnnxRuntimeBackend);
     if (use_default_cpu_instance_count) {
       group->set_count(default_cpu_instance_count);
     } else {
