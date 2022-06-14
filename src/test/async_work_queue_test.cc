@@ -64,7 +64,7 @@ TEST_F(AsyncWorkQueueTest, InitOneWorker)
 
 TEST_F(AsyncWorkQueueTest, InitFourWorker)
 {
-  auto error = tc::AsyncWorkQueue::Initialize(1);
+  auto error = tc::AsyncWorkQueue::Initialize(4);
   EXPECT_TRUE(error.IsOk()) << error.Message();
 }
 
