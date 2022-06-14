@@ -786,23 +786,20 @@ GetNormalizedModelConfig(
 
 Status
 SetDefaultInstanceCount(
-    ::inference::ModelInstanceGroup* group, const std::string& backend)
+    inference::ModelInstanceGroup* group, const std::string& backend)
 {
+  group->set_count(1);
+
+  // Backends opt into the default_cpu_instance_count since
+  // some backends (pytorch, OpenVINO) don't perform well/have high overhead
+  // when using multiple instances.
   const int default_cpu_instance_count = 2;
-  if (group->kind() == inference::ModelInstanceGroup::KIND_CPU) {
-    // Backends opt into the default_cpu_instance_count since
-    // some backends (pytorch, OpenVINO) don't perform well/have high overhead
-    // when using multiple instances.
-    bool use_default_cpu_instance_count = (backend == kTensorRTBackend) ||
-                                          (backend == kTensorFlowBackend) ||
-                                          (backend == kOnnxRuntimeBackend);
-    if (use_default_cpu_instance_count) {
-      group->set_count(default_cpu_instance_count);
-    } else {
-      group->set_count(1);
-    }
-  } else {
-    group->set_count(1);
+  bool use_default_cpu_instance_count = (backend == kTensorRTBackend) ||
+                                        (backend == kTensorFlowBackend) ||
+                                        (backend == kOnnxRuntimeBackend);
+  if (group->kind() == inference::ModelInstanceGroup::KIND_CPU &&
+      use_default_cpu_instance_count) {
+    group->set_count(default_cpu_instance_count);
   }
 
   return Status::Success;
