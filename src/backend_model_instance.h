@@ -150,14 +150,13 @@ class TritonModelInstance {
   std::shared_ptr<TritonBackendThread> triton_backend_thread_;
 
   struct WarmupData {
-    WarmupData(const std::string& sample_name, const size_t repeat_count)
-        : sample_name_(sample_name),
-          repeat_count_(std::max(repeat_count, size_t{1}))
+    WarmupData(const std::string& sample_name, const size_t count)
+        : sample_name_(sample_name), count_(std::max(count, size_t{1}))
     {
     }
 
     std::string sample_name_;
-    size_t repeat_count_;
+    size_t count_;
     // Using a batch of requests to satisfy batch size, this provides better
     // alignment on the batch expected by the model, especially for sequence
     // model.

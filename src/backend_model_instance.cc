@@ -406,8 +406,7 @@ TritonModelInstance::GenerateWarmupData()
       }
     }
 
-    warmup_samples_.emplace_back(
-        warmup_setting.name(), warmup_setting.repeat_count());
+    warmup_samples_.emplace_back(warmup_setting.name(), warmup_setting.count());
     auto& warmup_data = warmup_samples_.back();
     // Create buffers for synthetic data
     TRITONSERVER_MemoryType type;
@@ -570,7 +569,7 @@ TritonModelInstance::WarmUp()
   lwarmup_samples.swap(warmup_samples_);
 
   for (auto& sample : lwarmup_samples) {
-    for (size_t iteration = 1; iteration <= sample.repeat_count_; ++iteration) {
+    for (size_t iteration = 1; iteration <= sample.count_; ++iteration) {
       LOG_VERBOSE(1) << "model '" << sample.requests_.back()->ModelName()
                      << "' instance " << Name() << " is running warmup sample '"
                      << sample.sample_name_ << "' for iteration " << iteration;
