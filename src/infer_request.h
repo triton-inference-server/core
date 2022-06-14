@@ -292,7 +292,7 @@ class InferenceRequest {
   const std::string& Id() const { return id_; }
   void SetId(const std::string& i) { id_ = i; }
   // Return string for logging request ID
-  std::string IdString() const
+  std::string LogRequest() const
   {
     return std::string("[request id: ") + Id() + "]";
   }

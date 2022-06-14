@@ -156,22 +156,23 @@ RequestResponseCache::Lookup(
   const uint64_t key = request->CacheKey();
 
   num_lookups_++;
-  LOG_VERBOSE(1) << request->IdString()
+  LOG_VERBOSE(1) << request->LogRequest()
                  << "Looking up key [" + std::to_string(key) + "] in cache.";
 
   // Search cache for request hash key
   auto iter = cache_.find(key);
   if (iter == cache_.end()) {
     num_misses_++;
-    LOG_VERBOSE(1) << request->IdString()
+    LOG_VERBOSE(1) << request->LogRequest()
                    << "MISS for key [" + std::to_string(key) + "] in cache.";
     return Status(
-        Status::Code::INTERNAL, request->IdString() + "key not found in cache");
+        Status::Code::INTERNAL,
+        request->LogRequest() + "key not found in cache");
   }
 
   // If find succeeds, it's a cache hit
   num_hits_++;
-  LOG_VERBOSE(1) << request->IdString()
+  LOG_VERBOSE(1) << request->LogRequest()
                  << "HIT for key [" + std::to_string(key) + "] in cache.";
 
   // Populate passed-in "response" from cache entry
@@ -181,7 +182,7 @@ RequestResponseCache::Lookup(
 
   // Update this key to front of LRU list
   UpdateLRU(iter);
-  LOG_VERBOSE(1) << request->IdString()
+  LOG_VERBOSE(1) << request->LogRequest()
                  << "Using cached response for key [" + std::to_string(key) +
                         "].";
   return Status::Success;
@@ -213,7 +214,7 @@ RequestResponseCache::Insert(
   auto iter = cache_.find(key);
   if (iter != cache_.end()) {
     return Status(
-        Status::Code::ALREADY_EXISTS, request->IdString() + "key [" +
+        Status::Code::ALREADY_EXISTS, request->LogRequest() + "key [" +
                                           std::to_string(key) +
                                           "] already exists in cache");
   }
@@ -223,14 +224,15 @@ RequestResponseCache::Insert(
   RETURN_IF_ERROR(BuildCacheEntry(response, &entry));
 
   // Insert entry into cache
-  LOG_VERBOSE(1) << request->IdString()
+  LOG_VERBOSE(1) << request->LogRequest()
                  << "Inserting key [" + std::to_string(key) + "] into cache.";
   auto cache_pair = cache_.insert({key, entry});
   // Exit early if cache insertion failed
   if (!cache_pair.second) {
-    LOG_ERROR << request->IdString() << "Failed to insert key into map.";
+    LOG_ERROR << request->LogRequest() << "Failed to insert key into map.";
     return Status(
-        Status::Code::INTERNAL, request->IdString() + "Cache insertion failed");
+        Status::Code::INTERNAL,
+        request->LogRequest() + "Cache insertion failed");
   }
   // Update LRU with new cache entry
   auto cache_iter = cache_pair.first;

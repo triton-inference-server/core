@@ -718,7 +718,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
         // that same correlation ID that have an assigned slot.
         if (sequence_to_batcherseqslot_map_.find(correlation_id) !=
             sequence_to_batcherseqslot_map_.end()) {
-          LOG_ERROR << irequest->IdString() << "internal: backlog sequence "
+          LOG_ERROR << irequest->LogRequest() << "internal: backlog sequence "
                     << correlation_id
                     << " conflicts with in-flight sequence for model '"
                     << irequest->ModelName() << "'";
@@ -728,7 +728,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
         sequence_to_batcherseqslot_map_[correlation_id] = batcher_seq_slot;
       }
 
-      LOG_VERBOSE(1) << irequest->IdString() << "CORRID " << correlation_id
+      LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
                      << " reusing batcher " << batcher_seq_slot.batcher_idx_
                      << ", slot " << batcher_seq_slot.seq_slot_ << ": "
                      << irequest->ModelName();
@@ -1593,7 +1593,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
       // the sequence slot should be released but otherwise do
       // nothing.
       if (irequest == nullptr) {
-        LOG_VERBOSE(1) << irequest->IdString()
+        LOG_VERBOSE(1) << irequest->LogRequest()
                        << "force-end sequence in batcher " << batcher_idx_
                        << ", slot " << seq_slot;
         release_seq_slot = true;
@@ -1605,7 +1605,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         // release the sequence slot to make it available to another
         // sequence.
         if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0) {
-          LOG_VERBOSE(1) << irequest->IdString() << "end sequence CORRID "
+          LOG_VERBOSE(1) << irequest->LogRequest() << "end sequence CORRID "
                          << correlation_id << " in batcher " << batcher_idx_
                          << ", slot " << seq_slot;
           release_seq_slot = true;
@@ -1617,7 +1617,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         // Update the implicit state and set the input state tensors.
         UpdateImplicitState(irequest, seq_slot);
 
-        LOG_VERBOSE(1) << irequest->IdString()
+        LOG_VERBOSE(1) << irequest->LogRequest()
                        << "issue to dynamic batcher CORRID " << correlation_id
                        << " in batcher " << batcher_idx_ << ", slot "
                        << seq_slot;
