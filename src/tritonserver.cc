@@ -269,6 +269,9 @@ class TritonServerOptions {
     buffer_manager_thread_count_ = c;
   }
 
+  unsigned int ModelLoadThreadCount() const { return model_load_thread_count_; }
+  void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
+
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
 
@@ -322,6 +325,7 @@ class TritonServerOptions {
   uint64_t pinned_memory_pool_size_;
   uint64_t response_cache_byte_size_;
   unsigned int buffer_manager_thread_count_;
+  unsigned int model_load_thread_count_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
@@ -338,6 +342,8 @@ TritonServerOptions::TritonServerOptions()
       gpu_metrics_(true), metrics_interval_(2000), exit_timeout_(30),
       pinned_memory_pool_size_(1 << 28), response_cache_byte_size_(0),
       buffer_manager_thread_count_(0),
+      model_load_thread_count_(
+          std::max(2u, 2 * std::thread::hardware_concurrency())),
 #ifdef TRITON_ENABLE_GPU
       min_compute_capability_(TRITON_MIN_COMPUTE_CAPABILITY),
 #else
@@ -1200,6 +1206,16 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
+    TRITONSERVER_ServerOptions* options, unsigned int thread_count)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelLoadThreadCount(thread_count);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogInfo(
     TRITONSERVER_ServerOptions* options, bool log)
 {
@@ -2018,6 +2034,7 @@ TRITONSERVER_ServerNew(
   lserver->SetHostPolicyCmdlineConfig(loptions->HostPolicyCmdlineConfigMap());
   lserver->SetRepoAgentDir(loptions->RepoAgentDir());
   lserver->SetBufferManagerThreadCount(loptions->BufferManagerThreadCount());
+  lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.

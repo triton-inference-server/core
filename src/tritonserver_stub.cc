@@ -382,6 +382,10 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetModelLoadThreadCount()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetLogInfo()
 {
 }

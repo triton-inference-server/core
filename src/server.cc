@@ -102,6 +102,9 @@ InferenceServer::InferenceServer()
   exit_timeout_secs_ = 30;
   pinned_memory_pool_size_ = 1 << 28;
   buffer_manager_thread_count_ = 0;
+  model_load_thread_count_ =
+      std::max(2u, 2 * std::thread::hardware_concurrency());
+
 #ifdef TRITON_ENABLE_GPU
   min_supported_compute_capability_ = TRITON_MIN_COMPUTE_CAPABILITY;
 #else
@@ -222,7 +225,7 @@ InferenceServer::Init()
       this, version_, model_repository_paths_, startup_models_,
       strict_model_config_, backend_cmdline_config_map_, polling_enabled,
       model_control_enabled, min_supported_compute_capability_,
-      host_policy_map_, &model_repository_manager_);
+      host_policy_map_, model_load_thread_count_, &model_repository_manager_);
   if (!status.IsOk()) {
     if (model_repository_manager_ == nullptr) {
       ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
