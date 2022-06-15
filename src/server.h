@@ -236,6 +236,8 @@ class InferenceServer {
     buffer_manager_thread_count_ = c;
   }
 
+  void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
+
   // Set a backend command-line configuration
   void SetBackendCmdlineConfig(
       const triton::common::BackendCmdlineConfigMap& bc)
@@ -293,6 +295,7 @@ class InferenceServer {
   bool strict_readiness_;
   uint32_t exit_timeout_secs_;
   uint32_t buffer_manager_thread_count_;
+  uint32_t model_load_thread_count_;
   uint64_t pinned_memory_pool_size_;
   uint64_t response_cache_byte_size_;
   bool response_cache_enabled_;
