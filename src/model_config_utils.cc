@@ -794,9 +794,8 @@ SetDefaultInstanceCount(
   // some backends (pytorch, OpenVINO) don't perform well/have high overhead
   // when using multiple instances.
   const int default_cpu_instance_count = 2;
-  bool use_default_cpu_instance_count = (backend == kTensorRTBackend) ||
-                                        (backend == kTensorFlowBackend) ||
-                                        (backend == kOnnxRuntimeBackend);
+  bool use_default_cpu_instance_count =
+      (backend == kTensorFlowBackend) || (backend == kOnnxRuntimeBackend);
   if (group->kind() == inference::ModelInstanceGroup::KIND_CPU &&
       use_default_cpu_instance_count) {
     group->set_count(default_cpu_instance_count);
