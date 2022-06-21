@@ -298,7 +298,8 @@ TEST_F(QueryTest, NoQueryFn)
   ASSERT_TRUE(err != nullptr) << "Expect error";
   EXPECT_EQ(TRITONSERVER_ErrorCode(err), TRITONSERVER_ERROR_UNAVAILABLE);
   EXPECT_STREQ(
-      TRITONSERVER_ErrorMessage(err), "Output properties are not available");
+      TRITONSERVER_ErrorMessage(err),
+      "[request id: <id_unknown>]Output properties are not available");
 }
 
 TEST_F(QueryTest, UnnamedQuery)
