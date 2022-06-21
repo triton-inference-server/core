@@ -1568,6 +1568,12 @@ CollectInt64Fields(
   for (int i = 0; i < desc->field_count(); ++i) {
     const google::protobuf::FieldDescriptor* field = desc->field(i);
     const std::string fullname = prefix + "::" + field->name();
+
+    // Since the message description for this field is recursive, skip this
+    // parameter to avoid infinit recursion.
+    if (fullname == "ModelConfig::parameters::value::list_value") {
+      continue;
+    }
     switch (field->type()) {
       case google::protobuf::FieldDescriptor::TYPE_MESSAGE: {
         if (field->is_repeated()) {
