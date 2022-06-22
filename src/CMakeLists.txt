@@ -124,6 +124,7 @@ set(
   metric_family.cc
   model.cc
   model_config_utils.cc
+  model_lifecycle.cc
   model_repository_manager.cc
   numa_utils.cc
   payload.cc
@@ -167,6 +168,7 @@ set(
   metric_family.h
   model_config_utils.h
   model.h
+  model_lifecycle.h
   model_repository_manager.h
   numa_utils.h
   payload.h

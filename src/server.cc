@@ -435,7 +435,7 @@ InferenceServer::ModelReadyVersions(
 
   ScopedAtomicIncrement inflight(inflight_request_counter_);
 
-  const ModelRepositoryManager::VersionStateMap version_states =
+  const auto version_states =
       model_repository_manager_->VersionStates(model_name);
   for (const auto& pr : version_states) {
     if (pr.second.first == ModelReadyState::READY) {
@@ -516,7 +516,7 @@ InferenceServer::LoadModel(
 
   ScopedAtomicIncrement inflight(inflight_request_counter_);
 
-  auto action_type = ModelRepositoryManager::ActionType::LOAD;
+  auto action_type = ActionType::LOAD;
   return model_repository_manager_->LoadUnloadModel(
       models, action_type, false /* unload_dependents */);
 }
@@ -531,7 +531,7 @@ InferenceServer::UnloadModel(
 
   ScopedAtomicIncrement inflight(inflight_request_counter_);
 
-  auto action_type = ModelRepositoryManager::ActionType::UNLOAD;
+  auto action_type = ActionType::UNLOAD;
   return model_repository_manager_->LoadUnloadModel(
       {{model_name, {}}}, action_type, unload_dependents);
 }
