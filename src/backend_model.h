@@ -108,6 +108,9 @@ class TritonModel : public Model {
   // be longer than the lifetime of a model owned by the server.
   InferenceServer* server_;
 
+  // The minimum supported compute capability on device.
+  const double min_compute_capability_;
+
   // Whether the backend should attempt to auto-complete the model config.
   const bool auto_complete_config_;
 

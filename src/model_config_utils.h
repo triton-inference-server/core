@@ -86,13 +86,6 @@ Status GetNormalizedModelConfig(
     const std::string& model_name, const std::string& path,
     const double min_compute_capability, inference::ModelConfig* config);
 
-/// Auto-complete the instance count based on instance kind and backend name.
-/// \param group The instance group to set the count for.
-/// \param backend The backend name to check against.
-/// \return The error status.
-Status SetDefaultInstanceCount(
-    inference::ModelInstanceGroup* group, const std::string& backend);
-
 /// Auto-complete backend related fields (platform, backend and default model
 /// filename) if not set, note that only Triton recognized backends will be
 /// checked.
@@ -104,6 +97,21 @@ Status SetDefaultInstanceCount(
 Status AutoCompleteBackendFields(
     const std::string& model_name, const std::string& model_path,
     inference::ModelConfig* config);
+
+/// Detects and adds missing fields in the model configuration.
+/// \param config The model configuration
+/// \param min_compute_capability The minimum support CUDA compute
+/// capability.
+/// \return The error status
+Status NormalizeModelConfig(
+    const double min_compute_capability, inference::ModelConfig* config);
+
+/// Auto-complete the instance count based on instance kind and backend name.
+/// \param group The instance group to set the count for.
+/// \param backend The backend name to check against.
+/// \return The error status.
+Status SetDefaultInstanceCount(
+    inference::ModelInstanceGroup* group, const std::string& backend);
 
 /// Validate that a model is specified correctly, except for model inputs
 /// and outputs. ValidateModelIOConfig() should be called to
