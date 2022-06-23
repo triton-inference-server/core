@@ -1207,7 +1207,7 @@ ModelRepositoryManager::ModelLifeCycle::Load(
       model_info->state_ = ModelReadyState::LOADING;
       model_info->state_reason_.clear();
       // Load model asynchronously via thread pool
-      load_pool_->enqueue([this, model_name, version, model_info]() {
+      load_pool_->Enqueue([this, model_name, version, model_info]() {
         CreateModel(model_name, version, model_info);
       });
       break;
