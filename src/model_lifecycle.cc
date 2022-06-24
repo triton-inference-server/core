@@ -496,29 +496,6 @@ ModelLifeCycle::AsyncLoad(
             model_name + "'");
   }
 
-  for (const auto& version : versions) {
-    auto res = it->second.emplace(std::make_pair(
-        version,
-        std::make_pair(
-            std::unique_ptr<ModelInfo>(), std::unique_ptr<ModelInfo>())));
-    if (res.second) {
-      res.first->second.first.reset(new ModelInfo(
-          model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
-          model_config));
-    } else {
-      auto& serving_model = res.first->second.first;
-      std::lock_guard<std::recursive_mutex> lock(serving_model->mtx_);
-      // If the version model is being served, the re-load of the version
-      // should be performed in background to avoid version down-time
-      if (serving_model->state_ == ModelReadyState::READY) {
-        res.first->second.second.reset(new ModelInfo(
-            model_path, ModelReadyState::UNKNOWN, ActionType::NO_ACTION,
-            model_config));
-      }
-    }
-  }
-
-  Status status = Status::Success;
 
   struct LoadTracker {
     LoadTracker(size_t affected_version_cnt)
@@ -527,35 +504,60 @@ ModelLifeCycle::AsyncLoad(
     {
     }
 
+    std::mutex mtx_;
+
     bool load_failed_;
     std::string reason_;
     size_t completed_version_cnt_;
     size_t affected_version_cnt_;
     std::map<int64_t, ModelInfo*> load_set_;
+    // [WIP] the defer unload set will be deduced when all new versions are
+    // successfully loaded, according to 'latest_update_ns_'
+
     // The set of model versions to be unloaded after the load is completed
-    std::set<int64_t> defer_unload_set_;
-    std::mutex mtx_;
+    // std::set<int64_t> defer_unload_set_;
   };
   std::shared_ptr<LoadTracker> load_tracker(new LoadTracker(versions.size()));
-  for (auto& version_model : it->second) {
-    auto version = version_model.first;
-    ModelInfo* model_info = (version_model.second.second == nullptr)
-                                ? version_model.second.first.get()
-                                : version_model.second.second.get();
 
-    std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-    if (versions.find(version) != versions.end()) {
-      model_info->model_path_ = model_path;
-      model_info->model_config_ = model_config;
-      model_info->next_action_ = ActionType::LOAD;
-#ifdef TRITON_ENABLE_ENSEMBLE
-      model_info->is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
-#endif  // TRITON_ENABLE_ENSEMBLE
-      model_info->agent_model_list_ = agent_model_list;
+  uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
+  // [WIP] below trigger load directly
+  for (const auto& version : versions) {
+    std::unique_ptr<ModelInfo> linfo(new ModelInfo(model_path, model_config));
+    ModelInfo* model_info = linfo.get();
+
+    auto res = it->second.emplace(
+        std::make_pair(version, std::unique_ptr<ModelInfo>()));
+    if (res.second) {
+      res.first->second = std::move(linfo);
     } else {
-      load_tracker->defer_unload_set_.emplace(version);
-      continue;
+      // There is already a record of this model version. Check if the version
+      // model is being served, if so, the re-load of the version
+      // should be performed in background to avoid version downtime
+      auto& serving_model = res.first->second;
+      std::lock_guard<std::recursive_mutex> lock(serving_model->mtx_);
+      if (serving_model->state_ == ModelReadyState::READY) {
+        background_models_[(uintptr_t)model_info] = std::move(linfo);
+      } else {
+        // swap the monitoring model info
+        serving_model.swap(linfo);
+
+        // further check the state, put to 'background_models_' to keep
+        // the object valid if the model is LOADING / UNLOADING, because
+        // the model info may be accessed by a different thread once the
+        // operation is completed
+        if ((linfo->state_ == ModelReadyState::LOADING) ||
+            (linfo->state_ == ModelReadyState::UNLOADING)) {
+          ModelInfo* key = linfo.get();
+          background_models_[(uintptr_t)key] = std::move(linfo);
+        }
+      }
     }
+
+    // [WIP] Trigger load and stuff
+    model_info->agent_model_list_ = agent_model_list;
+    model_info->latest_update_ns_ = now_ns;
     // set version-wise callback before triggering next action
     if (OnComplete != nullptr) {
       model_info->OnComplete_ = [this, model_name, version, model_info,
@@ -563,6 +565,8 @@ ModelLifeCycle::AsyncLoad(
         std::lock_guard<std::mutex> tracker_lock(load_tracker->mtx_);
         ++load_tracker->completed_version_cnt_;
         load_tracker->load_set_[version] = model_info;
+        // [WIP] version will not be marked ready until all versions are
+        // ready, this simplify the unloading when one version fails to load
         if (model_info->state_ != ModelReadyState::READY) {
           load_tracker->load_failed_ = true;
           load_tracker->reason_ +=
@@ -596,6 +600,7 @@ ModelLifeCycle::AsyncLoad(
                   unloading_models_[(uintptr_t)loaded.second] =
                       std::move(vit->second.second);
                   auto unload_model = loaded.second;
+                  // [FIXME] clean up can be moved to destructor
                   loaded.second->OnComplete_ = [this, unload_model]() {
                     std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
                     unloading_models_.erase((uintptr_t)unload_model);
@@ -740,6 +745,7 @@ ModelLifeCycle::TriggerNextAction(
   // invoke callback by this point
   if ((!status.IsOk()) && (model_info->OnComplete_ != nullptr)) {
     LOG_VERBOSE(2) << "failed to execute next action, trigger OnComplete()";
+    // [FIXME] OnComplete_ shouldn't be called inplace, should be moved first
     model_info->OnComplete_();
     model_info->OnComplete_ = nullptr;
   }

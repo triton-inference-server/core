@@ -137,9 +137,8 @@ class ModelLifeCycle {
   }
 
   // Start loading model with specified versions asynchronously.
-  // If 'defer_unload' is false, all versions that are being served will
-  // be unloaded before loading the specified versions. Otherwise, the versions
-  // not specified in the load will be unloaded after the load is finished.
+  // All versions that are being served will be unloaded only after
+  // the load is finished sucessfully.
   Status AsyncLoad(
       const std::string& model_name, const std::string& model_path,
       const inference::ModelConfig& model_config,
@@ -183,11 +182,11 @@ class ModelLifeCycle {
  private:
   struct ModelInfo {
     ModelInfo(
-        const std::string& model_path, const ModelReadyState state,
-        const ActionType next_action,
+        const std::string& model_path,
         const inference::ModelConfig& model_config)
-        : model_path_(model_path), is_ensemble_(false), state_(state),
-          next_action_(next_action), model_config_(model_config)
+        : model_path_(model_path), is_ensemble_(false),
+          state_(ModelReadyState::UNKNOWN), latest_update_ns_(0),
+          model_config_(model_config)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
       is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
@@ -201,10 +200,7 @@ class ModelLifeCycle {
     ModelReadyState state_;
     std::string state_reason_;
 
-    // next_action will be set in the case where a load / unload is requested
-    // while the model is already in loading / unloading state. Then the new
-    // load / unload will be postponed as next action.
-    ActionType next_action_;
+    uint64_t latest_update_ns_;
     // callback function that will be triggered when there is no next action
     std::function<void()> OnComplete_;
     inference::ModelConfig model_config_;
@@ -248,12 +244,12 @@ class ModelLifeCycle {
 
   const double min_compute_capability_;
 
-  using VersionMap = std::map<
-      int64_t,
-      std::pair<std::unique_ptr<ModelInfo>, std::unique_ptr<ModelInfo>>>;
+  using VersionMap = std::map<int64_t, std::unique_ptr<ModelInfo>>;
   using ModelMap = std::map<std::string, VersionMap>;
   ModelMap map_;
-  std::map<uintptr_t, std::unique_ptr<ModelInfo>> unloading_models_;
+
+  // Models that are being loaded / unloaded (?) in background
+  std::map<uintptr_t, std::unique_ptr<ModelInfo>> background_models_;
   std::recursive_mutex map_mtx_;
 
   InferenceServer* server_;
