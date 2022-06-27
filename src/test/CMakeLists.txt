@@ -362,7 +362,7 @@ target_include_directories(
 target_link_libraries(
   async_work_queue_test
   PRIVATE
-    triton-common-sync-queue         # from repo-common
+    triton-common-thread-pool        # from repo-common
     triton-common-async-work-queue   # from repo-common
     triton-common-error              # from repo-common
     GTest::gtest
