@@ -298,7 +298,7 @@ class InferenceRequest {
     if (id.empty()) {
       id = "<id_unknown>";
     }
-    return std::string("[request id: ") + id + "]";
+    return std::string("[request id: ") + id + "] ";
   }
 
   // Flags for the request, union of TRITONSERVER_RequestFlag.
