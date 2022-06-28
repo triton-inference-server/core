@@ -23,6 +23,7 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include <unistd.h>
@@ -38,6 +39,8 @@
 #include "triton/core/tritonserver.h"
 
 namespace {
+
+using ::testing::HasSubstr;
 
 #define FAIL_TEST_IF_ERR(X, MSG)                                              \
   do {                                                                        \
@@ -297,9 +300,9 @@ TEST_F(QueryTest, NoQueryFn)
   auto err = completed_.get_future().get();
   ASSERT_TRUE(err != nullptr) << "Expect error";
   EXPECT_EQ(TRITONSERVER_ErrorCode(err), TRITONSERVER_ERROR_UNAVAILABLE);
-  EXPECT_STREQ(
+  EXPECT_THAT(
       TRITONSERVER_ErrorMessage(err),
-      "[request id: <id_unknown>] Output properties are not available");
+      HasSubstr("Output properties are not available"));
 }
 
 TEST_F(QueryTest, UnnamedQuery)
