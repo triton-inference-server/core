@@ -443,6 +443,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
             << "Agent model returns error on TRITONREPOAGENT_ACTION_UNLOAD: "
             << status.AsString();
       }
+      // [FIXME] move to deletor?
       model_info->OnComplete_ = [this, unloading_agent_model_list]() {
         auto status = unloading_agent_model_list->InvokeAgentModels(
             TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE);
@@ -475,7 +476,7 @@ ModelLifeCycle::AsyncLoad(
     const std::string& model_name, const std::string& model_path,
     const inference::ModelConfig& model_config,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
-    std::function<void(Status)> OnComplete)
+    std::function<void(Status)>&& OnComplete)
 {
   LOG_VERBOSE(2) << "AsyncLoad() '" << model_name << "'";
 
@@ -497,34 +498,16 @@ ModelLifeCycle::AsyncLoad(
   }
 
 
-  struct LoadTracker {
-    LoadTracker(size_t affected_version_cnt)
-        : load_failed_(false), completed_version_cnt_(0),
-          affected_version_cnt_(affected_version_cnt)
-    {
-    }
-
-    std::mutex mtx_;
-
-    bool load_failed_;
-    std::string reason_;
-    size_t completed_version_cnt_;
-    size_t affected_version_cnt_;
-    std::map<int64_t, ModelInfo*> load_set_;
-    // [WIP] the defer unload set will be deduced when all new versions are
-    // successfully loaded, according to 'latest_update_ns_'
-
-    // The set of model versions to be unloaded after the load is completed
-    // std::set<int64_t> defer_unload_set_;
-  };
-  std::shared_ptr<LoadTracker> load_tracker(new LoadTracker(versions.size()));
-
-  uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
+  const uint64_t now_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
+  std::shared_ptr<LoadTracker> load_tracker(
+      new LoadTracker(versions.size(), now_ns));
   // [WIP] below trigger load directly
   for (const auto& version : versions) {
-    std::unique_ptr<ModelInfo> linfo(new ModelInfo(model_path, model_config));
+    std::unique_ptr<ModelInfo> linfo(
+        new ModelInfo(model_path, model_config, now_ns));
     ModelInfo* model_info = linfo.get();
 
     auto res = it->second.emplace(
@@ -534,7 +517,8 @@ ModelLifeCycle::AsyncLoad(
     } else {
       // There is already a record of this model version. Check if the version
       // model is being served, if so, the re-load of the version
-      // should be performed in background to avoid version downtime
+      // should be performed in background to avoid version downtime.
+      // Otherwise, swap and monitor state for newly loading model.
       auto& serving_model = res.first->second;
       std::lock_guard<std::recursive_mutex> lock(serving_model->mtx_);
       if (serving_model->state_ == ModelReadyState::READY) {
@@ -559,155 +543,12 @@ ModelLifeCycle::AsyncLoad(
     model_info->agent_model_list_ = agent_model_list;
     model_info->latest_update_ns_ = now_ns;
     // set version-wise callback before triggering next action
-    if (OnComplete != nullptr) {
-      model_info->OnComplete_ = [this, model_name, version, model_info,
-                                 OnComplete, load_tracker]() {
-        std::lock_guard<std::mutex> tracker_lock(load_tracker->mtx_);
-        ++load_tracker->completed_version_cnt_;
-        load_tracker->load_set_[version] = model_info;
-        // [WIP] version will not be marked ready until all versions are
-        // ready, this simplify the unloading when one version fails to load
-        if (model_info->state_ != ModelReadyState::READY) {
-          load_tracker->load_failed_ = true;
-          load_tracker->reason_ +=
-              ("version " + std::to_string(version) + ": " +
-               model_info->state_reason_ + ";");
-        }
-        // Check if all versions are completed and finish the load
-        if (load_tracker->completed_version_cnt_ ==
-            load_tracker->affected_version_cnt_) {
-          std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-          auto it = map_.find(model_name);
-          if (load_tracker->load_failed_) {
-            // If any of the versions fails to load, abort the load and unload
-            // all newly loaded versions
-            if (model_info->agent_model_list_) {
-              auto status = model_info->agent_model_list_->InvokeAgentModels(
-                  TRITONREPOAGENT_ACTION_LOAD_FAIL);
-              if (!status.IsOk()) {
-                LOG_ERROR << "Agent model returns error on "
-                             "TRITONREPOAGENT_ACTION_LOAD_FAIL: "
-                          << status.AsString();
-              }
-            }
-            for (auto& loaded : load_tracker->load_set_) {
-              std::lock_guard<std::recursive_mutex> lock(loaded.second->mtx_);
-              if (loaded.second->state_ == ModelReadyState::READY) {
-                auto vit = it->second.find(loaded.first);
-                // Check if the version model is loaded in background, if so,
-                // move the model to 'unloading_models_' and unload it.
-                if (vit->second.second.get() == loaded.second) {
-                  unloading_models_[(uintptr_t)loaded.second] =
-                      std::move(vit->second.second);
-                  auto unload_model = loaded.second;
-                  // [FIXME] clean up can be moved to destructor
-                  loaded.second->OnComplete_ = [this, unload_model]() {
-                    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-                    unloading_models_.erase((uintptr_t)unload_model);
-                  };
-                } else {
-                  loaded.second->OnComplete_ = nullptr;
-                }
-                loaded.second->next_action_ = ActionType::UNLOAD;
-                TriggerNextAction(model_name, loaded.first, loaded.second);
-              }
-            }
-          } else {
-            if (model_info->agent_model_list_) {
-              auto status = model_info->agent_model_list_->InvokeAgentModels(
-                  TRITONREPOAGENT_ACTION_LOAD_COMPLETE);
-              if (!status.IsOk()) {
-                LOG_ERROR << "Agent model returns error on "
-                             "TRITONREPOAGENT_ACTION_LOAD_COMPLETE: "
-                          << status.AsString();
-              }
-            }
-            bool notified_agent = false;
-            for (auto& loaded : load_tracker->load_set_) {
-              auto vit = it->second.find(loaded.first);
-              // Check if the version model is loaded in background, if so,
-              // replace the current version model and unload it.
-              if (vit->second.second.get() == loaded.second) {
-                vit->second.second.swap(vit->second.first);
-                auto unload_model = vit->second.second.get();
-                unloading_models_[(uintptr_t)unload_model] =
-                    std::move(vit->second.second);
-                std::lock_guard<std::recursive_mutex> lock(unload_model->mtx_);
-                unload_model->next_action_ = ActionType::UNLOAD;
-                if (unload_model->agent_model_list_ && !notified_agent) {
-                  auto unloading_agent_model_list =
-                      unload_model->agent_model_list_;
-                  auto status = unloading_agent_model_list->InvokeAgentModels(
-                      TRITONREPOAGENT_ACTION_UNLOAD);
-                  if (!status.IsOk()) {
-                    LOG_ERROR << "Agent model returns error on "
-                                 "TRITONREPOAGENT_ACTION_UNLOAD: "
-                              << status.AsString();
-                  }
-                  unload_model->OnComplete_ = [this, unload_model,
-                                               unloading_agent_model_list]() {
-                    auto status = unloading_agent_model_list->InvokeAgentModels(
-                        TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE);
-                    if (!status.IsOk()) {
-                      LOG_ERROR << "Agent model returns error on "
-                                   "TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE: "
-                                << status.AsString();
-                    }
-                    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-                    unloading_models_.erase((uintptr_t)unload_model);
-                  };
-                  notified_agent = true;
-                } else {
-                  unload_model->OnComplete_ = [this, unload_model]() {
-                    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
-                    unloading_models_.erase((uintptr_t)unload_model);
-                  };
-                }
-                TriggerNextAction(model_name, version, unload_model);
-              }
-            }
-            // Unload the deferred versions
-            for (const auto deferred_version :
-                 load_tracker->defer_unload_set_) {
-              auto vit = it->second.find(deferred_version);
-              auto unload_model = vit->second.first.get();
-              std::lock_guard<std::recursive_mutex> lock(unload_model->mtx_);
-              unload_model->next_action_ = ActionType::UNLOAD;
-              if (unload_model->agent_model_list_ && !notified_agent) {
-                auto unloading_agent_model_list =
-                    unload_model->agent_model_list_;
-                auto status = unloading_agent_model_list->InvokeAgentModels(
-                    TRITONREPOAGENT_ACTION_UNLOAD);
-                if (!status.IsOk()) {
-                  LOG_ERROR << "Agent model returns error on "
-                               "TRITONREPOAGENT_ACTION_UNLOAD: "
-                            << status.AsString();
-                }
-                unload_model->OnComplete_ = [this,
-                                             unloading_agent_model_list]() {
-                  auto status = unloading_agent_model_list->InvokeAgentModels(
-                      TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE);
-                  if (!status.IsOk()) {
-                    LOG_ERROR << "Agent model returns error on "
-                                 "TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE: "
-                              << status.AsString();
-                  }
-                };
-                notified_agent = true;
-              } else {
-                unload_model->OnComplete_ = nullptr;
-              }
-              TriggerNextAction(model_name, deferred_version, unload_model);
-            }
-          }
-          OnComplete(
-              load_tracker->load_failed_
-                  ? Status(Status::Code::INVALID_ARG, load_tracker->reason_)
-                  : Status::Success);
-        }
-      };
-    }
-    Status action_status = TriggerNextAction(model_name, version, model_info);
+    // [FIXME] 'OnComplete_' is used as handy callback placeholder for now,
+    // should revisit
+    model_info->OnComplete_ = std::bind(
+        &ModelLifeCycle::OnLoadComplete, this, model_name, version, model_info,
+        OnComplete, load_tracker);
+    Status action_status = NewLoad(model_name, version, model_info);
     if (!action_status.IsOk()) {
       status = action_status;
     }
@@ -787,6 +628,23 @@ ModelLifeCycle::Load(
   }
 
   return status;
+}
+
+Status
+ModelLifeCycle::NewLoad(
+    const std::string& model_name, const int64_t version, ModelInfo* model_info)
+{
+  LOG_VERBOSE(2) << "Load() '" << model_name << "' version " << version;
+
+  LOG_INFO << "loading: " << model_name << ":" << version;
+  model_info->state_ = ModelReadyState::LOADING;
+  model_info->state_reason_.clear();
+  // Load model asynchronously via thread pool
+  load_pool_->enqueue([this, model_name, version, model_info]() {
+    CreateModel(model_name, version, model_info);
+  });
+
+  return Status::Success;
 }
 
 Status
@@ -934,6 +792,257 @@ ModelLifeCycle::CreateModel(
 
   // Check if next action is requested
   return TriggerNextAction(model_name, version, model_info);
+}
+
+void
+ModelLifeCycle::NewCreateModel(
+    const std::string& model_name, const int64_t version, ModelInfo* model_info)
+{
+  LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
+  const auto& model_config = model_info->model_config_;
+
+  // Create model
+  Status status;
+  std::unique_ptr<Model> is;
+
+  // If 'backend' is specified in the config then use the new triton
+  // backend.
+  if (!model_config.backend().empty()) {
+    std::unique_ptr<TritonModel> model;
+    status = TritonModel::Create(
+        server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
+        model_name, version, model_config, &model);
+    is.reset(model.release());
+  } else {
+#ifdef TRITON_ENABLE_ENSEMBLE
+    if (model_info->is_ensemble_) {
+      status = EnsembleModel::Create(
+          server_, model_info->model_path_, version, model_config,
+          min_compute_capability_, &is);
+      // Complete label provider with label information from involved models
+      // Must be done here because involved models may not be able to
+      // obtained from server because this may happen during server
+      // initialization.
+      if (status.IsOk()) {
+        std::set<std::string> no_label_outputs;
+        const auto& label_provider = is->GetLabelProvider();
+        for (const auto& output : model_config.output()) {
+          if (label_provider->GetLabel(output.name(), 0).empty()) {
+            no_label_outputs.emplace(output.name());
+          }
+        }
+        for (const auto& element : model_config.ensemble_scheduling().step()) {
+          for (const auto& pair : element.output_map()) {
+            // Found model that produce one of the missing output
+            if (no_label_outputs.find(pair.second) != no_label_outputs.end()) {
+              std::shared_ptr<Model> model;
+              // Safe to obtain model because the ensemble can't be loaded
+              // until the involved models are ready
+              GetModel(element.model_name(), element.model_version(), &model);
+              label_provider->AddLabels(
+                  pair.second,
+                  model->GetLabelProvider()->GetLabels(pair.first));
+            }
+          }
+        }
+      }
+    } else
+#endif  // TRITON_ENABLE_ENSEMBLE
+    {
+      status = Status(
+          Status::Code::INVALID_ARG,
+          "unknown platform '" + model_config.platform() + "'");
+    }
+  }
+
+  // [FIXME] lock?
+  {
+    std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+    // Update model state
+    // [FIXME] check if current state is still LOADING?
+    // helper function to determine if the load should be
+    // aborted (has newer state change / fail to load / self?)
+    if (status.IsOk()) {
+      // [FIXME] better way to manage agent model lifecycle
+      auto agent_model_list = model_info->agent_model_list_;
+      // Unless the handle is nullptr, always reset handle out of the mutex,
+      // otherwise the handle's destructor will try to acquire the mutex and
+      // cause deadlock.
+      model_info->model_.reset(
+          is.release(), ModelDeleter([this, model_name, version, model_info,
+                                      agent_model_list]() mutable {
+            LOG_VERBOSE(2) << "OnDestroy callback() '" << model_name
+                           << "' version " << version;
+            LOG_INFO << "successfully unloaded '" << model_name << "' version "
+                     << version;
+            // [FIXME] update deleter callback below
+            // Use recursive mutex as this deleter is likely to to be called
+            // within ModelLifeCycle class where the same mutex is being hold.
+            // However, mutex acquisition is needed here for the case where
+            // the model is requested to be unloaded while there are inflight
+            // requests, then the deleter will be called from the request thread
+            {
+              std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+              model_info->state_ = ModelReadyState::UNAVAILABLE;
+              model_info->state_reason_ = "unloaded";
+              // Check if next action is requested
+              this->TriggerNextAction(model_name, version, model_info);
+            }
+          }));
+      // [WIP] defer the setting to READY state to OnLoadComplete callback
+      // for simplicity (avoid serving subset of the versions while the load
+      // is not fully finished)
+      // model_info->state_ = ModelReadyState::READY;
+      // model_info->state_reason_.clear();
+      // LOG_INFO << "successfully loaded '" << model_name << "' version "
+      //           << version;
+    } else {
+      LOG_ERROR << "failed to load '" << model_name << "' version " << version
+                << ": " << status.AsString();
+      model_info->state_ = ModelReadyState::UNAVAILABLE;
+      model_info->state_reason_ = status.AsString();
+    }
+  }
+
+  auto load_complete_fn = std::move(model_info->OnComplete_);
+  load_complete_fn();
+}
+
+void
+ModelLifeCycle::OnLoadComplete(
+    const std::string& model_name, const int64_t version, ModelInfo* model_info,
+    std::function<void(Status)> OnComplete,
+    std::shared_ptr<LoadTracker> load_tracker)
+{
+  std::lock_guard<std::mutex> tracker_lock(load_tracker->mtx_);
+  ++load_tracker->completed_version_cnt_;
+  load_tracker->load_set_[version] = model_info;
+  // [WIP] version will not be marked ready until all versions are
+  // ready, this simplify the unloading when one version fails to load
+  if (model_info->state_ != ModelReadyState::LOADING) {
+    load_tracker->load_failed_ = true;
+    load_tracker->reason_ +=
+        ("version " + std::to_string(version) + " is at " +
+         ModelReadyStateString(model_info->state_) +
+         " state : " + model_info->state_reason_ + ";");
+  }
+  // Check if all versions are completed and finish the load
+  if (load_tracker->completed_version_cnt_ ==
+      load_tracker->affected_version_cnt_) {
+    // hold 'map_mtx_' as there will be change onto the model info map
+    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+    auto it = map_.find(model_name);
+    // Check if the load is the latest frontground action on the model
+    for (const auto& version_info : it->second) {
+      if (version_info.second->latest_update_ns_ >
+          load_tracker->latest_update_ns_) {
+        load_tracker->load_failed_ = true;
+        load_tracker->reason_ =
+            "Newer operation has been applied to the model lifecycle, current "
+            "load operation is out-dated.";
+      }
+    }
+    // [FIXME] load should fail when newer update on the model has taken affect
+    if (load_tracker->load_failed_) {
+      // Move agent list out of ModelInfo as it needs to be invoked
+      // after all ModelInfos are reset
+      std::shared_ptr<TritonRepoAgentModelList> lagent_list;
+      if (model_info->agent_model_list_) {
+        lagent_list = std::move(model_info->agent_model_list_);
+      }
+      // If any of the versions fails to load, abort the load and unload
+      // all newly loaded versions
+      for (auto& loaded : load_tracker->load_set_) {
+        // Unload directly, the object is being managed either in frontground
+        // or background
+        std::lock_guard<std::recursive_mutex> lock(loaded.second->mtx_);
+        if (loaded.second->model_ != nullptr) {
+          model_info->state_ = ModelReadyState::UNLOADING;
+          model_info->state_reason_.clear();
+          model_info->agent_model_list_.reset();
+          model_info->model_.reset();
+        }
+      }
+
+      if (lagent_list) {
+        auto status =
+            lagent_list->InvokeAgentModels(TRITONREPOAGENT_ACTION_LOAD_FAIL);
+        if (!status.IsOk()) {
+          LOG_ERROR << "Agent model returns error on "
+                       "TRITONREPOAGENT_ACTION_LOAD_FAIL: "
+                    << status.AsString();
+        }
+      }
+    } else {
+      // Unload any previous loaded versions that are still available
+      for (auto& version_info : it->second) {
+        auto& mi = version_info.second;
+        if ((mi->state_ == ModelReadyState::READY) &&
+            (mi->latest_update_ns_ < load_tracker->latest_update_ns_)) {
+          if ((mi->agent_model_list_ != nullptr) &&
+              (mi->agent_model_list_->LastActionType() ==
+               TRITONREPOAGENT_ACTION_LOAD_COMPLETE)) {
+            auto status = mi->agent_model_list_->InvokeAgentModels(
+                TRITONREPOAGENT_ACTION_UNLOAD);
+            if (!status.IsOk()) {
+              LOG_ERROR << "Agent model returns error on "
+                           "TRITONREPOAGENT_ACTION_UNLOAD: "
+                        << status.AsString();
+            }
+          }
+
+          mi->state_ = ModelReadyState::UNLOADING;
+          mi->state_reason_.clear();
+          mi->agent_model_list_.reset();
+          mi->model_.reset();
+        }
+      }
+
+      // Mark current versions ready and track info in frontground
+      for (auto& loaded : load_tracker->load_set_) {
+        loaded.second->state_ = ModelReadyState::READY;
+
+        auto bit = background_models_.find((uintptr_t)loaded.second);
+        // Check if the version model is loaded in background, if so,
+        // replace and unload the current serving version
+        if (bit != background_models_.end()) {
+          auto vit = it->second.find(loaded.first);
+
+          // Need to lock the previous model info for in case the model is
+          // loading / unloading, this ensure the model state tracked even when
+          // the load / unload is completed.
+          std::lock_guard<std::recursive_mutex> prev_info_lk(vit->second->mtx_);
+
+          // swap previous info into local unique pointer
+          auto linfo = std::move(bit->second);
+          vit->second.swap(linfo);
+          background_models_.erase(bit);
+
+          // if previous info is under change, put into 'background_models_'
+          if ((linfo->state_ == ModelReadyState::LOADING) ||
+              (linfo->state_ == ModelReadyState::UNLOADING)) {
+            ModelInfo* key = linfo.get();
+            background_models_[(uintptr_t)key] = std::move(linfo);
+          }
+        }
+      }
+      if (model_info->agent_model_list_) {
+        auto status = model_info->agent_model_list_->InvokeAgentModels(
+            TRITONREPOAGENT_ACTION_LOAD_COMPLETE);
+        if (!status.IsOk()) {
+          LOG_ERROR << "Agent model returns error on "
+                       "TRITONREPOAGENT_ACTION_LOAD_COMPLETE: "
+                    << status.AsString();
+        }
+      }
+    }
+    if (OnComplete != nullptr) {
+      OnComplete(
+          load_tracker->load_failed_
+              ? Status(Status::Code::INVALID_ARG, load_tracker->reason_)
+              : Status::Success);
+    }
+  }
 }
 
 }}  // namespace triton::core

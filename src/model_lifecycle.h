@@ -74,7 +74,16 @@ using ModelStateMap = std::map<std::string, VersionStateMap>;
 // Helper class to manage the lifecycle of a list of associated agent models
 class TritonRepoAgentModelList {
  public:
-  TritonRepoAgentModelList() = default;
+  TritonRepoAgentModelList()
+      : last_action_type_(TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE){};
+  ~TritonRepoAgentModelList()
+  {
+    // [WIP] Use destructor to make sure the unload lifecycle is complete
+    // without explicitly managing the last step in ModelLifecycle.
+    if (last_action_type_ == TRITONREPOAGENT_ACTION_UNLOAD) {
+      InvokeAgentModels(TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE);
+    }
+  }
   Status AddAgentModel(std::unique_ptr<TritonRepoAgentModel>&& agent_model)
   {
     agent_models_.emplace_back(std::move(agent_model));
@@ -85,8 +94,11 @@ class TritonRepoAgentModelList {
 
   TritonRepoAgentModel* Back() { return agent_models_.back().get(); }
 
+  TRITONREPOAGENT_ActionType LastActionType() { return last_action_type_; }
+
   Status InvokeAgentModels(const TRITONREPOAGENT_ActionType action_type)
   {
+    last_action_type_ = action_type;
     switch (action_type) {
       case TRITONREPOAGENT_ACTION_LOAD:
       case TRITONREPOAGENT_ACTION_UNLOAD: {
@@ -114,6 +126,7 @@ class TritonRepoAgentModelList {
   DISALLOW_COPY_AND_ASSIGN(TritonRepoAgentModelList);
 
   std::vector<std::unique_ptr<TritonRepoAgentModel>> agent_models_;
+  TRITONREPOAGENT_ActionType last_action_type_;
 };
 
 class InferenceServer;
@@ -143,7 +156,7 @@ class ModelLifeCycle {
       const std::string& model_name, const std::string& model_path,
       const inference::ModelConfig& model_config,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
-      std::function<void(Status)> OnComplete);
+      std::function<void(Status)>&& OnComplete);
 
   // Unload model asynchronously.
   Status AsyncUnload(const std::string& model_name);
@@ -183,30 +196,56 @@ class ModelLifeCycle {
   struct ModelInfo {
     ModelInfo(
         const std::string& model_path,
-        const inference::ModelConfig& model_config)
-        : model_path_(model_path), is_ensemble_(false),
-          state_(ModelReadyState::UNKNOWN), latest_update_ns_(0),
-          model_config_(model_config)
+        const inference::ModelConfig& model_config,
+        const uint64_t latest_update_ns)
+        : model_config_(model_config), model_path_(model_path),
+          is_ensemble_(false), latest_update_ns_(latest_update_ns),
+          state_(ModelReadyState::UNKNOWN)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
       is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
 #endif  // TRITON_ENABLE_ENSEMBLE
     }
 
+    inference::ModelConfig model_config_;
     std::string model_path_;
     bool is_ensemble_;
 
     std::recursive_mutex mtx_;
+    uint64_t latest_update_ns_;
     ModelReadyState state_;
     std::string state_reason_;
 
-    uint64_t latest_update_ns_;
     // callback function that will be triggered when there is no next action
     std::function<void()> OnComplete_;
-    inference::ModelConfig model_config_;
 
+    // [FIXME] better way to manage the lifecycle (unload / unload complete)
     std::shared_ptr<TritonRepoAgentModelList> agent_model_list_;
     std::shared_ptr<Model> model_;
+  };
+
+  struct LoadTracker {
+    LoadTracker(
+        const size_t affected_version_cnt, const uint64_t latest_update_ns)
+        : load_failed_(false), completed_version_cnt_(0),
+          affected_version_cnt_(affected_version_cnt),
+          latest_update_ns_(latest_update_ns)
+    {
+    }
+
+    std::mutex mtx_;
+
+    bool load_failed_;
+    std::string reason_;
+    size_t completed_version_cnt_;
+    size_t affected_version_cnt_;
+    std::map<int64_t, ModelInfo*> load_set_;
+    // [WIP] the defer unload set will be deduced when all new versions are
+    // successfully loaded, according to 'latest_update_ns_'
+    uint64_t latest_update_ns_;
+
+    // The set of model versions to be unloaded after the load is completed
+    // std::set<int64_t> defer_unload_set_;
   };
 
   ModelLifeCycle(
@@ -241,6 +280,24 @@ class ModelLifeCycle {
   Status CreateModel(
       const std::string& model_name, const int64_t version,
       ModelInfo* model_info);
+
+  // [WIP] replace existing functions
+  // [FIXME] lock?
+  // Load is easy, always operating on fresh ModelInfo
+  Status NewLoad(
+      const std::string& model_name, const int64_t version,
+      ModelInfo* model_info);
+  void NewCreateModel(
+      const std::string& model_name, const int64_t version,
+      ModelInfo* model_info);
+  // Callback function template for model load.
+  // 'OnComplete' needs to be passed by value for now as there can be
+  // multiple versions to be loaded and each holds a copy of
+  // the 'OnComplete' callback.
+  void OnLoadComplete(
+      const std::string& model_name, const int64_t version,
+      ModelInfo* model_info, std::function<void(Status)> OnComplete,
+      std::shared_ptr<LoadTracker> load_tracker);
 
   const double min_compute_capability_;
 
