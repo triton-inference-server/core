@@ -198,21 +198,18 @@ ModelLifeCycle::LiveModelStates(bool strict_readiness)
     VersionStateMap version_map;
 
     for (auto& version_model : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_model.second.first->mtx_);
+      std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
       if (strict_readiness &&
-          version_model.second.first->state_ != ModelReadyState::READY) {
+          version_model.second->state_ != ModelReadyState::READY) {
         continue;
       }
 
       // At lease one version is live (ready / loading / unloading)
-      if ((version_model.second.first->state_ != ModelReadyState::UNKNOWN) &&
-          (version_model.second.first->state_ !=
-           ModelReadyState::UNAVAILABLE)) {
+      if ((version_model.second->state_ != ModelReadyState::UNKNOWN) &&
+          (version_model.second->state_ != ModelReadyState::UNAVAILABLE)) {
         live = true;
         version_map[version_model.first] = std::make_pair(
-            version_model.second.first->state_,
-            version_model.second.first->state_reason_);
+            version_model.second->state_, version_model.second->state_reason_);
       }
     }
 
@@ -230,11 +227,10 @@ ModelLifeCycle::StopAllModels()
   std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
-      if (version_model.second.first != nullptr) {
-        std::lock_guard<std::recursive_mutex> lock(
-            version_model.second.first->mtx_);
-        if (version_model.second.first->model_ != nullptr) {
-          version_model.second.first->model_->Stop();
+      if (version_model.second != nullptr) {
+        std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+        if (version_model.second->model_ != nullptr) {
+          version_model.second->model_->Stop();
         }
       }
     }
@@ -250,12 +246,11 @@ ModelLifeCycle::InflightStatus()
   std::set<std::tuple<std::string, int64_t, size_t>> inflight_status;
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
-      if (version_model.second.first != nullptr) {
-        std::lock_guard<std::recursive_mutex> lock(
-            version_model.second.first->mtx_);
-        if (version_model.second.first->model_ != nullptr) {
+      if (version_model.second != nullptr) {
+        std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+        if (version_model.second->model_ != nullptr) {
           const auto cnt =
-              version_model.second.first->model_->InflightInferenceCount();
+              version_model.second->model_->InflightInferenceCount();
           if (cnt != 0) {
             inflight_status.emplace(
                 model_version.first, version_model.first, cnt);
@@ -277,11 +272,9 @@ ModelLifeCycle::ModelStates()
     VersionStateMap version_map;
 
     for (auto& version_model : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_model.second.first->mtx_);
+      std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
       version_map[version_model.first] = std::make_pair(
-          version_model.second.first->state_,
-          version_model.second.first->state_reason_);
+          version_model.second->state_, version_model.second->state_reason_);
     }
 
     model_states[model_version.first] = std::move(version_map);
@@ -299,11 +292,9 @@ ModelLifeCycle::VersionStates(const std::string& model_name)
   auto mit = map_.find(model_name);
   if (mit != map_.end()) {
     for (auto& version_model : mit->second) {
-      std::lock_guard<std::recursive_mutex> lock(
-          version_model.second.first->mtx_);
+      std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
       version_map[version_model.first] = std::make_pair(
-          version_model.second.first->state_,
-          version_model.second.first->state_reason_);
+          version_model.second->state_, version_model.second->state_reason_);
     }
   }
 
@@ -320,8 +311,8 @@ ModelLifeCycle::ModelState(
   if (mit != map_.end()) {
     auto vit = mit->second.find(model_version);
     if (vit != mit->second.end()) {
-      std::lock_guard<std::recursive_mutex> lock(vit->second.first->mtx_);
-      *state = vit->second.first->state_;
+      std::lock_guard<std::recursive_mutex> lock(vit->second->mtx_);
+      *state = vit->second->state_;
       return Status::Success;
     }
   }
@@ -359,19 +350,19 @@ ModelLifeCycle::GetModel(
             // mutex to update its state. Here we attempt to acquire the lock
             // but don't block on it.
             std::unique_lock<std::recursive_mutex> lock(
-                version_model.second.first->mtx_, std::try_to_lock);
+                version_model.second->mtx_, std::try_to_lock);
             retry = !lock.owns_lock();
             if (retry) {
               // Skip this version as it is still being processed.
               continue;
             }
-            if (version_model.second.first->state_ == ModelReadyState::READY) {
+            if (version_model.second->state_ == ModelReadyState::READY) {
               latest = version_model.first;
               // Tedious, but have to set handle for any "latest" version
               // at the moment to avoid edge case like the following:
               // "versions : 1 3 2", version 3 is latest but is requested
               // to be unloaded when the iterator is examining version 2.
-              *model = version_model.second.first->model_;
+              *model = version_model.second->model_;
             }
           }
         }
@@ -398,7 +389,7 @@ ModelLifeCycle::GetModel(
       // mutex to update its state. Here we attempt to acquire the lock
       // but don't block on it.
       std::unique_lock<std::recursive_mutex> lock(
-          vit->second.first->mtx_, std::try_to_lock);
+          vit->second->mtx_, std::try_to_lock);
       if (!lock.owns_lock()) {
         // The model version is still being processed. Will initiate a
         // re-attempt, which will release map_mtx_ for now. This is important so
@@ -406,8 +397,8 @@ ModelLifeCycle::GetModel(
         // make progress and avoid a deadlock.
         continue;
       }
-      if (vit->second.first->state_ == ModelReadyState::READY) {
-        *model = vit->second.first->model_;
+      if (vit->second->state_ == ModelReadyState::READY) {
+        *model = vit->second->model_;
       } else {
         return Status(
             Status::Code::UNAVAILABLE, "'" + model_name + "' version " +
@@ -431,44 +422,40 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
   }
 
   // Get the existing agent models and notify the unload action
+  const uint64_t now_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
   for (auto& version : it->second) {
-    ModelInfo* model_info = version.second.first.get();
-    if (model_info->agent_model_list_ != nullptr) {
-      auto unloading_agent_model_list = model_info->agent_model_list_;
-      // Only log the error because the model should be unloaded regardless
-      auto status = unloading_agent_model_list->InvokeAgentModels(
-          TRITONREPOAGENT_ACTION_UNLOAD);
-      if (!status.IsOk()) {
-        LOG_ERROR
-            << "Agent model returns error on TRITONREPOAGENT_ACTION_UNLOAD: "
-            << status.AsString();
-      }
-      // [FIXME] move to deletor?
-      model_info->OnComplete_ = [this, unloading_agent_model_list]() {
-        auto status = unloading_agent_model_list->InvokeAgentModels(
-            TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE);
+    auto& model_info = version.second;
+    std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+    model_info->latest_update_ns_ = now_ns;
+    // Unload serving model, for model that is in LOADING state,
+    // the updated timestamp will be recognized that there is newer update
+    // on the model info and the load should be aborted
+    if (model_info->state_ == ModelReadyState::READY) {
+      if ((model_info->agent_model_list_ != nullptr) &&
+          (model_info->agent_model_list_->LastActionType() ==
+           TRITONREPOAGENT_ACTION_LOAD_COMPLETE)) {
+        // Only log the error because the model should be unloaded regardless
+        auto status = model_info->agent_model_list_->InvokeAgentModels(
+            TRITONREPOAGENT_ACTION_UNLOAD);
         if (!status.IsOk()) {
-          LOG_ERROR << "Agent model returns error on "
-                       "TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE: "
-                    << status.AsString();
+          LOG_ERROR
+              << "Agent model returns error on TRITONREPOAGENT_ACTION_UNLOAD: "
+              << status.AsString();
         }
-      };
-      break;
+      }
+
+      // unload
+      model_info->state_ = ModelReadyState::UNLOADING;
+      model_info->state_reason_.clear();
+      model_info->agent_model_list_.reset();
+      model_info->model_.reset();
     }
   }
 
-  Status status = Status::Success;
-  for (auto& version_model : it->second) {
-    ModelInfo* model_info = version_model.second.first.get();
-    model_info->next_action_ = ActionType::UNLOAD;
-    Status action_status =
-        TriggerNextAction(model_name, version_model.first, model_info);
-    if (!action_status.IsOk()) {
-      status = action_status;
-    }
-  }
-
-  return status;
+  return Status::Success;
 }
 
 Status
@@ -548,254 +535,21 @@ ModelLifeCycle::AsyncLoad(
     model_info->OnComplete_ = std::bind(
         &ModelLifeCycle::OnLoadComplete, this, model_name, version, model_info,
         OnComplete, load_tracker);
-    Status action_status = NewLoad(model_name, version, model_info);
-    if (!action_status.IsOk()) {
-      status = action_status;
-    }
+
+    LOG_INFO << "loading: " << model_name << ":" << version;
+    model_info->state_ = ModelReadyState::LOADING;
+    model_info->state_reason_.clear();
+    // Load model asynchronously via thread pool
+    load_pool_->Enqueue([this, model_name, version, model_info]() {
+      CreateModel(model_name, version, model_info);
+    });
   }
-
-  return status;
-}
-
-Status
-ModelLifeCycle::TriggerNextAction(
-    const std::string& model_name, const int64_t version, ModelInfo* model_info)
-{
-  LOG_VERBOSE(2) << "TriggerNextAction() '" << model_name << "' version "
-                 << version << ": " << std::to_string(model_info->next_action_);
-  ActionType next_action = model_info->next_action_;
-  model_info->next_action_ = ActionType::NO_ACTION;
-  Status status = Status::Success;
-  switch (next_action) {
-    case ActionType::LOAD:
-      status = Load(model_name, version, model_info);
-      break;
-    case ActionType::UNLOAD:
-      status = Unload(model_name, version, model_info);
-      break;
-    default:
-      if (model_info->OnComplete_ != nullptr) {
-        LOG_VERBOSE(2) << "no next action, trigger OnComplete()";
-        model_info->OnComplete_();
-        model_info->OnComplete_ = nullptr;
-      }
-      break;
-  }
-
-  // If status is not ok, "next action" path ends here and thus need to
-  // invoke callback by this point
-  if ((!status.IsOk()) && (model_info->OnComplete_ != nullptr)) {
-    LOG_VERBOSE(2) << "failed to execute next action, trigger OnComplete()";
-    // [FIXME] OnComplete_ shouldn't be called inplace, should be moved first
-    model_info->OnComplete_();
-    model_info->OnComplete_ = nullptr;
-  }
-
-  return status;
-}
-
-Status
-ModelLifeCycle::Load(
-    const std::string& model_name, const int64_t version, ModelInfo* model_info)
-{
-  LOG_VERBOSE(2) << "Load() '" << model_name << "' version " << version;
-  Status status = Status::Success;
-
-  model_info->next_action_ = ActionType::NO_ACTION;
-
-  switch (model_info->state_) {
-    case ModelReadyState::READY:
-      LOG_INFO << "re-loading: " << model_name << ":" << version;
-      model_info->state_ = ModelReadyState::UNLOADING;
-      model_info->state_reason_.clear();
-      model_info->next_action_ = ActionType::LOAD;
-      // The load will be triggered once the unload is done (deleter is called)
-      model_info->model_.reset();
-      break;
-    case ModelReadyState::LOADING:
-    case ModelReadyState::UNLOADING:
-      model_info->next_action_ = ActionType::LOAD;
-      break;
-    default:
-      LOG_INFO << "loading: " << model_name << ":" << version;
-      model_info->state_ = ModelReadyState::LOADING;
-      model_info->state_reason_.clear();
-      // Load model asynchronously via thread pool
-      load_pool_->enqueue([this, model_name, version, model_info]() {
-        CreateModel(model_name, version, model_info);
-      });
-      break;
-  }
-
-  return status;
-}
-
-Status
-ModelLifeCycle::NewLoad(
-    const std::string& model_name, const int64_t version, ModelInfo* model_info)
-{
-  LOG_VERBOSE(2) << "Load() '" << model_name << "' version " << version;
-
-  LOG_INFO << "loading: " << model_name << ":" << version;
-  model_info->state_ = ModelReadyState::LOADING;
-  model_info->state_reason_.clear();
-  // Load model asynchronously via thread pool
-  load_pool_->enqueue([this, model_name, version, model_info]() {
-    CreateModel(model_name, version, model_info);
-  });
 
   return Status::Success;
 }
 
-Status
-ModelLifeCycle::Unload(
-    const std::string& model_name, const int64_t version, ModelInfo* model_info)
-{
-  LOG_VERBOSE(2) << "Unload() '" << model_name << "' version " << version;
-  Status status = Status::Success;
-
-  model_info->next_action_ = ActionType::NO_ACTION;
-
-  switch (model_info->state_) {
-    case ModelReadyState::READY:
-      LOG_INFO << "unloading: " << model_name << ":" << version;
-      model_info->state_ = ModelReadyState::UNLOADING;
-      model_info->state_reason_.clear();
-      model_info->model_.reset();
-      model_info->agent_model_list_.reset();
-      break;
-    case ModelReadyState::LOADING:
-    case ModelReadyState::UNLOADING:
-      model_info->next_action_ = ActionType::UNLOAD;
-      break;
-    default:
-      status = Status(
-          Status::Code::NOT_FOUND,
-          "tried to unload model '" + model_name + "' version " +
-              std::to_string(version) + " which is at model state: " +
-              ModelReadyStateString(model_info->state_));
-      break;
-  }
-
-  return status;
-}
-
-Status
-ModelLifeCycle::CreateModel(
-    const std::string& model_name, const int64_t version, ModelInfo* model_info)
-{
-  LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
-  // make copy of the current model config in case model config in model info
-  // is updated (another poll) during the creation of the model
-  inference::ModelConfig model_config;
-  {
-    std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-    model_config = model_info->model_config_;
-  }
-
-  // Create model
-  Status status;
-  std::unique_ptr<Model> is;
-
-  // If 'backend' is specified in the config then use the new triton
-  // backend.
-  if (!model_config.backend().empty()) {
-    std::unique_ptr<TritonModel> model;
-    status = TritonModel::Create(
-        server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
-        model_name, version, model_config, &model);
-    is.reset(model.release());
-  } else {
-#ifdef TRITON_ENABLE_ENSEMBLE
-    if (model_info->is_ensemble_) {
-      status = EnsembleModel::Create(
-          server_, model_info->model_path_, version, model_config,
-          min_compute_capability_, &is);
-      // Complete label provider with label information from involved models
-      // Must be done here because involved models may not be able to
-      // obtained from server because this may happen during server
-      // initialization.
-      if (status.IsOk()) {
-        std::set<std::string> no_label_outputs;
-        const auto& label_provider = is->GetLabelProvider();
-        for (const auto& output : model_config.output()) {
-          if (label_provider->GetLabel(output.name(), 0).empty()) {
-            no_label_outputs.emplace(output.name());
-          }
-        }
-        for (const auto& element : model_config.ensemble_scheduling().step()) {
-          for (const auto& pair : element.output_map()) {
-            // Found model that produce one of the missing output
-            if (no_label_outputs.find(pair.second) != no_label_outputs.end()) {
-              std::shared_ptr<Model> model;
-              // Safe to obtain model because the ensemble can't be loaded
-              // until the involved models are ready
-              GetModel(element.model_name(), element.model_version(), &model);
-              label_provider->AddLabels(
-                  pair.second,
-                  model->GetLabelProvider()->GetLabels(pair.first));
-            }
-          }
-        }
-      }
-    } else
-#endif  // TRITON_ENABLE_ENSEMBLE
-    {
-      status = Status(
-          Status::Code::INVALID_ARG,
-          "unknown platform '" + model_config.platform() + "'");
-    }
-  }
-
-  // Update model state
-  std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-  // Sanity check
-  if (model_info->model_ != nullptr) {
-    LOG_ERROR << "trying to load model '" << model_name << "' version "
-              << version << " while it is being served";
-  } else {
-    if (status.IsOk()) {
-      // Unless the handle is nullptr, always reset handle out of the mutex,
-      // otherwise the handle's destructor will try to acquire the mutex and
-      // cause deadlock.
-      model_info->model_.reset(
-          is.release(),
-          ModelDeleter([this, model_name, version, model_info]() mutable {
-            LOG_VERBOSE(2) << "OnDestroy callback() '" << model_name
-                           << "' version " << version;
-            LOG_INFO << "successfully unloaded '" << model_name << "' version "
-                     << version;
-            // Use recursive mutex as this deleter is likely to to be called
-            // within ModelLifeCycle class where the same mutex is being hold.
-            // However, mutex acquisition is needed here for the case where
-            // the model is requested to be unloaded while there are inflight
-            // requests, then the deleter will be called from the request thread
-            {
-              std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-              model_info->state_ = ModelReadyState::UNAVAILABLE;
-              model_info->state_reason_ = "unloaded";
-              // Check if next action is requested
-              this->TriggerNextAction(model_name, version, model_info);
-            }
-          }));
-      model_info->state_ = ModelReadyState::READY;
-      model_info->state_reason_.clear();
-      LOG_INFO << "successfully loaded '" << model_name << "' version "
-               << version;
-    } else {
-      LOG_ERROR << "failed to load '" << model_name << "' version " << version
-                << ": " << status.AsString();
-      model_info->state_ = ModelReadyState::UNAVAILABLE;
-      model_info->state_reason_ = status.AsString();
-    }
-  }
-
-  // Check if next action is requested
-  return TriggerNextAction(model_name, version, model_info);
-}
-
 void
-ModelLifeCycle::NewCreateModel(
+ModelLifeCycle::CreateModel(
     const std::string& model_name, const int64_t version, ModelInfo* model_info)
 {
   LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
@@ -875,7 +629,6 @@ ModelLifeCycle::NewCreateModel(
                            << "' version " << version;
             LOG_INFO << "successfully unloaded '" << model_name << "' version "
                      << version;
-            // [FIXME] update deleter callback below
             // Use recursive mutex as this deleter is likely to to be called
             // within ModelLifeCycle class where the same mutex is being hold.
             // However, mutex acquisition is needed here for the case where
@@ -885,17 +638,16 @@ ModelLifeCycle::NewCreateModel(
               std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
               model_info->state_ = ModelReadyState::UNAVAILABLE;
               model_info->state_reason_ = "unloaded";
-              // Check if next action is requested
-              this->TriggerNextAction(model_name, version, model_info);
+            }
+
+            // Check if the model info is in background, if so, remove from the
+            // map
+            std::lock_guard<std::recursive_mutex> lk(this->map_mtx_);
+            auto it = this->background_models_.find((uintptr_t)model_info);
+            if (it != this->background_models_.end()) {
+              this->background_models_.erase(it);
             }
           }));
-      // [WIP] defer the setting to READY state to OnLoadComplete callback
-      // for simplicity (avoid serving subset of the versions while the load
-      // is not fully finished)
-      // model_info->state_ = ModelReadyState::READY;
-      // model_info->state_reason_.clear();
-      // LOG_INFO << "successfully loaded '" << model_name << "' version "
-      //           << version;
     } else {
       LOG_ERROR << "failed to load '" << model_name << "' version " << version
                 << ": " << status.AsString();
@@ -1001,6 +753,9 @@ ModelLifeCycle::OnLoadComplete(
       // Mark current versions ready and track info in frontground
       for (auto& loaded : load_tracker->load_set_) {
         loaded.second->state_ = ModelReadyState::READY;
+        model_info->state_reason_.clear();
+        LOG_INFO << "successfully loaded '" << model_name << "' version "
+                 << version;
 
         auto bit = background_models_.find((uintptr_t)loaded.second);
         // Check if the version model is loaded in background, if so,

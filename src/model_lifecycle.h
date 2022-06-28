@@ -267,27 +267,13 @@ class ModelLifeCycle {
       const std::string& model_name, const int64_t version,
       ModelInfo* model_info);
 
-  // Helper function called by TriggerNextAction()
-  Status Load(
-      const std::string& model_name, const int64_t version,
-      ModelInfo* model_info);
-
-  // Helper function called by TriggerNextAction()
-  Status Unload(
-      const std::string& model_name, const int64_t version,
-      ModelInfo* model_info);
-
-  Status CreateModel(
-      const std::string& model_name, const int64_t version,
-      ModelInfo* model_info);
-
   // [WIP] replace existing functions
   // [FIXME] lock?
   // Load is easy, always operating on fresh ModelInfo
-  Status NewLoad(
+  Status Load(
       const std::string& model_name, const int64_t version,
       ModelInfo* model_info);
-  void NewCreateModel(
+  void CreateModel(
       const std::string& model_name, const int64_t version,
       ModelInfo* model_info);
   // Callback function template for model load.
