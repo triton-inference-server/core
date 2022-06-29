@@ -38,9 +38,6 @@
 
 namespace triton { namespace core {
 
-// [FIXME] shouldn't need this
-enum ActionType { NO_ACTION, LOAD, UNLOAD };
-
 /// Readiness status for models.
 enum class ModelReadyState {
   // The model is in an unknown state. The model is not available for
@@ -78,8 +75,8 @@ class TritonRepoAgentModelList {
       : last_action_type_(TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE){};
   ~TritonRepoAgentModelList()
   {
-    // [WIP] Use destructor to make sure the unload lifecycle is complete
-    // without explicitly managing the last step in ModelLifecycle.
+    // Using destructor to finish the unload lifecycle without
+    // explicitly managing the last step in ModelLifecycle.
     if (last_action_type_ == TRITONREPOAGENT_ACTION_UNLOAD) {
       InvokeAgentModels(TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE);
     }
@@ -197,9 +194,9 @@ class ModelLifeCycle {
     ModelInfo(
         const std::string& model_path,
         const inference::ModelConfig& model_config,
-        const uint64_t latest_update_ns)
+        const uint64_t last_update_ns)
         : model_config_(model_config), model_path_(model_path),
-          is_ensemble_(false), latest_update_ns_(latest_update_ns),
+          is_ensemble_(false), last_update_ns_(last_update_ns),
           state_(ModelReadyState::UNKNOWN)
     {
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -212,21 +209,20 @@ class ModelLifeCycle {
     bool is_ensemble_;
 
     std::recursive_mutex mtx_;
-    uint64_t latest_update_ns_;
+    uint64_t last_update_ns_;
     ModelReadyState state_;
     std::string state_reason_;
 
-    // [FIXME] better way to manage the lifecycle (unload / unload complete)
     std::shared_ptr<TritonRepoAgentModelList> agent_model_list_;
     std::shared_ptr<Model> model_;
   };
 
   struct LoadTracker {
     LoadTracker(
-        const size_t affected_version_cnt, const uint64_t latest_update_ns)
+        const size_t affected_version_cnt, const uint64_t last_update_ns)
         : load_failed_(false), completed_version_cnt_(0),
           affected_version_cnt_(affected_version_cnt),
-          latest_update_ns_(latest_update_ns)
+          last_update_ns_(last_update_ns)
     {
     }
 
@@ -237,12 +233,7 @@ class ModelLifeCycle {
     size_t completed_version_cnt_;
     size_t affected_version_cnt_;
     std::map<int64_t, ModelInfo*> load_set_;
-    // [WIP] the defer unload set will be deduced when all new versions are
-    // successfully loaded, according to 'latest_update_ns_'
-    uint64_t latest_update_ns_;
-
-    // The set of model versions to be unloaded after the load is completed
-    // std::set<int64_t> defer_unload_set_;
+    uint64_t last_update_ns_;
   };
 
   ModelLifeCycle(
@@ -258,12 +249,6 @@ class ModelLifeCycle {
         new triton::common::ThreadPool(std::max(1u, model_load_thread_count)));
   }
 
-  // [WIP] replace existing functions
-  // [FIXME] lock?
-  // Load is easy, always operating on fresh ModelInfo
-  Status Load(
-      const std::string& model_name, const int64_t version,
-      ModelInfo* model_info);
   void CreateModel(
       const std::string& model_name, const int64_t version,
       ModelInfo* model_info);
@@ -278,13 +263,14 @@ class ModelLifeCycle {
 
   const double min_compute_capability_;
 
+  // Mutex for 'map_' and 'background_models_'
+  std::recursive_mutex map_mtx_;
+
   using VersionMap = std::map<int64_t, std::unique_ptr<ModelInfo>>;
   using ModelMap = std::map<std::string, VersionMap>;
   ModelMap map_;
-
-  // Models that are being loaded / unloaded (?) in background
+  // Models that are being loaded / unloaded in background
   std::map<uintptr_t, std::unique_ptr<ModelInfo>> background_models_;
-  std::recursive_mutex map_mtx_;
 
   InferenceServer* server_;
   const triton::common::BackendCmdlineConfigMap cmdline_config_map_;

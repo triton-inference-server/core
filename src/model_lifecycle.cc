@@ -430,7 +430,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
   for (auto& version : it->second) {
     auto& model_info = version.second;
     std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-    model_info->latest_update_ns_ = now_ns;
+    model_info->last_update_ns_ = now_ns;
     // Unload serving model, for model that is in LOADING state,
     // the updated timestamp will be recognized that there is newer update
     // on the model info and the load should be aborted
@@ -672,8 +672,8 @@ ModelLifeCycle::OnLoadComplete(
     auto it = map_.find(model_name);
     // Check if the load is the latest frontground action on the model
     for (const auto& version_info : it->second) {
-      if (version_info.second->latest_update_ns_ >
-          load_tracker->latest_update_ns_) {
+      if (version_info.second->last_update_ns_ >
+          load_tracker->last_update_ns_) {
         load_tracker->load_failed_ = true;
         load_tracker->reason_ =
             "Newer operation has been applied to the model lifecycle, current "
@@ -716,7 +716,7 @@ ModelLifeCycle::OnLoadComplete(
       for (auto& version_info : it->second) {
         auto& mi = version_info.second;
         if ((mi->state_ == ModelReadyState::READY) &&
-            (mi->latest_update_ns_ < load_tracker->latest_update_ns_)) {
+            (mi->last_update_ns_ < load_tracker->last_update_ns_)) {
           if ((mi->agent_model_list_ != nullptr) &&
               (mi->agent_model_list_->LastActionType() ==
                TRITONREPOAGENT_ACTION_LOAD_COMPLETE)) {

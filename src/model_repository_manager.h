@@ -41,6 +41,9 @@ namespace triton { namespace core {
 class InferenceServer;
 class Model;
 
+// [FIXME] should have separated load / unload functions for clarity
+enum ActionType { NO_ACTION, LOAD, UNLOAD };
+
 /// Predefined reason strings
 #define MODEL_READY_REASON_DUPLICATE "model appears in two or more repositories"
 
