@@ -99,9 +99,9 @@ Status AutoCompleteBackendFields(
     inference::ModelConfig* config);
 
 /// Detects and adds missing fields in the model configuration.
-/// \param config The model configuration
-/// \param min_compute_capability The minimum support CUDA compute
+/// \param min_compute_capability The minimum supported CUDA compute
 /// capability.
+/// \param config The model configuration
 /// \return The error status
 Status NormalizeModelConfig(
     const double min_compute_capability, inference::ModelConfig* config);

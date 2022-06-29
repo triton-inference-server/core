@@ -353,8 +353,8 @@ TritonModel::UpdateModelConfig(
             .c_str());
   }  // else do nothing
 
-  // The updated model config may have added some
-  // fields that may need normalizing.
+  // Need to normalize the model configuration for
+  // populating missing fields.
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability_, &config));
 
   RETURN_IF_ERROR(SetModelConfig(config));
