@@ -491,7 +491,6 @@ ModelLifeCycle::AsyncLoad(
           .count();
   std::shared_ptr<LoadTracker> load_tracker(
       new LoadTracker(versions.size(), now_ns));
-  // [WIP] below trigger load directly
   for (const auto& version : versions) {
     std::unique_ptr<ModelInfo> linfo(
         new ModelInfo(model_path, model_config, now_ns));
@@ -526,22 +525,17 @@ ModelLifeCycle::AsyncLoad(
       }
     }
 
-    // [WIP] Trigger load and stuff
     model_info->agent_model_list_ = agent_model_list;
     model_info->latest_update_ns_ = now_ns;
-    // set version-wise callback before triggering next action
-    // [FIXME] 'OnComplete_' is used as handy callback placeholder for now,
-    // should revisit
-    model_info->OnComplete_ = std::bind(
-        &ModelLifeCycle::OnLoadComplete, this, model_name, version, model_info,
-        OnComplete, load_tracker);
 
     LOG_INFO << "loading: " << model_name << ":" << version;
     model_info->state_ = ModelReadyState::LOADING;
     model_info->state_reason_.clear();
     // Load model asynchronously via thread pool
-    load_pool_->Enqueue([this, model_name, version, model_info]() {
+    load_pool_->Enqueue([this, model_name, version, model_info, OnComplete,
+                         load_tracker]() {
       CreateModel(model_name, version, model_info);
+      OnLoadComplete(model_name, version, model_info, OnComplete, load_tracker);
     });
   }
 
@@ -655,9 +649,6 @@ ModelLifeCycle::CreateModel(
       model_info->state_reason_ = status.AsString();
     }
   }
-
-  auto load_complete_fn = std::move(model_info->OnComplete_);
-  load_complete_fn();
 }
 
 void
@@ -669,8 +660,9 @@ ModelLifeCycle::OnLoadComplete(
   std::lock_guard<std::mutex> tracker_lock(load_tracker->mtx_);
   ++load_tracker->completed_version_cnt_;
   load_tracker->load_set_[version] = model_info;
-  // [WIP] version will not be marked ready until all versions are
-  // ready, this simplify the unloading when one version fails to load
+  // Version will not be marked ready until all versions are
+  // ready, this simplify the unloading when one version fails to load as
+  // all other versions won't have inflight requests
   if (model_info->state_ != ModelReadyState::LOADING) {
     load_tracker->load_failed_ = true;
     load_tracker->reason_ +=
@@ -709,10 +701,10 @@ ModelLifeCycle::OnLoadComplete(
         // or background
         std::lock_guard<std::recursive_mutex> lock(loaded.second->mtx_);
         if (loaded.second->model_ != nullptr) {
-          model_info->state_ = ModelReadyState::UNLOADING;
-          model_info->state_reason_.clear();
-          model_info->agent_model_list_.reset();
-          model_info->model_.reset();
+          loaded.second->state_ = ModelReadyState::UNLOADING;
+          loaded.second->state_reason_.clear();
+          loaded.second->agent_model_list_.reset();
+          loaded.second->model_.reset();
         }
       }
 

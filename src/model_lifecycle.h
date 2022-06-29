@@ -216,9 +216,6 @@ class ModelLifeCycle {
     ModelReadyState state_;
     std::string state_reason_;
 
-    // callback function that will be triggered when there is no next action
-    std::function<void()> OnComplete_;
-
     // [FIXME] better way to manage the lifecycle (unload / unload complete)
     std::shared_ptr<TritonRepoAgentModelList> agent_model_list_;
     std::shared_ptr<Model> model_;
