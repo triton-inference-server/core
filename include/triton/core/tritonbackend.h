@@ -981,9 +981,9 @@ TRITONBACKEND_ModelAutoCompleteConfig(
 /// context will result in an error being returned. Additionally, Triton server
 /// can add some of the missing fields in the provided config with this call.
 /// The backend must get the complete configuration again by using
-/// TRITONBACKEND_ModelConfig. The function does not take ownership of the
-/// message object and so the caller should call TRITONSERVER_MessageDelete to
-/// release the object once the function returns.
+/// TRITONBACKEND_ModelConfig. TRITONBACKEND_ModelSetConfig does not take
+/// ownership of the message object and so the caller should call
+/// TRITONSERVER_MessageDelete to release the object once the function returns.
 ///
 /// \param model The model.
 /// \param config_version The format version of the model configuration.
