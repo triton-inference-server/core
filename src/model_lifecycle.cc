@@ -676,7 +676,7 @@ ModelLifeCycle::OnLoadComplete(
     load_tracker->reason_ +=
         ("version " + std::to_string(version) + " is at " +
          ModelReadyStateString(model_info->state_) +
-         " state : " + model_info->state_reason_ + ";");
+         " state: " + model_info->state_reason_ + ";");
   }
   // Check if all versions are completed and finish the load
   if (load_tracker->completed_version_cnt_ ==
