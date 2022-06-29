@@ -328,6 +328,7 @@ ModelLifeCycle::GetModel(
     const std::string& model_name, const int64_t version,
     std::shared_ptr<Model>* model)
 {
+  // [FIXME] no longer needed?
   do {
     LOG_VERBOSE(2) << "GetModel() '" << model_name << "' version " << version;
     std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
@@ -496,6 +497,11 @@ ModelLifeCycle::AsyncLoad(
         new ModelInfo(model_path, model_config, now_ns));
     ModelInfo* model_info = linfo.get();
 
+    LOG_INFO << "loading: " << model_name << ":" << version;
+    model_info->state_ = ModelReadyState::LOADING;
+    model_info->state_reason_.clear();
+    model_info->agent_model_list_ = agent_model_list;
+
     auto res = it->second.emplace(
         std::make_pair(version, std::unique_ptr<ModelInfo>()));
     if (res.second) {
@@ -515,7 +521,7 @@ ModelLifeCycle::AsyncLoad(
 
         // further check the state, put to 'background_models_' to keep
         // the object valid if the model is LOADING / UNLOADING, because
-        // the model info may be accessed by a different thread once the
+        // the model info will be accessed by a different thread once the
         // operation is completed
         if ((linfo->state_ == ModelReadyState::LOADING) ||
             (linfo->state_ == ModelReadyState::UNLOADING)) {
@@ -525,12 +531,6 @@ ModelLifeCycle::AsyncLoad(
       }
     }
 
-    model_info->agent_model_list_ = agent_model_list;
-    model_info->latest_update_ns_ = now_ns;
-
-    LOG_INFO << "loading: " << model_name << ":" << version;
-    model_info->state_ = ModelReadyState::LOADING;
-    model_info->state_reason_.clear();
     // Load model asynchronously via thread pool
     load_pool_->Enqueue([this, model_name, version, model_info, OnComplete,
                          load_tracker]() {
@@ -603,51 +603,45 @@ ModelLifeCycle::CreateModel(
     }
   }
 
-  // [FIXME] lock?
-  {
-    std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-    // Update model state
-    // [FIXME] check if current state is still LOADING?
-    // helper function to determine if the load should be
-    // aborted (has newer state change / fail to load / self?)
-    if (status.IsOk()) {
-      // [FIXME] better way to manage agent model lifecycle
-      auto agent_model_list = model_info->agent_model_list_;
-      // Unless the handle is nullptr, always reset handle out of the mutex,
-      // otherwise the handle's destructor will try to acquire the mutex and
-      // cause deadlock.
-      model_info->model_.reset(
-          is.release(), ModelDeleter([this, model_name, version, model_info,
-                                      agent_model_list]() mutable {
-            LOG_VERBOSE(2) << "OnDestroy callback() '" << model_name
-                           << "' version " << version;
-            LOG_INFO << "successfully unloaded '" << model_name << "' version "
-                     << version;
-            // Use recursive mutex as this deleter is likely to to be called
-            // within ModelLifeCycle class where the same mutex is being hold.
-            // However, mutex acquisition is needed here for the case where
-            // the model is requested to be unloaded while there are inflight
-            // requests, then the deleter will be called from the request thread
-            {
-              std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
-              model_info->state_ = ModelReadyState::UNAVAILABLE;
-              model_info->state_reason_ = "unloaded";
-            }
+  std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+  if (status.IsOk()) {
+    // [FIXME] better way to manage agent model lifecycle
+    // Let the deleter also holds a shared pointer copy of agent model list,
+    // because the reference in ModelInfo can be cleared before the Model object
+    // is destroyed, and we want agent model to be valid for receiving
+    // UNLOAD_COMPLETE signal (see ~TritonRepoAgentModelList for detail)
+    auto agent_model_list = model_info->agent_model_list_;
+    model_info->model_.reset(
+        is.release(), ModelDeleter([this, model_name, version, model_info,
+                                    agent_model_list]() mutable {
+          LOG_VERBOSE(2) << "OnDestroy callback() '" << model_name
+                         << "' version " << version;
+          LOG_INFO << "successfully unloaded '" << model_name << "' version "
+                   << version;
+          // Use recursive mutex as this deleter is likely to to be called
+          // within ModelLifeCycle class where the same mutex is being hold.
+          // However, mutex acquisition is needed here for the case where
+          // the model is requested to be unloaded while there are inflight
+          // requests, then the deleter will be called from the inference thread
+          {
+            std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+            model_info->state_ = ModelReadyState::UNAVAILABLE;
+            model_info->state_reason_ = "unloaded";
+          }
 
-            // Check if the model info is in background, if so, remove from the
-            // map
-            std::lock_guard<std::recursive_mutex> lk(this->map_mtx_);
-            auto it = this->background_models_.find((uintptr_t)model_info);
-            if (it != this->background_models_.end()) {
-              this->background_models_.erase(it);
-            }
-          }));
-    } else {
-      LOG_ERROR << "failed to load '" << model_name << "' version " << version
-                << ": " << status.AsString();
-      model_info->state_ = ModelReadyState::UNAVAILABLE;
-      model_info->state_reason_ = status.AsString();
-    }
+          // Check if the model info is in background, if so, remove from the
+          // map
+          std::lock_guard<std::recursive_mutex> lk(this->map_mtx_);
+          auto it = this->background_models_.find((uintptr_t)model_info);
+          if (it != this->background_models_.end()) {
+            this->background_models_.erase(it);
+          }
+        }));
+  } else {
+    LOG_ERROR << "failed to load '" << model_name << "' version " << version
+              << ": " << status.AsString();
+    model_info->state_ = ModelReadyState::UNAVAILABLE;
+    model_info->state_reason_ = status.AsString();
   }
 }
 
@@ -686,7 +680,7 @@ ModelLifeCycle::OnLoadComplete(
             "load operation is out-dated.";
       }
     }
-    // [FIXME] load should fail when newer update on the model has taken affect
+
     if (load_tracker->load_failed_) {
       // Move agent list out of ModelInfo as it needs to be invoked
       // after all ModelInfos are reset
@@ -756,8 +750,8 @@ ModelLifeCycle::OnLoadComplete(
           auto vit = it->second.find(loaded.first);
 
           // Need to lock the previous model info for in case the model is
-          // loading / unloading, this ensure the model state tracked even when
-          // the load / unload is completed.
+          // loading / unloading, this ensure the model state is consistent
+          // even when the load / unload is completed.
           std::lock_guard<std::recursive_mutex> prev_info_lk(vit->second->mtx_);
 
           // swap previous info into local unique pointer

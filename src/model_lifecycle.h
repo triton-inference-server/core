@@ -258,12 +258,6 @@ class ModelLifeCycle {
         new triton::common::ThreadPool(std::max(1u, model_load_thread_count)));
   }
 
-  // Function called after model state / next action is updated.
-  // Caller must obtain the mutex of 'model_info' before calling this function
-  Status TriggerNextAction(
-      const std::string& model_name, const int64_t version,
-      ModelInfo* model_info);
-
   // [WIP] replace existing functions
   // [FIXME] lock?
   // Load is easy, always operating on fresh ModelInfo
