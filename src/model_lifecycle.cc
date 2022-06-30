@@ -684,6 +684,7 @@ ModelLifeCycle::OnLoadComplete(
       // Unload any previous loaded versions that are still available
       for (auto& version_info : it->second) {
         auto& mi = version_info.second;
+        std::lock_guard<std::recursive_mutex> info_lk(mi->mtx_);
         if ((mi->state_ == ModelReadyState::READY) &&
             (mi->last_update_ns_ < load_tracker->last_update_ns_)) {
           if ((mi->agent_model_list_ != nullptr) &&
