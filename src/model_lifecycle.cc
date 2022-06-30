@@ -647,6 +647,7 @@ ModelLifeCycle::OnLoadComplete(
         load_tracker->reason_ =
             "Newer operation has been applied to the model lifecycle, current "
             "load operation is out-dated.";
+        break;
       }
     }
 
