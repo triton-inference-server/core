@@ -1446,6 +1446,18 @@ ValidateModelConfig(
     }
   }
 
+  // FIXME: DLIS-3916 - Response Cache does not yet support decoupled models
+  if (config.model_transaction_policy().decoupled() &&
+      config.response_cache().enable()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Invalid combination for model " + config.name() +
+            ": Response Cache "
+            "does not currently support decoupled model transaction policy. "
+            "Please "
+            "disable response cache or change the model transaction policy.");
+  }
+
   return Status::Success;
 }
 
