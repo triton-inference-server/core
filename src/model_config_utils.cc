@@ -645,6 +645,15 @@ GetNormalizedModelConfig(
   LOG_VERBOSE(1) << "Server side auto-completed config: "
                  << config->DebugString();
 
+  RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
+
+  return Status::Success;
+}
+
+Status
+NormalizeModelConfig(
+    const double min_compute_capability, inference::ModelConfig* config)
+{
   if (config->backend().empty()) {
     // Expect backend is not empty unless it is ensemble platform.
 #ifdef TRITON_ENABLE_ENSEMBLE

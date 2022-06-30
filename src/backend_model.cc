@@ -353,6 +353,10 @@ TritonModel::UpdateModelConfig(
             .c_str());
   }  // else do nothing
 
+  // Need to normalize the model configuration for
+  // populating missing fields.
+  RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability_, &config));
+
   RETURN_IF_ERROR(SetModelConfig(config));
   return Status::Success;
 }
@@ -438,7 +442,8 @@ TritonModel::TritonModel(
     const inference::ModelConfig& config, const bool auto_complete_config)
     : Model(
           min_compute_capability, localized_model_dir->Path(), version, config),
-      server_(server), auto_complete_config_(auto_complete_config),
+      server_(server), min_compute_capability_(min_compute_capability),
+      auto_complete_config_(auto_complete_config),
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {
