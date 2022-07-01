@@ -1452,10 +1452,9 @@ ValidateModelConfig(
     return Status(
         Status::Code::INVALID_ARG,
         "Invalid combination for model " + config.name() +
-            ": Response Cache "
-            "does not currently support decoupled model transaction policy. "
-            "Please "
-            "disable response cache or change the model transaction policy.");
+            ": Response Cache does not currently support the 'decoupled' "
+            "model transaction policy. Please disable the response cache or "
+            "change the model transaction policy.");
   }
 
   return Status::Success;
