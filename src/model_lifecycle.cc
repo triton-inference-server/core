@@ -709,6 +709,7 @@ ModelLifeCycle::OnLoadComplete(
 
       // Mark current versions ready and track info in frontground
       for (auto& loaded : load_tracker->load_set_) {
+        std::lock_guard<std::recursive_mutex> curr_info_lk(loaded.second->mtx_);
         loaded.second->state_ = ModelReadyState::READY;
         model_info->state_reason_.clear();
         LOG_INFO << "successfully loaded '" << model_name << "' version "
