@@ -39,7 +39,7 @@ GetTFSpecializedBackendName(
     const triton::common::BackendCmdlineConfigMap& config_map,
     std::string* specialized_name)
 {
-  std::string tf_version_str = "1";
+  std::string tf_version_str = "2";
   const auto& itr = config_map.find("tensorflow");
   if (itr != config_map.end()) {
     if (BackendConfiguration(itr->second, "version", &tf_version_str).IsOk()) {
