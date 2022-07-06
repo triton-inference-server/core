@@ -208,7 +208,7 @@ class ModelLifeCycle {
     std::string model_path_;
     bool is_ensemble_;
 
-    std::recursive_mutex mtx_;
+    std::mutex mtx_;
     uint64_t last_update_ns_;
     ModelReadyState state_;
     std::string state_reason_;
@@ -264,7 +264,7 @@ class ModelLifeCycle {
   const double min_compute_capability_;
 
   // Mutex for 'map_' and 'background_models_'
-  std::recursive_mutex map_mtx_;
+  std::mutex map_mtx_;
 
   using VersionMap = std::map<int64_t, std::unique_ptr<ModelInfo>>;
   using ModelMap = std::map<std::string, VersionMap>;

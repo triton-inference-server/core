@@ -191,14 +191,14 @@ const ModelStateMap
 ModelLifeCycle::LiveModelStates(bool strict_readiness)
 {
   LOG_VERBOSE(2) << "LiveModelStates()";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   ModelStateMap live_model_states;
   for (auto& model_version : map_) {
     bool live = false;
     VersionStateMap version_map;
 
     for (auto& version_model : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+      std::lock_guard<std::mutex> lock(version_model.second->mtx_);
       if (strict_readiness &&
           version_model.second->state_ != ModelReadyState::READY) {
         continue;
@@ -224,11 +224,11 @@ Status
 ModelLifeCycle::StopAllModels()
 {
   LOG_VERBOSE(2) << "StopAllModels()";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
       if (version_model.second != nullptr) {
-        std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+        std::lock_guard<std::mutex> lock(version_model.second->mtx_);
         if (version_model.second->model_ != nullptr) {
           version_model.second->model_->Stop();
         }
@@ -242,12 +242,12 @@ const std::set<std::tuple<std::string, int64_t, size_t>>
 ModelLifeCycle::InflightStatus()
 {
   LOG_VERBOSE(2) << "InflightStatus()";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   std::set<std::tuple<std::string, int64_t, size_t>> inflight_status;
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
       if (version_model.second != nullptr) {
-        std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+        std::lock_guard<std::mutex> lock(version_model.second->mtx_);
         if (version_model.second->model_ != nullptr) {
           const auto cnt =
               version_model.second->model_->InflightInferenceCount();
@@ -266,13 +266,13 @@ const ModelStateMap
 ModelLifeCycle::ModelStates()
 {
   LOG_VERBOSE(2) << "ModelStates()";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   ModelStateMap model_states;
   for (auto& model_version : map_) {
     VersionStateMap version_map;
 
     for (auto& version_model : model_version.second) {
-      std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+      std::lock_guard<std::mutex> lock(version_model.second->mtx_);
       version_map[version_model.first] = std::make_pair(
           version_model.second->state_, version_model.second->state_reason_);
     }
@@ -287,12 +287,12 @@ const VersionStateMap
 ModelLifeCycle::VersionStates(const std::string& model_name)
 {
   LOG_VERBOSE(2) << "VersionStates() '" << model_name << "'";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   VersionStateMap version_map;
   auto mit = map_.find(model_name);
   if (mit != map_.end()) {
     for (auto& version_model : mit->second) {
-      std::lock_guard<std::recursive_mutex> lock(version_model.second->mtx_);
+      std::lock_guard<std::mutex> lock(version_model.second->mtx_);
       version_map[version_model.first] = std::make_pair(
           version_model.second->state_, version_model.second->state_reason_);
     }
@@ -306,12 +306,12 @@ ModelLifeCycle::ModelState(
     const std::string& model_name, const int64_t model_version,
     ModelReadyState* state)
 {
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto mit = map_.find(model_name);
   if (mit != map_.end()) {
     auto vit = mit->second.find(model_version);
     if (vit != mit->second.end()) {
-      std::lock_guard<std::recursive_mutex> lock(vit->second->mtx_);
+      std::lock_guard<std::mutex> lock(vit->second->mtx_);
       *state = vit->second->state_;
       return Status::Success;
     }
@@ -329,7 +329,7 @@ ModelLifeCycle::GetModel(
     std::shared_ptr<Model>* model)
 {
   LOG_VERBOSE(2) << "GetModel() '" << model_name << "' version " << version;
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto mit = map_.find(model_name);
   if (mit == map_.end()) {
     return Status(Status::Code::NOT_FOUND, "'" + model_name + "' is not found");
@@ -347,8 +347,7 @@ ModelLifeCycle::GetModel(
       int64_t latest = -1;
       for (auto& version_model : mit->second) {
         if (version_model.first > latest) {
-          std::lock_guard<std::recursive_mutex> lock(
-              version_model.second->mtx_);
+          std::lock_guard<std::mutex> lock(version_model.second->mtx_);
           if (version_model.second->state_ == ModelReadyState::READY) {
             latest = version_model.first;
             // Tedious, but have to set handle for any "latest" version
@@ -367,7 +366,7 @@ ModelLifeCycle::GetModel(
       }
     }
   } else {
-    std::lock_guard<std::recursive_mutex> lock(vit->second->mtx_);
+    std::lock_guard<std::mutex> lock(vit->second->mtx_);
     if (vit->second->state_ == ModelReadyState::READY) {
       *model = vit->second->model_;
     } else {
@@ -384,7 +383,7 @@ Status
 ModelLifeCycle::AsyncUnload(const std::string& model_name)
 {
   LOG_VERBOSE(2) << "AsyncUnload() '" << model_name << "'";
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto it = map_.find(model_name);
   if (it == map_.end()) {
     return Status(
@@ -398,7 +397,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
           .count();
   for (auto& version : it->second) {
     auto& model_info = version.second;
-    std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+    std::lock_guard<std::mutex> lock(model_info->mtx_);
     model_info->last_update_ns_ = now_ns;
     // Unload serving model, for model that is in LOADING state,
     // the updated timestamp will be recognized that there is newer update
@@ -437,7 +436,7 @@ ModelLifeCycle::AsyncLoad(
 {
   LOG_VERBOSE(2) << "AsyncLoad() '" << model_name << "'";
 
-  std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
   auto it = map_.find(model_name);
   if (it == map_.end()) {
     it = map_.emplace(std::make_pair(model_name, VersionMap())).first;
@@ -481,7 +480,7 @@ ModelLifeCycle::AsyncLoad(
       // should be performed in background to avoid version downtime.
       // Otherwise, swap and monitor state for newly loading model.
       auto& serving_model = res.first->second;
-      std::lock_guard<std::recursive_mutex> lock(serving_model->mtx_);
+      std::lock_guard<std::mutex> lock(serving_model->mtx_);
       if (serving_model->state_ == ModelReadyState::READY) {
         background_models_[(uintptr_t)model_info] = std::move(linfo);
       } else {
@@ -572,7 +571,7 @@ ModelLifeCycle::CreateModel(
     }
   }
 
-  std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+  std::lock_guard<std::mutex> lock(model_info->mtx_);
   if (status.IsOk()) {
     // [FIXME] better way to manage agent model lifecycle
     // Let the deleter also holds a shared pointer copy of agent model list,
@@ -593,14 +592,14 @@ ModelLifeCycle::CreateModel(
           // the model is requested to be unloaded while there are inflight
           // requests, then the deleter will be called from the inference thread
           {
-            std::lock_guard<std::recursive_mutex> lock(model_info->mtx_);
+            std::lock_guard<std::mutex> lock(model_info->mtx_);
             model_info->state_ = ModelReadyState::UNAVAILABLE;
             model_info->state_reason_ = "unloaded";
           }
 
           // Check if the model info is in background, if so, remove from the
           // map
-          std::lock_guard<std::recursive_mutex> lk(this->map_mtx_);
+          std::lock_guard<std::mutex> lk(this->map_mtx_);
           auto it = this->background_models_.find((uintptr_t)model_info);
           if (it != this->background_models_.end()) {
             this->background_models_.erase(it);
@@ -637,7 +636,7 @@ ModelLifeCycle::OnLoadComplete(
   if (load_tracker->completed_version_cnt_ ==
       load_tracker->affected_version_cnt_) {
     // hold 'map_mtx_' as there will be change onto the model info map
-    std::lock_guard<std::recursive_mutex> map_lock(map_mtx_);
+    std::lock_guard<std::mutex> map_lock(map_mtx_);
     auto it = map_.find(model_name);
     // Check if the load is the latest frontground action on the model
     for (const auto& version_info : it->second) {
@@ -663,7 +662,7 @@ ModelLifeCycle::OnLoadComplete(
       for (auto& loaded : load_tracker->load_set_) {
         // Unload directly, the object is being managed either in frontground
         // or background
-        std::lock_guard<std::recursive_mutex> lock(loaded.second->mtx_);
+        std::lock_guard<std::mutex> lock(loaded.second->mtx_);
         if (loaded.second->model_ != nullptr) {
           loaded.second->state_ = ModelReadyState::UNLOADING;
           loaded.second->state_reason_.clear();
@@ -685,7 +684,7 @@ ModelLifeCycle::OnLoadComplete(
       // Unload any previous loaded versions that are still available
       for (auto& version_info : it->second) {
         auto& mi = version_info.second;
-        std::lock_guard<std::recursive_mutex> info_lk(mi->mtx_);
+        std::lock_guard<std::mutex> info_lk(mi->mtx_);
         if ((mi->state_ == ModelReadyState::READY) &&
             (mi->last_update_ns_ < load_tracker->last_update_ns_)) {
           if ((mi->agent_model_list_ != nullptr) &&
@@ -709,7 +708,7 @@ ModelLifeCycle::OnLoadComplete(
 
       // Mark current versions ready and track info in frontground
       for (auto& loaded : load_tracker->load_set_) {
-        std::lock_guard<std::recursive_mutex> curr_info_lk(loaded.second->mtx_);
+        std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
         loaded.second->state_ = ModelReadyState::READY;
         model_info->state_reason_.clear();
         LOG_INFO << "successfully loaded '" << model_name << "' version "
@@ -724,7 +723,7 @@ ModelLifeCycle::OnLoadComplete(
           // Need to lock the previous model info for in case the model is
           // loading / unloading, this ensure the model state is consistent
           // even when the load / unload is completed.
-          std::lock_guard<std::recursive_mutex> prev_info_lk(vit->second->mtx_);
+          std::lock_guard<std::mutex> prev_info_lk(vit->second->mtx_);
 
           // swap previous info into local unique pointer
           auto linfo = std::move(bit->second);
