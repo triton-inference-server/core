@@ -224,7 +224,7 @@ InferenceRequest::OutputBufferProperties(
     const char* name, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id)
 {
-  const auto allocator = response_factory_.Allocator();
+  const auto allocator = response_factory_->Allocator();
   if ((allocator == nullptr) || (allocator->QueryFn() == nullptr)) {
     return Status(
         Status::Code::UNAVAILABLE,
@@ -233,7 +233,7 @@ InferenceRequest::OutputBufferProperties(
     RETURN_IF_TRITONSERVER_ERROR(allocator->QueryFn()(
         reinterpret_cast<TRITONSERVER_ResponseAllocator*>(
             const_cast<ResponseAllocator*>(allocator)),
-        response_factory_.AllocatorUserp(), name, byte_size, memory_type,
+        response_factory_->AllocatorUserp(), name, byte_size, memory_type,
         memory_type_id));
   }
   return Status::Success;
@@ -260,7 +260,7 @@ InferenceRequest::RespondIfError(
   // the last response for the request and so set the FINAL flag.
   std::unique_ptr<InferenceResponse> response;
   LOG_STATUS_ERROR(
-      request->response_factory_.CreateResponse(&response),
+      request->response_factory_->CreateResponse(&response),
       (request->LogRequest() + "failed to create error response").c_str());
   LOG_STATUS_ERROR(
       InferenceResponse::SendWithStatus(

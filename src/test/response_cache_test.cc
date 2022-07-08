@@ -41,11 +41,11 @@ namespace triton { namespace core {
 //
 Status
 InferenceResponseFactory::CreateResponse(
-    std::unique_ptr<InferenceResponse>* response) const
+    std::unique_ptr<InferenceResponse>* response)
 {
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_));
+      response_delegator_, 0 /* response id */));
 
   return Status::Success;
 }
@@ -174,7 +174,8 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp,
     const std::function<
-        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
+        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
+    const uint64_t response_idx)
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
       response_delegator_(delegator), null_response_(false)
@@ -336,7 +337,7 @@ reset_response(
     std::unique_ptr<tc::InferenceResponse>* response,
     tc::InferenceRequest* request)
 {
-  check_status(request->ResponseFactory().CreateResponse(response));
+  check_status(request->ResponseFactory()->CreateResponse(response));
 }
 
 // Only support 1-Dimensional data to keep it simple
@@ -354,7 +355,7 @@ GenerateResponse(
 {
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response;
-  check_status(request->ResponseFactory().CreateResponse(&response));
+  check_status(request->ResponseFactory()->CreateResponse(&response));
 
   std::cout << "Add output metadata to response object" << std::endl;
   for (const auto& tensor : outputs) {
@@ -822,7 +823,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
     check_status(
-        random_requests[idx]->ResponseFactory().CreateResponse(&response));
+        random_requests[idx]->ResponseFactory()->CreateResponse(&response));
     responses.push_back(std::move(response));
     // Insert response for each thread
     cache->Insert(*response0, random_requests[idx]);
@@ -923,7 +924,7 @@ TEST_F(RequestResponseCacheTest, TestEndToEnd)
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response_test;
-  check_status(request0->ResponseFactory().CreateResponse(&response_test));
+  check_status(request0->ResponseFactory()->CreateResponse(&response_test));
 
   // Lookup should now succeed
   std::cout << "Lookup request0 in cache after insertion" << std::endl;

@@ -61,6 +61,7 @@ class InferenceResponseFactory {
         alloc_userp_(alloc_userp), response_fn_(response_fn),
         response_userp_(response_userp), response_delegator_(delegator)
   {
+    // response_idx_ = {0};
   }
 
   const ResponseAllocator* Allocator() { return allocator_; }
@@ -75,7 +76,7 @@ class InferenceResponseFactory {
   }
 
   // Create a new response.
-  Status CreateResponse(std::unique_ptr<InferenceResponse>* response) const;
+  Status CreateResponse(std::unique_ptr<InferenceResponse>* response);
 
   // Send a "null" response with 'flags'.
   Status SendFlags(const uint32_t flags) const;
@@ -117,6 +118,9 @@ class InferenceResponseFactory {
   // Delegator to be invoked on sending responses.
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>
       response_delegator_;
+
+  // Response index
+  std::atomic<uint64_t> response_idx_;
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.
@@ -226,7 +230,8 @@ class InferenceResponse {
       TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
       void* response_userp,
       const std::function<void(
-          std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator);
+          std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
+      const uint64_t response_idx);
 
   // "null" InferenceResponse is a special instance of InferenceResponse which
   // contains minimal information for calling InferenceResponse::Send,
@@ -254,6 +259,9 @@ class InferenceResponse {
 
   // The response outputs.
   const std::deque<Output>& Outputs() const { return outputs_; }
+
+  // The response index.
+  uint64_t ResponseIdx() const { return response_idx_; }
 
   // Add an output to the response. If 'output' is non-null
   // return a pointer to the newly added output.
@@ -337,6 +345,9 @@ class InferenceResponse {
       response_delegator_;
 
   bool null_response_;
+
+  // Representing the response index.
+  uint64_t response_idx_;
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.

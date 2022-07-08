@@ -962,5 +962,14 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
   return nullptr;  // success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Response* response,
+    const bool success, const uint64_t response_start,
+    const uint64_t compute_output_start, const uint64_t response_end)
+{
+  return nullptr;  // success
+}
+
 }  // extern C
 }}  // namespace triton::core
