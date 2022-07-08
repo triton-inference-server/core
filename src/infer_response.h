@@ -42,7 +42,6 @@ namespace triton { namespace core {
 
 class Model;
 class InferenceResponse;
-
 //
 // An inference response factory.
 //
@@ -61,7 +60,6 @@ class InferenceResponseFactory {
         alloc_userp_(alloc_userp), response_fn_(response_fn),
         response_userp_(response_userp), response_delegator_(delegator)
   {
-    // response_idx_ = {0};
   }
 
   const ResponseAllocator* Allocator() { return allocator_; }
@@ -120,7 +118,7 @@ class InferenceResponseFactory {
       response_delegator_;
 
   // Response index
-  std::atomic<uint64_t> response_idx_;
+  std::atomic<uint64_t> response_idx_ = {0};
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.
