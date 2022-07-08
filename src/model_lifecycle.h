@@ -196,19 +196,21 @@ class ModelLifeCycle {
         const inference::ModelConfig& model_config,
         const uint64_t last_update_ns)
         : model_config_(model_config), model_path_(model_path),
-          is_ensemble_(false), last_update_ns_(last_update_ns),
-          state_(ModelReadyState::UNKNOWN)
-    {
 #ifdef TRITON_ENABLE_ENSEMBLE
-      is_ensemble_ = (model_config.platform() == kEnsemblePlatform);
+          is_ensemble_(model_config.platform() == kEnsemblePlatform),
+#else
+          is_ensemble_(false),
 #endif  // TRITON_ENABLE_ENSEMBLE
+          last_update_ns_(last_update_ns), state_(ModelReadyState::UNKNOWN)
+    {
     }
 
-    inference::ModelConfig model_config_;
-    std::string model_path_;
-    bool is_ensemble_;
+    const inference::ModelConfig model_config_;
+    const std::string model_path_;
+    const bool is_ensemble_;
 
     std::mutex mtx_;
+
     uint64_t last_update_ns_;
     ModelReadyState state_;
     std::string state_reason_;
@@ -220,20 +222,21 @@ class ModelLifeCycle {
   struct LoadTracker {
     LoadTracker(
         const size_t affected_version_cnt, const uint64_t last_update_ns)
-        : load_failed_(false), completed_version_cnt_(0),
-          affected_version_cnt_(affected_version_cnt),
-          last_update_ns_(last_update_ns)
+        : last_update_ns_(last_update_ns),
+          affected_version_cnt_(affected_version_cnt), load_failed_(false),
+          completed_version_cnt_(0)
     {
     }
+
+    const uint64_t last_update_ns_;
+    const size_t affected_version_cnt_;
 
     std::mutex mtx_;
 
     bool load_failed_;
     std::string reason_;
     size_t completed_version_cnt_;
-    size_t affected_version_cnt_;
     std::map<int64_t, ModelInfo*> load_set_;
-    uint64_t last_update_ns_;
   };
 
   ModelLifeCycle(
