@@ -291,6 +291,15 @@ class InferenceRequest {
 
   const std::string& Id() const { return id_; }
   void SetId(const std::string& i) { id_ = i; }
+  // Return string for logging request ID
+  std::string LogRequest() const
+  {
+    std::string id = Id();
+    if (id.empty()) {
+      id = "<id_unknown>";
+    }
+    return std::string("[request id: ") + id + "] ";
+  }
 
   // Flags for the request, union of TRITONSERVER_RequestFlag.
   uint32_t Flags() const { return flags_; }
@@ -670,6 +679,7 @@ class InferenceRequest {
   {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
+
 #endif  // TRITON_ENABLE_STATS
 
  private:

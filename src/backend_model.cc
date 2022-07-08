@@ -600,7 +600,7 @@ TRITONBACKEND_RequestCorrelationId(TRITONBACKEND_Request* request, uint64_t* id)
   if (correlation_id.Type() != InferenceRequest::SequenceId::DataType::UINT64) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        std::string("correlation ID in request is not an unsigned int")
+        (tr->LogRequest() + "correlation ID in request is not an unsigned int")
             .c_str());
   }
   *id = correlation_id.UnsignedIntValue();
@@ -624,7 +624,8 @@ TRITONBACKEND_RequestCorrelationIdString(
   if (correlation_id.Type() != InferenceRequest::SequenceId::DataType::STRING) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        std::string("correlation ID in request is not a string").c_str());
+        (tr->LogRequest() + "correlation ID in request is not a string")
+            .c_str());
   }
   *id = correlation_id.StringValue().c_str();
   return nullptr;  // success
@@ -650,7 +651,7 @@ TRITONBACKEND_RequestInputName(
   if (index >= inputs.size()) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("out of bounds index ") + std::to_string(index) +
+        (tr->LogRequest() + "out of bounds index " + std::to_string(index) +
          ": request has " + std::to_string(inputs.size()) + " inputs")
             .c_str());
   }
@@ -685,7 +686,7 @@ TRITONBACKEND_RequestInput(
     *input = nullptr;
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("unknown request input name ") + name).c_str());
+        (tr->LogRequest() + "unknown request input name " + name).c_str());
   }
 
   InferenceRequest::Input* in = itr->second;
@@ -704,7 +705,7 @@ TRITONBACKEND_RequestInputByIndex(
   if (index >= inputs.size()) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("out of bounds index ") + std::to_string(index) +
+        (tr->LogRequest() + "out of bounds index " + std::to_string(index) +
          ": request has " + std::to_string(inputs.size()) + " inputs")
             .c_str());
   }
@@ -748,7 +749,7 @@ TRITONBACKEND_RequestOutputName(
   if (index >= routputs.size()) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("out of bounds index ") + std::to_string(index) +
+        (tr->LogRequest() + "out of bounds index " + std::to_string(index) +
          ": request has " + std::to_string(routputs.size()) +
          " requested outputs")
             .c_str());

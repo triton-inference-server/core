@@ -476,7 +476,8 @@ TritonModelInstance::GenerateWarmupData()
             } else if (((size_t)batch_byte_size) > input_data->size()) {
               return Status(
                   Status::Code::INVALID_ARG,
-                  "warmup setting expects " + std::to_string(batch_byte_size) +
+                  lrequest->LogRequest() + "warmup setting expects " +
+                      std::to_string(batch_byte_size) +
                       " bytes, but the data "
                       "provided from " +
                       input_meta.second.input_data_file() + "only has " +
@@ -487,9 +488,9 @@ TritonModelInstance::GenerateWarmupData()
           }
           default:
             return Status(
-                Status::Code::INVALID_ARG, "warmup setting expects input '" +
-                                               input_meta.first +
-                                               "' to have input_data_type set");
+                Status::Code::INVALID_ARG,
+                lrequest->LogRequest() + "warmup setting expects input '" +
+                    input_meta.first + "' to have input_data_type set");
         }
 
         const inference::ModelInput* input_config;

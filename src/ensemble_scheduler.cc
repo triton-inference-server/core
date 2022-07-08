@@ -475,7 +475,7 @@ EnsembleContext::EnsembleContext(
       } else {
         ensemble_status_ = Status(
             Status::Code::INVALID_ARG,
-            "unexpected input '" + input->Name() +
+            lrequest->LogRequest() + "unexpected input '" + input->Name() +
                 "' in request header that does not map to any ensemble inputs");
       }
     }
@@ -910,7 +910,8 @@ EnsembleContext::InitStep(
     if (tensor.parameter_override_) {
       if (parameter_set && ((correlation_id != tensor.correlation_id_) ||
                             (flags != tensor.flags_))) {
-        LOG_ERROR << "Different set of response parameters are set for '"
+        LOG_ERROR << irequest->LogRequest()
+                  << "Different set of response parameters are set for '"
                   << istep.model_name_ << "'. Parameter correlation ID "
                   << correlation_id << ", flags " << flags << " is used.";
         continue;
@@ -1103,8 +1104,9 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     }
     return Status(
         Status::Code::INVALID_ARG,
-        "unexpected deadlock, at least one output is not set while no more "
-        "ensemble steps can be made");
+        lrequest->LogRequest() +
+            "unexpected deadlock, at least one output is not set while no more "
+            "ensemble steps can be made");
   }
 
   RETURN_IF_ERROR(lrequest->ResponseFactory().CreateResponse(response));
