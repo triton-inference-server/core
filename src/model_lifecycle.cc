@@ -342,28 +342,28 @@ ModelLifeCycle::GetModel(
           Status::Code::NOT_FOUND, "'" + model_name + "' version " +
                                        std::to_string(version) +
                                        " is not found");
-    } else {
-      // The case where the request is asking for latest version
-      int64_t latest = -1;
-      for (auto& version_model : mit->second) {
-        if (version_model.first > latest) {
-          std::lock_guard<std::mutex> lock(version_model.second->mtx_);
-          if (version_model.second->state_ == ModelReadyState::READY) {
-            latest = version_model.first;
-            // Tedious, but have to set handle for any "latest" version
-            // at the moment to avoid edge case like the following:
-            // "versions : 1 3 2", version 3 is latest but is requested
-            // to be unloaded when the iterator is examining version 2,
-            // then 'model' will ensure version 3 is still valid
-            *model = version_model.second->model_;
-          }
+    }
+
+    // The case where the request is asking for latest version
+    int64_t latest = -1;
+    for (auto& version_model : mit->second) {
+      if (version_model.first > latest) {
+        std::lock_guard<std::mutex> lock(version_model.second->mtx_);
+        if (version_model.second->state_ == ModelReadyState::READY) {
+          latest = version_model.first;
+          // Tedious, but have to set handle for any "latest" version
+          // at the moment to avoid edge case like the following:
+          // "versions : 1 3 2", version 3 is latest but is requested
+          // to be unloaded when the iterator is examining version 2,
+          // then 'model' will ensure version 3 is still valid
+          *model = version_model.second->model_;
         }
       }
-      if (latest == -1) {
-        return Status(
-            Status::Code::NOT_FOUND,
-            "'" + model_name + "' has no available versions");
-      }
+    }
+    if (latest == -1) {
+      return Status(
+          Status::Code::NOT_FOUND,
+          "'" + model_name + "' has no available versions");
     }
   } else {
     std::lock_guard<std::mutex> lock(vit->second->mtx_);
