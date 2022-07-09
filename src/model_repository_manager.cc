@@ -1911,8 +1911,7 @@ ModelRepositoryManager::GetModel(
   if (!status.IsOk()) {
     model->reset();
     status = Status(
-        Status::Code::UNAVAILABLE,
-        "Request for unknown model: " + status.Message());
+        status.ErrorCode(), "Request for unknown model: " + status.Message());
   }
   return status;
 }
