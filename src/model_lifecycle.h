@@ -91,10 +91,18 @@ class TritonRepoAgentModelList {
 
   TritonRepoAgentModel* Back() { return agent_models_.back().get(); }
 
-  TRITONREPOAGENT_ActionType LastActionType() { return last_action_type_; }
-
   Status InvokeAgentModels(const TRITONREPOAGENT_ActionType action_type)
   {
+    // Special handling for the current model lifecycle implementation,
+    // the repo agent may be asked to perform UNLOAD action multiple times,
+    // and the requests after the first should be ignored.
+    const bool first_unload =
+        (action_type == TRITONREPOAGENT_ACTION_UNLOAD) &&
+        (last_action_type_ != TRITONREPOAGENT_ACTION_UNLOAD);
+    if (!first_unload) {
+      return Status::Success;
+    }
+
     last_action_type_ = action_type;
     switch (action_type) {
       case TRITONREPOAGENT_ACTION_LOAD:
@@ -205,6 +213,17 @@ class ModelLifeCycle {
     {
     }
 
+    // Release the flyweight in ModelInfo object, reflect as 'UNLOADING' in
+    // model state. Note that 'mtx_' should be acquired before invoking this
+    // function to prevent possible data race.
+    void Release()
+    {
+      state_ = ModelReadyState::UNLOADING;
+      state_reason_.clear();
+      agent_model_list_.reset();
+      model_.reset();
+    }
+
     const inference::ModelConfig model_config_;
     const std::string model_path_;
     const bool is_ensemble_;
@@ -212,9 +231,11 @@ class ModelLifeCycle {
     std::mutex mtx_;
 
     uint64_t last_update_ns_;
+
     ModelReadyState state_;
     std::string state_reason_;
 
+    // flyweight
     std::shared_ptr<TritonRepoAgentModelList> agent_model_list_;
     std::shared_ptr<Model> model_;
   };

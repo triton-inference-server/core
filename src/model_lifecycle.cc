@@ -204,7 +204,7 @@ ModelLifeCycle::LiveModelStates(bool strict_readiness)
         continue;
       }
 
-      // At lease one version is live (ready / loading / unloading)
+      // At least one version is live (ready / loading / unloading)
       if ((version_model.second->state_ != ModelReadyState::UNKNOWN) &&
           (version_model.second->state_ != ModelReadyState::UNAVAILABLE)) {
         live = true;
@@ -403,9 +403,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
     // the updated timestamp will be recognized that there is newer update
     // on the model info and the load should be aborted
     if (model_info->state_ == ModelReadyState::READY) {
-      if ((model_info->agent_model_list_ != nullptr) &&
-          (model_info->agent_model_list_->LastActionType() ==
-           TRITONREPOAGENT_ACTION_LOAD_COMPLETE)) {
+      if (model_info->agent_model_list_ != nullptr) {
         // Only log the error because the model should be unloaded regardless
         auto status = model_info->agent_model_list_->InvokeAgentModels(
             TRITONREPOAGENT_ACTION_UNLOAD);
@@ -417,10 +415,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
       }
 
       // unload
-      model_info->state_ = ModelReadyState::UNLOADING;
-      model_info->state_reason_.clear();
-      model_info->agent_model_list_.reset();
-      model_info->model_.reset();
+      model_info->Release();
     }
   }
 
@@ -586,11 +581,7 @@ ModelLifeCycle::CreateModel(
                          << "' version " << version;
           LOG_INFO << "successfully unloaded '" << model_name << "' version "
                    << version;
-          // Use recursive mutex as this deleter is likely to to be called
-          // within ModelLifeCycle class where the same mutex is being hold.
-          // However, mutex acquisition is needed here for the case where
-          // the model is requested to be unloaded while there are inflight
-          // requests, then the deleter will be called from the inference thread
+          // Update model state as it is fully unloaded
           {
             std::lock_guard<std::mutex> lock(model_info->mtx_);
             model_info->state_ = ModelReadyState::UNAVAILABLE;
@@ -664,10 +655,7 @@ ModelLifeCycle::OnLoadComplete(
         // or background
         std::lock_guard<std::mutex> lock(loaded.second->mtx_);
         if (loaded.second->model_ != nullptr) {
-          loaded.second->state_ = ModelReadyState::UNLOADING;
-          loaded.second->state_reason_.clear();
-          loaded.second->agent_model_list_.reset();
-          loaded.second->model_.reset();
+          loaded.second->Release();
         }
       }
 
@@ -687,9 +675,7 @@ ModelLifeCycle::OnLoadComplete(
         std::lock_guard<std::mutex> info_lk(mi->mtx_);
         if ((mi->state_ == ModelReadyState::READY) &&
             (mi->last_update_ns_ < load_tracker->last_update_ns_)) {
-          if ((mi->agent_model_list_ != nullptr) &&
-              (mi->agent_model_list_->LastActionType() ==
-               TRITONREPOAGENT_ACTION_LOAD_COMPLETE)) {
+          if (mi->agent_model_list_ != nullptr) {
             auto status = mi->agent_model_list_->InvokeAgentModels(
                 TRITONREPOAGENT_ACTION_UNLOAD);
             if (!status.IsOk()) {
@@ -699,14 +685,11 @@ ModelLifeCycle::OnLoadComplete(
             }
           }
 
-          mi->state_ = ModelReadyState::UNLOADING;
-          mi->state_reason_.clear();
-          mi->agent_model_list_.reset();
-          mi->model_.reset();
+          mi->Release();
         }
       }
 
-      // Mark current versions ready and track info in frontground
+      // Mark current versions ready and track info in foreground
       for (auto& loaded : load_tracker->load_set_) {
         std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
         loaded.second->state_ = ModelReadyState::READY;
