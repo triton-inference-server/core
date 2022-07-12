@@ -1792,7 +1792,7 @@ ModelRepositoryManager::UnloadAllModels()
     Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
     if (!unload_status.IsOk()) {
       status = Status(
-          Status::Code::INTERNAL,
+          unload_status.ErrorCode(),
           "Failed to gracefully unload models: " + unload_status.Message());
     }
   }
