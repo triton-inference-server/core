@@ -881,8 +881,14 @@ InferenceRequest::Normalize()
                 "'");
       }
 
-      input.MutableShape()->assign(
-          input.OriginalShape().begin() + 1, input.OriginalShape().end());
+      // When skipping the first dimension, make sure there is a second
+      // dimension
+      if (input.OriginalShape().size() > 1) {
+        input.MutableShape()->assign(
+            input.OriginalShape().begin() + 1, input.OriginalShape().end());
+      } else {
+        input.MutableShape()->clear();
+      }
     }
   }
 
