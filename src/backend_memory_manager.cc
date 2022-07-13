@@ -64,7 +64,8 @@ TRITONBACKEND_MemoryManagerAllocate(
       auto status = CudaMemoryManager::Alloc(buffer, byte_size, memory_type_id);
       if (!status.IsOk()) {
         return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_UNAVAILABLE, status.Message().c_str());
+            StatusCodeToTritonCode(status.ErrorCode()),
+            status.Message().c_str());
       }
       break;
     }
@@ -81,7 +82,8 @@ TRITONBACKEND_MemoryManagerAllocate(
       auto status = PinnedMemoryManager::Alloc(buffer, byte_size, &mt, false);
       if (!status.IsOk()) {
         return TRITONSERVER_ErrorNew(
-            TRITONSERVER_ERROR_UNAVAILABLE, status.Message().c_str());
+            StatusCodeToTritonCode(status.ErrorCode()),
+            status.Message().c_str());
       }
       break;
     }

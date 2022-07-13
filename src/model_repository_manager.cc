@@ -1792,7 +1792,7 @@ ModelRepositoryManager::UnloadAllModels()
     Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
     if (!unload_status.IsOk()) {
       status = Status(
-          Status::Code::INTERNAL,
+          unload_status.ErrorCode(),
           "Failed to gracefully unload models: " + unload_status.Message());
     }
   }
@@ -1911,8 +1911,7 @@ ModelRepositoryManager::GetModel(
   if (!status.IsOk()) {
     model->reset();
     status = Status(
-        Status::Code::UNAVAILABLE,
-        "Request for unknown model: " + status.Message());
+        status.ErrorCode(), "Request for unknown model: " + status.Message());
   }
   return status;
 }
