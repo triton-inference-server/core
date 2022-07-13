@@ -185,7 +185,7 @@ typedef enum TRITONSERVER_parametertype_enum {
   TRITONSERVER_PARAMETER_BYTES
 } TRITONSERVER_ParameterType;
 
-/// Get the string representation of a parmeter type. The returned
+/// Get the string representation of a parameter type. The returned
 /// string is not owned by the caller and so should not be modified or
 /// freed.
 ///
