@@ -863,11 +863,12 @@ InferenceRequest::Normalize()
         continue;
       }
 
-      if (input.OriginalShape().size() == 0) {
+      // Make sure shape has batch dimension and at least 1d shape for model
+      if (input.OriginalShape().size() < 2) {
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() + "input '" + input.Name() +
-                "' has no shape but model requires batch dimension for '" +
+                "' shape is missing batch and/or subsequent dimension '" +
                 ModelName() + "'");
       }
 
@@ -881,14 +882,8 @@ InferenceRequest::Normalize()
                 "'");
       }
 
-      // When skipping the first dimension, make sure there is a second
-      // dimension
-      if (input.OriginalShape().size() > 1) {
-        input.MutableShape()->assign(
-            input.OriginalShape().begin() + 1, input.OriginalShape().end());
-      } else {
-        input.MutableShape()->clear();
-      }
+      input.MutableShape()->assign(
+          input.OriginalShape().begin() + 1, input.OriginalShape().end());
     }
   }
 
