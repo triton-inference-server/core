@@ -29,8 +29,10 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <set>
 #include "infer_parameter.h"
 #include "model_config.pb.h"
+#include "model_lifecycle.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 
@@ -39,42 +41,15 @@ namespace triton { namespace core {
 class InferenceServer;
 class Model;
 
+// [FIXME] should have separated load / unload functions for clarity
+enum ActionType { NO_ACTION, LOAD, UNLOAD };
+
 /// Predefined reason strings
 #define MODEL_READY_REASON_DUPLICATE "model appears in two or more repositories"
-
-/// Readiness status for models.
-enum class ModelReadyState {
-  // The model is in an unknown state. The model is not available for
-  // inferencing.
-  UNKNOWN,
-
-  // The model is ready and available for inferencing.
-  READY,
-
-  // The model is unavailable, indicating that the model failed to
-  // load or has been implicitly or explicitly unloaded. The model is
-  // not available for inferencing.
-  UNAVAILABLE,
-
-  // The model is being loaded by the inference server. The model is
-  // not available for inferencing.
-  LOADING,
-
-  // The model is being unloaded by the inference server. The model is
-  // not available for inferencing.
-  UNLOADING
-};
-
-/// Get the string representation for a ModelReadyState
-const std::string& ModelReadyStateString(ModelReadyState state);
 
 /// An object to manage the model repository active in the server.
 class ModelRepositoryManager {
  public:
-  using VersionStateMap =
-      std::map<int64_t, std::pair<ModelReadyState, std::string>>;
-  using ModelStateMap = std::map<std::string, VersionStateMap>;
-
   // Index information for a model.
   struct ModelIndex {
     ModelIndex(const std::string& n)
@@ -94,8 +69,6 @@ class ModelRepositoryManager {
     const ModelReadyState state_;
     const std::string reason_;
   };
-
-  enum ActionType { NO_ACTION, LOAD, UNLOAD };
 
   /// A basic unit in dependency graph that records the models seen by the model
   /// repository manager.
@@ -237,7 +210,6 @@ class ModelRepositoryManager {
 
  private:
   struct ModelInfo;
-  class ModelLifeCycle;
 
   // Map from model name to information about the model.
   using ModelInfoMap =
