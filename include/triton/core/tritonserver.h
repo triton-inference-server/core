@@ -27,6 +27,7 @@
 
 /// \file
 
+#include <string>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -1761,7 +1762,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
-/// Enable or disable info level logging.
+/// Provide a log output file.
 ///
 /// \param options The server options object.
 /// \param file a string defining the file where the log outputs will be saved.
