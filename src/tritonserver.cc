@@ -24,6 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <string>
 #include <vector>
 #include "buffer_attributes.h"
 #include "cuda_utils.h"
@@ -1216,11 +1217,11 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogOutFile(
-    TRITONSERVER_ServerOptions* options, std::string file)
+    TRITONSERVER_ServerOptions* options, const char* file)
 {
 #ifdef TRITON_ENABLE_LOGGING
-  // Logging is global for now...
-  LOG_SET_OUT_FILE(file);
+  std::string out_file(file);
+  LOG_SET_OUT_FILE(out_file);
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
