@@ -1764,6 +1764,14 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 /// Enable or disable info level logging.
 ///
 /// \param options The server options object.
+/// \param file a string defining the file where the log outputs will be saved.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogOutFile(
+    TRITONSERVER_ServerOptions* options, std::string file);
+
+/// Enable or disable info level logging.
+///
+/// \param options The server options object.
 /// \param log True to enable info logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogInfo(
