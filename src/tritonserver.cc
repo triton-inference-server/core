@@ -1216,6 +1216,20 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogOutFile(
+    TRITONSERVER_ServerOptions* options, std::string file)
+{
+#ifdef TRITON_ENABLE_LOGGING
+  // Logging is global for now...
+  LOG_SET_OUT_FILE(file);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
+#endif  // TRITON_ENABLE_LOGGING
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogInfo(
     TRITONSERVER_ServerOptions* options, bool log)
 {
