@@ -306,11 +306,8 @@ ModelRepositoryManager::Create(
     InferenceServer* server, const std::string& server_version,
     const std::set<std::string>& repository_paths,
     const std::set<std::string>& startup_models, const bool strict_model_config,
-    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const bool polling_enabled, const bool model_control_enabled,
-    const double min_compute_capability,
-    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const unsigned int model_load_thread_count,
+    const ModelLifeCycleOptions& life_cycle_options,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
 {
   // The rest only matters if repository path is valid directory
@@ -331,15 +328,14 @@ ModelRepositoryManager::Create(
   }
 
   std::unique_ptr<ModelLifeCycle> life_cycle;
-  RETURN_IF_ERROR(ModelLifeCycle::Create(
-      server, min_compute_capability, backend_cmdline_config_map,
-      host_policy_map, model_load_thread_count, &life_cycle));
+  RETURN_IF_ERROR(
+      ModelLifeCycle::Create(server, life_cycle_options, &life_cycle));
 
   // Not setting the smart pointer directly to simplify clean up
   std::unique_ptr<ModelRepositoryManager> local_manager(
       new ModelRepositoryManager(
           repository_paths, !strict_model_config, polling_enabled,
-          model_control_enabled, min_compute_capability,
+          model_control_enabled, life_cycle_options.min_compute_capability_,
           std::move(life_cycle)));
 
   // Support loading all models on startup in explicit model control mode with

@@ -95,36 +95,27 @@ class ModelRepositoryManager {
   /// Create a manager for a repository.
   /// \param server The pointer to the inference server.
   /// \param server_version The version of the inference server.
-  /// \param repositpory_paths A set of file-system paths of the repositories.
+  /// \param repository_paths A set of file-system paths of the repositories.
   /// \param startup_models A set of models to be loaded at startup
   /// if model control is enabled.
   /// \param strict_model_config If false attempt to autofill missing required
   /// information in each model configuration.
-  /// \param backend_cmdline_config_map The backend configuration setting
-  /// specified on the command-line.
   /// \param polling_enabled If true, then PollAndUpdate() is allowed.
   /// Otherwise, it is not allowed.
   /// \param model_control_enabled If true, then LoadUnloadModel() is allowed
   /// and the models in the model repository will not be loaded at startup.
   /// Otherwise, LoadUnloadModel() is not allowed and the models will be loaded.
   /// Cannot be set to true if polling_enabled is true.
-  /// \param min_compute_capability The minimum support CUDA compute
-  /// capability.
-  /// \param host_policy_map The host policy setting used when loading models.
-  /// \param model_load_thread_count The number of threads to allocate to the
-  /// thread pool for concurrently loading models.
+  /// \param life_cycle_options The options to configure ModelLifeCycle.
   /// \param model_repository_manager Return the model repository manager.
   /// \return The error status.
   static Status Create(
       InferenceServer* server, const std::string& server_version,
       const std::set<std::string>& repository_paths,
       const std::set<std::string>& startup_models,
-      const bool strict_model_config,
-      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const bool polling_enabled, const bool model_control_enabled,
-      const double min_compute_capability,
-      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const unsigned int model_load_thread_count,
+      const bool strict_model_config, const bool polling_enabled,
+      const bool model_control_enabled,
+      const ModelLifeCycleOptions& life_cycle_options,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
 
   /// Poll the model repository to determine the new set of models and

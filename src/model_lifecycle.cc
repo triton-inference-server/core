@@ -173,15 +173,11 @@ struct ModelDeleter {
 
 Status
 ModelLifeCycle::Create(
-    InferenceServer* server, const double min_compute_capability,
-    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const unsigned int model_load_thread_count,
+    InferenceServer* server, const ModelLifeCycleOptions& options,
     std::unique_ptr<ModelLifeCycle>* life_cycle)
 {
-  std::unique_ptr<ModelLifeCycle> local_life_cycle(new ModelLifeCycle(
-      min_compute_capability, server, backend_cmdline_config_map,
-      host_policy_map, model_load_thread_count));
+  std::unique_ptr<ModelLifeCycle> local_life_cycle(
+      new ModelLifeCycle(server, options));
 
   *life_cycle = std::move(local_life_cycle);
   return Status::Success;
