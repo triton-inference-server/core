@@ -364,10 +364,12 @@ ModelRepositoryManager::Create(
     std::unordered_map<std::string, std::vector<const InferenceParameter*>>
         models;
     for (const auto& model_name : startup_models) {
+      // Verify each model loads successfully, one at a time
       models[model_name];
+      RETURN_IF_ERROR(local_manager->LoadUnloadModel(
+        models, ActionType::LOAD, false));
+      models.clear();
     }
-    RETURN_IF_ERROR(local_manager->LoadUnloadModels(
-        models, ActionType::LOAD, false, &all_models_polled));
   }
 
   *model_repository_manager = std::move(local_manager);
