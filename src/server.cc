@@ -221,11 +221,13 @@ InferenceServer::Init()
   bool polling_enabled = (model_control_mode_ == ModelControlMode::MODE_POLL);
   bool model_control_enabled =
       (model_control_mode_ == ModelControlMode::MODE_EXPLICIT);
+  const ModelLifeCycleOptions life_cycle_options(
+      min_supported_compute_capability_, backend_cmdline_config_map_,
+      host_policy_map_, model_load_thread_count_);
   status = ModelRepositoryManager::Create(
       this, version_, model_repository_paths_, startup_models_,
-      strict_model_config_, backend_cmdline_config_map_, polling_enabled,
-      model_control_enabled, min_supported_compute_capability_,
-      host_policy_map_, model_load_thread_count_, &model_repository_manager_);
+      strict_model_config_, polling_enabled, model_control_enabled,
+      life_cycle_options, &model_repository_manager_);
   if (!status.IsOk()) {
     if (model_repository_manager_ == nullptr) {
       ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
