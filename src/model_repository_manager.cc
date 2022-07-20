@@ -907,7 +907,6 @@ ModelRepositoryManager::Poll(
           LOG_ERROR << "mapped path '" << full_path
                     << "' does not exist for model '" << model.first << "'";
           exists = false;
-          *all_models_polled = false;
         }
       } else {
         for (const auto repository_path : repository_paths_) {
@@ -939,7 +938,6 @@ ModelRepositoryManager::Poll(
               exists = true;
             } else {
               exists = false;
-              *all_models_polled = false;
               model_to_path.erase(res.first);
               LOG_ERROR << "failed to poll model '" << model.first
                         << "': not unique across all model repositories";
@@ -949,8 +947,8 @@ ModelRepositoryManager::Poll(
         }
       }
       if (!exists) {
-        deleted->insert(model.first);
         *all_models_polled = false;
+        deleted->insert(model.first);
       }
     }
   }
