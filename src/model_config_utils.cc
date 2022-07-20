@@ -1792,7 +1792,7 @@ ModelConfigToJson(
 
   // Config will have 0 byte size if all fields are with default value,
   // in other word the config is empty.
-  if (config.ByteSize() == 0) {
+  if (config.ByteSizeLong() == 0) {
     json_str->clear();
     return Status::Success;
   }

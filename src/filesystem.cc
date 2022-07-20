@@ -2183,7 +2183,7 @@ ReadBinaryProto(const std::string& path, google::protobuf::MessageLite* msg)
 
   google::protobuf::io::CodedInputStream coded_stream(
       reinterpret_cast<const uint8_t*>(msg_str.c_str()), msg_str.size());
-  coded_stream.SetTotalBytesLimit(INT_MAX, INT_MAX);
+  coded_stream.SetTotalBytesLimit(INT_MAX);
   if (!msg->ParseFromCodedStream(&coded_stream)) {
     return Status(
         Status::Code::INTERNAL, "Can't parse " + path + " as binary proto");
