@@ -359,18 +359,18 @@ ModelRepositoryManager::Create(
   if (!model_control_enabled || load_all_models_on_startup) {
     // only error happens before model load / unload will be return
     // model loading / unloading error will be printed but ignored
-    RETURN_IF_ERROR((*model_repository_manager)->PollAndUpdateInternal(&all_models_polled));
+    RETURN_IF_ERROR(
+        (*model_repository_manager)->PollAndUpdateInternal(&all_models_polled));
   } else {
     // Load each specified startup_model
     std::unordered_map<std::string, std::vector<const InferenceParameter*>>
         models;
     for (const auto& model_name : startup_models) {
-      // Verify each model loads successfully, one at a time
       models[model_name];
-      RETURN_IF_ERROR(
-          (*model_repository_manager)->LoadUnloadModel(models, ActionType::LOAD, false));
-      models.clear();
     }
+    RETURN_IF_ERROR(
+        (*model_repository_manager)
+            ->LoadUnloadModels(models, ActionType::LOAD, &all_models_polled));
   }
 
 
@@ -938,10 +938,10 @@ ModelRepositoryManager::Poll(
               exists = true;
             } else {
               exists = false;
+              *all_models_polled = false;
               model_to_path.erase(res.first);
               LOG_ERROR << "failed to poll model '" << model.first
                         << "': not unique across all model repositories";
-              *all_models_polled = false;
               break;
             }
           }
@@ -949,6 +949,7 @@ ModelRepositoryManager::Poll(
       }
       if (!exists) {
         deleted->insert(model.first);
+        *all_models_polled = false;
       }
     }
   }
