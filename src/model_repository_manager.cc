@@ -366,8 +366,8 @@ ModelRepositoryManager::Create(
     for (const auto& model_name : startup_models) {
       // Verify each model loads successfully, one at a time
       models[model_name];
-      RETURN_IF_ERROR(local_manager->LoadUnloadModel(
-        models, ActionType::LOAD, false));
+      RETURN_IF_ERROR(
+          local_manager->LoadUnloadModel(models, ActionType::LOAD, false));
       models.clear();
     }
   }
