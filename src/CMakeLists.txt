@@ -84,8 +84,8 @@ endif() # TRITON_ENABLE_METRICS
 # GCS
 #
 if(${TRITON_ENABLE_GCS})
-  find_package(storage_client REQUIRED)
-  message(STATUS "Using google-cloud-cpp ${storage_client_VERSION}")
+  find_package(google_cloud_cpp_storage REQUIRED)
+  message(STATUS "Using google-cloud-cpp ${google_cloud_cpp_storage_VERSION}")
 endif() # TRITON_ENABLE_GCS
 
 #
@@ -286,7 +286,7 @@ endif() # TRITON_ENABLE_METRICS
 if(${TRITON_ENABLE_GCS})
   target_include_directories(
     triton-core
-    PRIVATE $<TARGET_PROPERTY:storage_client,INTERFACE_INCLUDE_DIRECTORIES>
+    PRIVATE $<TARGET_PROPERTY:google-cloud-cpp::storage,INTERFACE_INCLUDE_DIRECTORIES>
   )
   if (NOT WIN32)
     set_source_files_properties(
@@ -454,7 +454,7 @@ if(${TRITON_ENABLE_GCS})
   target_link_libraries(
     triton-core
     PRIVATE
-      storage_client
+    google-cloud-cpp::storage
   )
 endif() # TRITON_ENABLE_GCS
 
