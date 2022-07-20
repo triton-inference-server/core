@@ -337,6 +337,7 @@ ModelRepositoryManager::Create(
           repository_paths, !strict_model_config, polling_enabled,
           model_control_enabled, life_cycle_options.min_compute_capability_,
           std::move(life_cycle)));
+  *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
   // special startup_model name "*". This does not imply support for pattern
@@ -358,7 +359,7 @@ ModelRepositoryManager::Create(
   if (!model_control_enabled || load_all_models_on_startup) {
     // only error happens before model load / unload will be return
     // model loading / unloading error will be printed but ignored
-    RETURN_IF_ERROR(local_manager->PollAndUpdateInternal(&all_models_polled));
+    RETURN_IF_ERROR((*model_repository_manager)->PollAndUpdateInternal(&all_models_polled));
   } else {
     // Load each specified startup_model
     std::unordered_map<std::string, std::vector<const InferenceParameter*>>
@@ -367,12 +368,11 @@ ModelRepositoryManager::Create(
       // Verify each model loads successfully, one at a time
       models[model_name];
       RETURN_IF_ERROR(
-          local_manager->LoadUnloadModel(models, ActionType::LOAD, false));
+          (*model_repository_manager)->LoadUnloadModel(models, ActionType::LOAD, false));
       models.clear();
     }
   }
 
-  *model_repository_manager = std::move(local_manager);
 
   if (!all_models_polled) {
     return Status(Status::Code::INTERNAL, "failed to load all models");
