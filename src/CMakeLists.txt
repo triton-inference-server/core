@@ -106,6 +106,7 @@ set(
   backend_model.cc
   backend_model_instance.cc
   buffer_attributes.cc
+  common.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
   ensemble_scheduler.cc
@@ -149,6 +150,7 @@ set(
   backend_model.h
   backend_model_instance.h
   buffer_attributes.h
+  common.h
   constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h

@@ -40,10 +40,15 @@ Status
 InferenceResponseFactory::CreateResponse(
     std::unique_ptr<InferenceResponse>* response)
 {
-  response_idx_++;
+  uint64_t response_index;
+  {
+    std::lock_guard<std::mutex> guard{mu_};
+    response_index = total_response_idx_;
+    total_response_idx_++;
+  }
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_, response_idx_));
+      response_delegator_, request_id_, response_index));
 #ifdef TRITON_ENABLE_TRACING
   (*response)->SetTrace(trace_);
 #endif  // TRITON_ENABLE_TRACING
@@ -64,6 +69,8 @@ InferenceResponseFactory::SendFlags(const uint32_t flags) const
   return Status::Success;
 }
 
+uint64_t InferenceResponseFactory::total_response_idx_ = 0;
+
 //
 // InferenceResponse
 //
@@ -74,11 +81,11 @@ InferenceResponse::InferenceResponse(
     void* response_userp,
     const std::function<
         void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-    uint64_t response_idx)
+    uint64_t response_idx, uint64_t request_id)
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
       response_delegator_(delegator), null_response_(false),
-      response_idx_(response_idx)
+      response_idx_(response_idx), request_id_(request_id)
 {
   // If the allocator has a start_fn then invoke it.
   TRITONSERVER_ResponseAllocatorStartFn_t start_fn = allocator_->StartFn();

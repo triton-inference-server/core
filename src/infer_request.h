@@ -25,11 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include "buffer_attributes.h"
+#include "common.h"
 #include "infer_response.h"
 #include "infer_stats.h"
 #include "infer_trace.h"
@@ -54,7 +56,7 @@ class MetricModelReporter;
 // valid. Preparing involves removing/resetting any state left over
 // from the previous inference.
 //
-class InferenceRequest {
+class InferenceRequest : CountedObject {
  public:
   // Input tensor
   class Input {
@@ -482,7 +484,7 @@ class InferenceRequest {
   {
     response_factory_.reset(new InferenceResponseFactory(
         model_shared_, id_, allocator, alloc_userp, response_fn, response_userp,
-        response_delegator_));
+        response_delegator_, InstanceIndex()));
     return Status::Success;
   }
 
@@ -792,7 +794,6 @@ std::ostream& operator<<(
 bool operator==(
     const InferenceRequest::SequenceId lhs,
     const InferenceRequest::SequenceId rhs);
-
 }}  // namespace triton::core
 
 namespace std {

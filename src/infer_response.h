@@ -55,10 +55,12 @@ class InferenceResponseFactory {
       TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
       void* response_userp,
       const std::function<void(
-          std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
+          std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
+      const uint64_t request_id)
       : model_(model), id_(id), allocator_(allocator),
         alloc_userp_(alloc_userp), response_fn_(response_fn),
-        response_userp_(response_userp), response_delegator_(delegator)
+        response_userp_(response_userp), response_delegator_(delegator),
+        request_id_(request_id)
   {
   }
 
@@ -118,12 +120,16 @@ class InferenceResponseFactory {
       response_delegator_;
 
   // Response index
-  std::atomic<uint64_t> response_idx_ = {0};
+  static uint64_t total_response_idx_;
+  std::mutex mu_;
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.
   std::shared_ptr<InferenceTraceProxy> trace_;
 #endif  // TRITON_ENABLE_TRACING
+
+  // The internal unique ID of the request
+  uint64_t request_id_;
 };
 
 //
@@ -229,7 +235,7 @@ class InferenceResponse {
       void* response_userp,
       const std::function<void(
           std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-      const uint64_t response_idx);
+      const uint64_t response_idx, const uint64_t request_id);
 
   // "null" InferenceResponse is a special instance of InferenceResponse which
   // contains minimal information for calling InferenceResponse::Send,
@@ -260,6 +266,9 @@ class InferenceResponse {
 
   // The response index.
   uint64_t ResponseIdx() const { return response_idx_; }
+
+  // The unique request ID stored in triton.
+  uint64_t RequestIdx() const { return response_idx_; }
 
   // Add an output to the response. If 'output' is non-null
   // return a pointer to the newly added output.
@@ -344,13 +353,20 @@ class InferenceResponse {
 
   bool null_response_;
 
-  // Representing the response index.
-  uint64_t response_idx_;
+  // A static variable counting the total number of responses created for the
+  // request.
+  static uint64_t total_responses_count;
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.
   std::shared_ptr<InferenceTraceProxy> trace_;
 #endif  // TRITON_ENABLE_TRACING
+
+  // Representing the response index.
+  uint64_t response_idx_;
+
+  // Representing the request id that the response was created from.
+  uint64_t request_id_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceResponse& response);

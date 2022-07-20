@@ -45,7 +45,7 @@ InferenceResponseFactory::CreateResponse(
 {
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_, 0 /* response id */));
+      response_delegator_, 0 /* request id */, 0 /* response id */));
 
   return Status::Success;
 }
@@ -175,7 +175,7 @@ InferenceResponse::InferenceResponse(
     void* response_userp,
     const std::function<
         void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-    const uint64_t response_idx)
+    const uint64_t response_idx, const uint64_t request_id)
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
       response_delegator_(delegator), null_response_(false)
@@ -274,17 +274,6 @@ InferenceResponse::AddOutput(
     const std::vector<int64_t>& shape, InferenceResponse::Output** output)
 {
   outputs_.emplace_back(name, datatype, shape, allocator_, alloc_userp_);
-
-  // LOG_VERBOSE(1) << "add response output: " << outputs_.back();
-
-  /*if (model_ != nullptr) {
-    const inference::ModelOutput* output_config;
-    RETURN_IF_ERROR(model_->GetOutput(name, &output_config));
-    if (output_config->has_reshape()) {
-      const bool has_batch_dim = (model_->Config().max_batch_size() > 0);
-      outputs_.back().Reshape(has_batch_dim, output_config);
-    }
-  }*/
 
   if (output != nullptr) {
     *output = std::addressof(outputs_.back());

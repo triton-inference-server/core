@@ -94,6 +94,8 @@ if(${TRITON_ENABLE_GPU})
     ../status.cc
     ../status.h
     ../constants.h
+    ../common.h
+    ../common.cc
     ${MEMORY_SRCS}
     ${CUDA_MEMORY_MANAGER_SRCS}
     ${PINNED_MEMORY_MANAGER_SRCS}
