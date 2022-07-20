@@ -370,7 +370,8 @@ ModelRepositoryManager::Create(
     }
     RETURN_IF_ERROR(
         (*model_repository_manager)
-            ->LoadUnloadModels(models, ActionType::LOAD, &all_models_polled));
+            ->LoadUnloadModels(
+                models, ActionType::LOAD, false, &all_models_polled));
   }
 
 
