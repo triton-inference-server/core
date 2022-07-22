@@ -646,7 +646,7 @@ TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
-    const char* msg)
+    const char* msg, const int verbosity)
 {
   switch (level) {
     case TRITONSERVER_LOG_INFO:
@@ -659,7 +659,7 @@ TRITONSERVER_LogMessage(
       LOG_ERROR_FL(filename, line) << msg;
       return nullptr;
     case TRITONSERVER_LOG_VERBOSE:
-      LOG_VERBOSE_FL(1, filename, line) << msg;
+      LOG_VERBOSE_FL(verbosity, filename, line) << msg;
       return nullptr;
     default:
       return TRITONSERVER_ErrorNew(
