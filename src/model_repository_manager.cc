@@ -337,6 +337,7 @@ ModelRepositoryManager::Create(
           repository_paths, !strict_model_config, polling_enabled,
           model_control_enabled, life_cycle_options.min_compute_capability_,
           std::move(life_cycle)));
+  *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
   // special startup_model name "*". This does not imply support for pattern
@@ -358,7 +359,8 @@ ModelRepositoryManager::Create(
   if (!model_control_enabled || load_all_models_on_startup) {
     // only error happens before model load / unload will be return
     // model loading / unloading error will be printed but ignored
-    RETURN_IF_ERROR(local_manager->PollAndUpdateInternal(&all_models_polled));
+    RETURN_IF_ERROR(
+        (*model_repository_manager)->PollAndUpdateInternal(&all_models_polled));
   } else {
     // Load each specified startup_model
     std::unordered_map<std::string, std::vector<const InferenceParameter*>>
@@ -366,11 +368,12 @@ ModelRepositoryManager::Create(
     for (const auto& model_name : startup_models) {
       models[model_name];
     }
-    RETURN_IF_ERROR(local_manager->LoadUnloadModels(
-        models, ActionType::LOAD, false, &all_models_polled));
+    RETURN_IF_ERROR(
+        (*model_repository_manager)
+            ->LoadUnloadModels(
+                models, ActionType::LOAD, false, &all_models_polled));
   }
 
-  *model_repository_manager = std::move(local_manager);
 
   if (!all_models_polled) {
     return Status(Status::Code::INTERNAL, "failed to load all models");
@@ -904,7 +907,6 @@ ModelRepositoryManager::Poll(
           LOG_ERROR << "mapped path '" << full_path
                     << "' does not exist for model '" << model.first << "'";
           exists = false;
-          *all_models_polled = false;
         }
       } else {
         for (const auto repository_path : repository_paths_) {
@@ -939,13 +941,13 @@ ModelRepositoryManager::Poll(
               model_to_path.erase(res.first);
               LOG_ERROR << "failed to poll model '" << model.first
                         << "': not unique across all model repositories";
-              *all_models_polled = false;
               break;
             }
           }
         }
       }
       if (!exists) {
+        *all_models_polled = false;
         deleted->insert(model.first);
       }
     }
