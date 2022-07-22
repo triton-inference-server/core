@@ -1317,8 +1317,8 @@ namespace s3 = Aws::S3;
 
 class S3FileSystem final : public FileSystem {
  public:
-  S3FileSystem(const Aws::SDKOptions& options, const std::string& s3_path);
-  S3FileSystem(const Aws::SDKOptions& options, const std::string& s3_path, const char* secret_key, const char* key_id, const char* region, const char* session_token);
+  S3FileSystem(const std::string& s3_path);
+  S3FileSystem(const std::string& s3_path, const char* secret_key, const char* key_id, const char* region, const char* session_token);
   ~S3FileSystem();
 
   Status CheckClient(const std::string& s3_path);
@@ -1349,10 +1349,15 @@ class S3FileSystem final : public FileSystem {
   Status ParsePath(
       const std::string& path, std::string* bucket, std::string* object);
   Status CleanPath(const std::string& s3_path, std::string* clean_path);
-  Aws::SDKOptions options_;
-  s3::S3Client client_;
+  const Aws::SDKOptions options_;
+  s3::S3Client* client_;  // must NOT init until Aws::InitAPI is called
   re2::RE2 s3_regex_;
+  // enforce order: Aws::InitAPI -> Aws::ShutdownAPI -> Aws::InitAPI ...
+  static std::mutex init_mu;
+  static size_t init_count;
 };
+std::mutex S3FileSystem::init_mu;
+size_t S3FileSystem::init_count = 0;
 
 Status
 S3FileSystem::ParsePath(
@@ -1453,16 +1458,21 @@ S3FileSystem::CleanPath(const std::string& s3_path, std::string* clean_path)
   return Status::Success;
 }
 
-S3FileSystem::S3FileSystem(
-    const Aws::SDKOptions& options, const std::string& s3_path) : S3FileSystem(options, s3_path, std::getenv("AWS_SECRET_ACCESS_KEY"), std::getenv("AWS_ACCESS_KEY_ID"), std::getenv("AWS_DEFAULT_REGION"), std::getenv("AWS_SESSION_TOKEN")) {}
+S3FileSystem::S3FileSystem(const std::string& s3_path) : S3FileSystem(s3_path, std::getenv("AWS_SECRET_ACCESS_KEY"), std::getenv("AWS_ACCESS_KEY_ID"), std::getenv("AWS_DEFAULT_REGION"), std::getenv("AWS_SESSION_TOKEN")) {}
 
 S3FileSystem::S3FileSystem(
-    const Aws::SDKOptions& options, const std::string& s3_path, const char* secret_key, const char* key_id, const char* region, const char* session_token)
-    : options_(options),
-      s3_regex_(
+    const std::string& s3_path, const char* secret_key, const char* key_id, const char* region, const char* session_token)
+    : s3_regex_(
           "s3://(http://|https://|)([0-9a-zA-Z\\-.]+):([0-9]+)/"
           "([0-9a-z.\\-]+)(((/[0-9a-zA-Z.\\-_]+)*)?)")
 {
+  // init aws API if not already
+  init_mu.lock();
+  if (!init_count++) {
+    Aws::InitAPI(options_);
+  }
+  init_mu.unlock();
+
   Aws::Client::ClientConfiguration config;
   Aws::Auth::AWSCredentials credentials;
 
@@ -1500,13 +1510,13 @@ S3FileSystem::S3FileSystem(
   }
 
   if ((secret_key != NULL) && (key_id != NULL)) {
-    client_ = s3::S3Client(
+    client_ = new s3::S3Client(
         credentials, config,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
         /*useVirtualAdressing*/ false);
 
   } else {
-    client_ = s3::S3Client(
+    client_ = new s3::S3Client(
         config, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
         /*useVirtualAdressing*/ false);
   }
@@ -1514,7 +1524,13 @@ S3FileSystem::S3FileSystem(
 
 S3FileSystem::~S3FileSystem()
 {
-  Aws::ShutdownAPI(options_);
+  delete client_;
+  // shutdown aws API if no more active instance
+  init_mu.lock();
+  if (!--init_count) {
+    Aws::ShutdownAPI(options_);
+  }
+  init_mu.unlock();
 }
 
 Status
@@ -1550,7 +1566,7 @@ S3FileSystem::FileExists(const std::string& path, bool* exists)
   head_request.SetBucket(bucket.c_str());
   head_request.SetKey(object.c_str());
 
-  auto head_object_outcome = client_.HeadObject(head_request);
+  auto head_object_outcome = client_->HeadObject(head_request);
   if (!head_object_outcome.IsSuccess()) {
     if (head_object_outcome.GetError().GetErrorType() !=
         s3::S3Errors::RESOURCE_NOT_FOUND) {
@@ -1580,7 +1596,7 @@ S3FileSystem::IsDirectory(const std::string& path, bool* is_dir)
   s3::Model::HeadBucketRequest head_request;
   head_request.WithBucket(bucket.c_str());
 
-  auto head_bucket_outcome = client_.HeadBucket(head_request);
+  auto head_bucket_outcome = client_->HeadBucket(head_request);
   if (!head_bucket_outcome.IsSuccess()) {
     return Status(
         Status::Code::INTERNAL,
@@ -1600,7 +1616,7 @@ S3FileSystem::IsDirectory(const std::string& path, bool* is_dir)
   s3::Model::ListObjectsRequest list_objects_request;
   list_objects_request.SetBucket(bucket.c_str());
   list_objects_request.SetPrefix(AppendSlash(object_path).c_str());
-  auto list_objects_outcome = client_.ListObjects(list_objects_request);
+  auto list_objects_outcome = client_->ListObjects(list_objects_request);
 
   if (list_objects_outcome.IsSuccess()) {
     *is_dir = !list_objects_outcome.GetResult().GetContents().empty();
@@ -1634,7 +1650,7 @@ S3FileSystem::FileModificationTime(const std::string& path, int64_t* mtime_ns)
   head_request.SetKey(object.c_str());
 
   // If request succeeds, copy over the modification time
-  auto head_object_outcome = client_.HeadObject(head_request);
+  auto head_object_outcome = client_->HeadObject(head_request);
   if (head_object_outcome.IsSuccess()) {
     *mtime_ns = head_object_outcome.GetResult().GetLastModified().Millis() *
                 NANOS_PER_MILLIS;
@@ -1665,7 +1681,7 @@ S3FileSystem::GetDirectoryContents(
   s3::Model::ListObjectsRequest objects_request;
   objects_request.SetBucket(bucket.c_str());
   objects_request.SetPrefix(full_dir.c_str());
-  auto list_objects_outcome = client_.ListObjects(objects_request);
+  auto list_objects_outcome = client_->ListObjects(objects_request);
 
   if (list_objects_outcome.IsSuccess()) {
     Aws::Vector<Aws::S3::Model::Object> object_list =
@@ -1763,7 +1779,7 @@ S3FileSystem::ReadTextFile(const std::string& path, std::string* contents)
   object_request.SetBucket(bucket.c_str());
   object_request.SetKey(object.c_str());
 
-  auto get_object_outcome = client_.GetObject(object_request);
+  auto get_object_outcome = client_->GetObject(object_request);
   if (get_object_outcome.IsSuccess()) {
     auto& object_result = get_object_outcome.GetResultWithOwnership().GetBody();
 
@@ -1869,7 +1885,7 @@ S3FileSystem::LocalizeDirectory(
         object_request.SetBucket(file_bucket.c_str());
         object_request.SetKey(file_object.c_str());
 
-        auto get_object_outcome = client_.GetObject(object_request);
+        auto get_object_outcome = client_->GetObject(object_request);
         if (get_object_outcome.IsSuccess()) {
           auto& retrieved_file =
               get_object_outcome.GetResultWithOwnership().GetBody();
@@ -2061,14 +2077,11 @@ Status FileSystemManager::GetFileSystem(const std::string& path, FileSystem** fi
         "s3:// file-system not supported. To enable, build with "
         "-DTRITON_ENABLE_S3=ON.");
 #else
-    Aws::SDKOptions options;
-    static std::once_flag onceFlag;
-    std::call_once(onceFlag, [&options] { Aws::InitAPI(options); });
     const Status& status_ = LoadCredential();
     if (status_.IsOk()) {
       std::tuple<std::string, std::string, std::string, std::string> credential_;
       RETURN_IF_ERROR((GetLongestMatchingCredential<std::tuple<std::string, std::string, std::string, std::string>>(s3_credential, "s3://", path.substr(5, std::string::npos), credential_)));
-      s3_fs = new S3FileSystem(options, path, std::get<0>(credential_).c_str(), std::get<1>(credential_).c_str(), std::get<2>(credential_).c_str(), std::get<3>(credential_).c_str());
+      s3_fs = new S3FileSystem(path, std::get<0>(credential_).c_str(), std::get<1>(credential_).c_str(), std::get<2>(credential_).c_str(), std::get<3>(credential_).size() ? std::get<3>(credential_).c_str() : NULL);
       const Status& client_status = s3_fs->CheckClient(path);
       if (!client_status.IsOk()) {
         if (status_.Message() == "Cached") {
@@ -2081,7 +2094,7 @@ Status FileSystemManager::GetFileSystem(const std::string& path, FileSystem** fi
       return Status::Success;
     }
     else if (status_.Message() == "Use legacy credential") {
-      s3_fs = new S3FileSystem(options, path);
+      s3_fs = new S3FileSystem(path);
       RETURN_IF_ERROR(s3_fs->CheckClient(path));
       *file_system = s3_fs;
       return Status::Success;
@@ -2220,14 +2233,14 @@ Status FileSystemManager::LoadCredentialFromFile()
         triton::common::TritonJson::Value s3_cred_key_id_;
         triton::common::TritonJson::Value s3_cred_region_;
         triton::common::TritonJson::Value s3_cred_session_token_;
-        s3_cred_.Find("secret_key", &s3_cred_secret_key_);
-        s3_cred_.Find("key_id", &s3_cred_key_id_);
-        s3_cred_.Find("region", &s3_cred_region_);
-        s3_cred_.Find("session_token", &s3_cred_session_token_);
-        s3_cred_secret_key_.AsString(&s3_cred_secret_key);
-        s3_cred_key_id_.AsString(&s3_cred_key_id);
-        s3_cred_region_.AsString(&s3_cred_region);
-        s3_cred_session_token_.AsString(&s3_cred_session_token);
+        if (s3_cred_.Find("secret_key", &s3_cred_secret_key_))
+          s3_cred_secret_key_.AsString(&s3_cred_secret_key);
+        if (s3_cred_.Find("key_id", &s3_cred_key_id_))
+          s3_cred_key_id_.AsString(&s3_cred_key_id);
+        if (s3_cred_.Find("region", &s3_cred_region_))
+          s3_cred_region_.AsString(&s3_cred_region);
+        if (s3_cred_.Find("session_token", &s3_cred_session_token_))
+          s3_cred_session_token_.AsString(&s3_cred_session_token);
         s3_credential.push_back(std::make_pair(s3_cred_name, std::make_tuple(s3_cred_secret_key, s3_cred_key_id, s3_cred_region, s3_cred_session_token)));
       }
       std::sort(s3_credential.begin(), s3_credential.end(), [](std::pair<std::string, std::tuple<std::string, std::string, std::string, std::string>> i, std::pair<std::string, std::tuple<std::string, std::string, std::string, std::string>> j) {return i.first.size() >= j.first.size();});
@@ -2249,10 +2262,10 @@ Status FileSystemManager::LoadCredentialFromFile()
         as_cred_json.Find(as_cred_name.c_str(), &as_cred_);
         triton::common::TritonJson::Value as_cred_account_str_;
         triton::common::TritonJson::Value as_cred_account_key_;
-        as_cred_.Find("account_str", &as_cred_account_str_);
-        as_cred_.Find("account_key", &as_cred_account_key_);
-        as_cred_account_str_.AsString(&as_cred_account_str);
-        as_cred_account_key_.AsString(&as_cred_account_key);
+        if (as_cred_.Find("account_str", &as_cred_account_str_))
+          as_cred_account_str_.AsString(&as_cred_account_str);
+        if (as_cred_.Find("account_key", &as_cred_account_key_))
+          as_cred_account_key_.AsString(&as_cred_account_key);
         as_credential.push_back(std::make_pair(as_cred_name, std::make_pair(as_cred_account_str, as_cred_account_key)));
       }
       std::sort(as_credential.begin(), as_credential.end(), [](std::pair<std::string, std::pair<std::string, std::string>> i, std::pair<std::string, std::pair<std::string, std::string>> j) {return i.first.size() >= j.first.size();});
@@ -2284,17 +2297,17 @@ Status FileSystemManager::GetLongestMatchingCredential(const std::vector<std::pa
   if (!credentials.size()) {
     return Status(
         Status::Code::NOT_FOUND,
-        "Credential not found, set at least one credential to match '" + file_system_prefix + path + "'");
+        "Credential not found, set at least one credential to match  " + file_system_prefix + path);
   }
   for (size_t i = 0; i < credentials.size(); i++) {
     if (!path.rfind(credentials[i].first, 0)) {
       credential = credentials[i].second;
-      LOG_VERBOSE(1) << "Using credential '" + credentials[i].first + "' for path '" + file_system_prefix + path + "'";
+      LOG_VERBOSE(1) << "Using credential  " + credentials[i].first + "  for path  " + file_system_prefix + path;
       return Status::Success;
     }
   }
   credential = credentials[credentials.size() - 1].second;
-  LOG_VERBOSE(1) << "Using credential '" + credentials[credentials.size() - 1].first + "' for path '" + file_system_prefix + path + "'";
+  LOG_VERBOSE(1) << "Using credential  " + credentials[credentials.size() - 1].first + "  for path  " + file_system_prefix + path;
   return Status::Success;
 }
 
