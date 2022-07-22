@@ -646,7 +646,7 @@ TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
-    const char* msg, const int verbosity)
+    const char* msg, const uint32_t verbosity)
 {
   switch (level) {
     case TRITONSERVER_LOG_INFO:

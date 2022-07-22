@@ -286,7 +286,7 @@ TRITONSERVER_DECLSPEC bool TRITONSERVER_LogIsEnabled(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
-    const char* msg, const int verbosity=1);
+    const char* msg, const uint32_t verbosity=1);
 
 /// TRITONSERVER_Error
 ///
