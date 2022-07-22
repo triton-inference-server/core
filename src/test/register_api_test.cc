@@ -106,7 +106,7 @@ TEST_F(RegisterApiTest, Register)
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       TRITONSERVER_ERROR_INTERNAL,
-      "failed to load 'model_0', no version is available",
+      "failed to load 'model_0', failed to poll from model repository",
       "loading model 'model_0'");
 
   // Registering a repository "models_0" where contains "model_0"
@@ -147,7 +147,7 @@ TEST_F(RegisterApiTest, RegisterWithMap)
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       TRITONSERVER_ERROR_INTERNAL,
-      "failed to load 'model_0', no version is available",
+      "failed to load 'model_0', failed to poll from model repository",
       "loading model 'model_0'");
   // Request to load "name_0"
   FAIL_TEST_IF_ERR(
@@ -718,7 +718,7 @@ TEST_F(RegisterApiTest, CorrectIndex)
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerLoadModel(server_, "model_0"),
       TRITONSERVER_ERROR_INTERNAL,
-      "failed to load 'model_0', no version is available",
+      "failed to load 'model_0', failed to poll from model repository",
       "loading model 'model_0'");
   // Request to load "name_0"
   FAIL_TEST_IF_ERR(
