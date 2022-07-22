@@ -60,7 +60,7 @@ class InferenceResponseFactory {
       : model_(model), id_(id), allocator_(allocator),
         alloc_userp_(alloc_userp), response_fn_(response_fn),
         response_userp_(response_userp), response_delegator_(delegator),
-        request_id_(request_id)
+        request_id_(request_id), total_response_idx_(0)
   {
   }
 
@@ -119,9 +119,6 @@ class InferenceResponseFactory {
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>
       response_delegator_;
 
-  // Response index
-  static uint64_t total_response_idx_;
-  std::mutex mu_;
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.
@@ -130,6 +127,10 @@ class InferenceResponseFactory {
 
   // The internal unique ID of the request
   uint64_t request_id_;
+
+  // Response index
+  uint64_t total_response_idx_;
+  std::mutex mu_;
 };
 
 //
@@ -268,7 +269,9 @@ class InferenceResponse {
   uint64_t ResponseIdx() const { return response_idx_; }
 
   // The unique request ID stored in triton.
-  uint64_t RequestIdx() const { return response_idx_; }
+  uint64_t RequestUniqueId() const { return response_idx_; }
+
+  uint64_t ResponseStartNs() const { return response_start_; }
 
   // Add an output to the response. If 'output' is non-null
   // return a pointer to the newly added output.
@@ -367,6 +370,8 @@ class InferenceResponse {
 
   // Representing the request id that the response was created from.
   uint64_t request_id_;
+
+  uint64_t response_start_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceResponse& response);

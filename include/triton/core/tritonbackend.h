@@ -1295,13 +1295,15 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
 /// computations.
 /// \param compute_output_start Timestamp for the end of execution
 /// computations.
+/// \param send_flags The flags that will be used for sending the response.
 /// \param response_end Timestamp for the end of execution.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportResponseStatistics(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Response* response,
     const bool success, const uint64_t response_start,
-    const uint64_t compute_output_start, const uint64_t response_end);
+    const uint64_t compute_output_start, const uint64_t response_end,
+    const uint32_t response_flags);
 
 ///
 /// The following functions can be implemented by a backend. Functions

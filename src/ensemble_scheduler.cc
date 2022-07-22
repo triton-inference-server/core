@@ -1038,7 +1038,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
       if (inflight_step_counter_ != 0) {
         return ensemble_status_;
       }
-      request_tracker_->Request()->ResponseFactory().SendFlags(
+      request_tracker_->Request()->ResponseFactory()->SendFlags(
           TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     } else {
       InferenceResponse::Send(
@@ -1109,7 +1109,7 @@ EnsembleContext::CheckAndSetEnsembleOutput(
             "ensemble steps can be made");
   }
 
-  RETURN_IF_ERROR(lrequest->ResponseFactory().CreateResponse(response));
+  RETURN_IF_ERROR(lrequest->ResponseFactory()->CreateResponse(response));
 
   bool cuda_async_copy = false;
   std::map<TensorData*, size_t*> releasing_tensors;
