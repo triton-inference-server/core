@@ -612,7 +612,9 @@ ModelRepositoryManager::LoadUnloadModels(
       for (const auto& model : models) {
         deleted.insert(model.first);
       }
-    } else {
+    }
+    // ActionType::LOAD and in model control mode
+    else {
       std::set<std::string> checked_models;
       auto current_models = models;
       for (const auto& model : models) {
@@ -880,7 +882,9 @@ ModelRepositoryManager::Poll(
       LOG_ERROR << "failed to poll model '" << model
                 << "': not unique across all model repositories";
     }
-  } else {
+  }
+  // If models are specified, this is explicit model control mode.
+  else {
     for (const auto& model : models) {
       // Skip repository polling if override model files
       if (ModelDirectoryOverride(model.second)) {
@@ -946,9 +950,10 @@ ModelRepositoryManager::Poll(
           }
         }
       }
+      // For an explicitly specified model that doesn't exist, we don't mark it
+      // as deleted, we simply mark that we couldn't poll all models.
       if (!exists) {
         *all_models_polled = false;
-        deleted->insert(model.first);
       }
     }
   }
