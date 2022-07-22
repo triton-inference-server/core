@@ -50,6 +50,7 @@ class TritonModelInstance {
  public:
   static Status CreateInstances(
       TritonModel* model,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const inference::ModelConfig& model_config, const bool device_blocking);
   ~TritonModelInstance();

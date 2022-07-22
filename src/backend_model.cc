@@ -186,7 +186,8 @@ TritonModel::Create(
 
   // Create and initialize the model instances for this model.
   RETURN_IF_ERROR(TritonModelInstance::CreateInstances(
-      raw_local_model, host_policy_map, model_config, device_blocking));
+      raw_local_model, backend_cmdline_config_map, host_policy_map,
+      model_config, device_blocking));
 
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
 

@@ -214,4 +214,30 @@ BackendConfigurationBackendLibraryName(
   return Status::Success;
 }
 
+Status
+BackendConfigurationModelLoadGpuFraction(
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    const int device_id, double* memory_limit)
+{
+  *memory_limit = 1.0;
+  const auto& itr = config_map.find(std::string());
+  if (itr == config_map.end()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "unable to find global backends directory configuration");
+  }
+
+  static std::string key_prefix = "model-load-gpu-fraction-device-";
+  std::string memory_limit_str;
+  auto status = BackendConfiguration(
+      itr->second, key_prefix + std::to_string(device_id), &memory_limit_str);
+  // Allow missing key, default to 1.0 (no limit) if the limit is not specified
+  if (status.IsOk()) {
+    RETURN_IF_ERROR(BackendConfigurationParseStringToDouble(
+        memory_limit_str, memory_limit));
+  }
+
+  return Status::Success;
+}
+
 }}  // namespace triton::core
