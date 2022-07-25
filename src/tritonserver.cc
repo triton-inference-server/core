@@ -1216,7 +1216,7 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetLogOutFile(
+TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file)
 {
 #ifdef TRITON_ENABLE_LOGGING
