@@ -386,7 +386,7 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_ServerOptionsSetLogOutFile()
+TRITONSERVER_ServerOptionsSetLogFile()
 {
 }
 TRITONAPI_DECLSPEC void
