@@ -684,17 +684,13 @@ TEST_F(RegisterApiTest, DifferentMapping)
   ASSERT_TRUE(ready) << "Expect 'name_0' v1 to be ready, model directory is "
                         "'models_0/model_0'";
 
-  // [FIXME] need to revisit this, currently the model manager will actually
-  // unload 'model_0' as the side affect of calling load 'model_0' after updated
-  // the mapping, the reasoning is 'model_0' no longing "seen" in any
-  // repositories. Probably not the expected behavior as we want to keep the
-  // previously loaded 'model_0'
-  // ready = false;
-  // FAIL_TEST_IF_ERR(
-  //     TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
-  //     "Is 'model_0' ready");
-  // ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is
-  // 'models_0/model_0'";
+  // Verify that model_0 still exists in-memory
+  ready = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerModelIsReady(server_, "model_0", 1, &ready),
+      "Is 'model_0' ready");
+  ASSERT_TRUE(ready) << "Expect 'model_0' v1 to be ready, model directory is "
+                        "'models_0/model_0'";
 }
 
 TEST_F(RegisterApiTest, CorrectIndex)

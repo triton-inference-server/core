@@ -274,6 +274,8 @@ class ModelRepositoryManager {
   /// \param deleted The names of the models removed from the repository.
   /// \param modified The names of the models remaining in the
   /// repository that have been changed.
+  /// \param deleted_dependents The names of dependent models to be removed
+  /// from the repository.
   /// \return The error status.
   Status UpdateDependencyGraph(
       const std::set<std::string>& added, const std::set<std::string>& deleted,
