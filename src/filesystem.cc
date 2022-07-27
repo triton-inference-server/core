@@ -129,6 +129,7 @@ namespace {
 
 class FileSystem {
  public:
+  virtual ~FileSystem() {}
   virtual Status FileExists(const std::string& path, bool* exists) = 0;
   virtual Status IsDirectory(const std::string& path, bool* is_dir) = 0;
   virtual Status FileModificationTime(
@@ -155,7 +156,7 @@ class FileSystem {
   virtual Status DeleteDirectory(const std::string& path) = 0;
 };
 
-class LocalFileSystem final : public FileSystem {
+class LocalFileSystem : public FileSystem {
  public:
   Status FileExists(const std::string& path, bool* exists) override;
   Status IsDirectory(const std::string& path, bool* is_dir) override;
@@ -477,9 +478,8 @@ AppendSlash(const std::string& name)
 
 namespace gcs = google::cloud::storage;
 
-class GCSFileSystem final : public FileSystem {
+class GCSFileSystem : public FileSystem {
  public:
-  GCSFileSystem();
   GCSFileSystem(const std::string& credential_path);
   Status CheckClient();
   Status FileExists(const std::string& path, bool* exists) override;
@@ -517,15 +517,9 @@ class GCSFileSystem final : public FileSystem {
 };
 std::mutex GCSFileSystem::env_mu_;
 
-GCSFileSystem::GCSFileSystem()
-{
-  std::lock_guard<std::mutex> lock(env_mu_);
-  client_ = gcs::Client::CreateDefaultClient();
-}
-
 GCSFileSystem::GCSFileSystem(const std::string& credential_path)
 {
-  std::string env_name = "GOOGLE_APPLICATION_CREDENTIALS";
+  static std::string env_name = "GOOGLE_APPLICATION_CREDENTIALS";
   std::lock_guard<std::mutex> lock(env_mu_);
 #ifdef _WIN32
   _putenv((env_name + "=" + credential_path).c_str());
@@ -916,12 +910,11 @@ GCSFileSystem::DeleteDirectory(const std::string& path)
 namespace as = azure::storage_lite;
 const std::string AS_URL_PATTERN = "as://([^/]+)/([^/?]+)(?:/([^?]*))?(\\?.*)?";
 
-class ASFileSystem final : public FileSystem {
+class ASFileSystem : public FileSystem {
  public:
-  ASFileSystem(const std::string& s3_path);
   ASFileSystem(
-      const std::string& s3_path, const char* account_str,
-      const char* account_key);
+      const std::string& path, const std::string& account_str,
+      const std::string& account_key);
   Status CheckClient();
 
   Status FileExists(const std::string& path, bool* exists) override;
@@ -976,15 +969,9 @@ ASFileSystem::ParsePath(
   return Status::Success;
 }
 
-ASFileSystem::ASFileSystem(const std::string& path)
-    : ASFileSystem(
-          path, std::getenv("AZURE_STORAGE_ACCOUNT"),
-          std::getenv("AZURE_STORAGE_KEY"))
-{
-}
-
 ASFileSystem::ASFileSystem(
-    const std::string& path, const char* account_str, const char* account_key)
+    const std::string& path, const std::string& account_str,
+    const std::string& account_key)
     : as_regex_(AS_URL_PATTERN)
 {
   std::shared_ptr<as::storage_account> account = nullptr;
@@ -993,18 +980,18 @@ ASFileSystem::ASFileSystem(
           path, as_regex_, &host_name, &container, &blob_path, &query)) {
     size_t pos = host_name.rfind(".blob.core.windows.net");
     std::string account_name;
-    if (account_str == NULL) {
+    if (account_str.size()) {
       if (pos != std::string::npos) {
         account_name = host_name.substr(0, pos);
       } else {
         account_name = host_name;
       }
     } else {
-      account_name = std::string(account_str);
+      account_name = account_str;
     }
 
     std::shared_ptr<as::storage_credential> cred;
-    if (account_key != NULL) {
+    if (account_key.size()) {
       // Shared Key
       cred = std::make_shared<as::shared_key_credential>(
           account_name, account_key);
@@ -1324,12 +1311,12 @@ ASFileSystem::DeleteDirectory(const std::string& path)
 
 namespace s3 = Aws::S3;
 
-class S3FileSystem final : public FileSystem {
+class S3FileSystem : public FileSystem {
  public:
-  S3FileSystem(const std::string& s3_path);
   S3FileSystem(
-      const std::string& s3_path, const char* secret_key, const char* key_id,
-      const char* region, const char* session_token);
+      const std::string& s3_path, const std::string& secret_key,
+      const std::string& key_id, const std::string& region,
+      const std::string& session_token, const std::string& profile_name);
   ~S3FileSystem();
 
   Status CheckClient(const std::string& s3_path);
@@ -1361,7 +1348,7 @@ class S3FileSystem final : public FileSystem {
       const std::string& path, std::string* bucket, std::string* object);
   Status CleanPath(const std::string& s3_path, std::string* clean_path);
   const Aws::SDKOptions options_;
-  std::unique_ptr<s3::S3Client> client_;  // init after Aws::InitAPI is called
+  s3::S3Client* client_;  // init after Aws::InitAPI is called
   re2::RE2 s3_regex_;
   // enforce order: Aws::InitAPI -> Aws::ShutdownAPI -> Aws::InitAPI ...
   static std::mutex init_mu_;
@@ -1469,22 +1456,15 @@ S3FileSystem::CleanPath(const std::string& s3_path, std::string* clean_path)
   return Status::Success;
 }
 
-S3FileSystem::S3FileSystem(const std::string& s3_path)
-    : S3FileSystem(
-          s3_path, std::getenv("AWS_SECRET_ACCESS_KEY"),
-          std::getenv("AWS_ACCESS_KEY_ID"), std::getenv("AWS_DEFAULT_REGION"),
-          std::getenv("AWS_SESSION_TOKEN"))
-{
-}
-
 S3FileSystem::S3FileSystem(
-    const std::string& s3_path, const char* secret_key, const char* key_id,
-    const char* region, const char* session_token)
+    const std::string& s3_path, const std::string& secret_key,
+    const std::string& key_id, const std::string& region,
+    const std::string& session_token, const std::string& profile_name)
     : s3_regex_(
           "s3://(http://|https://|)([0-9a-zA-Z\\-.]+):([0-9]+)/"
           "([0-9a-z.\\-]+)(((/[0-9a-zA-Z.\\-_]+)*)?)")
 {
-  // init aws API if not already
+  // init aws api if not already
   init_mu_.lock();
   if (!init_count_++) {
     Aws::InitAPI(options_);
@@ -1494,19 +1474,19 @@ S3FileSystem::S3FileSystem(
   Aws::Client::ClientConfiguration config;
   Aws::Auth::AWSCredentials credentials;
 
-  // check vars for S3 credentials -> AWS_PROFILE (ENV) -> default
-  if ((secret_key != NULL) && (key_id != NULL)) {
-    credentials.SetAWSAccessKeyId(key_id);
-    credentials.SetAWSSecretKey(secret_key);
-    if (session_token != NULL) {
-      credentials.SetSessionToken(session_token);
+  // check vars for S3 credentials -> aws profile -> default
+  if ((secret_key.size()) && (key_id.size())) {
+    credentials.SetAWSAccessKeyId(key_id.c_str());
+    credentials.SetAWSSecretKey(secret_key.c_str());
+    if (session_token.size()) {
+      credentials.SetSessionToken(session_token.c_str());
     }
     config = Aws::Client::ClientConfiguration();
-    if (region != NULL) {
-      config.region = region;
+    if (region.size()) {
+      config.region = region.c_str();
     }
-  } else if (const char* profile_name = std::getenv("AWS_PROFILE")) {
-    config = Aws::Client::ClientConfiguration(profile_name);
+  } else if (profile_name.size()) {
+    config = Aws::Client::ClientConfiguration(profile_name.c_str());
   } else {
     config = Aws::Client::ClientConfiguration("default");
   }
@@ -1527,26 +1507,34 @@ S3FileSystem::S3FileSystem(
     }
   }
 
-  if ((secret_key != NULL) && (key_id != NULL)) {
-    client_.reset(new s3::S3Client(
+  if (secret_key.size() && key_id.size()) {
+    client_ = new s3::S3Client(
         credentials, config,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAdressing*/ false));
+        /*useVirtualAdressing*/ false);
 
   } else {
-    client_.reset(new s3::S3Client(
+    client_ = new s3::S3Client(
         config, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAdressing*/ false));
+        /*useVirtualAdressing*/ false);
   }
 }
 
 S3FileSystem::~S3FileSystem()
 {
-  // shutdown aws API if no more active instance
+  // should delete all client_ before shutdown
+  delete client_;
+  // shutdown aws api if no more S3 instances
+  // FIXME: Calling Aws::ShutdownAPI will result in segmentation fault.
+  //        Currently, the Aws::initAPI will be called at most once at the
+  //        constructor and zero calls to Aws::ShutdownAPI, which is not a
+  //        memory leak and resources will be reclaimed when triton stops.
+  /*
   std::lock_guard<std::mutex> lock(init_mu_);
   if (!--init_count_) {
     Aws::ShutdownAPI(options_);
   }
+  */
 }
 
 Status
@@ -1971,75 +1959,62 @@ S3FileSystem::DeleteDirectory(const std::string& path)
 
 class FileSystemManager {
  public:
-  // create a FileSystem from the given path
-  // the class instance is to keep track and auto delete unused FileSystem
-  // the FileSystem will live for the duration of this class instance
-  // use a different class instance for different paths
-  Status GetFileSystem(const std::string& path, FileSystem** file_system);
-  // create a FileSystem from the given type
-  Status GetFileSystem(FileSystemType type, FileSystem** file_system);
+  Status GetFileSystem(
+      const std::string& path, std::shared_ptr<FileSystem>& file_system);
+  Status GetFileSystem(
+      FileSystemType type, std::shared_ptr<FileSystem>& file_system);
+  FileSystemManager();
 
  private:
   Status ReturnErrorOrReload(
       const Status& load_status, const Status& error_status,
-      const std::string& path, FileSystem** file_system);
+      const std::string& path, std::shared_ptr<FileSystem>& file_system);
+  Status LoadCredential(bool flush_cache = false);
+  template <class CredentialType, class FileSystemType>
+  static void SortCache(
+      std::vector<std::tuple<
+          std::string, CredentialType, std::shared_ptr<FileSystemType>>>&
+          cache);
+  template <class CredentialType, class FileSystemType>
+  static Status GetLongestMatchingNameIndex(
+      const std::vector<std::tuple<
+          std::string, CredentialType, std::shared_ptr<FileSystemType>>>& cache,
+      const std::string& path, size_t& idx);
 
-  static Status LoadCredential(bool flush_cache = false);
-
-  template <class FileSystemCredential>
-  static void SortCredential(
-      std::vector<std::pair<std::string, FileSystemCredential>>& credential);
-  template <class FileSystemCredential>
-  static Status GetLongestMatchingCredential(
-      const std::vector<std::pair<std::string, FileSystemCredential>>&
-          credentials,
-      const std::string& file_system_prefix, const std::string& path,
-      FileSystemCredential& credential);
-
-  // for protecting concurrent access into static variables
-  static std::mutex mu_;
-  static bool is_credential_cached_;
-  // credentials should be sorted in descending name length order
+  std::shared_ptr<LocalFileSystem> local_fs_;
+  std::mutex mu_;   // protect concurrent access into variables
+  bool is_cached_;  // if name and credential is cached, lazy load file system
+  // cloud credential cache should be sorted in descending name length order
+  // [(name_long, credential, file_system), (name, ...)]
 #ifdef TRITON_ENABLE_GCS
-  static std::vector<std::pair<std::string, std::string>> gs_credential_;
-  std::unique_ptr<GCSFileSystem> gcs_fs_;
+  std::vector<
+      std::tuple<std::string, std::string, std::shared_ptr<GCSFileSystem>>>
+      gs_cache_;
 #endif  // TRITON_ENABLE_GCS
 #ifdef TRITON_ENABLE_S3
-  static std::vector<std::pair<
+  std::vector<std::tuple<
       std::string,
-      std::tuple<std::string, std::string, std::string, std::string>>>
-      s3_credential_;
-  std::unique_ptr<S3FileSystem> s3_fs_;
+      std::tuple<
+          std::string, std::string, std::string, std::string, std::string>,
+      std::shared_ptr<S3FileSystem>>>
+      s3_cache_;
 #endif  // TRITON_ENABLE_S3
 #ifdef TRITON_ENABLE_AZURE_STORAGE
-  static std::vector<
-      std::pair<std::string, std::pair<std::string, std::string>>>
-      as_credential_;
-  std::unique_ptr<ASFileSystem> as_fs_;
+  std::vector<std::tuple<
+      std::string, std::pair<std::string, std::string>,
+      std::shared_ptr<ASFileSystem>>>
+      as_cache_;
 #endif  // TRITON_ENABLE_AZURE_STORAGE
-  std::unique_ptr<LocalFileSystem> local_fs_;
 };
-// initialize FileSystemManager static variables
-std::mutex FileSystemManager::mu_;
-bool FileSystemManager::is_credential_cached_ = false;
-#ifdef TRITON_ENABLE_GCS
-std::vector<std::pair<std::string, std::string>>
-    FileSystemManager::gs_credential_;
-#endif  // TRITON_ENABLE_GCS
-#ifdef TRITON_ENABLE_S3
-std::vector<std::pair<
-    std::string,
-    std::tuple<std::string, std::string, std::string, std::string>>>
-    FileSystemManager::s3_credential_;
-#endif  // TRITON_ENABLE_S3
-#ifdef TRITON_ENABLE_AZURE_STORAGE
-std::vector<std::pair<std::string, std::pair<std::string, std::string>>>
-    FileSystemManager::as_credential_;
-#endif  // TRITON_ENABLE_AZURE_STORAGE
+
+FileSystemManager::FileSystemManager()
+    : local_fs_(new LocalFileSystem()), is_cached_(false)
+{
+}
 
 Status
 FileSystemManager::GetFileSystem(
-    const std::string& path, FileSystem** file_system)
+    const std::string& path, std::shared_ptr<FileSystem>& file_system)
 {
   // Check if this is a GCS path (gs://$BUCKET_NAME)
   if (!path.empty() && !path.rfind("gs://", 0)) {
@@ -2049,32 +2024,36 @@ FileSystemManager::GetFileSystem(
         "gs:// file-system not supported. To enable, build with "
         "-DTRITON_ENABLE_GCS=ON.");
 #else
-    const Status& load_status = LoadCredential();
-    if (load_status.IsOk() ||
-        load_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
-      std::string credential_path;
-      const Status& match_status = GetLongestMatchingCredential<std::string>(
-          gs_credential_, "gs://", path.substr(5, std::string::npos),
-          credential_path);
+    const Status& cred_status = LoadCredential();
+    if (cred_status.IsOk() ||
+        cred_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
+      // Find credential
+      size_t idx;
+      const Status& match_status =
+          GetLongestMatchingNameIndex(gs_cache_, path, idx);
       if (!match_status.IsOk()) {
         return ReturnErrorOrReload(
-            load_status, match_status, path, file_system);
+            cred_status, match_status, path, file_system);
       }
-      gcs_fs_.reset(new GCSFileSystem(credential_path));
-      const Status& client_status = gcs_fs_->CheckClient();
+      // Find or lazy load file system
+      std::shared_ptr<GCSFileSystem> gcs_fs = std::get<2>(gs_cache_[idx]);
+      if (gcs_fs == nullptr) {
+        std::string cred_name = std::get<0>(gs_cache_[idx]);
+        std::string cred_file_path = std::get<1>(gs_cache_[idx]);
+        gcs_fs = std::make_shared<GCSFileSystem>(cred_file_path);
+        gs_cache_[idx] = std::make_tuple(cred_name, cred_file_path, gcs_fs);
+      }
+      // Check client
+      const Status& client_status = gcs_fs->CheckClient();
       if (!client_status.IsOk()) {
         return ReturnErrorOrReload(
-            load_status, client_status, path, file_system);
+            cred_status, client_status, path, file_system);
       }
-      *file_system = gcs_fs_.get();
-      return Status::Success;
-    } else if (load_status.StatusCode() == Status::Code::UNAVAILABLE) {
-      gcs_fs_.reset(new GCSFileSystem());
-      RETURN_IF_ERROR(gcs_fs_->CheckClient());
-      *file_system = gcs_fs_.get();
+      // Return client
+      file_system = gcs_fs;
       return Status::Success;
     }
-    return load_status;
+    return cred_status;
 #endif  // TRITON_ENABLE_GCS
   }
 
@@ -2086,38 +2065,40 @@ FileSystemManager::GetFileSystem(
         "s3:// file-system not supported. To enable, build with "
         "-DTRITON_ENABLE_S3=ON.");
 #else
-    const Status& load_status = LoadCredential();
-    if (load_status.IsOk() ||
-        load_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
-      std::tuple<std::string, std::string, std::string, std::string>
-          credential_;
-      const Status& match_status = GetLongestMatchingCredential<
-          std::tuple<std::string, std::string, std::string, std::string>>(
-          s3_credential_, "s3://", path.substr(5, std::string::npos),
-          credential_);
+    const Status& cred_status = LoadCredential();
+    if (cred_status.IsOk() ||
+        cred_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
+      // Find credential
+      size_t idx;
+      const Status& match_status =
+          GetLongestMatchingNameIndex(s3_cache_, path, idx);
       if (!match_status.IsOk()) {
         return ReturnErrorOrReload(
-            load_status, match_status, path, file_system);
+            cred_status, match_status, path, file_system);
       }
-      s3_fs_.reset(new S3FileSystem(
-          path, std::get<0>(credential_).c_str(),
-          std::get<1>(credential_).c_str(), std::get<2>(credential_).c_str(),
-          std::get<3>(credential_).size() ? std::get<3>(credential_).c_str()
-                                          : nullptr));
-      const Status& client_status = s3_fs_->CheckClient(path);
+      // Find or lazy load file system
+      std::shared_ptr<S3FileSystem> s3_fs = std::get<2>(s3_cache_[idx]);
+      if (s3_fs == nullptr) {
+        std::string cred_name = std::get<0>(s3_cache_[idx]);
+        std::tuple<
+            std::string, std::string, std::string, std::string, std::string>
+            cred = std::get<1>(s3_cache_[idx]);
+        s3_fs = std::make_shared<S3FileSystem>(
+            path, std::get<0>(cred), std::get<1>(cred), std::get<2>(cred),
+            std::get<3>(cred), std::get<4>(cred));
+        s3_cache_[idx] = std::make_tuple(cred_name, cred, s3_fs);
+      }
+      // Check client
+      const Status& client_status = s3_fs->CheckClient(path);
       if (!client_status.IsOk()) {
         return ReturnErrorOrReload(
-            load_status, client_status, path, file_system);
+            cred_status, client_status, path, file_system);
       }
-      *file_system = s3_fs_.get();
-      return Status::Success;
-    } else if (load_status.StatusCode() == Status::Code::UNAVAILABLE) {
-      s3_fs_.reset(new S3FileSystem(path));
-      RETURN_IF_ERROR(s3_fs_->CheckClient(path));
-      *file_system = s3_fs_.get();
+      // Return client
+      file_system = s3_fs;
       return Status::Success;
     }
-    return load_status;
+    return cred_status;
 #endif  // TRITON_ENABLE_S3
   }
 
@@ -2129,89 +2110,71 @@ FileSystemManager::GetFileSystem(
         "as:// file-system not supported. To enable, build with "
         "-DTRITON_ENABLE_AZURE_STORAGE=ON.");
 #else
-    const Status& load_status = LoadCredential();
-    if (load_status.IsOk() ||
-        load_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
-      std::pair<std::string, std::string> credential_;
+    const Status& cred_status = LoadCredential();
+    if (cred_status.IsOk() ||
+        cred_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
+      // Find credential
+      size_t idx;
       const Status& match_status =
-          GetLongestMatchingCredential<std::pair<std::string, std::string>>(
-              as_credential_, "as://", path.substr(5, std::string::npos),
-              credential_);
+          GetLongestMatchingNameIndex(as_cache_, path, idx);
       if (!match_status.IsOk()) {
         return ReturnErrorOrReload(
-            load_status, match_status, path, file_system);
+            cred_status, match_status, path, file_system);
       }
-      as_fs_.reset(new ASFileSystem(
-          path, credential_.first.c_str(), credential_.second.c_str()));
-      const Status& client_status = as_fs_->CheckClient();
+      // Find or lazy load file system
+      std::shared_ptr<ASFileSystem> as_fs = std::get<2>(as_cache_[idx]);
+      if (as_fs == nullptr) {
+        std::string cred_name = std::get<0>(as_cache_[idx]);
+        std::pair<std::string, std::string> cred = std::get<1>(as_cache_[idx]);
+        as_fs = std::make_shared<ASFileSystem>(path, cred.first, cred.second);
+        as_cache_[idx] = std::make_tuple(cred_name, cred, as_fs);
+      }
+      // Check client
+      const Status& client_status = as_fs->CheckClient();
       if (!client_status.IsOk()) {
         return ReturnErrorOrReload(
-            load_status, client_status, path, file_system);
+            cred_status, client_status, path, file_system);
       }
-      *file_system = as_fs_.get();
-      return Status::Success;
-    } else if (load_status.StatusCode() == Status::Code::UNAVAILABLE) {
-      as_fs_.reset(new ASFileSystem(path));
-      RETURN_IF_ERROR(as_fs_->CheckClient());
-      *file_system = as_fs_.get();
+      // Return client
+      file_system = as_fs;
       return Status::Success;
     }
-    return load_status;
+    return cred_status;
 #endif  // TRITON_ENABLE_AZURE_STORAGE
   }
 
   // Assume path is for local filesystem
-  local_fs_.reset(new LocalFileSystem());
-  *file_system = local_fs_.get();
+  file_system = local_fs_;
   return Status::Success;
 }
 
 Status
-FileSystemManager::GetFileSystem(FileSystemType type, FileSystem** file_system)
+FileSystemManager::GetFileSystem(
+    FileSystemType type, std::shared_ptr<FileSystem>& file_system)
 {
-  const Status& status = LoadCredential();
-  if (status.IsOk() || status.StatusCode() == Status::Code::ALREADY_EXISTS) {
-    // with credential file, use default credential (one with shortest name)
-    switch (type) {
-      case FileSystemType::LOCAL:
-        return GetFileSystem("", file_system);
-      case FileSystemType::GCS:
-        return GetFileSystem("gs://", file_system);
-      case FileSystemType::S3:
-        return GetFileSystem("s3://", file_system);
-      case FileSystemType::AS:
-        return GetFileSystem("as://", file_system);
-      default:
-        return Status(Status::Code::UNSUPPORTED, "Unsupported filesystem type");
-    }
-  } else if (status.StatusCode() == Status::Code::UNAVAILABLE) {
-    // with env var, only LOCAL and GCS are not path-dependent
-    switch (type) {
-      case FileSystemType::LOCAL:
-        return GetFileSystem("", file_system);
-      case FileSystemType::GCS:
-        return GetFileSystem("gs://", file_system);
-      case FileSystemType::S3:
-        return Status(
-            Status::Code::UNSUPPORTED,
-            "S3 filesystem cannot be accessed by type with environment "
-            "variable credential");
-      case FileSystemType::AS:
-        return Status(
-            Status::Code::UNSUPPORTED,
-            "AS filesystem cannot be accessed by type with environment "
-            "variable credential");
-      default:
-        return Status(Status::Code::UNSUPPORTED, "Unsupported filesystem type");
-    }
+  // only LOCAL and GCS are not path-dependent and can be accessed by type
+  switch (type) {
+    case FileSystemType::LOCAL:
+      return GetFileSystem("", file_system);
+    case FileSystemType::GCS:
+      return GetFileSystem("gs://", file_system);
+    case FileSystemType::S3:
+      return Status(
+          Status::Code::UNSUPPORTED,
+          "S3 filesystem cannot be accessed by type");
+    case FileSystemType::AS:
+      return Status(
+          Status::Code::UNSUPPORTED,
+          "AS filesystem cannot be accessed by type");
+    default:
+      return Status(Status::Code::UNSUPPORTED, "Unsupported filesystem type");
   }
-  return status;
 }
 
 Status
 FileSystemManager::ReturnErrorOrReload(
     const Status& load_status, const Status& error_status,
-    const std::string& path, FileSystem** file_system)
+    const std::string& path, std::shared_ptr<FileSystem>& file_system)
 {
   if (load_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
     return error_status;
@@ -2220,10 +2183,9 @@ FileSystemManager::ReturnErrorOrReload(
   return GetFileSystem(path, file_system);
 }
 
-// meaning of return status:
-// - Status(SUCCESS) -> loaded credential from file
-// - Status(ALREADY_EXISTS, "Cached") -> credential already loaded
-// - Status(UNAVAILABLE, "Use legacy credential") -> no credential file
+// return status meaning:
+// - SUCCESS, "" -> loaded credential from file
+// - ALREADY_EXISTS, "Cached" -> credential already loaded
 Status
 FileSystemManager::LoadCredential(bool flush_cache)
 {
@@ -2231,24 +2193,24 @@ FileSystemManager::LoadCredential(bool flush_cache)
   std::lock_guard<std::mutex> lock(mu_);
 
   // check if credential is already cached
-  if (is_credential_cached_ && !flush_cache) {
+  if (is_cached_ && !flush_cache) {
     return Status(Status::Code::ALREADY_EXISTS, "Cached");
   }
 
   const char* file_path_c_str = std::getenv("TRITON_CLOUD_CREDENTIAL_PATH");
   if (file_path_c_str != nullptr) {
+    // Load from credential file
     std::string file_path = std::string(file_path_c_str);
     LOG_VERBOSE(1) << "Reading cloud credential from " << file_path;
 
     triton::common::TritonJson::Value creds_json;
     std::string cred_file_content;
-    LocalFileSystem fs;
-    RETURN_IF_ERROR(fs.ReadTextFile(file_path, &cred_file_content));
+    RETURN_IF_ERROR(local_fs_->ReadTextFile(file_path, &cred_file_content));
     RETURN_IF_ERROR(creds_json.Parse(cred_file_content));
 
 #ifdef TRITON_ENABLE_GCS
     // load GCS credentials
-    gs_credential_.clear();
+    gs_cache_.clear();
     triton::common::TritonJson::Value gs_creds_json;
     if (creds_json.Find("gs", &gs_creds_json)) {
       std::vector<std::string> gs_cred_names;
@@ -2259,31 +2221,29 @@ FileSystemManager::LoadCredential(bool flush_cache)
         triton::common::TritonJson::Value gs_cred_path_json;
         gs_creds_json.Find(gs_cred_name.c_str(), &gs_cred_path_json);
         gs_cred_path_json.AsString(&gs_cred_path);
-        gs_credential_.push_back(std::make_pair(gs_cred_name, gs_cred_path));
+        gs_cache_.push_back(std::make_tuple(
+            gs_cred_name, gs_cred_path, std::shared_ptr<GCSFileSystem>()));
       }
-      SortCredential(gs_credential_);
+      SortCache(gs_cache_);
     }
 #endif  // TRITON_ENABLE_GCS
 
 #ifdef TRITON_ENABLE_S3
     // load S3 credentials
-    s3_credential_.clear();
+    s3_cache_.clear();
     triton::common::TritonJson::Value s3_creds_json;
     if (creds_json.Find("s3", &s3_creds_json)) {
       std::vector<std::string> s3_cred_names;
       s3_creds_json.Members(&s3_cred_names);
       for (size_t i = 0; i < s3_cred_names.size(); i++) {
         std::string s3_cred_name = s3_cred_names[i];
-        std::string s3_cred_secret_key;
-        std::string s3_cred_key_id;
-        std::string s3_cred_region;
-        std::string s3_cred_session_token;
+        std::string s3_cred_secret_key, s3_cred_key_id, s3_cred_region,
+            s3_cred_session_token, s3_cred_profile;
         triton::common::TritonJson::Value s3_cred_json;
         s3_creds_json.Find(s3_cred_name.c_str(), &s3_cred_json);
-        triton::common::TritonJson::Value s3_cred_secret_key_json;
-        triton::common::TritonJson::Value s3_cred_key_id_json;
-        triton::common::TritonJson::Value s3_cred_region_json;
-        triton::common::TritonJson::Value s3_cred_session_token_json;
+        triton::common::TritonJson::Value s3_cred_secret_key_json,
+            s3_cred_key_id_json, s3_cred_region_json,
+            s3_cred_session_token_json, s3_cred_profile_json;
         if (s3_cred_json.Find("secret_key", &s3_cred_secret_key_json))
           s3_cred_secret_key_json.AsString(&s3_cred_secret_key);
         if (s3_cred_json.Find("key_id", &s3_cred_key_id_json))
@@ -2292,84 +2252,140 @@ FileSystemManager::LoadCredential(bool flush_cache)
           s3_cred_region_json.AsString(&s3_cred_region);
         if (s3_cred_json.Find("session_token", &s3_cred_session_token_json))
           s3_cred_session_token_json.AsString(&s3_cred_session_token);
-        s3_credential_.push_back(std::make_pair(
-            s3_cred_name, std::make_tuple(
-                              s3_cred_secret_key, s3_cred_key_id,
-                              s3_cred_region, s3_cred_session_token)));
+        if (s3_cred_json.Find("profile", &s3_cred_profile_json))
+          s3_cred_profile_json.AsString(&s3_cred_profile);
+        s3_cache_.push_back(std::make_tuple(
+            s3_cred_name,
+            std::make_tuple(
+                s3_cred_secret_key, s3_cred_key_id, s3_cred_region,
+                s3_cred_session_token, s3_cred_profile),
+            std::shared_ptr<S3FileSystem>()));
       }
-      SortCredential(s3_credential_);
+      SortCache(s3_cache_);
     }
 #endif  // TRITON_ENABLE_S3
 
 #ifdef TRITON_ENABLE_AZURE_STORAGE
     // load AS credentials
-    as_credential_.clear();
+    as_cache_.clear();
     triton::common::TritonJson::Value as_creds_json;
     if (creds_json.Find("as", &as_creds_json)) {
       std::vector<std::string> as_cred_names;
       as_creds_json.Members(&as_cred_names);
       for (size_t i = 0; i < as_cred_names.size(); i++) {
         std::string as_cred_name = as_cred_names[i];
-        std::string as_cred_account_str;
-        std::string as_cred_account_key;
+        std::string as_cred_account_str, as_cred_account_key;
         triton::common::TritonJson::Value as_cred_json;
         as_creds_json.Find(as_cred_name.c_str(), &as_cred_json);
-        triton::common::TritonJson::Value as_cred_account_str_json;
-        triton::common::TritonJson::Value as_cred_account_key_json;
+        triton::common::TritonJson::Value as_cred_account_str_json,
+            as_cred_account_key_json;
         if (as_cred_json.Find("account_str", &as_cred_account_str_json))
           as_cred_account_str_json.AsString(&as_cred_account_str);
         if (as_cred_json.Find("account_key", &as_cred_account_key_json))
           as_cred_account_key_json.AsString(&as_cred_account_key);
-        as_credential_.push_back(std::make_pair(
+        as_cache_.push_back(std::make_tuple(
             as_cred_name,
-            std::make_pair(as_cred_account_str, as_cred_account_key)));
+            std::make_pair(as_cred_account_str, as_cred_account_key),
+            std::shared_ptr<ASFileSystem>()));
       }
-      SortCredential(as_credential_);
+      SortCache(as_cache_);
     }
 #endif  // TRITON_ENABLE_AZURE_STORAGE
+  } else {
+    // Load from environment variables
+    LOG_VERBOSE(1) << "TRITON_CLOUD_CREDENTIAL_PATH environment variable is "
+                      "not set, reading from environment variables";
 
-    is_credential_cached_ = true;
-    return Status::Success;
+    // for mapping nullptr to empty string
+    const auto c_str_to_str = [](const char* s) -> std::string {
+      return (s != nullptr ? std::string(s) : "");
+    };
+
+#ifdef TRITON_ENABLE_GCS
+    // load GCS credentials
+    gs_cache_.clear();
+    const char* gs_cred_path = std::getenv("GOOGLE_APPLICATION_CREDENTIALS");
+    if (gs_cred_path != nullptr) {
+      gs_cache_.push_back(std::make_tuple(
+          "", std::string(gs_cred_path), std::shared_ptr<GCSFileSystem>()));
+    }
+#endif  // TRITON_ENABLE_GCS
+
+#ifdef TRITON_ENABLE_S3
+    // load S3 credentials
+    s3_cache_.clear();
+    const char* s3_cred_secret_key = std::getenv("AWS_SECRET_ACCESS_KEY");
+    const char* s3_cred_key_id = std::getenv("AWS_ACCESS_KEY_ID");
+    const char* s3_cred_region = std::getenv("AWS_DEFAULT_REGION");
+    const char* s3_cred_session_token = std::getenv("AWS_SESSION_TOKEN");
+    const char* s3_cred_profile = std::getenv("AWS_PROFILE");
+    // we need to support no credential
+    // same as setting all/some S3 fields to empty in the credential file
+    s3_cache_.push_back(std::make_tuple(
+        "",
+        std::make_tuple(
+            c_str_to_str(s3_cred_secret_key), c_str_to_str(s3_cred_key_id),
+            c_str_to_str(s3_cred_region), c_str_to_str(s3_cred_session_token),
+            c_str_to_str(s3_cred_profile)),
+        std::shared_ptr<S3FileSystem>()));
+#endif  // TRITON_ENABLE_S3
+
+#ifdef TRITON_ENABLE_AZURE_STORAGE
+    // load AS credentials
+    as_cache_.clear();
+    const char* as_cred_account_str = std::getenv("AZURE_STORAGE_ACCOUNT");
+    const char* as_cred_account_key = std::getenv("AZURE_STORAGE_KEY");
+    // we need to support no credential
+    // same as setting all/some AS fields to empty in the credential file
+    as_cache_.push_back(std::make_tuple(
+        "",
+        std::make_pair(
+            c_str_to_str(as_cred_account_str),
+            c_str_to_str(as_cred_account_key)),
+        std::shared_ptr<ASFileSystem>()));
+#endif  // TRITON_ENABLE_AZURE_STORAGE
   }
 
-  LOG_VERBOSE(1)
-      << "TRITON_CLOUD_CREDENTIAL_PATH environment variable is not set";
-  return Status(Status::Code::UNAVAILABLE, "Use legacy credential");
+  is_cached_ = true;
+  return Status::Success;
 }
 
-template <class FileSystemCredential>
+template <class CredentialType, class FileSystemType>
 void
-FileSystemManager::SortCredential(
-    std::vector<std::pair<std::string, FileSystemCredential>>& credential)
+FileSystemManager::SortCache(
+    std::vector<std::tuple<
+        std::string, CredentialType, std::shared_ptr<FileSystemType>>>& cache)
 {
   std::sort(
-      credential.begin(), credential.end(),
-      [](std::pair<std::string, FileSystemCredential> i,
-         std::pair<std::string, FileSystemCredential> j) {
-        return i.first.size() >= j.first.size();
-      });
+      cache.begin(), cache.end(),
+      [](std::tuple<
+             std::string, CredentialType, std::shared_ptr<FileSystemType>>
+             a,
+         std::tuple<
+             std::string, CredentialType, std::shared_ptr<FileSystemType>>
+             b) { return std::get<0>(a).size() >= std::get<0>(b).size(); });
 }
 
-template <class FileSystemCredential>
+template <class CredentialType, class FileSystemType>
 Status
-FileSystemManager::GetLongestMatchingCredential(
-    const std::vector<std::pair<std::string, FileSystemCredential>>&
-        credentials,
-    const std::string& file_system_prefix, const std::string& path,
-    FileSystemCredential& credential)
+FileSystemManager::GetLongestMatchingNameIndex(
+    const std::vector<std::tuple<
+        std::string, CredentialType, std::shared_ptr<FileSystemType>>>& cache,
+    const std::string& path, size_t& idx)
 {
-  for (size_t i = 0; i < credentials.size(); i++) {
-    if (!path.rfind(credentials[i].first, 0)) {
-      credential = credentials[i].second;
-      LOG_VERBOSE(1) << "Using credential  " + credentials[i].first +
-                            "  for path  " + file_system_prefix + path;
+  for (size_t i = 0; i < cache.size(); i++) {
+    if (!path.rfind(std::get<0>(cache[i]), 0)) {
+      idx = i;
+      LOG_VERBOSE(1) << "Using credential  " + std::get<0>(cache[i]) +
+                            "  for path  " + path;
       return Status::Success;
     }
   }
   return Status(
-      Status::Code::NOT_FOUND,
-      "Cannot match credential for path  " + file_system_prefix + path);
+      Status::Code::NOT_FOUND, "Cannot match credential for path  " + path);
 }
+
+static FileSystemManager fsm_;
 
 }  // namespace
 
@@ -2459,45 +2475,40 @@ DirName(const std::string& path)
 Status
 FileExists(const std::string& path, bool* exists)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->FileExists(path, exists);
 }
 
 Status
 IsDirectory(const std::string& path, bool* is_dir)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->IsDirectory(path, is_dir);
 }
 
 Status
 FileModificationTime(const std::string& path, int64_t* mtime_ns)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->FileModificationTime(path, mtime_ns);
 }
 
 Status
 GetDirectoryContents(const std::string& path, std::set<std::string>* contents)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->GetDirectoryContents(path, contents);
 }
 
 Status
 GetDirectorySubdirs(const std::string& path, std::set<std::string>* subdirs)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->GetDirectorySubdirs(path, subdirs);
 }
 
@@ -2506,9 +2517,8 @@ GetDirectoryFiles(
     const std::string& path, const bool skip_hidden_files,
     std::set<std::string>* files)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   std::set<std::string> all_files;
   RETURN_IF_ERROR(fs->GetDirectoryFiles(path, &all_files));
   // Remove the hidden files
@@ -2523,18 +2533,16 @@ GetDirectoryFiles(
 Status
 ReadTextFile(const std::string& path, std::string* contents)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->ReadTextFile(path, contents);
 }
 
 Status
 ReadTextProto(const std::string& path, google::protobuf::Message* msg)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
 
   std::string contents;
   RETURN_IF_ERROR(fs->ReadTextFile(path, &contents));
@@ -2551,18 +2559,16 @@ Status
 LocalizeDirectory(
     const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->LocalizeDirectory(path, localized);
 }
 
 Status
 WriteTextProto(const std::string& path, const google::protobuf::Message& msg)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
 
   std::string prototxt;
   if (!google::protobuf::TextFormat::PrintToString(msg, &prototxt)) {
@@ -2577,9 +2583,8 @@ Status
 WriteBinaryFile(
     const std::string& path, const char* contents, const size_t content_len)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->WriteBinaryFile(path, contents, content_len);
 }
 
@@ -2603,27 +2608,24 @@ ReadBinaryProto(const std::string& path, google::protobuf::MessageLite* msg)
 Status
 MakeDirectory(const std::string& dir, const bool recursive)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(dir, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(dir, fs));
   return fs->MakeDirectory(dir, recursive);
 }
 
 Status
 MakeTemporaryDirectory(const FileSystemType type, std::string* temp_dir)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(type, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(type, fs));
   return fs->MakeTemporaryDirectory(temp_dir);
 }
 
 Status
 DeleteDirectory(const std::string& path)
 {
-  FileSystem* fs;
-  FileSystemManager fsm;
-  RETURN_IF_ERROR(fsm.GetFileSystem(path, &fs));
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->DeleteDirectory(path);
 }
 
