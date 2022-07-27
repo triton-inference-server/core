@@ -227,7 +227,7 @@ BackendConfigurationModelLoadGpuFraction(
         "unable to find global backends directory configuration");
   }
 
-  static std::string key_prefix = "model-load-gpu-fraction-device-";
+  static std::string key_prefix = "model-load-gpu-limit-device-";
   std::string memory_limit_str;
   auto status = BackendConfiguration(
       itr->second, key_prefix + std::to_string(device_id), &memory_limit_str);
