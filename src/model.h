@@ -44,7 +44,8 @@ class Model {
       const double min_compute_capability, const std::string& model_dir,
       const int64_t version, const inference::ModelConfig& config)
       : config_(config), min_compute_capability_(min_compute_capability),
-        version_(version), required_input_count_(0), model_dir_(model_dir)
+        version_(version), required_input_count_(0), model_dir_(model_dir),
+        set_model_config_(false)
   {
   }
   virtual ~Model() {}
@@ -153,6 +154,9 @@ class Model {
 
   // The largest priority value for the model.
   uint32_t max_priority_level_;
+
+  // Whether or not model config has been set.
+  bool set_model_config_;
 };
 
 }}  // namespace triton::core
