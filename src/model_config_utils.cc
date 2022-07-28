@@ -1005,8 +1005,8 @@ AutoCompleteBackendFields(
     // to load. We must assume that if the model name conforms to the required
     // shape, we parse the backend name out of the model file name. i.e.
     // model.identity will set the backend to "identity".
-    const std::string delimeter = ".";
-    size_t pos = model_name.find(delimeter, 0);
+    const std::string delimiter = ".";
+    size_t pos = model_name.find(delimiter, 0);
     if (pos == std::string::npos) {
       return Status(
           triton::common::Error::Code::INVALID_ARG,
