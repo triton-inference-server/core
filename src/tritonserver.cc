@@ -1221,11 +1221,7 @@ TRITONSERVER_ServerOptionsSetLogFile(
 {
 #ifdef TRITON_ENABLE_LOGGING
   std::string out_file(file);
-  bool success = LOG_SET_OUT_FILE(out_file);
-  if(!success) {
-    return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_INTERNAL, "failed to open log file");
-  }
+  LOG_SET_OUT_FILE(out_file);
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
