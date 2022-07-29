@@ -454,7 +454,7 @@ if(${TRITON_ENABLE_GCS})
   target_link_libraries(
     triton-core
     PRIVATE
-    google-cloud-cpp::storage
+      google-cloud-cpp::storage
   )
 endif() # TRITON_ENABLE_GCS
 
