@@ -182,6 +182,17 @@ InferenceResponse::InferenceResponse(
   // Skip allocator logic / references in unit test
 }
 
+std::ostream&
+operator<<(std::ostream& out, const InferenceResponse& response)
+{
+  out << "[0x" << std::addressof(response) << "] "
+      << "response id: " << response.Id() << std::endl;
+
+  out << "status:" << response.ResponseStatus().AsString() << std::endl;
+
+  return out;
+}
+
 InferenceResponse::Output::~Output()
 {
   Status status = ReleaseDataBuffer();
