@@ -68,7 +68,7 @@ Status BackendConfigurationSpecializeBackendName(
 Status BackendConfigurationBackendLibraryName(
     const std::string& backend_name, std::string* libname);
 
-/// Get GPU memory limit for model loading in fraction
+/// Get GPU memory limit fraction for model loading
 /// from the backend configuration.
 Status BackendConfigurationModelLoadGpuFraction(
     const triton::common::BackendCmdlineConfigMap& config_map,

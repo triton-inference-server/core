@@ -240,9 +240,29 @@ TritonModelInstance::CreateInstances(
       for (const auto is : instance_setting) {
         const auto& kind = std::get<1>(is);
         const auto& id = std::get<2>(is);
+
+        const std::string& policy_name = std::get<0>(is);
+        const triton::common::HostPolicyCmdlineConfig* host_policy;
+        const auto policy_it = host_policy_map.find(policy_name);
+        if (policy_it != host_policy_map.end()) {
+          host_policy = &policy_it->second;
+        } else {
+          host_policy = &empty_host_policy;
+        }
+        RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
+        auto err = CreateInstance(
+            model, instance_name, c, kind, id, profile_names, passive,
+            policy_name, *host_policy, *(std::get<3>(is)), device_blocking,
+            &device_to_thread_map, secondary_devices);
+        RETURN_IF_ERROR(ResetNumaMemoryPolicy());
+        RETURN_IF_ERROR(err);
+
         // When deploying on GPU, we want to make sure the GPU memory usage
         // is within allowed range, otherwise, stop the creation to ensure
         // there is sufficient GPU memory for other use.
+        // We check the usage after loading the instance to better enforcing
+        // the limit. If we check before loading, we may create instance
+        // that occupies the rest of available memory which against the purpose
         if (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
           size_t free, total;
           double memory_limit;
@@ -261,21 +281,6 @@ TritonModelInstance::CreateInstances(
                     " has exceeded, model loading is rejected.");
           }
         }
-        const std::string& policy_name = std::get<0>(is);
-        const triton::common::HostPolicyCmdlineConfig* host_policy;
-        const auto policy_it = host_policy_map.find(policy_name);
-        if (policy_it != host_policy_map.end()) {
-          host_policy = &policy_it->second;
-        } else {
-          host_policy = &empty_host_policy;
-        }
-        RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
-        auto err = CreateInstance(
-            model, instance_name, c, kind, id, profile_names, passive,
-            policy_name, *host_policy, *(std::get<3>(is)), device_blocking,
-            &device_to_thread_map, secondary_devices);
-        RETURN_IF_ERROR(ResetNumaMemoryPolicy());
-        RETURN_IF_ERROR(err);
       }
     }
   }
