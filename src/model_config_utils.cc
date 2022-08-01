@@ -1015,7 +1015,7 @@ AutoCompleteBackendFields(
            "' with no backend in model configuration. Expected model name of "
            "the form 'model.<backend_name>'."));
     }
-    const std::string backend_name = model_name.substr(pos, std::string::npos);
+    const std::string backend_name = model_name.substr(pos + 1, std::string::npos);
     config->set_backend(backend_name);
     config->set_default_model_filename(
         (std::string("model.") + backend_name).c_str());
