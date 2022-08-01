@@ -383,7 +383,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
   // Second pass
   size_t max_byte_size = 0;
   size_t max_str_byte_size = 0;
-  const std::string* max_input_name;
+  const std::string* max_input_name = nullptr;
   for (const auto& input : from.OriginalInputs()) {
     // Skip shape tensors in this pass
     if (input.second.IsShapeTensor()) {
