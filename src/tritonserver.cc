@@ -1215,14 +1215,14 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
   return nullptr;  // Success
 }
 
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONAPI_DECLSPEC bool
 TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file)
 {
 #ifdef TRITON_ENABLE_LOGGING
   std::string out_file(file);
-  LOG_SET_OUT_FILE(out_file);
-  return nullptr;  // Success
+  bool success = LOG_SET_OUT_FILE(out_file);
+  return success;
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
