@@ -1748,7 +1748,7 @@ FixIntArray(
           (std::string("unable to convert '") + str + "' to integer"));
     }
 
-    fixed_shape_array.AppendInt(d);
+    RETURN_IF_ERROR(fixed_shape_array.AppendInt(d));
   }
 
   shape_array.Swap(fixed_shape_array);
@@ -1948,7 +1948,7 @@ ModelConfigToJson(
 
   // Convert fixed json back the string...
   triton::common::TritonJson::WriteBuffer buffer;
-  config_json.Write(&buffer);
+  RETURN_IF_ERROR(config_json.Write(&buffer));
   *json_str = std::move(buffer.MutableContents());
 
   return Status::Success;
