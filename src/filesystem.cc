@@ -538,27 +538,19 @@ class GCSFileSystem : public FileSystem {
       google::cloud::StatusOr<gcs::ObjectMetadata>* metadata);
 
   google::cloud::StatusOr<gcs::Client> client_;
-  static std::mutex env_mu_;  // protect GOOGLE_APPLICATION_CREDENTIALS env var
 };
-std::mutex GCSFileSystem::env_mu_;
 
 GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
 {
-  static std::string env_name = "GOOGLE_APPLICATION_CREDENTIALS";
-  std::lock_guard<std::mutex> lock(env_mu_);
-#ifdef _WIN32
-  _putenv((env_name + "=" + gs_cred.path_).c_str());
-#else
-  setenv(env_name.c_str(), gs_cred.path_.c_str(), 1);
-#endif
-  client_ = gcs::Client::CreateDefaultClient();
+  auto creds = gcs::oauth2::CreateServiceAccountCredentialsFromJsonFilePath(gs_cred.path_);
+  if (creds) {
+    client_ = gcs::Client(gcs::ClientOptions(*creds));
+  }
 }
 
 Status
 GCSFileSystem::CheckClient()
 {
-  // Need to return error status if GOOGLE_APPLICATION_CREDENTIALS is not set or
-  // valid
   if (!client_) {
     return Status(
         Status::Code::INTERNAL,
