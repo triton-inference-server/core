@@ -1215,14 +1215,18 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
   return nullptr;  // Success
 }
 
-TRITONAPI_DECLSPEC bool
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file)
 {
 #ifdef TRITON_ENABLE_LOGGING
   std::string out_file(file);
   bool success = LOG_SET_OUT_FILE(out_file);
-  return success;
+  if(!success) {
+    return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_INTERNAL, "Failed to open log file.");
+  }
+  return nullptr; // Success
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");

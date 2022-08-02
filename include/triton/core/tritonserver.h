@@ -1768,7 +1768,8 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 /// An "empty" string for the file name will cause triton to direct logging
 /// facilities to the console (default behavior)
 /// \return a bool indicating success or failure.
-TRITONSERVER_DECLSPEC bool TRITONSERVER_ServerOptionsSetLogFile(
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file);
 
 /// Enable or disable info level logging.
