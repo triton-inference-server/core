@@ -1369,7 +1369,7 @@ TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit(
   if (device_id < 0) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("Expects device ID >= 0, got ") +
+        (std::string("expects device ID >= 0, got ") +
          std::to_string(device_id))
             .c_str());
   } else if ((fraction < 0.0) || (fraction > 1.0)) {
