@@ -559,8 +559,38 @@ TEST_F(RequestResponseCacheTest, TestHashing)
   ASSERT_EQ(request3->CacheKey(), request4->CacheKey());
 }
 
+
+// Test cache size too large to initialize.
+TEST_F(RequestResponseCacheTest, TestCacheSizeTooLarge)
+{
+  // Pick intentionally large cache size, expecting failure
+  constexpr uint64_t cache_size = ULLONG_MAX;
+  std::cout << "Create cache of size: " << cache_size << std::endl;
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  auto status = tc::RequestResponseCache::Create(cache_size, &cache);
+  ASSERT_FALSE(status.IsOk()) << "Creating cache of size " << cache_size
+                              << " succeeded when it should fail.";
+}
+
+// Test cache size too small to initialize.
+// See following boost code for reference:
+// -
+// https://github.com/boostorg/interprocess/blob/41018201d6b7a34f38a0303a1ad591d978989cb8/include/boost/interprocess/managed_external_buffer.hpp#L75-L77
+// -
+// https://github.com/boostorg/interprocess/blob/41018201d6b7a34f38a0303a1ad591d978989cb8/include/boost/interprocess/detail/managed_memory_impl.hpp#L172-L174
+TEST_F(RequestResponseCacheTest, TestCacheSizeTooSmall)
+{
+  // Pick intentionally small cache size, expecting failure
+  constexpr uint64_t cache_size = 1;
+  std::cout << "Create cache of size: " << cache_size << std::endl;
+  std::unique_ptr<tc::RequestResponseCache> cache;
+  auto status = tc::RequestResponseCache::Create(cache_size, &cache);
+  ASSERT_FALSE(status.IsOk()) << "Creating cache of size " << cache_size
+                              << " succeeded when it should fail.";
+}
+
 // Test cache too small for entry
-TEST_F(RequestResponseCacheTest, TestCacheTooSmall)
+TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntry)
 {
   // Create cache
   constexpr uint64_t cache_size = 1024;
