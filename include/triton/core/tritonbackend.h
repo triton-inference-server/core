@@ -64,6 +64,7 @@ struct TRITONBACKEND_Response;
 struct TRITONBACKEND_Backend;
 struct TRITONBACKEND_Model;
 struct TRITONBACKEND_ModelInstance;
+struct TRITONBACKEND_BackendAttribute;
 
 ///
 /// TRITONBACKEND API Version
@@ -1358,6 +1359,86 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
 
+
+/// [BETA] Below is an experimental feature and the interface is subject to
+/// changes.
+///
+
+typedef enum TRITONBACKEND_attributetype_enum {
+  TRITONBACKEND_ATTRIBUTE_PREFERRED_INSTANCE_GROUP,
+} TRITONBACKEND_AttributeType;
+
+/// Query the backend for different model attributes. This function is optional,
+/// a backend is not required to implement it. This function is called when
+/// Triton requires further backend / model information to perform operations.
+/// This function may be called multiple times within the lifetime of the
+/// backend (between TRITONBACKEND_Initialize and TRITONBACKEND_Finalize), and
+/// optional 'model' may be provided if it is called for a particular model.
+/// The backend may return error to indicate that the specific attribute does
+/// not apply, otherwise, 'backend_attributes' should be created and set to
+/// reflect such attribute and 'nullptr' should be returned. Triton will take
+/// the ownership of 'backend_attributes' if 'nullptr' is returned.
+///
+/// \param backend The backend.
+/// \param model The model. 'nullptr' may be provided if no model is associated.
+/// \param type The attribute to query about.
+/// \param in_params The array of input parameters as a complement of the
+/// attribute inquiry.
+/// \param in_count The number of input parameters.
+/// \param backend_attributes The backend attribute. See
+/// TRITONBACKEND_BackendAttribute on how it should be set for different 'type'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_GetBackendAttribute(
+    TRITONBACKEND_Backend* backend, TRITONBACKEND_Model* model,
+    const TRITONBACKEND_AttributeType type,
+    const TRITONSERVER_Parameter** in_params, const uint64_t in_count,
+    TRITONBACKEND_BackendAttribute** backend_attributes);
+
+/// TRITONBACKEND_BackendAttribute
+///
+/// API to create, modify, or retrieve attributes associated with a backend.
+///
+
+/// Create a new backend attributes object. The caller takes ownership of
+/// the TRITONBACKEND_BackendAttribute object and must call
+/// TRITONBACKEND_BackendAttributeDelete to release the object.
+///
+/// \param backend_attributes Returns the new backend attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeNew(
+    TRITONBACKEND_BackendAttribute** backend_attributes);
+
+/// Delete a backend attributes object.
+///
+/// \param backend_attributes The backend_attributes object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeDelete(
+    TRITONBACKEND_BackendAttribute* backend_attributes);
+
+///
+/// TRITONBACKEND_ATTRIBUTE_PREFERRED_INSTANCE_GROUP
+///
+/// Set the preferred instance group of the backend. This function should be
+/// called for TRITONBACKEND_ATTRIBUTE_PREFERRED_INSTANCE_GROUP. This function
+/// can be called multiple times to cover different instance group kinds that
+/// the backend supports, given the priority order that the first call describes
+/// the most preferred group. In the case where instance group are not
+/// explicitly provided, Triton will use this attribute to create model
+/// deployment that aligns more with the backend preference.
+///
+/// \param backend_attributes The backend attributes object.
+/// \param kind The kind of the instance group.
+/// \param count The number of instances per device. Triton default will be used
+/// if 0 is provided.
+/// \param device_ids The devices where instances should be available. Triton
+/// default will be used if 'nullptr' is provided.
+/// \param id_count The number of devices in 'device_ids'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BackendAttributeSetPreferredInstanceGroup(
+    TRITONBACKEND_BackendAttribute* backend_attributes,
+    const TRITONSERVER_InstanceGroupKind kind, const uint64_t count,
+    const uint64_t* device_ids, const uint64_t id_count);
 
 #ifdef __cplusplus
 }
