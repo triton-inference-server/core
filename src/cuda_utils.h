@@ -54,7 +54,7 @@ using cudaStream_t = void*;
 /// \param device_id The device ID.
 /// \param free Return free memory in bytes.
 /// \param total Return total memory in bytes.
-/// \return The error status. A non-OK status means not all pairs are enabled
+/// \return The error status. A non-OK status means failure to get memory info.
 Status GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total);
 
 /// Enable peer access for all GPU device pairs
