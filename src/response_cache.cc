@@ -93,7 +93,7 @@ RequestResponseCache::Create(
   catch (const std::exception& ex) {
     return Status(
         Status::Code::INTERNAL,
-        "Failed to initialize Response Cache: " + ex.what());
+        "Failed to initialize Response Cache: " + std::string(ex.what()));
   }
 
   return Status::Success;
