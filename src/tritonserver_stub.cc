@@ -426,6 +426,10 @@ TRITONSERVER_ServerOptionsSetRepoAgentDirectory()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetBackendConfig()
 {
 }
