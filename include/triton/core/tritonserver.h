@@ -1767,9 +1767,9 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 /// \param file a string defining the file where the log outputs will be saved.
 /// An "empty" string for the file name will cause triton to direct logging
 /// facilities to the console (default behavior)
-/// \return a bool indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetLogFile(
+/// \return On success, this function will return on empty string. On failure,
+/// it will return a string containing the error message.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file);
 
 /// Enable or disable info level logging.
