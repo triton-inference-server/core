@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 15
+#define TRITONSERVER_API_VERSION_MINOR 16
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1857,6 +1857,24 @@ TRITONSERVER_ServerOptionsSetBackendDirectory(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
     TRITONSERVER_ServerOptions* options, const char* repoagent_dir);
+
+/// Specify the limit on memory usage as a fraction on the device identified by
+/// 'kind' and 'device_id'. If model loading on the device is requested and the
+/// current memory usage exceeds the limit, the load will be rejected. If not
+/// specified, the limit will not be set.
+///
+/// Currently support TRITONSERVER_INSTANCEGROUPKIND_GPU
+///
+/// \param options The server options object.
+/// \param kind The kind of the device.
+/// \param device_id The id of the device.
+/// \param fraction The limit on memory usage as a fraction
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit(
+    TRITONSERVER_ServerOptions* options,
+    const TRITONSERVER_InstanceGroupKind kind, const int device_id,
+    const double fraction);
 
 /// Set a configuration setting for a named backend in a server
 /// options.

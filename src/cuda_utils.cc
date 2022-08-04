@@ -42,6 +42,42 @@ MemcpyHost(void* args)
 #endif  // TRITON_ENABLE_GPU
 
 Status
+GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total)
+{
+  *free = 0;
+  *total = 0;
+#ifdef TRITON_ENABLE_GPU
+  // Make sure that correct device is set before creating stream and
+  // then restore the device to what was set by the caller.
+  int current_device;
+  auto cuerr = cudaGetDevice(&current_device);
+  bool overridden = false;
+  if (cuerr == cudaSuccess) {
+    overridden = (current_device != device_id);
+    if (overridden) {
+      cuerr = cudaSetDevice(device_id);
+    }
+  }
+
+  if (cuerr == cudaSuccess) {
+    cuerr = cudaMemGetInfo(free, total);
+  }
+
+  if (overridden) {
+    cudaSetDevice(current_device);
+  }
+
+  if (cuerr != cudaSuccess) {
+    return Status(
+        Status::Code::INTERNAL,
+        (std::string("unable to get memory info for device ") +
+         std::to_string(device_id) + ": " + cudaGetErrorString(cuerr)));
+  }
+#endif  // TRITON_ENABLE_GPU
+  return Status::Success;
+}
+
+Status
 EnablePeerAccess(const double min_compute_capability)
 {
 #ifdef TRITON_ENABLE_GPU

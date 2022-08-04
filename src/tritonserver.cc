@@ -1361,6 +1361,42 @@ TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit(
+    TRITONSERVER_ServerOptions* options,
+    const TRITONSERVER_InstanceGroupKind kind, const int device_id,
+    const double fraction)
+{
+  if (device_id < 0) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("expects device ID >= 0, got ") +
+         std::to_string(device_id))
+            .c_str());
+  } else if ((fraction < 0.0) || (fraction > 1.0)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("expects limit fraction to be in range [0.0, 1.0], got ") +
+         std::to_string(fraction))
+            .c_str());
+  }
+
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  switch (kind) {
+    case TRITONSERVER_INSTANCEGROUPKIND_GPU:
+      static std::string key_prefix = "model-load-gpu-limit-device-";
+      return loptions->AddBackendConfig(
+          "", key_prefix + std::to_string(device_id), std::to_string(fraction));
+    default:
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          (std::string("given device kind is not supported, got: ") +
+           TRITONSERVER_InstanceGroupKindString(kind))
+              .c_str());
+  }
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetBackendConfig(
     TRITONSERVER_ServerOptions* options, const char* backend_name,
     const char* setting, const char* value)
