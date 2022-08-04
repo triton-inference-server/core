@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -244,10 +244,17 @@ PinnedMemoryManager::Create(const Options& options)
       LOG_INFO << "Pinned memory pool disabled";
     }
 #endif  // TRITON_ENABLE_GPU
-    instance_->AddPinnedMemoryBuffer(
-        std::shared_ptr<PinnedMemory>(
-            new PinnedMemory(buffer, options.pinned_memory_pool_byte_size_)),
-        0);
+    try {
+      instance_->AddPinnedMemoryBuffer(
+          std::shared_ptr<PinnedMemory>(
+              new PinnedMemory(buffer, options.pinned_memory_pool_byte_size_)),
+          0);
+    }
+    catch (const std::exception& ex) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Failed to add Pinned Memory buffer: " + std::string(ex.what()));
+    }
   } else {
     // Create only one buffer / manager should be created for one node,
     // and all associated devices should request memory from the shared manager
@@ -296,18 +303,34 @@ PinnedMemoryManager::Create(const Options& options)
       }
 #endif  // TRITON_ENABLE_GPU
       ResetNumaMemoryPolicy();
-      instance_->AddPinnedMemoryBuffer(
-          std::shared_ptr<PinnedMemory>(
-              new PinnedMemory(buffer, options.pinned_memory_pool_byte_size_)),
-          node_mask);
+      try {
+        instance_->AddPinnedMemoryBuffer(
+            std::shared_ptr<PinnedMemory>(new PinnedMemory(
+                buffer, options.pinned_memory_pool_byte_size_)),
+            node_mask);
+      }
+      catch (const std::exception& ex) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Failed to add Pinned Memory buffer with host policy: " +
+                std::string(ex.what()));
+      }
     }
     // If no pinned memory is allocated, add an empty entry where all allocation
-    // will be on noraml system memory
+    // will be on normal system memory
     if (instance_->pinned_memory_buffers_.empty()) {
-      instance_->AddPinnedMemoryBuffer(
-          std::shared_ptr<PinnedMemory>(
-              new PinnedMemory(nullptr, options.pinned_memory_pool_byte_size_)),
-          0);
+      try {
+        instance_->AddPinnedMemoryBuffer(
+            std::shared_ptr<PinnedMemory>(new PinnedMemory(
+                nullptr, options.pinned_memory_pool_byte_size_)),
+            0);
+      }
+      catch (const std::exception& ex) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Failed to add empty Pinned Memory entry: " +
+                std::string(ex.what()));
+      }
     }
   }
   pinned_memory_byte_size_ = options.pinned_memory_pool_byte_size_;
