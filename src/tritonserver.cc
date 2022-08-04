@@ -1384,9 +1384,11 @@ TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit(
       reinterpret_cast<TritonServerOptions*>(options);
   switch (kind) {
     case TRITONSERVER_INSTANCEGROUPKIND_GPU:
-      static std::string key_prefix = "model-load-gpu-limit-device-";
-      return loptions->AddBackendConfig(
-          "", key_prefix + std::to_string(device_id), std::to_string(fraction));
+      {
+        static std::string key_prefix = "model-load-gpu-limit-device-";
+        return loptions->AddBackendConfig(
+            "", key_prefix + std::to_string(device_id), std::to_string(fraction));
+      }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
