@@ -1364,34 +1364,22 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
 /// changes.
 ///
 
-typedef enum TRITONBACKEND_attributetype_enum {
-  TRITONBACKEND_ATTRIBUTE_PREFERRED_INSTANCE_GROUP,
-} TRITONBACKEND_AttributeType;
-
 /// Query the backend for different model attributes. This function is optional,
-/// a backend is not required to implement it. This function is called when
+/// a backend is not required to implement it. The backend is also not required
+/// to set all backend attribute listed. This function is called when
 /// Triton requires further backend / model information to perform operations.
 /// This function may be called multiple times within the lifetime of the
-/// backend (between TRITONBACKEND_Initialize and TRITONBACKEND_Finalize), and
-/// optional 'model' may be provided if it is called for a particular model.
-/// The backend may return error to indicate that the specific attribute does
-/// not apply, otherwise, 'backend_attributes' should be created and set to
+/// backend (between TRITONBACKEND_Initialize and TRITONBACKEND_Finalize).
+/// The backend may return error to indicate failure to set the backend
+/// attributes , otherwise, 'backend_attributes' should be created and set to
 /// reflect such attribute and 'nullptr' should be returned. Triton will take
 /// the ownership of 'backend_attributes' if 'nullptr' is returned.
 ///
 /// \param backend The backend.
-/// \param model The model. 'nullptr' may be provided if no model is associated.
-/// \param type The attribute to query about.
-/// \param in_params The array of input parameters as a complement of the
-/// attribute inquiry.
-/// \param in_count The number of input parameters.
-/// \param backend_attributes The backend attribute. See
-/// TRITONBACKEND_BackendAttribute on how it should be set for different 'type'.
+/// \param backend_attributes Return the backend attribute.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_GetBackendAttribute(
-    TRITONBACKEND_Backend* backend, TRITONBACKEND_Model* model,
-    const TRITONBACKEND_AttributeType type,
-    const TRITONSERVER_Parameter** in_params, const uint64_t in_count,
+    TRITONBACKEND_Backend* backend,
     TRITONBACKEND_BackendAttribute** backend_attributes);
 
 /// TRITONBACKEND_BackendAttribute
@@ -1415,11 +1403,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeNew(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeDelete(
     TRITONBACKEND_BackendAttribute* backend_attributes);
 
-///
-/// TRITONBACKEND_ATTRIBUTE_PREFERRED_INSTANCE_GROUP
-///
-/// Set the preferred instance group of the backend. This function should be
-/// called for TRITONBACKEND_ATTRIBUTE_PREFERRED_INSTANCE_GROUP. This function
+/// Add the preferred instance group of the backend. This function
 /// can be called multiple times to cover different instance group kinds that
 /// the backend supports, given the priority order that the first call describes
 /// the most preferred group. In the case where instance group are not
@@ -1435,7 +1419,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeDelete(
 /// \param id_count The number of devices in 'device_ids'.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BackendAttributeSetPreferredInstanceGroup(
+TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
     TRITONBACKEND_BackendAttribute* backend_attributes,
     const TRITONSERVER_InstanceGroupKind kind, const uint64_t count,
     const uint64_t* device_ids, const uint64_t id_count);
