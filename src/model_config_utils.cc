@@ -995,6 +995,33 @@ AutoCompleteBackendFields(
     return Status::Success;
   }
 
+  // Custom Backend
+  // For now, only do the narrowest case, where no info is given in the config.
+  if (config->backend().empty() && config->platform().empty() &&
+      config->default_model_filename().empty()) {
+    LOG_VERBOSE(1) << "Could not infer supported backend, so attempting "
+                      "autofill of custom backend.";
+    // Since we lazily load the backends, we let the model tell us what backend
+    // to load. We must assume that if the model name conforms to the required
+    // shape, we parse the backend name out of the model file name. i.e.
+    // model.identity will set the backend to "identity".
+    const std::string delimiter = ".";
+    size_t pos = model_name.find(delimiter, 0);
+    if (pos == std::string::npos) {
+      return Status(
+          triton::common::Error::Code::INVALID_ARG,
+          ("Invalid model name: Could not determine backend for model '" +
+           model_name +
+           "' with no backend in model configuration. Expected model name of "
+           "the form 'model.<backend_name>'."));
+    }
+    const std::string backend_name = model_name.substr(pos + 1, std::string::npos);
+    config->set_backend(backend_name);
+    config->set_default_model_filename(
+        (std::string("model.") + backend_name).c_str());
+    return Status::Success;
+  }
+
   return Status::Success;
 }
 
