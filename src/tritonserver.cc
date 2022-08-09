@@ -1220,7 +1220,10 @@ TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file)
 {
 #ifdef TRITON_ENABLE_LOGGING
-  const std::string& out_file(file);
+  std::string out_file;
+  if(file != nullptr) {
+    out_file = std::string(file);
+  }
   const std::string& error = LOG_SET_OUT_FILE(out_file);
   if(!error.empty()) {
     return TRITONSERVER_ErrorNew(
