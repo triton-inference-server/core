@@ -1241,7 +1241,6 @@ DirectSequenceBatch::BatcherThread(const int nice)
                        << " until " << delay_cnt
                        << " queued requests, current total = " << total_size;
       } else {
-        RequiredEqualInputs required_equal_inputs;
         InferenceRequest* null_irequest = nullptr;
 
         // Make one pass through the active slots to:
@@ -1297,15 +1296,16 @@ DirectSequenceBatch::BatcherThread(const int nice)
             // If this is the first non-null request capture the shape
             // of the tensors that don't support ragged so we can
             // compare them to later requests.
-            if (required_equal_inputs.empty() && check_input) {
-              Status status = InitRequiredEqualInputs(
-                  queue.front(), enforce_equal_shape_tensors_,
-                  has_optional_input_, &required_equal_inputs);
+            if (curr_payload_->MutableRequiredEqualInputs()->Initialized() &&
+                check_input) {
+              Status status =
+                  curr_payload_->MutableRequiredEqualInputs()->Initialize(
+                      queue.front(), enforce_equal_shape_tensors_,
+                      has_optional_input_);
               if (!status.IsOk()) {
                 LOG_ERROR
                     << "internal: unexpecting failure initializing shape: "
                     << status.Message();
-                required_equal_inputs.clear();
               }
             }
 
@@ -1375,10 +1375,11 @@ DirectSequenceBatch::BatcherThread(const int nice)
           // If there are one or more tensors that don't support
           // ragged batch, then don't allow a request into an existing
           // batch if shape differs.
-          else if (!required_equal_inputs.empty() && check_input) {
-            if (!CompareWithRequiredEqualInputs(
-                    queue.front(), has_optional_input_,
-                    required_equal_inputs)) {
+          else if (
+              !curr_payload_->MutableRequiredEqualInputs()->Initialized() &&
+              check_input) {
+            if (!curr_payload_->MutableRequiredEqualInputs()->HasEqualInputs(
+                    queue.front())) {
               use_null_request = true;
             }
           }
