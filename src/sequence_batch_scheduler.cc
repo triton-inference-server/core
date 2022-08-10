@@ -1296,7 +1296,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
             // If this is the first non-null request capture the shape
             // of the tensors that don't support ragged so we can
             // compare them to later requests.
-            if (curr_payload_->MutableRequiredEqualInputs()->Initialized() &&
+            if (!curr_payload_->MutableRequiredEqualInputs()->Initialized() &&
                 check_input) {
               Status status =
                   curr_payload_->MutableRequiredEqualInputs()->Initialize(
@@ -1376,7 +1376,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
           // ragged batch, then don't allow a request into an existing
           // batch if shape differs.
           else if (
-              !curr_payload_->MutableRequiredEqualInputs()->Initialized() &&
+              curr_payload_->MutableRequiredEqualInputs()->Initialized() &&
               check_input) {
             if (!curr_payload_->MutableRequiredEqualInputs()->HasEqualInputs(
                     queue.front())) {
