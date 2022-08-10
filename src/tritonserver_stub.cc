@@ -386,6 +386,10 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetLogFile()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetLogInfo()
 {
 }

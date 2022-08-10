@@ -1761,6 +1761,16 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
 
+/// Provide a log output file.
+///
+/// \param options The server options object.
+/// \param file a string defining the file where the log outputs will be saved.
+/// An empty string for the file name will cause triton to direct logging
+/// facilities to the console
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogFile(
+    TRITONSERVER_ServerOptions* options, const char* file);
+
 /// Enable or disable info level logging.
 ///
 /// \param options The server options object.

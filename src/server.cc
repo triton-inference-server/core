@@ -96,7 +96,9 @@ InferenceServer::InferenceServer()
 #ifdef TRITON_ENABLE_TRACING
   extensions_.push_back("trace");
 #endif  // TRITON_ENABLE_TRACING
-
+#ifdef TRITON_ENABLE_LOGGING
+  extensions_.push_back("logging");
+#endif  // TRITON_ENABLE_LOGGING
   strict_model_config_ = true;
   strict_readiness_ = true;
   exit_timeout_secs_ = 30;
