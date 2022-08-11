@@ -90,6 +90,7 @@ Payload::Reset(const Operation op_type, TritonModelInstance* instance)
   instance_ = instance;
   state_ = State::UNINITIALIZED;
   status_.reset(new std::promise<Status>());
+  required_equal_inputs_ = RequiredEqualInputs();
   batcher_start_ns_ = 0;
   saturated_ = false;
 }
@@ -103,6 +104,7 @@ Payload::Release()
   release_callbacks_.clear();
   instance_ = nullptr;
   state_ = State::RELEASED;
+  required_equal_inputs_ = RequiredEqualInputs();
   batcher_start_ns_ = 0;
   saturated_ = false;
 }
