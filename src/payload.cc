@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "payload.h"
-#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
@@ -59,7 +58,10 @@ Payload::MergePayload(std::shared_ptr<Payload>& payload)
         "Attempted to merge payloads that are not in executing state");
   }
 
-  if (!required_equal_inputs_.HasEqualInputs(*payload->Requests().begin())) {
+  // Skip comparison if not initialized (required), here assume either all
+  // payloads are initialized or otherwise.
+  if (required_equal_inputs_.Initialized() &&
+      !required_equal_inputs_.HasEqualInputs(*payload->Requests().begin())) {
     return Status(
         Status::Code::INVALID_ARG,
         "Attempted to merge payloads that has non-equal inputs");
