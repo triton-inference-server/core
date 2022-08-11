@@ -53,7 +53,7 @@ class Payload {
 
   Payload();
   void Reset(const Operation op_type, TritonModelInstance* instance = nullptr);
-  Status MergePayload(std::shared_ptr<Payload>& payload);
+  const Status& MergePayload(std::shared_ptr<Payload>& payload);
   Operation GetOpType() { return op_type_; }
   std::mutex* GetExecMutex() { return exec_mu_.get(); }
   size_t RequestCount() { return requests_.size(); }

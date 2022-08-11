@@ -82,7 +82,8 @@ InstanceQueue::Dequeue(
           payload_queue_.front()->SetState(Payload::State::EXECUTING);
           size_t front_batch_size = payload_queue_.front()->BatchSize();
           if ((batch_size + front_batch_size) <= max_batch_size_) {
-            auto status = (*payload)->MergePayload(payload_queue_.front());
+            const auto& status =
+                (*payload)->MergePayload(payload_queue_.front());
             if (status.IsOk()) {
               merged_payloads->push_back(payload_queue_.front());
               payload_queue_.pop_front();

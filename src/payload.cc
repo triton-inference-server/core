@@ -37,34 +37,38 @@ Payload::Payload()
   exec_mu_.reset(new std::mutex());
 }
 
-Status
+const Status&
 Payload::MergePayload(std::shared_ptr<Payload>& payload)
 {
   if ((payload->GetOpType() != Operation::INFER_RUN) ||
       (op_type_ != Operation::INFER_RUN)) {
-    return Status(
+    static Status op_type_error(
         Status::Code::INTERNAL,
         "Attempted to merge payloads of type that are not INFER_RUN");
+    return op_type_error;
   }
   if (payload->GetInstance() != instance_) {
-    return Status(
+    static Status instance_error(
         Status::Code::INTERNAL,
         "Attempted to merge payloads of mismatching instance");
+    return instance_error;
   }
   if ((payload->GetState() != State::EXECUTING) ||
       (state_ != State::EXECUTING)) {
-    return Status(
+    static Status state_error(
         Status::Code::INTERNAL,
         "Attempted to merge payloads that are not in executing state");
+    return state_error;
   }
 
   // Skip comparison if not initialized (required), here assume either all
   // payloads are initialized or otherwise.
   if (required_equal_inputs_.Initialized() &&
       !required_equal_inputs_.HasEqualInputs(*payload->Requests().begin())) {
-    return Status(
+    static Status shape_error(
         Status::Code::INVALID_ARG,
         "Attempted to merge payloads that has non-equal inputs");
+    return shape_error;
   }
 
   requests_.insert(
