@@ -2698,7 +2698,6 @@ TRITONSERVER_ServerModelStatistics(
       for (const auto& stats : infer_response_stats) {
         triton::common::TritonJson::Value response_stat(
             metadata, triton::common::TritonJson::ValueType::OBJECT);
-        RETURN_IF_STATUS_ERROR(response_stat.AddUInt("count", stats.first));
         triton::common::TritonJson::Value responses(
             metadata, triton::common::TritonJson::ValueType::ARRAY);
         size_t i = 0;
