@@ -336,6 +336,7 @@ InferenceStatsAggregator::UpdateResponseStatsMap(
       response_stats_[response_count][i].failure_duration_ns_ +=
           response_info.response_duration_ns_;
     }
+    i++;
   }
 }
 

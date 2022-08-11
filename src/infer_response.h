@@ -269,7 +269,7 @@ class InferenceResponse {
   uint64_t ResponseIdx() const { return response_idx_; }
 
   // The unique request ID stored in triton.
-  uint64_t RequestUniqueId() const { return response_idx_; }
+  uint64_t RequestUniqueId() const { return request_id_; }
 
   uint64_t ResponseStartNs() const { return response_start_; }
 

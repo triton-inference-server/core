@@ -2705,19 +2705,19 @@ TRITONSERVER_ServerModelStatistics(
         for (const auto& stat : stats.second) {
           triton::common::TritonJson::Value ith_response_stat(
               metadata, triton::common::TritonJson::ValueType::OBJECT);
-          RETURN_IF_STATUS_ERROR(response_stat.AddUInt("index", i));
+          RETURN_IF_STATUS_ERROR(ith_response_stat.AddUInt("index", i));
           SetDurationStat(
-              metadata, response_stat, "success", stat.success_count_,
+              metadata, ith_response_stat, "success", stat.success_count_,
               stat.response_duration_ns_);
           SetDurationStat(
-              metadata, response_stat, "fail", stat.failure_count_,
+              metadata, ith_response_stat, "fail", stat.failure_count_,
               stat.failure_duration_ns_);
           SetDurationStat(
-              metadata, response_stat, "compute_infer", stat.success_count_,
+              metadata, ith_response_stat, "compute_infer", stat.success_count_,
               stat.compute_infer_duration_ns_);
           SetDurationStat(
-              metadata, response_stat, "compute_output", stat.success_count_,
-              stat.compute_output_duration_ns_);
+              metadata, ith_response_stat, "compute_output",
+              stat.success_count_, stat.compute_output_duration_ns_);
           i++;
           RETURN_IF_STATUS_ERROR(
               responses.Append(std::move(ith_response_stat)));
