@@ -153,25 +153,8 @@ DupeMetricHelper(
   // Assert custom metric/family remains when there's still a reference to it
   AssertNumMetricMatches(server, description, 1);
 
-  // TODO
-  std::cout << "==START=============================================="
-            << std::endl;
-  std::string metrics_str;
-  GetMetrics(server, &metrics_str);
-  std::cout << metrics_str << std::endl;
-  std::cout << "==END=============================================="
-            << std::endl;
-
   // Delete the last metric reference
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
-
-  // TODO
-  std::cout << "==START=============================================="
-            << std::endl;
-  GetMetrics(server, &metrics_str);
-  std::cout << metrics_str << std::endl;
-  std::cout << "==END=============================================="
-            << std::endl;
 
   // Assert custom metric/family unregistered after last reference deleted
   AssertNumMetricMatches(server, description, 0);
@@ -300,8 +283,6 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
-  // TODO: Check metric?
-  AssertNumMetricMatches(server_, description, 1);
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
 
@@ -379,8 +360,6 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
 
   // Cleanup
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
-  // TODO: Check metric?
-  AssertNumMetricMatches(server_, description, 1);
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
 

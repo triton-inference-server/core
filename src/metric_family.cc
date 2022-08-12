@@ -116,6 +116,7 @@ MetricFamily::Remove(void* metric)
       }
     }
   }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_family_ptr =
