@@ -146,6 +146,15 @@ TritonModel::Create(
       model_config.backend(), backend_libdir, backend_libpath, config,
       &backend));
 
+  // Normalize backend-dependent config
+  {
+    const auto& attributes = backend->BackendAttributes();
+    // [WIP] do something with the attributes
+    if (!attributes.preferred_groups_.empty()) {
+      // [WIP] formalize config normalization / validation
+    }
+  }
+
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,

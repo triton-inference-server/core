@@ -1371,37 +1371,21 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
 /// This function may be called multiple times within the lifetime of the
 /// backend (between TRITONBACKEND_Initialize and TRITONBACKEND_Finalize).
 /// The backend may return error to indicate failure to set the backend
-/// attributes , otherwise, 'backend_attributes' should be created and set to
-/// reflect such attribute and 'nullptr' should be returned. Triton will take
-/// the ownership of 'backend_attributes' if 'nullptr' is returned.
+/// attributes, and the attributes specified in the same function call will be
+/// ignored. Triton will update the specified attributes if 'nullptr' is
+/// returned.
 ///
 /// \param backend The backend.
 /// \param backend_attributes Return the backend attribute.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_GetBackendAttribute(
     TRITONBACKEND_Backend* backend,
-    TRITONBACKEND_BackendAttribute** backend_attributes);
+    TRITONBACKEND_BackendAttribute* backend_attributes);
 
 /// TRITONBACKEND_BackendAttribute
 ///
-/// API to create, modify, or retrieve attributes associated with a backend.
+/// API to modify attributes associated with a backend.
 ///
-
-/// Create a new backend attributes object. The caller takes ownership of
-/// the TRITONBACKEND_BackendAttribute object and must call
-/// TRITONBACKEND_BackendAttributeDelete to release the object.
-///
-/// \param backend_attributes Returns the new backend attributes object.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeNew(
-    TRITONBACKEND_BackendAttribute** backend_attributes);
-
-/// Delete a backend attributes object.
-///
-/// \param backend_attributes The backend_attributes object.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendAttributeDelete(
-    TRITONBACKEND_BackendAttribute* backend_attributes);
 
 /// Add the preferred instance group of the backend. This function
 /// can be called multiple times to cover different instance group kinds that
