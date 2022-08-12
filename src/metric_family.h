@@ -28,6 +28,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include <mutex>
+#include <set>
 #include <unordered_map>
 
 #include "infer_parameter.h"
@@ -39,6 +40,7 @@ namespace triton { namespace core {
 //
 // Implementation for TRITONSERVER_MetricFamily.
 //
+class Metric;
 class MetricFamily {
  public:
   MetricFamily(
@@ -48,22 +50,28 @@ class MetricFamily {
   void* Family() const { return family_; }
   TRITONSERVER_MetricKind Kind() const { return kind_; }
 
-  void* Add(std::map<std::string, std::string> label_map);
-  void Remove(void* metric);
+  void* Add(std::map<std::string, std::string> label_map, Metric* metric);
+  void Remove(void* prom_metric, Metric* metric);
   // Decrements the reference count of the MetricFamily.
   // Removes the family from the registry when the reference count hits zero.
   void Unregister();
 
  private:
+  // If a MetricFamily is deleted before its dependent Metric, we want to
+  // invalidate the reference so we don't access invalid memory.
+  void InvalidateReferences();
+
   void* family_;
-  std::mutex mtx_;
+  TRITONSERVER_MetricKind kind_;
+  // Synchronize access of related metric objects
+  std::mutex metric_mtx_;
   // Prometheus returns the existing metric pointer if the metric with the same
   // set of labels are requested, as a result, different Metric objects may
   // refer to the same prometheus metric. So we must track the reference count
   // of the metric and request prometheus to remove it only when all references
   // are released.
-  std::unordered_map<void*, size_t> metric_ref_cnt_;
-  TRITONSERVER_MetricKind kind_;
+  std::unordered_map<void*, size_t> prom_metric_ref_cnt_;
+  std::set<Metric*> child_metrics_;
 };
 
 //
@@ -82,6 +90,10 @@ class Metric {
   TRITONSERVER_Error* Value(double* value);
   TRITONSERVER_Error* Increment(double value);
   TRITONSERVER_Error* Set(double value);
+
+  // If a MetricFamily is deleted before its dependent Metric, we want to
+  // invalidate the reference so we don't access invalid memory.
+  void InvalidateFamily();
 
  private:
   void* metric_;

@@ -1221,15 +1221,14 @@ TRITONSERVER_ServerOptionsSetLogFile(
 {
 #ifdef TRITON_ENABLE_LOGGING
   std::string out_file;
-  if(file != nullptr) {
+  if (file != nullptr) {
     out_file = std::string(file);
   }
   const std::string& error = LOG_SET_OUT_FILE(out_file);
-  if(!error.empty()) {
-    return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_INTERNAL, (error).c_str());
+  if (!error.empty()) {
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, (error).c_str());
   }
-  return nullptr; // Success
+  return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
@@ -1404,12 +1403,11 @@ TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   switch (kind) {
-    case TRITONSERVER_INSTANCEGROUPKIND_GPU:
-      {
-        static std::string key_prefix = "model-load-gpu-limit-device-";
-        return loptions->AddBackendConfig(
-            "", key_prefix + std::to_string(device_id), std::to_string(fraction));
-      }
+    case TRITONSERVER_INSTANCEGROUPKIND_GPU: {
+      static std::string key_prefix = "model-load-gpu-limit-device-";
+      return loptions->AddBackendConfig(
+          "", key_prefix + std::to_string(device_id), std::to_string(fraction));
+    }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_INVALID_ARG,
@@ -2962,8 +2960,16 @@ TRITONSERVER_Error*
 TRITONSERVER_MetricDelete(TRITONSERVER_Metric* metric)
 {
 #ifdef TRITON_ENABLE_METRICS
-  delete reinterpret_cast<tc::Metric*>(metric);
-  return nullptr;  // Success
+  auto lmetric = reinterpret_cast<tc::Metric*>(metric);
+  if (lmetric->Family() == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "MetricFamily reference was invalidated before Metric was deleted. "
+        "Must call MetricDelete before dependent MetricFamilyDelete.");
+  }
+
+  delete lmetric;
+  return nullptr;  // success
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
