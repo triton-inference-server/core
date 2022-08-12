@@ -28,11 +28,14 @@
 
 #include <iostream>
 #include <thread>
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "triton/common/logging.h"
 #include "triton/core/tritonserver.h"
 
 namespace {
+
+using ::testing::HasSubstr;
 
 #define FAIL_TEST_IF_ERR(X, MSG)                                              \
   do {                                                                        \
@@ -570,6 +573,9 @@ TEST_F(MetricsApiTest, TestOutOfOrderDelete)
   // This should return an error but still delete the object
   auto err = TRITONSERVER_MetricDelete(metric);
   ASSERT_NE(err, nullptr);
+  EXPECT_THAT(
+      TRITONSERVER_ErrorMessage(err),
+      HasSubstr("Must call MetricDelete before dependent MetricFamilyDelete"));
 }
 
 }  // namespace
