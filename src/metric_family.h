@@ -50,11 +50,14 @@ class MetricFamily {
 
   void* Add(std::map<std::string, std::string> label_map);
   void Remove(void* metric);
+  // Decrements the reference count of the MetricFamily.
+  // Removes the family from the registry when the reference count hits zero.
+  void Unregister();
 
  private:
   void* family_;
   std::mutex mtx_;
-  // prometheus returns the existing metric pointer if the metric with the same
+  // Prometheus returns the existing metric pointer if the metric with the same
   // set of labels are requested, as a result, different Metric objects may
   // refer to the same prometheus metric. So we must track the reference count
   // of the metric and request prometheus to remove it only when all references

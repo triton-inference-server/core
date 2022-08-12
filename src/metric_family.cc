@@ -35,6 +35,12 @@ namespace triton { namespace core {
 //
 // Implementation for TRITONSERVER_MetricFamily.
 //
+
+// Prometheus returns existing family pointer if a family with the same name
+// already exists. So we must track the reference count of the prometheus
+// family to know when we can remove it from the Prometheus Registry.
+static std::unordered_map<void*, size_t> family_ref_cnt_;
+
 MetricFamily::MetricFamily(
     TRITONSERVER_MetricKind kind, const char* name, const char* description)
 {
@@ -59,6 +65,10 @@ MetricFamily::MetricFamily(
   }
 
   kind_ = kind;
+
+  // Maintain reference count to manage duplicate names for registry removal
+  std::lock_guard<std::mutex> lk(mtx_);
+  ++family_ref_cnt_[family_];
 }
 
 void*
@@ -128,10 +138,44 @@ MetricFamily::Remove(void* metric)
   }
 }
 
+void
+MetricFamily::Unregister()
+{
+  std::lock_guard<std::mutex> lk(mtx_);
+  const auto it = family_ref_cnt_.find(family_);
+  if (it != family_ref_cnt_.end()) {
+    --it->second;
+    if (it->second > 0) {
+      // Done as it is not the last reference
+      return;
+    }
+
+    // Last reference, so cleanup
+    family_ref_cnt_.erase(it);
+    auto registry = Metrics::GetRegistry();
+    switch (kind_) {
+      case TRITONSERVER_METRIC_KIND_COUNTER: {
+        auto counter_family_ptr =
+            reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
+        registry->Remove(*counter_family_ptr);
+        break;
+      }
+      case TRITONSERVER_METRIC_KIND_GAUGE: {
+        auto gauge_family_ptr =
+            reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
+        registry->Remove(*gauge_family_ptr);
+        break;
+      }
+      default:
+        LOG_ERROR << "Unexpected kind when unregistering metric family.";
+        break;
+    }
+  }
+}
+
 MetricFamily::~MetricFamily()
 {
-  // NOTE: registry->Remove() not added until until prometheus-cpp v1.0 which
-  // we do not currently install
+  Unregister();
 }
 
 //
