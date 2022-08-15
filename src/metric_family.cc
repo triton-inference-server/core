@@ -35,7 +35,6 @@ namespace triton { namespace core {
 //
 // Implementation for TRITONSERVER_MetricFamily.
 //
-
 MetricFamily::MetricFamily(
     TRITONSERVER_MetricKind kind, const char* name, const char* description)
 {
@@ -113,10 +112,6 @@ MetricFamily::Remove(void* prom_metric, Metric* metric)
         // Done as it is not the last reference
         return;
       }
-    } else {
-      LOG_ERROR
-          << "No reference to metric being tracked. Something went wrong.";
-      return;
     }
   }
 
@@ -147,8 +142,6 @@ MetricFamily::InvalidateReferences()
 {
   std::lock_guard<std::mutex> lk(metric_mtx_);
   for (auto& metric : child_metrics_) {
-    // Invalidate metric's family reference to catch metric object using
-    // family object after it is deleted
     if (metric != nullptr) {
       metric->InvalidateFamily();
     }
@@ -160,7 +153,6 @@ MetricFamily::~MetricFamily()
 {
   InvalidateReferences();
   // DLIS-4072: Support for removing metric families from registry
-  // Unregister();
 }
 
 //
@@ -194,12 +186,13 @@ Metric::~Metric()
 {
   if (family_ != nullptr) {
     family_->Remove(metric_, this);
-    family_ = nullptr;
   } else {
     LOG_WARNING << "Corresponding MetricFamily was deleted before this Metric, "
                    "this should not happen. Make sure to delete a Metric "
                    "before deleting its MetricFamily.";
   }
+  // Catch lifetime management / invalid reference issues
+  family_ = nullptr;
   metric_ = nullptr;
 }
 

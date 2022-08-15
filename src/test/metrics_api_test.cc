@@ -137,33 +137,25 @@ DupeMetricHelper(
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricValue(metric1, &value1),
       "query metric value after increment");
-  // Verify increment worked
   ASSERT_EQ(value1, inc);
 
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricValue(metric2, &value2),
       "query metric value after increment");
-  // Verify metric values are equal
   ASSERT_EQ(value1, value2);
   std::cout << "metric1 value: " << value1 << " == metric2 value: " << value2
             << std::endl;
 
-  // Delete one of the metric references
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric1), "delete metric1");
-
   // Assert custom metric/family remains when there's still a reference to it
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric1), "delete metric1");
   ASSERT_EQ(NumMetricMatches(server, description), 1);
 
-  // Delete the last metric reference
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
-
   // Assert custom metric/family unregistered after last reference deleted
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
   ASSERT_EQ(NumMetricMatches(server, description), 0);
 
-  // Delete the last metric family reference
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
-
   // Assert custom metric/family unregistered after last reference deleted
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
   ASSERT_EQ(NumMetricMatches(server, description), 0);
 }
 
@@ -210,7 +202,6 @@ class MetricsApiTest : public ::testing::Test {
   void TearDown() override
   {
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
-    server_ = nullptr;
   }
 
   double increment_ = 10;
@@ -434,15 +425,12 @@ TEST_F(MetricsApiTest, TestDupeMetricFamilyDiffDescription)
   // Specificailly, family1, because family2 is bound to metric2
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family1), "delete family1");
 
-  // Assert custom metric/family remains when there's still a reference
-  // (family2) to it
+  // Assert custom metric/family remains when family2 still references it
   ASSERT_EQ(NumMetricMatches(server_, description1), 1);
 
-  // Delete the last metric reference
+  // Assert custom metric/family unregistered after last reference deleted
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family2), "delete family2");
-
-  // Assert custom metric/family unregistered after last reference deleted
   ASSERT_EQ(NumMetricMatches(server_, description1), 0);
   ASSERT_EQ(NumMetricMatches(server_, description2), 0);
 }
@@ -480,6 +468,9 @@ TEST_F(MetricsApiTest, TestDupeMetricFamily)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricNew(&metric1, family1, labels1.data(), labels1.size()),
       "Creating new metric1");
+  for (const auto label : labels1) {
+    TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
+  }
 
   std::vector<const TRITONSERVER_Parameter*> labels2;
   labels2.emplace_back(TRITONSERVER_ParameterNew(
@@ -488,10 +479,6 @@ TEST_F(MetricsApiTest, TestDupeMetricFamily)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_MetricNew(&metric2, family2, labels2.data(), labels2.size()),
       "Creating new metric2");
-
-  for (const auto label : labels1) {
-    TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
-  }
   for (const auto label : labels2) {
     TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
   }
@@ -508,16 +495,14 @@ TEST_F(MetricsApiTest, TestDupeMetricFamily)
 
   // Assert custom family remains when there's still a reference to it
   ASSERT_EQ(NumMetricMatches(server_, description), 1);
-  // Assert we one remaining metric after deleting one
+  // Assert only one remaining metric after deleting one
   ASSERT_EQ(NumMetricMatches(server_, metric_key), 1);
 
-  // Delete the last metric family reference
+  // Assert custom metric/family unregistered after last reference deleted
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family2), "delete family2");
-
-  // Assert custom metric/family unregistered after last reference deleted
   ASSERT_EQ(NumMetricMatches(server_, description), 0);
-  // Assert we no remaining metrics after deleting both
+  // Assert no remaining metrics after deleting both
   ASSERT_EQ(NumMetricMatches(server_, metric_key), 0);
 }
 
@@ -533,7 +518,6 @@ TEST_F(MetricsApiTest, TestDupeMetricLabels)
 
   DupeMetricHelper(server_, labels);
 
-  // Cleanup
   for (const auto label : labels) {
     TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
   }
@@ -569,7 +553,7 @@ TEST_F(MetricsApiTest, TestOutOfOrderDelete)
   // NOTE: This should NOT be done normally, this is just to test it is
   // gracefully handled rather than causing undefined behavior.
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
-  // This should return an error but still delete the object
+  // This should return an error since family was already deleted
   auto err = TRITONSERVER_MetricDelete(metric);
   ASSERT_NE(err, nullptr);
   EXPECT_THAT(
