@@ -150,13 +150,10 @@ DupeMetricHelper(
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric1), "delete metric1");
   ASSERT_EQ(NumMetricMatches(server, description), 1);
 
-  // Assert custom metric/family unregistered after last reference deleted
+  // Assert custom metric/family not displayed after all metrics are deleted
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
   ASSERT_EQ(NumMetricMatches(server, description), 0);
-
-  // Assert custom metric/family unregistered after last reference deleted
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
-  ASSERT_EQ(NumMetricMatches(server, description), 0);
 }
 
 
