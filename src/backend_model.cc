@@ -61,8 +61,7 @@ TritonModel::Create(
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const std::string& model_name, const int64_t version,
-    const inference::ModelConfig& model_config,
-    std::unique_ptr<TritonModel>* model)
+    inference::ModelConfig model_config, std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -149,10 +148,11 @@ TritonModel::Create(
   // Normalize backend-dependent config
   {
     const auto& attributes = backend->BackendAttributes();
-    // [WIP] do something with the attributes
-    if (!attributes.preferred_groups_.empty()) {
-      // [WIP] formalize config normalization / validation
-    }
+    // [WIP] formalize config normalization / validation
+    RETURN_IF_ERROR(NormalizeInstanceGroup(
+        min_compute_capability, attributes.preferred_groups_, &model_config));
+    RETURN_IF_ERROR(
+        ValidateInstanceGroup(model_config, min_compute_capability));
   }
 
   // Create and initialize the model.
@@ -1255,6 +1255,39 @@ TRITONBACKEND_OutputBufferAttributes(
       to->GetBufferAttributes());
   return nullptr;  // success
 }
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
+    TRITONBACKEND_BackendAttribute* backend_attributes,
+    const TRITONSERVER_InstanceGroupKind kind, const uint64_t count,
+    const uint64_t* device_ids, const uint64_t id_count)
+{
+  auto ba = reinterpret_cast<TritonBackend::Attribute*>(backend_attributes);
+  ba->preferred_groups_.emplace_back();
+  auto& pg = ba->preferred_groups_.back();
+  switch (kind) {
+    case TRITONSERVER_INSTANCEGROUPKIND_AUTO:
+      pg.set_kind(inference::ModelInstanceGroup::KIND_AUTO);
+      break;
+    case TRITONSERVER_INSTANCEGROUPKIND_CPU:
+      pg.set_kind(inference::ModelInstanceGroup::KIND_CPU);
+      break;
+    case TRITONSERVER_INSTANCEGROUPKIND_GPU:
+      pg.set_kind(inference::ModelInstanceGroup::KIND_GPU);
+      break;
+    case TRITONSERVER_INSTANCEGROUPKIND_MODEL:
+      pg.set_kind(inference::ModelInstanceGroup::KIND_MODEL);
+      break;
+  }
+  pg.set_count(count);
+  if (device_ids != nullptr) {
+    for (size_t i = 0; i < id_count; ++i) {
+      pg.add_gpus(device_ids[i]);
+    }
+  }
+  return nullptr;
+}
+
 }  // extern C
 
 }}  // namespace triton::core

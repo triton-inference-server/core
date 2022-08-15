@@ -106,6 +106,17 @@ Status AutoCompleteBackendFields(
 Status NormalizeModelConfig(
     const double min_compute_capability, inference::ModelConfig* config);
 
+/// [FIXME] better formalize config normalization / validation
+/// Detects and adds missing fields in instance group setting.
+/// \param min_compute_capability The minimum supported CUDA compute
+/// capability.
+/// \param config The model configuration
+/// \return The error status
+Status NormalizeInstanceGroup(
+    const double min_compute_capability,
+    const std::vector<inference::ModelInstanceGroup>& preferred_groups,
+    inference::ModelConfig* config);
+
 /// Auto-complete the instance count based on instance kind and backend name.
 /// \param group The instance group to set the count for.
 /// \param backend The backend name to check against.
@@ -122,6 +133,16 @@ Status SetDefaultInstanceCount(
 /// \return The error status. A non-OK status indicates the configuration
 /// is not valid.
 Status ValidateModelConfig(
+    const inference::ModelConfig& config, const double min_compute_capability);
+
+/// [FIXME] better formalize config normalization / validation
+/// Validate instance group setting.
+/// \param config The model configuration to validate.
+/// \param min_compute_capability The minimum support CUDA compute
+/// capability.
+/// \return The error status. A non-OK status indicates the configuration
+/// is not valid.
+Status ValidateInstanceGroup(
     const inference::ModelConfig& config, const double min_compute_capability);
 
 /// Validate that a model inputs and outputs are specified correctly.
