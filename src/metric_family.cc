@@ -36,13 +36,6 @@ namespace triton { namespace core {
 // Implementation for TRITONSERVER_MetricFamily.
 //
 
-// Prometheus returns existing family pointer if a family with the same name
-// already exists. So we must track the reference count of the prometheus
-// family to know when we can remove it from the Prometheus Registry.
-static std::unordered_map<void*, size_t> family_ref_cnt_;
-// This mutex needs to be static since the ref_cnt is static
-static std::mutex family_mtx_;
-
 MetricFamily::MetricFamily(
     TRITONSERVER_MetricKind kind, const char* name, const char* description)
 {
@@ -67,10 +60,6 @@ MetricFamily::MetricFamily(
   }
 
   kind_ = kind;
-
-  // Maintain reference count to manage duplicate names for registry removal
-  std::lock_guard<std::mutex> lk(family_mtx_);
-  ++family_ref_cnt_[family_];
 }
 
 void*
@@ -154,48 +143,6 @@ MetricFamily::Remove(void* prom_metric, Metric* metric)
 }
 
 void
-MetricFamily::Unregister()
-{
-  {
-    std::lock_guard<std::mutex> lk(family_mtx_);
-    const auto it = family_ref_cnt_.find(family_);
-    if (it != family_ref_cnt_.end()) {
-      --it->second;
-      if (it->second == 0) {
-        // Last reference, so cleanup
-        family_ref_cnt_.erase(it);
-      } else {
-        // Done as it is not the last reference
-        return;
-      }
-    } else {
-      LOG_ERROR
-          << "No reference to this family being tracked. Something went wrong.";
-      return;
-    }
-  }
-
-  auto registry = Metrics::GetRegistry();
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      auto counter_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
-      registry->Remove(*counter_family_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      auto gauge_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
-      registry->Remove(*gauge_family_ptr);
-      break;
-    }
-    default:
-      LOG_ERROR << "Unexpected kind when unregistering metric family.";
-      break;
-  }
-}
-
-void
 MetricFamily::InvalidateReferences()
 {
   std::lock_guard<std::mutex> lk(metric_mtx_);
@@ -212,7 +159,8 @@ MetricFamily::InvalidateReferences()
 MetricFamily::~MetricFamily()
 {
   InvalidateReferences();
-  Unregister();
+  // DLIS-4072: Support for removing metric families from registry
+  // Unregister();
 }
 
 //

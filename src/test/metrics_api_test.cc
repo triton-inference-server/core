@@ -489,7 +489,6 @@ TEST_F(MetricsApiTest, TestDupeMetricFamily)
       TRITONSERVER_MetricNew(&metric2, family2, labels2.data(), labels2.size()),
       "Creating new metric2");
 
-  // Cleanup
   for (const auto label : labels1) {
     TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
   }
@@ -576,6 +575,27 @@ TEST_F(MetricsApiTest, TestOutOfOrderDelete)
   EXPECT_THAT(
       TRITONSERVER_ErrorMessage(err),
       HasSubstr("Must call MetricDelete before dependent MetricFamilyDelete"));
+}
+
+// This test serves as a reminder to consider the ability to access
+// internal core metrics via current metrics API and its implications.
+TEST_F(MetricsApiTest, TestCoreMetricAccess)
+{
+  // Test accessing a metric family created in Triton Core
+  // through prometheus directly. Technically this metric can be
+  // updated manually by a user in addition to how the core manages
+  // the metric, but this should generally not be done.
+  TRITONSERVER_MetricFamily* family = nullptr;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
+  // Pick existing core metric name here.
+  const char* name = "nv_gpu_power_limit";
+  const char* description = "";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+  // DLIS-4072: If registry->Remove() is implemented in MetricFamily we will
+  // we will probably want to make sure core metrics can not be deleted early.
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
 }
 
 }  // namespace

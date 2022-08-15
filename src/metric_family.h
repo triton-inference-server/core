@@ -52,9 +52,6 @@ class MetricFamily {
 
   void* Add(std::map<std::string, std::string> label_map, Metric* metric);
   void Remove(void* prom_metric, Metric* metric);
-  // Decrements the reference count of the MetricFamily.
-  // Removes the family from the registry when the reference count hits zero.
-  void Unregister();
 
  private:
   // If a MetricFamily is deleted before its dependent Metric, we want to
@@ -71,6 +68,8 @@ class MetricFamily {
   // of the metric and request prometheus to remove it only when all references
   // are released.
   std::unordered_map<void*, size_t> prom_metric_ref_cnt_;
+  // Maintain references to metrics created from this metric family to
+  // invalidate their references if a family is deleted before its metric
   std::set<Metric*> child_metrics_;
 };
 
