@@ -2269,8 +2269,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
 /// Delete a metric family object.
 /// A TRITONSERVER_MetricFamily* object should be deleted AFTER its
 /// corresponding TRITONSERVER_Metric* objects have been deleted.
-/// If a family is deleted before its metrics, an error will be
-/// returned on TRITONSERVER_MetricDelete.
+/// Attempting to delete a family before its metrics will return an error.
 ///
 /// \param family The metric family object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
@@ -2296,8 +2295,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricNew(
 /// Delete a metric object.
 /// All TRITONSERVER_Metric* objects should be deleted BEFORE their
 /// corresponding TRITONSERVER_MetricFamily* objects have been deleted.
-/// If a family is deleted before its metrics, an error will be
-/// returned on TRITONSERVER_MetricDelete.
+/// If a family is deleted before its metrics, an error will be returned.
 ///
 /// \param metric The metric object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
