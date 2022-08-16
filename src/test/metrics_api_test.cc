@@ -159,7 +159,6 @@ DupeMetricHelper(
 void
 MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
 {
-  TRITONSERVER_Error* err = nullptr;
   double value = -1;
   double prev_value = -1;
   FAIL_TEST_IF_ERR(
@@ -180,7 +179,7 @@ MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
   // Increment negatively
   double decrement = -3.14;
   prev_value = value;
-  err = TRITONSERVER_MetricIncrement(metric, decrement);
+  auto err = TRITONSERVER_MetricIncrement(metric, decrement);
   switch (kind) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       ASSERT_NE(err, nullptr);
@@ -225,6 +224,7 @@ MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
   ASSERT_EQ(kind_tmp, kind);
+  TRITONSERVER_ErrorDelete(err);
 }
 
 
@@ -379,6 +379,7 @@ TEST_F(MetricsApiTest, TestDupeMetricFamilyDiffKind)
   auto err = TRITONSERVER_MetricFamilyNew(&family2, kind2, name, description);
   ASSERT_NE(err, nullptr);
   ASSERT_EQ(family2, nullptr);
+  TRITONSERVER_ErrorDelete(err);
 }
 
 // Test that a duplicate metric family name will still
@@ -555,10 +556,10 @@ TEST_F(MetricsApiTest, TestOutOfOrderDelete)
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
   // This should return an error since family was already deleted
   auto err = TRITONSERVER_MetricDelete(metric);
-  ASSERT_NE(err, nullptr);
   EXPECT_THAT(
       TRITONSERVER_ErrorMessage(err),
       HasSubstr("Must call MetricDelete before dependent MetricFamilyDelete"));
+  TRITONSERVER_ErrorDelete(err);
 }
 
 TEST_F(MetricsApiTest, TestMetricAfterFamilyDelete)
@@ -594,6 +595,7 @@ TEST_F(MetricsApiTest, TestMetricAfterFamilyDelete)
   EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));
   err = TRITONSERVER_MetricSet(metric, 1.0);
   EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));
+  TRITONSERVER_ErrorDelete(err);
 }
 
 // This test serves as a reminder to consider the ability to access
