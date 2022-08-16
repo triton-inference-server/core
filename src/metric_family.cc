@@ -154,7 +154,7 @@ MetricFamily::InvalidateReferences()
 
 MetricFamily::~MetricFamily()
 {
-  if (HasMetrics()) {
+  if (NumMetrics() > 0) {
     LOG_WARNING << "MetricFamily was deleted before its child Metrics, this "
                    "should not happen. Make sure to delete all child Metrics "
                    "before deleting their MetricFamily.";

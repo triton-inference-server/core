@@ -52,7 +52,12 @@ class MetricFamily {
 
   void* Add(std::map<std::string, std::string> label_map, Metric* metric);
   void Remove(void* prom_metric, Metric* metric);
-  bool HasMetrics() { return !child_metrics_.empty(); }
+
+  int NumMetrics()
+  {
+    std::lock_guard<std::mutex> lk(metric_mtx_);
+    return child_metrics_.size();
+  }
 
  private:
   // If a MetricFamily is deleted before its dependent Metric, we want to

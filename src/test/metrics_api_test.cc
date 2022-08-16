@@ -624,6 +624,43 @@ TEST_F(MetricsApiTest, TestCoreMetricAccess)
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
 }
 
+TEST_F(MetricsApiTest, TestChildMetricTracking)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family = nullptr;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
+  const char* name = "test_ref_counting";
+  const char* description = "test using metric ref counting";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // Use internal implementation to verify correctness
+  auto tc_family = reinterpret_cast<tc::MetricFamily*>(family);
+
+  // Create metric
+  TRITONSERVER_Metric* metric1 = nullptr;
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric1, family, labels.data(), labels.size()),
+      "Creating new metric1");
+  ASSERT_EQ(tc_family->NumMetrics(), 1);
+
+  // Create duplicate metric
+  TRITONSERVER_Metric* metric2 = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric2, family, labels.data(), labels.size()),
+      "Creating new metric2");
+  ASSERT_EQ(tc_family->NumMetrics(), 2);
+
+
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric1), "delete metric1");
+  ASSERT_EQ(tc_family->NumMetrics(), 1);
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
+  ASSERT_EQ(tc_family->NumMetrics(), 0);
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
+}
+
 }  // namespace
 
 int

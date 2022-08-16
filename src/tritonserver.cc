@@ -2918,7 +2918,7 @@ TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
 {
 #ifdef TRITON_ENABLE_METRICS
   auto lfamily = reinterpret_cast<tc::MetricFamily*>(family);
-  if (lfamily->HasMetrics()) {
+  if (lfamily->NumMetrics() > 0) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
         "Must call MetricDelete on all dependent metrics before calling "
