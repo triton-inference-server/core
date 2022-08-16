@@ -156,6 +156,77 @@ DupeMetricHelper(
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
 }
 
+void
+MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
+{
+  TRITONSERVER_Error* err = nullptr;
+  double value = -1;
+  double prev_value = -1;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value), "query metric initial value");
+  // Value should be zero initially
+  ASSERT_EQ(value, 0.0);
+
+  // Increment positively
+  double increment = 1729.0;
+  prev_value = value;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricIncrement(metric, increment), "increase metric value");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric, &value),
+      "query metric value after positive increment");
+  ASSERT_EQ(value, prev_value + increment);
+
+  // Increment negatively
+  double decrement = -3.14;
+  prev_value = value;
+  err = TRITONSERVER_MetricIncrement(metric, decrement);
+  switch (kind) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      ASSERT_NE(err, nullptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      ASSERT_EQ(err, nullptr);
+      FAIL_TEST_IF_ERR(
+          TRITONSERVER_MetricValue(metric, &value),
+          "query metric value after negative increment");
+      ASSERT_EQ(value, prev_value + decrement);
+      break;
+    }
+    default:
+      ASSERT_TRUE(false);
+      break;
+  }
+
+  // Set
+  double set_value = 42.0;
+  err = TRITONSERVER_MetricSet(metric, set_value);
+  switch (kind) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      ASSERT_NE(err, nullptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      ASSERT_EQ(err, nullptr);
+      FAIL_TEST_IF_ERR(
+          TRITONSERVER_MetricValue(metric, &value),
+          "query metric value after set");
+      ASSERT_EQ(value, set_value);
+      break;
+    }
+    default:
+      ASSERT_TRUE(false);
+      break;
+  }
+
+  // MetricKind
+  TRITONSERVER_MetricKind kind_tmp;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
+  ASSERT_EQ(kind_tmp, kind);
+}
+
 
 // Test Fixture
 class MetricsApiTest : public ::testing::Test {
@@ -236,36 +307,8 @@ TEST_F(MetricsApiTest, TestCounterEndToEnd)
     TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
   }
 
-  // Value should be zero initially
-  value_ = -1;
-  prev_value_ = value_;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric initial value");
-  ASSERT_EQ(value_, 0.0);
-
-  // Increment Positively
-  prev_value_ = value_;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricIncrement(metric, increment_),
-      "increase metric value");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_),
-      "query metric value after increment");
-  ASSERT_EQ(value_, prev_value_ + increment_);
-
-  // Verify negative increment fails on counter metric
-  auto err = TRITONSERVER_MetricIncrement(metric, -1.0 * increment_);
-  ASSERT_NE(err, nullptr);
-
-  // Verify set fails on counter metric
-  err = TRITONSERVER_MetricSet(metric, set_value_);
-  ASSERT_NE(err, nullptr);
-
-  // GetMetricKind
-  TRITONSERVER_MetricKind kind_tmp;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
-  ASSERT_EQ(kind_tmp, kind);
+  // Run through metric APIs and assert correctness
+  MetricAPIHelper(metric, kind);
 
   // Assert custom metric is reported and found in output
   ASSERT_EQ(NumMetricMatches(server_, description), 1);
@@ -305,44 +348,8 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
     TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
   }
 
-  // Value should be zero initially
-  value_ = -1;
-  prev_value_ = value_;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_), "query metric initial value");
-  ASSERT_EQ(value_, 0.0);
-
-  // Increment positively
-  prev_value_ = value_;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricIncrement(metric, increment_),
-      "increase metric value");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_),
-      "query metric value after positive increment");
-  ASSERT_EQ(value_, prev_value_ + increment_);
-
-  // Increment negatively
-  prev_value_ = value_;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricIncrement(metric, -1.0 * increment_),
-      "decrease metric value");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_),
-      "query metric value after negative increment");
-  ASSERT_EQ(value_, prev_value_ + (-1.0 * increment_));
-
-  // Set
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricSet(metric, set_value_), "set metric");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricValue(metric, &value_),
-      "query metric value after set");
-  ASSERT_EQ(value_, set_value_);
-
-  TRITONSERVER_MetricKind kind_tmp;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_GetMetricKind(metric, &kind_tmp), "query metric kind");
-  ASSERT_EQ(kind_tmp, kind);
+  // Run through metric APIs and assert correctness
+  MetricAPIHelper(metric, kind);
 
   // Assert custom metric is reported and found in output
   ASSERT_EQ(NumMetricMatches(server_, description), 1);

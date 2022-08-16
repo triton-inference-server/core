@@ -94,8 +94,11 @@ MetricFamily::Add(std::map<std::string, std::string> label_map, Metric* metric)
 void
 MetricFamily::Remove(void* prom_metric, Metric* metric)
 {
-  // Remove reference to dependent Metric object
-  child_metrics_.erase(metric);
+  {
+    // Remove reference to dependent Metric object
+    std::lock_guard<std::mutex> lk(metric_mtx_);
+    child_metrics_.erase(metric);
+  }
 
   if (prom_metric == nullptr) {
     return;
