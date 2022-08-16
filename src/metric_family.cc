@@ -146,7 +146,7 @@ MetricFamily::InvalidateReferences()
   std::lock_guard<std::mutex> lk(metric_mtx_);
   for (auto& metric : child_metrics_) {
     if (metric != nullptr) {
-      metric->InvalidateFamily();
+      metric->Invalidate();
     }
   }
   child_metrics_.clear();
@@ -195,19 +195,25 @@ Metric::~Metric()
                    "before deleting its MetricFamily.";
   }
   // Catch lifetime management / invalid reference issues
-  family_ = nullptr;
-  metric_ = nullptr;
+  Invalidate();
 }
 
 void
-Metric::InvalidateFamily()
+Metric::Invalidate()
 {
   family_ = nullptr;
+  metric_ = nullptr;
 }
 
 TRITONSERVER_Error*
 Metric::Value(double* value)
 {
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not get metric value. Metric has been invalidated.");
+  }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
@@ -235,6 +241,12 @@ Metric::Value(double* value)
 TRITONSERVER_Error*
 Metric::Increment(double value)
 {
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not increment metric value. Metric has been invalidated.");
+  }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       if (value < 0.0) {
@@ -273,6 +285,12 @@ Metric::Increment(double value)
 TRITONSERVER_Error*
 Metric::Set(double value)
 {
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not set metric value. Metric has been invalidated.");
+  }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       return TRITONSERVER_ErrorNew(

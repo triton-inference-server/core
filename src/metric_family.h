@@ -91,8 +91,8 @@ class Metric {
   TRITONSERVER_Error* Set(double value);
 
   // If a MetricFamily is deleted before its dependent Metric, we want to
-  // invalidate the reference so we don't access invalid memory.
-  void InvalidateFamily();
+  // invalidate the references so we don't access invalid memory.
+  void Invalidate();
 
  private:
   void* metric_;

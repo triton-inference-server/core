@@ -272,10 +272,6 @@ class MetricsApiTest : public ::testing::Test {
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_), "deleting server");
   }
 
-  double increment_ = 10;
-  double set_value_ = 42;
-  double value_ = -1;
-  double prev_value_ = -1;
   static TRITONSERVER_Server* server_;
 };
 
@@ -563,6 +559,41 @@ TEST_F(MetricsApiTest, TestOutOfOrderDelete)
   EXPECT_THAT(
       TRITONSERVER_ErrorMessage(err),
       HasSubstr("Must call MetricDelete before dependent MetricFamilyDelete"));
+}
+
+TEST_F(MetricsApiTest, TestMetricAfterFamilyDelete)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family = nullptr;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_GAUGE;
+  const char* name = "use_metric_after_family_delete";
+  const char* description = "test using a metric after its family is deleted";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // Add metric to family
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  TRITONSERVER_Metric* metric = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
+      "Creating new metric");
+
+  // Delete metric family BEFORE metric
+  // NOTE: This should NOT be done normally, this is just to test it is
+  // gracefully handled rather than causing undefined behavior.
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
+  ASSERT_EQ(NumMetricMatches(server_, description), 1);
+
+  // Expected API calls to fail since metric has been invalidated by
+  // calling MetricFamilyDelete before MetricDelete
+  double value = -1;
+  auto err = TRITONSERVER_MetricValue(metric, &value);
+  EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));
+  err = TRITONSERVER_MetricIncrement(metric, 1.0);
+  EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));
+  err = TRITONSERVER_MetricSet(metric, 1.0);
+  EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));
 }
 
 // This test serves as a reminder to consider the ability to access
