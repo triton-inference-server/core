@@ -30,8 +30,11 @@
 #include <thread>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "metric_family.h"
 #include "triton/common/logging.h"
 #include "triton/core/tritonserver.h"
+
+namespace tc = triton::core;
 
 namespace {
 
@@ -550,15 +553,14 @@ TEST_F(MetricsApiTest, TestOutOfOrderDelete)
       TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
       "Creating new metric");
 
-  // Delete metric family BEFORE metric
-  // NOTE: This should NOT be done normally, this is just to test it is
-  // gracefully handled rather than causing undefined behavior.
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
-  // This should return an error since family was already deleted
-  auto err = TRITONSERVER_MetricDelete(metric);
+  // Check that deleting metric family BEFORE metric fails
+  auto err = TRITONSERVER_MetricFamilyDelete(family);
   EXPECT_THAT(
-      TRITONSERVER_ErrorMessage(err),
-      HasSubstr("Must call MetricDelete before dependent MetricFamilyDelete"));
+      TRITONSERVER_ErrorMessage(err), HasSubstr("Must call MetricDelete"));
+
+  // Check that deleting in correct order still works after above failure
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "deleting metric");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "deleting family");
   TRITONSERVER_ErrorDelete(err);
 }
 
@@ -580,16 +582,19 @@ TEST_F(MetricsApiTest, TestMetricAfterFamilyDelete)
       TRITONSERVER_MetricNew(&metric, family, labels.data(), labels.size()),
       "Creating new metric");
 
-  // Delete metric family BEFORE metric
-  // NOTE: This should NOT be done normally, this is just to test it is
-  // gracefully handled rather than causing undefined behavior.
-  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
-  ASSERT_EQ(NumMetricMatches(server_, description), 1);
+  // Check that deleting metric family BEFORE metric fails
+  auto err = TRITONSERVER_MetricFamilyDelete(family);
+  EXPECT_THAT(
+      TRITONSERVER_ErrorMessage(err), HasSubstr("Must call MetricDelete"));
+
+  // Use internal implementation to force deletion since C API checks first
+  // NOTE: This is for internal testing and should NOT be done by users.
+  delete reinterpret_cast<tc::MetricFamily*>(family);
 
   // Expected API calls to fail since metric has been invalidated by
   // calling MetricFamilyDelete before MetricDelete
   double value = -1;
-  auto err = TRITONSERVER_MetricValue(metric, &value);
+  err = TRITONSERVER_MetricValue(metric, &value);
   EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));
   err = TRITONSERVER_MetricIncrement(metric, 1.0);
   EXPECT_THAT(TRITONSERVER_ErrorMessage(err), HasSubstr("invalidated"));

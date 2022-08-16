@@ -154,6 +154,11 @@ MetricFamily::InvalidateReferences()
 
 MetricFamily::~MetricFamily()
 {
+  if (HasMetrics()) {
+    LOG_WARNING << "MetricFamily was deleted before its child Metrics, this "
+                   "should not happen. Make sure to delete all child Metrics "
+                   "before deleting their MetricFamily.";
+  }
   InvalidateReferences();
   // DLIS-4072: Support for removing metric families from registry
 }

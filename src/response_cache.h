@@ -32,7 +32,6 @@
 
 #include "infer_request.h"
 #include "infer_response.h"
-#include "model.h"
 #include "status.h"
 
 #include <boost/functional/hash.hpp>

@@ -2917,7 +2917,15 @@ TRITONSERVER_Error*
 TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
 {
 #ifdef TRITON_ENABLE_METRICS
-  delete reinterpret_cast<tc::MetricFamily*>(family);
+  auto lfamily = reinterpret_cast<tc::MetricFamily*>(family);
+  if (lfamily->HasMetrics()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Must call MetricDelete on all dependent metrics before calling "
+        "MetricFamilyDelete.");
+  }
+
+  delete lfamily;
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
@@ -2965,7 +2973,8 @@ TRITONSERVER_MetricDelete(TRITONSERVER_Metric* metric)
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INTERNAL,
         "MetricFamily reference was invalidated before Metric was deleted. "
-        "Must call MetricDelete before dependent MetricFamilyDelete.");
+        "Must call MetricDelete on all dependent metrics before calling "
+        "MetricFamilyDelete.");
   }
 
   delete lmetric;
