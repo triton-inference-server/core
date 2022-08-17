@@ -139,7 +139,6 @@ class DynamicBatchScheduler : public Scheduler {
   std::set<int32_t> preferred_batch_sizes_;
   uint64_t pending_batch_delay_ns_;
   size_t pending_batch_size_;
-  RequiredEqualInputs required_equal_inputs_;
 
   size_t queued_batch_size_;
   size_t next_preferred_batch_size_;

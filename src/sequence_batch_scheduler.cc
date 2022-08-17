@@ -1297,15 +1297,14 @@ DirectSequenceBatch::BatcherThread(const int nice)
             // If this is the first non-null request capture the shape
             // of the tensors that don't support ragged so we can
             // compare them to later requests.
-            if (required_equal_inputs.empty() && check_input) {
-              Status status = InitRequiredEqualInputs(
+            if (!required_equal_inputs.Initialized() && check_input) {
+              Status status = required_equal_inputs.Initialize(
                   queue.front(), enforce_equal_shape_tensors_,
-                  has_optional_input_, &required_equal_inputs);
+                  has_optional_input_);
               if (!status.IsOk()) {
                 LOG_ERROR
                     << "internal: unexpecting failure initializing shape: "
                     << status.Message();
-                required_equal_inputs.clear();
               }
             }
 
@@ -1375,10 +1374,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
           // If there are one or more tensors that don't support
           // ragged batch, then don't allow a request into an existing
           // batch if shape differs.
-          else if (!required_equal_inputs.empty() && check_input) {
-            if (!CompareWithRequiredEqualInputs(
-                    queue.front(), has_optional_input_,
-                    required_equal_inputs)) {
+          else if (required_equal_inputs.Initialized() && check_input) {
+            if (!required_equal_inputs.HasEqualInputs(queue.front())) {
               use_null_request = true;
             }
           }
@@ -1489,6 +1486,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
         payload_cv_.notify_one();
       };
       curr_payload_->AddInternalReleaseCallback(callback);
+      curr_payload_->MarkSaturated();
 
       // Enqueue the payload to RateLimiter
       model_instance_->Model()->Server()->GetRateLimiter()->EnqueuePayload(

@@ -31,21 +31,27 @@
 
 namespace triton { namespace core {
 
-// A collection of inputs in the request, an nullptr for InferenceRequest::Input
-// indicates that the inputs doesn't require equality check
-using RequiredEqualInputs = std::unordered_map<
-    std::string,
-    std::pair<const InferenceRequest::Input*, bool /* compare contents */>>;
+struct RequiredEqualInputs {
+ public:
+  RequiredEqualInputs() : init_(false), has_optional_input_(false) {}
+  Status Initialize(
+      const std::unique_ptr<InferenceRequest>& request,
+      const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
+      const bool has_optional_input);
+  bool HasEqualInputs(const std::unique_ptr<InferenceRequest>& request);
+  bool Initialized() { return init_; };
 
-Status InitRequiredEqualInputs(
-    const std::unique_ptr<InferenceRequest>& request,
-    const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
-    const bool has_optional_input, RequiredEqualInputs* required_equal_inputs);
-
-bool CompareWithRequiredEqualInputs(
-    const std::unique_ptr<InferenceRequest>& request,
-    const bool has_optional_input,
-    const RequiredEqualInputs& required_equal_inputs);
+ private:
+  bool init_;
+  bool has_optional_input_;
+  // A collection of inputs in the request, an nullptr for
+  // InferenceRequest::Input indicates that the inputs doesn't require
+  // equality check
+  std::unordered_map<
+      std::string,
+      std::pair<const InferenceRequest::Input*, bool /* compare contents */>>
+      required_inputs_;
+};
 
 //
 // PriorityQueue
