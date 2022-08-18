@@ -85,6 +85,9 @@ class Metrics {
   // Enable reporting of GPU metrics
   static void EnableGPUMetrics();
 
+  // Enable reporting of CPU metrics
+  static void EnableCPUMetrics();
+
   // Enable reporting of Cache metrics
   static void EnableCacheMetrics(
       std::shared_ptr<RequestResponseCache> response_cache);
@@ -195,6 +198,7 @@ class Metrics {
   virtual ~Metrics();
   static Metrics* GetSingleton();
   bool InitializeDcgmMetrics();
+  bool InitializeCPUMetrics();
   bool InitializeCacheMetrics(
       std::shared_ptr<RequestResponseCache> response_cache);
   bool StartPollingThread(std::shared_ptr<RequestResponseCache> response_cache);
@@ -265,15 +269,25 @@ class Metrics {
   DcgmMetadata dcgm_metadata_;
 #endif  // TRITON_ENABLE_METRICS_GPU
 
+#ifdef TRITON_ENABLE_METRICS_CPU
+  prometheus::Family<prometheus::Gauge>& cpu_utilization_family_;
+  prometheus::Family<prometheus::Gauge>& cpu_memory_total_family_;
+  prometheus::Family<prometheus::Gauge>& cpu_memory_used_family_;
+
+  prometheus::Gauge* cpu_utilization_;
+  prometheus::Gauge* cpu_memory_total_;
+  prometheus::Gauge* cpu_memory_used_;
+#endif  // TRITON_ENABLE_METRICS_CPU
+
   // Thread for polling cache/gpu metrics periodically
   std::unique_ptr<std::thread> poll_thread_;
   std::atomic<bool> poll_thread_exit_;
   bool metrics_enabled_;
   bool gpu_metrics_enabled_;
+  bool cpu_metrics_enabled_;
   bool cache_metrics_enabled_;
   bool poll_thread_started_;
-  std::mutex gpu_metrics_enabling_;
-  std::mutex cache_metrics_enabling_;
+  std::mutex metrics_enabling_;
   std::mutex poll_thread_starting_;
   uint64_t metrics_interval_ms_;
 };

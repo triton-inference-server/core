@@ -193,8 +193,25 @@ Metrics::Metrics()
                     "started")
               .Register(*registry_)),
 #endif  // TRITON_ENABLE_METRICS_GPU
+
+#ifdef TRITON_ENABLE_METRICS_CPU
+      cpu_utilization_family_(prometheus::BuildGauge()
+                                  .Name("nv_cpu_utilization")
+                                  .Help("CPU utilization rate [0.0 - 1.0)")
+                                  .Register(*registry_)),
+      cpu_memory_total_family_(prometheus::BuildGauge()
+                                   .Name("nv_cpu_memory_total_bytes")
+                                   .Help("CPU total memory, in bytes")
+                                   .Register(*registry_)),
+      cpu_memory_used_family_(prometheus::BuildGauge()
+                                  .Name("nv_cpu_memory_used_bytes")
+                                  .Help("CPU used memory, in bytes")
+                                  .Register(*registry_)),
+#endif  // TRITON_ENABLE_METRICS_CPU
+
       metrics_enabled_(false), gpu_metrics_enabled_(false),
-      cache_metrics_enabled_(false), metrics_interval_ms_(2000)
+      cpu_metrics_enabled_(false), cache_metrics_enabled_(false),
+      metrics_interval_ms_(2000)
 {
 }
 
@@ -259,15 +276,12 @@ Metrics::EnableCacheMetrics(
 {
   auto singleton = GetSingleton();
   // Ensure thread-safe enabling of Cache Metrics
-  std::lock_guard<std::mutex> lock(singleton->cache_metrics_enabling_);
+  std::lock_guard<std::mutex> lock(singleton->metrics_enabling_);
   if (singleton->cache_metrics_enabled_) {
     return;
   }
 
-  // Setup metric families for cache metrics
   singleton->InitializeCacheMetrics(response_cache);
-
-  // Toggle flag so this function is only executed once
   singleton->cache_metrics_enabled_ = true;
 }
 
@@ -275,9 +289,8 @@ void
 Metrics::EnableGPUMetrics()
 {
   auto singleton = GetSingleton();
-
   // Ensure thread-safe enabling of GPU Metrics
-  std::lock_guard<std::mutex> lock(singleton->gpu_metrics_enabling_);
+  std::lock_guard<std::mutex> lock(singleton->metrics_enabling_);
   if (singleton->gpu_metrics_enabled_) {
     return;
   }
@@ -287,6 +300,20 @@ Metrics::EnableGPUMetrics()
   }
 
   singleton->gpu_metrics_enabled_ = true;
+}
+
+void
+Metrics::EnableCPUMetrics()
+{
+  auto singleton = GetSingleton();
+  // Ensure thread-safe enabling of CPU Metrics
+  std::lock_guard<std::mutex> lock(singleton->metrics_enabling_);
+  if (singleton->cpu_metrics_enabled_) {
+    return;
+  }
+
+  singleton->InitializeCPUMetrics();
+  singleton->cpu_metrics_enabled_ = true;
 }
 
 void
@@ -543,6 +570,20 @@ Metrics::InitializeCacheMetrics(
       &cache_insertion_duration_us_family_.Add(cache_labels);
   cache_util_global_ = &cache_util_family_.Add(cache_labels);
   return true;
+}
+
+bool
+Metrics::InitializeCPUMetrics()
+{
+#ifndef TRITON_ENABLE_METRICS_CPU
+  return false;
+#else
+  const std::map<std::string, std::string> cpu_labels;
+  cpu_utilization_ = &cpu_utilization_family_.Add(cpu_labels);
+  cpu_memory_total_ = &cpu_memory_total_family_.Add(cpu_labels);
+  cpu_memory_used_ = &cpu_memory_used_family_.Add(cpu_labels);
+  return true;
+#endif  // TRITON_ENABLE_METRICS_CPU
 }
 
 bool
