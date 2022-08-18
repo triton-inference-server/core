@@ -205,6 +205,7 @@ class Metrics {
       std::shared_ptr<RequestResponseCache> response_cache);
   bool StartPollingThread(std::shared_ptr<RequestResponseCache> response_cache);
   bool PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache);
+  bool PollCPUMetrics();
   bool PollDcgmMetrics();
 
   std::string dcgmValueToErrorMessage(double val);

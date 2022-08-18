@@ -349,9 +349,10 @@ Metrics::StartPollingThread(
     std::shared_ptr<RequestResponseCache> response_cache)
 {
   // Nothing to poll if no polling metrics enabled, don't spawn a thread
-  if (!cache_metrics_enabled_ && !gpu_metrics_enabled_) {
-    LOG_WARNING << "Neither cache metrics nor gpu metrics are enabled. Not "
-                   "polling for them.";
+  if (!cache_metrics_enabled_ && !gpu_metrics_enabled_ &&
+      !cpu_metrics_enabled_) {
+    LOG_WARNING << "No polling metrics (CPU, GPU, Cache) are enabled. Will not "
+                   "poll for them.";
     return false;
   }
   poll_thread_exit_.store(false);
@@ -376,6 +377,12 @@ Metrics::StartPollingThread(
         PollDcgmMetrics();
       }
 #endif  // TRITON_ENABLE_METRICS_GPU
+
+#ifdef TRITON_ENABLE_METRICS_CPU
+      if (cpu_metrics_enabled_) {
+        PollCPUMetrics();
+      }
+#endif  // TRITON_ENABLE_METRICS_CPU
     }
   }));
 
@@ -403,6 +410,20 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
       response_cache->TotalInsertionLatencyNs() / 1000);
   cache_util_global_->Set(response_cache->TotalUtilization());
   return true;
+}
+
+
+bool
+Metrics::PollCPUMetrics()
+{
+#ifndef TRITON_ENABLE_METRICS_GPU
+  return false;
+#else
+  cpu_utilization_->Set(0.0);   // [0.0, 1.0]
+  cpu_memory_total_->Set(0.0);  // bytes
+  cpu_memory_used_->Set(0.0);   // bytes
+  return true;
+#endif  // TRITON_ENABLE_METRICS_CPU
 }
 
 bool
