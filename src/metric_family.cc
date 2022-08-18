@@ -62,22 +62,22 @@ MetricFamily::MetricFamily(
 }
 
 void*
-MetricFamily::Add(std::map<std::string, std::string> label_map)
+MetricFamily::Add(std::map<std::string, std::string> label_map, Metric* metric)
 {
-  void* metric = nullptr;
+  void* prom_metric = nullptr;
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
       auto counter_ptr = &counter_family_ptr->Add(label_map);
-      metric = reinterpret_cast<void*>(counter_ptr);
+      prom_metric = reinterpret_cast<void*>(counter_ptr);
       break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
       auto gauge_ptr = &gauge_family_ptr->Add(label_map);
-      metric = reinterpret_cast<void*>(gauge_ptr);
+      prom_metric = reinterpret_cast<void*>(gauge_ptr);
       break;
     }
     default:
@@ -85,39 +85,51 @@ MetricFamily::Add(std::map<std::string, std::string> label_map)
           "Unsupported family kind passed to Metric constructor.");
   }
 
-  std::lock_guard<std::mutex> lk(mtx_);
-  ++metric_ref_cnt_[metric];
-  return metric;
+  std::lock_guard<std::mutex> lk(metric_mtx_);
+  ++prom_metric_ref_cnt_[prom_metric];
+  child_metrics_.insert(metric);
+  return prom_metric;
 }
 
 void
-MetricFamily::Remove(void* metric)
+MetricFamily::Remove(void* prom_metric, Metric* metric)
 {
   {
-    std::lock_guard<std::mutex> lk(mtx_);
-    const auto it = metric_ref_cnt_.find(metric);
-    if (it != metric_ref_cnt_.end()) {
+    // Remove reference to dependent Metric object
+    std::lock_guard<std::mutex> lk(metric_mtx_);
+    child_metrics_.erase(metric);
+  }
+
+  if (prom_metric == nullptr) {
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lk(metric_mtx_);
+    const auto it = prom_metric_ref_cnt_.find(prom_metric);
+    if (it != prom_metric_ref_cnt_.end()) {
       --it->second;
       if (it->second == 0) {
-        metric_ref_cnt_.erase(it);
+        prom_metric_ref_cnt_.erase(it);
       } else {
         // Done as it is not the last reference
         return;
       }
     }
   }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
-      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric);
+      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(prom_metric);
       counter_family_ptr->Remove(counter_ptr);
       break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
-      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric);
+      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(prom_metric);
       gauge_family_ptr->Remove(gauge_ptr);
       break;
     }
@@ -128,10 +140,27 @@ MetricFamily::Remove(void* metric)
   }
 }
 
+void
+MetricFamily::InvalidateReferences()
+{
+  std::lock_guard<std::mutex> lk(metric_mtx_);
+  for (auto& metric : child_metrics_) {
+    if (metric != nullptr) {
+      metric->Invalidate();
+    }
+  }
+  child_metrics_.clear();
+}
+
 MetricFamily::~MetricFamily()
 {
-  // NOTE: registry->Remove() not added until until prometheus-cpp v1.0 which
-  // we do not currently install
+  if (NumMetrics() > 0) {
+    LOG_WARNING << "MetricFamily was deleted before its child Metrics, this "
+                   "should not happen. Make sure to delete all child Metrics "
+                   "before deleting their MetricFamily.";
+  }
+  InvalidateReferences();
+  // DLIS-4072: Support for removing metric families from registry
 }
 
 //
@@ -158,17 +187,38 @@ Metric::Metric(
         std::string(reinterpret_cast<const char*>(param->ValuePointer()));
   }
 
-  metric_ = family_->Add(label_map);
+  metric_ = family_->Add(label_map, this);
 }
 
 Metric::~Metric()
 {
-  family_->Remove(metric_);
+  if (family_ != nullptr) {
+    family_->Remove(metric_, this);
+  } else {
+    LOG_WARNING << "Corresponding MetricFamily was deleted before this Metric, "
+                   "this should not happen. Make sure to delete a Metric "
+                   "before deleting its MetricFamily.";
+  }
+  // Catch lifetime management / invalid reference issues
+  Invalidate();
+}
+
+void
+Metric::Invalidate()
+{
+  family_ = nullptr;
+  metric_ = nullptr;
 }
 
 TRITONSERVER_Error*
 Metric::Value(double* value)
 {
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not get metric value. Metric has been invalidated.");
+  }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
@@ -196,6 +246,12 @@ Metric::Value(double* value)
 TRITONSERVER_Error*
 Metric::Increment(double value)
 {
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not increment metric value. Metric has been invalidated.");
+  }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       if (value < 0.0) {
@@ -234,6 +290,12 @@ Metric::Increment(double value)
 TRITONSERVER_Error*
 Metric::Set(double value)
 {
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not set metric value. Metric has been invalidated.");
+  }
+
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
       return TRITONSERVER_ErrorNew(

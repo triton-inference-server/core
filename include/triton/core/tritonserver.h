@@ -2267,6 +2267,9 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
     const char* name, const char* description);
 
 /// Delete a metric family object.
+/// A TRITONSERVER_MetricFamily* object should be deleted AFTER its
+/// corresponding TRITONSERVER_Metric* objects have been deleted.
+/// Attempting to delete a family before its metrics will return an error.
 ///
 /// \param family The metric family object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
@@ -2275,7 +2278,10 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete(
 
 /// Create a new metric object. The caller takes ownership of the
 /// TRITONSERVER_Metric object and must call
-/// TRITONSERVER_MetricDelete to release the object.
+/// TRITONSERVER_MetricDelete to release the object. The caller is also
+/// responsible for ownership of the labels passed in. Each label can be deleted
+/// immediately after creating the metric with TRITONSERVER_ParameterDelete
+/// if not re-using the labels.
 ///
 /// \param metric Returns the new metric object.
 /// \param family The metric family to add this new metric to.
@@ -2287,6 +2293,9 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricNew(
     const TRITONSERVER_Parameter** labels, const uint64_t label_count);
 
 /// Delete a metric object.
+/// All TRITONSERVER_Metric* objects should be deleted BEFORE their
+/// corresponding TRITONSERVER_MetricFamily* objects have been deleted.
+/// If a family is deleted before its metrics, an error will be returned.
 ///
 /// \param metric The metric object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.

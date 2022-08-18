@@ -31,6 +31,8 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include "prometheus/counter.h"
+#include "prometheus/gauge.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
 #include "prometheus/text_serializer.h"

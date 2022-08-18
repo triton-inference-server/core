@@ -434,6 +434,12 @@ if(${TRITON_ENABLE_METRICS})
   add_executable(
     metrics_api_test
     metrics_api_test.cc
+    ../metric_family.cc
+    ../metric_family.h
+    ../metrics.cc
+    ../metrics.h
+    ../infer_parameter.cc
+    ../infer_parameter.h
   )
 
   set_target_properties(
@@ -465,6 +471,7 @@ if(${TRITON_ENABLE_METRICS})
     PRIVATE
       triton-common-error   # from repo-common
       triton-common-logging # from repo-common
+      proto-library         # from repo-common
       triton-core
       GTest::gtest
       GTest::gtest_main
