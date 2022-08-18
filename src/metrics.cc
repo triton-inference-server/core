@@ -198,10 +198,12 @@ Metrics::Metrics()
 {
 }
 
+static prometheus::detail::LabelHasher label_hasher_;
+
 size_t
 Metrics::HashLabels(const std::map<std::string, std::string>& labels)
 {
-  return prometheus::detail::hash_labels(labels);
+  return label_hasher_(labels);
 }
 
 Metrics::~Metrics()
