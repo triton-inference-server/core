@@ -412,16 +412,71 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
   return true;
 }
 
+bool
+Metrics::ParseMemInfo(MemInfo* info)
+{
+#ifdef _WIN32
+  // Note: CPU metrics not supported on Windows
+  return false;
+#else
+  const std::string meminfo_file("/proc/meminfo");
+  std::ifstream ifs(meminfo_file);
+  if (!ifs) {
+    return false;
+  }
+
+  std::string line;
+  constexpr uint64_t KB = 1024;
+  while (std::getline(ifs, line)) {
+    std::istringstream iss(line);
+    std::string name;
+    uint64_t value = 0;
+    if (iss >> name >> value) {
+      // Remove trailing ":" after field names, and convert KB to bytes
+      name.pop_back();
+      (*info)[name] = value * KB;
+    } else {
+      return false;  // Parsing error
+    }
+  }
+  return true;
+#endif  // OS
+}
 
 bool
 Metrics::PollCPUMetrics()
 {
-#ifndef TRITON_ENABLE_METRICS_GPU
+#ifndef TRITON_ENABLE_METRICS_CPU
   return false;
 #else
-  cpu_utilization_->Set(0.0);   // [0.0, 1.0]
-  cpu_memory_total_->Set(0.0);  // bytes
-  cpu_memory_used_->Set(0.0);   // bytes
+  // CPU Utilization
+  cpu_utilization_->Set(0.0);  // [0.0, 1.0]
+
+  // RAM / Memory
+  MemInfo info;
+  double mem_total_bytes = 0.0;
+  double mem_used_bytes = 0.0;
+  if (ParseMemInfo(&info)) {
+    // In general this value should not change over time, but in case something
+    // goes wrong when querying memory, we can reflect that by updating.
+    auto iter = info.find("MemTotal");
+    if (iter != info.end()) {
+      mem_total_bytes = iter->second;
+    }
+    // "Used" memory can be defined in many different ways. While many
+    // older applications consider "used = total - (free + cached)", a more
+    // accurate measure of available memory "MemAvailable" was added in 2014,
+    // so we choose "used = total - available" for a more accurate measure.
+    // This may change in the future if not sufficient for most use cases.
+    // See https://stackoverflow.com/a/35019697.
+    iter = info.find("MemAvailable");
+    if (iter != info.end() && mem_total_bytes > 0) {
+      mem_used_bytes = mem_total_bytes - iter->second;
+    }
+  }
+  cpu_memory_total_->Set(mem_total_bytes);
+  cpu_memory_used_->Set(mem_used_bytes);
+
   return true;
 #endif  // TRITON_ENABLE_METRICS_CPU
 }

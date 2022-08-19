@@ -73,6 +73,8 @@ struct DcgmMetadata {
 };
 #endif  // TRITON_ENABLE_METRICS_GPU
 
+using MemInfo = std::unordered_map<std::string, uint64_t>;
+
 class Metrics {
  public:
   // Return the hash value of the labels
@@ -205,8 +207,10 @@ class Metrics {
       std::shared_ptr<RequestResponseCache> response_cache);
   bool StartPollingThread(std::shared_ptr<RequestResponseCache> response_cache);
   bool PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache);
-  bool PollCPUMetrics();
   bool PollDcgmMetrics();
+  bool PollCPUMetrics();
+  // Parses "/proc/meminfo" for metrics, currently only supported on Linux.
+  bool ParseMemInfo(MemInfo* info);
 
   std::string dcgmValueToErrorMessage(double val);
   std::string dcgmValueToErrorMessage(int64_t val);
