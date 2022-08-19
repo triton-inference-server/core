@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 16
+#define TRITONSERVER_API_VERSION_MINOR 17
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1831,6 +1831,17 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetGpuMetrics(
     TRITONSERVER_ServerOptions* options, bool gpu_metrics);
+
+/// Enable or disable CPU metrics collection in a server options. CPU
+/// metrics are collected if both this option and
+/// TRITONSERVER_ServerOptionsSetMetrics are true.
+///
+/// \param options The server options object.
+/// \param cpu_metrics True to enable CPU metrics, false to disable.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCpuMetrics(
+    TRITONSERVER_ServerOptions* options, bool cpu_metrics);
 
 /// Set the interval for metrics collection in a server options.
 /// This is 2000 milliseconds by default.

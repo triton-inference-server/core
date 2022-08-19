@@ -278,6 +278,9 @@ class TritonServerOptions {
   bool GpuMetrics() const { return gpu_metrics_; }
   void SetGpuMetrics(bool b) { gpu_metrics_ = b; }
 
+  bool CpuMetrics() const { return cpu_metrics_; }
+  void SetCpuMetrics(bool b) { cpu_metrics_ = b; }
+
   uint64_t MetricsInterval() const { return metrics_interval_; }
   void SetMetricsInterval(uint64_t m) { metrics_interval_ = m; }
 
@@ -320,6 +323,7 @@ class TritonServerOptions {
   tc::RateLimiter::ResourceMap rate_limit_resource_map_;
   bool metrics_;
   bool gpu_metrics_;
+  bool cpu_metrics_;
   uint64_t metrics_interval_;
   unsigned int exit_timeout_;
   uint64_t pinned_memory_pool_size_;
@@ -339,9 +343,9 @@ TritonServerOptions::TritonServerOptions()
       model_control_mode_(tc::ModelControlMode::MODE_POLL),
       exit_on_error_(true), strict_model_config_(true), strict_readiness_(true),
       rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
-      gpu_metrics_(true), metrics_interval_(2000), exit_timeout_(30),
-      pinned_memory_pool_size_(1 << 28), response_cache_byte_size_(0),
-      buffer_manager_thread_count_(0),
+      gpu_metrics_(true), cpu_metrics_(true), metrics_interval_(2000),
+      exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
+      response_cache_byte_size_(0), buffer_manager_thread_count_(0),
       model_load_thread_count_(
           std::max(2u, 2 * std::thread::hardware_concurrency())),
 #ifdef TRITON_ENABLE_GPU
@@ -355,11 +359,16 @@ TritonServerOptions::TritonServerOptions()
 #ifndef TRITON_ENABLE_METRICS
   metrics_ = false;
   gpu_metrics_ = false;
+  cpu_metrics_ = false;
 #endif  // TRITON_ENABLE_METRICS
 
 #ifndef TRITON_ENABLE_METRICS_GPU
   gpu_metrics_ = false;
 #endif  // TRITON_ENABLE_METRICS_GPU
+
+#ifndef TRITON_ENABLE_METRICS_CPU
+  cpu_metrics_ = false;
+#endif  // TRITON_ENABLE_METRICS_CPU
 }
 
 TRITONSERVER_Error*
@@ -1346,6 +1355,21 @@ TRITONSERVER_ServerOptionsSetGpuMetrics(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCpuMetrics(
+    TRITONSERVER_ServerOptions* options, bool cpu_metrics)
+{
+#ifdef TRITON_ENABLE_METRICS
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetCpuMetrics(cpu_metrics);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetricsInterval(
     TRITONSERVER_ServerOptions* options, uint64_t metrics_interval_ms)
 {
@@ -2110,7 +2134,6 @@ TRITONSERVER_ServerNew(
   // Initialize server
   tc::Status status = lserver->Init();
 
-
 #ifdef TRITON_ENABLE_METRICS
   if (loptions->Metrics() && lserver->ResponseCacheEnabled()) {
     // NOTE: Cache metrics must be enabled after cache initialized in
@@ -2123,8 +2146,16 @@ TRITONSERVER_ServerNew(
   }
 #endif  // TRITON_ENABLE_METRICS_GPU
 
-  if (loptions->Metrics() &&
-      (lserver->ResponseCacheEnabled() || loptions->GpuMetrics())) {
+#ifdef TRITON_ENABLE_METRICS_CPU
+  if (loptions->Metrics() && loptions->CpuMetrics()) {
+    tc::Metrics::EnableCPUMetrics();
+  }
+#endif  // TRITON_ENABLE_METRICS_CPU
+
+  const bool poll_metrics =
+      (lserver->ResponseCacheEnabled() || loptions->GpuMetrics() ||
+       loptions->CpuMetrics());
+  if (loptions->Metrics() && poll_metrics) {
     // Start thread to poll enabled metrics periodically
     tc::Metrics::StartPollingThreadSingleton(lserver->GetResponseCache());
   }

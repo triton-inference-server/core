@@ -67,6 +67,7 @@ GetMetrics(TRITONSERVER_Server* server, std::string* metrics_str)
           metrics, TRITONSERVER_METRIC_PROMETHEUS, &base, &byte_size),
       "format metrics string");
   *metrics_str = std::string(base, byte_size);
+  TRITONSERVER_MetricsDelete(metrics);
 }
 
 // Count number of times substr appears in s

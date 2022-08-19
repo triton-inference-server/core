@@ -418,6 +418,10 @@ TRITONSERVER_ServerOptionsSetGpuMetrics()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCpuMetrics()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetMetricsInterval()
 {
 }
