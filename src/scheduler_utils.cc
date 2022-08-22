@@ -247,11 +247,18 @@ PriorityQueue::PolicyQueue::TimeoutAt(size_t idx)
   }
 }
 
-PriorityQueue::PriorityQueue()
-    : size_(0), front_priority_level_(0), last_priority_level_(0)
+bool
+PriorityQueue::PolicyQueue::ReadyForErasure()
 {
-  inference::ModelQueuePolicy default_policy;
-  queues_.emplace(0, PolicyQueue(default_policy));
+  size_t total_size = Size() + rejected_queue_.size();
+  return !keep_instantiated_ && total_size == 0;
+}
+
+PriorityQueue::PriorityQueue()
+    : size_(0), front_priority_level_(0), last_priority_level_(0),
+      default_policy_()
+{
+  queues_.emplace(0, PolicyQueue(default_policy_, true));
   front_priority_level_ = queues_.begin()->first;
   ResetCursor();
 }
@@ -259,21 +266,24 @@ PriorityQueue::PriorityQueue()
 PriorityQueue::PriorityQueue(
     const inference::ModelQueuePolicy& default_queue_policy,
     uint32_t priority_levels, const ModelQueuePolicyMap queue_policy_map)
-    : size_(0), last_priority_level_(priority_levels)
+    : size_(0), last_priority_level_(priority_levels),
+      default_policy_(default_queue_policy)
 {
+  // Permanently instantiate PolicyQueue with keep_instantiate=true
+  // to prevent them from being erased & created during scheduling
   if (priority_levels == 0) {
-    queues_.emplace(0, PolicyQueue(default_queue_policy));
+    // Only default policy is instantiated
+    queues_.emplace(0, PolicyQueue(default_policy_, true));
   } else {
-    for (uint32_t level = 1; level <= priority_levels; level++) {
-      auto it = queue_policy_map.find(level);
-      if (it == queue_policy_map.end()) {
-        queues_.emplace(level, PolicyQueue(default_queue_policy));
-      } else {
-        queues_.emplace(level, PolicyQueue(it->second));
-      }
+    // All priorities with user-given policy are instantiated. We do not
+    // permanently add default PolicyQueue because those will be dynamically
+    // created and erased to keep memory footprint low
+    for (auto it = queue_policy_map.begin(); it != queue_policy_map.end();
+         ++it) {
+      queues_.emplace((uint32_t)it->first, PolicyQueue(it->second, true));
     }
   }
-  front_priority_level_ = queues_.begin()->first;
+  front_priority_level_ = queues_.empty() ? 0 : queues_.begin()->first;
   ResetCursor();
 }
 
@@ -281,7 +291,10 @@ Status
 PriorityQueue::Enqueue(
     uint32_t priority_level, std::unique_ptr<InferenceRequest>& request)
 {
-  auto status = queues_[priority_level].Enqueue(request);
+  // Get corresponding PolicyQueue if it exists, otherwise insert it
+  // via emplace with the default policy
+  auto it = queues_.insert(std::make_pair(priority_level, default_policy_));
+  auto status = it.first->second.Enqueue(request);
   if (status.IsOk()) {
     size_++;
     front_priority_level_ = std::min(front_priority_level_, priority_level);
@@ -303,38 +316,43 @@ Status
 PriorityQueue::Dequeue(std::unique_ptr<InferenceRequest>* request)
 {
   pending_cursor_.valid_ = false;
-  while (true) {
-    if (!queues_[front_priority_level_].Empty()) {
-      RETURN_IF_ERROR(queues_[front_priority_level_].Dequeue(request));
+  auto it_start = queues_.lower_bound(front_priority_level_);
+  for (auto it = it_start; it != queues_.end(); ++it) {
+    if (!it->second.Empty()) {
+      front_priority_level_ = it->first;
+      RETURN_IF_ERROR(it->second.Dequeue(request));
       size_--;
+      if (it->second.ReadyForErasure()) {
+        queues_.erase(it);
+      }
       return Status::Success;
-    } else if (front_priority_level_ != last_priority_level_) {
-      front_priority_level_++;
-      continue;
     }
-
-    // Control reach here if the queue for last priority level is also
-    // empty, then return error below.
-    break;
   }
-
-  return Status(
-      Status::Code::UNAVAILABLE,
-      (*request)->LogRequest() + "dequeue on empty queue");
+  return Status(Status::Code::UNAVAILABLE, "dequeue on empty queue");
 }
 
 void
 PriorityQueue::ReleaseRejectedRequests(
     std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>*
-        requests)
+    requests)
 {
   auto res = std::make_shared<
       std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>(
       queues_.size());
   size_t idx = 0;
-  for (auto& queue : queues_) {
-    queue.second.ReleaseRejectedQueue(&((*res)[idx]));
+  for (auto it = queues_.begin(); it != queues_.end(); ) {
+    it->second.ReleaseRejectedQueue(&((*res)[idx]));
     idx++;
+    if (it->second.ReadyForErasure()) {
+      // Invalidate the pending batch cursor if it points to
+      // the item to be erased
+      if (it->first == pending_cursor_.curr_it_->first) {
+        pending_cursor_.valid_ = false;
+      }
+      it = queues_.erase(it); // returns iterator following removed element
+    } else {
+      ++it;
+    }
   }
 
   requests->swap(res);
