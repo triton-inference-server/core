@@ -412,6 +412,7 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
   return true;
 }
 
+#ifdef TRITON_ENABLE_METRICS_CPU
 bool
 Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
 {
@@ -433,6 +434,7 @@ Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
 
   std::string _;
   std::istringstream iss(line);
+  // Use _ to skip "cpu" at start of line
   if (!(iss >> _ >> info->user >> info->nice >> info->system >> info->idle)) {
     return false;  // Parsing error
   }
@@ -470,6 +472,30 @@ Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
 #endif  // OS
 }
 
+double
+Metrics::CpuUtilization(std::shared_ptr<CpuInfo> info)
+{
+  if (info == nullptr || last_cpu_info_ == nullptr) {
+    LOG_ERROR << "Received nullptr on computing CPU utilization.";
+    return 0;
+  }
+
+  if (info->user < last_cpu_info_->user || info->nice < last_cpu_info_->nice ||
+      info->system < last_cpu_info_->system ||
+      info->idle < last_cpu_info_->idle) {
+    LOG_ERROR << "Recent CPU time was less than older CPU time.";
+    return 0;
+  }
+
+  uint64_t util_diff = (info->user - last_cpu_info_->user) +
+                       (info->nice - last_cpu_info_->nice) +
+                       (info->system - last_cpu_info_->system);
+  uint64_t idle_diff = (info->idle - last_cpu_info_->idle);
+  double util_ratio = static_cast<double>(util_diff) / (util_diff + idle_diff);
+  return util_ratio;
+}
+#endif  // TRITON_ENABLE_METRICS_CPU
+
 bool
 Metrics::PollCpuMetrics()
 {
@@ -480,8 +506,8 @@ Metrics::PollCpuMetrics()
   double cpu_util = 0.0;
   auto cpu_info = std::make_shared<CpuInfo>();
   if (ParseCpuInfo(cpu_info)) {
-    // cpu_util = CpuUtilization(cpu_info); // TODO: implement
-    cpu_util = (double)cpu_info->user;  // TODO: remove
+    cpu_util = CpuUtilization(cpu_info);
+    *last_cpu_info_ = *cpu_info;
   }
   cpu_utilization_->Set(cpu_util);  // [0.0, 1.0]
 

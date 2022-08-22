@@ -215,10 +215,6 @@ class Metrics {
   bool PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache);
   bool PollDcgmMetrics();
   bool PollCpuMetrics();
-  // Parses "/proc/meminfo" for metrics, currently only supported on Linux.
-  bool ParseMemInfo(std::shared_ptr<MemInfo> info);
-  // Parses "/proc/stat" for metrics, currently only supported on Linux.
-  bool ParseCpuInfo(std::shared_ptr<CpuInfo> info);
 
   std::string dcgmValueToErrorMessage(double val);
   std::string dcgmValueToErrorMessage(int64_t val);
@@ -285,6 +281,13 @@ class Metrics {
 #endif  // TRITON_ENABLE_METRICS_GPU
 
 #ifdef TRITON_ENABLE_METRICS_CPU
+  // Parses "/proc/meminfo" for metrics, currently only supported on Linux.
+  bool ParseMemInfo(std::shared_ptr<MemInfo> info);
+  // Parses "/proc/stat" for metrics, currently only supported on Linux.
+  bool ParseCpuInfo(std::shared_ptr<CpuInfo> info);
+  // Computes CPU utilization between "info" and "last_cpu_info_" values
+  double CpuUtilization(std::shared_ptr<CpuInfo> info);
+
   prometheus::Family<prometheus::Gauge>& cpu_utilization_family_;
   prometheus::Family<prometheus::Gauge>& cpu_memory_total_family_;
   prometheus::Family<prometheus::Gauge>& cpu_memory_used_family_;
