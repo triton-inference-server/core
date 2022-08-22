@@ -305,7 +305,7 @@ Metrics::EnableGPUMetrics()
 }
 
 void
-Metrics::EnableCPUMetrics()
+Metrics::EnableCpuMetrics()
 {
   auto singleton = GetSingleton();
   // Ensure thread-safe enabling of CPU Metrics
@@ -314,7 +314,7 @@ Metrics::EnableCPUMetrics()
     return;
   }
 
-  singleton->InitializeCPUMetrics();
+  singleton->InitializeCpuMetrics();
   singleton->cpu_metrics_enabled_ = true;
 }
 
@@ -380,7 +380,7 @@ Metrics::StartPollingThread(
 
 #ifdef TRITON_ENABLE_METRICS_CPU
       if (cpu_metrics_enabled_) {
-        PollCPUMetrics();
+        PollCpuMetrics();
       }
 #endif  // TRITON_ENABLE_METRICS_CPU
     }
@@ -413,15 +413,42 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
 }
 
 bool
-Metrics::ParseMemInfo(MemInfo* info)
+Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
 {
 #ifdef _WIN32
   // Note: CPU metrics not supported on Windows
   return false;
 #else
-  const std::string meminfo_file("/proc/meminfo");
-  std::ifstream ifs(meminfo_file);
-  if (!ifs) {
+  std::ifstream ifs("/proc/stat");
+  if (!ifs.good()) {
+    return false;
+  }
+
+  std::string line;
+  std::getline(ifs, line);
+  // Verify first line is aggregate cpu line
+  if (line.rfind("cpu ", 0) == std::string::npos) {
+    return false;
+  }
+
+  std::string _;
+  std::istringstream iss(line);
+  if (!(iss >> _ >> info->user >> info->nice >> info->system >> info->idle)) {
+    return false;  // Parsing error
+  }
+  return true;
+#endif  // OS
+}
+
+bool
+Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
+{
+#ifdef _WIN32
+  // Note: CPU metrics not supported on Windows
+  return false;
+#else
+  std::ifstream ifs("/proc/meminfo");
+  if (!ifs.good()) {
     return false;
   }
 
@@ -432,7 +459,7 @@ Metrics::ParseMemInfo(MemInfo* info)
     std::string name;
     uint64_t value = 0;
     if (iss >> name >> value) {
-      // Remove trailing ":" after field names, and convert KB to bytes
+      // Remove trailing ":" after field names, convert KB to bytes
       name.pop_back();
       (*info)[name] = value * KB;
     } else {
@@ -444,23 +471,29 @@ Metrics::ParseMemInfo(MemInfo* info)
 }
 
 bool
-Metrics::PollCPUMetrics()
+Metrics::PollCpuMetrics()
 {
 #ifndef TRITON_ENABLE_METRICS_CPU
   return false;
 #else
   // CPU Utilization
-  cpu_utilization_->Set(0.0);  // [0.0, 1.0]
+  double cpu_util = 0.0;
+  auto cpu_info = std::make_shared<CpuInfo>();
+  if (ParseCpuInfo(cpu_info)) {
+    // cpu_util = CpuUtilization(cpu_info); // TODO: implement
+    cpu_util = (double)cpu_info->user;  // TODO: remove
+  }
+  cpu_utilization_->Set(cpu_util);  // [0.0, 1.0]
 
   // RAM / Memory
-  MemInfo info;
   double mem_total_bytes = 0.0;
   double mem_used_bytes = 0.0;
-  if (ParseMemInfo(&info)) {
+  auto mem_info = std::make_shared<MemInfo>();
+  if (!ParseMemInfo(mem_info)) {
     // In general this value should not change over time, but in case something
     // goes wrong when querying memory, we can reflect that by updating.
-    auto iter = info.find("MemTotal");
-    if (iter != info.end()) {
+    auto iter = mem_info->find("MemTotal");
+    if (iter != mem_info->end()) {
       mem_total_bytes = iter->second;
     }
     // "Used" memory can be defined in many different ways. While many
@@ -469,8 +502,8 @@ Metrics::PollCPUMetrics()
     // so we choose "used = total - available" for a more accurate measure.
     // This may change in the future if not sufficient for most use cases.
     // See https://stackoverflow.com/a/35019697.
-    iter = info.find("MemAvailable");
-    if (iter != info.end() && mem_total_bytes > 0) {
+    iter = mem_info->find("MemAvailable");
+    if (iter != mem_info->end() && mem_total_bytes > 0) {
       mem_used_bytes = mem_total_bytes - iter->second;
     }
   }
@@ -651,7 +684,7 @@ Metrics::InitializeCacheMetrics(
 }
 
 bool
-Metrics::InitializeCPUMetrics()
+Metrics::InitializeCpuMetrics()
 {
 #ifndef TRITON_ENABLE_METRICS_CPU
   return false;
@@ -660,6 +693,23 @@ Metrics::InitializeCPUMetrics()
   cpu_utilization_ = &cpu_utilization_family_.Add(cpu_labels);
   cpu_memory_total_ = &cpu_memory_total_family_.Add(cpu_labels);
   cpu_memory_used_ = &cpu_memory_used_family_.Add(cpu_labels);
+
+  // Get baseline CPU info for future comparisons
+  last_cpu_info_.reset(new CpuInfo());
+  if (!ParseCpuInfo(last_cpu_info_)) {
+    LOG_WARNING << "error initializing CPU metrics, CPU utilization will not "
+                   "be available";
+    return false;
+  }
+
+  // Verify memory metrics can be parsed
+  auto mem_info = std::make_shared<MemInfo>();
+  if (!ParseMemInfo(mem_info)) {
+    LOG_WARNING
+        << "error initializing CPU metrics, CPU memory will not be available";
+    return false;
+  }
+
   return true;
 #endif  // TRITON_ENABLE_METRICS_CPU
 }

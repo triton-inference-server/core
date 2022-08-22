@@ -2148,7 +2148,7 @@ TRITONSERVER_ServerNew(
 
 #ifdef TRITON_ENABLE_METRICS_CPU
   if (loptions->Metrics() && loptions->CpuMetrics()) {
-    tc::Metrics::EnableCPUMetrics();
+    tc::Metrics::EnableCpuMetrics();
   }
 #endif  // TRITON_ENABLE_METRICS_CPU
 
