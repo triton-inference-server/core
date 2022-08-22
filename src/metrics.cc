@@ -515,7 +515,7 @@ Metrics::PollCpuMetrics()
   double mem_total_bytes = 0.0;
   double mem_used_bytes = 0.0;
   auto mem_info = std::make_shared<MemInfo>();
-  if (!ParseMemInfo(mem_info)) {
+  if (ParseMemInfo(mem_info)) {
     // In general this value should not change over time, but in case something
     // goes wrong when querying memory, we can reflect that by updating.
     auto iter = mem_info->find("MemTotal");
