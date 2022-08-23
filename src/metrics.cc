@@ -746,7 +746,7 @@ Metrics::InitializeCpuMetrics()
   last_cpu_info_.reset(new CpuInfo());
   auto status = ParseCpuInfo(last_cpu_info_);
   if (!status.IsOk()) {
-    LOG_WARNING << "error initializing CPU metrics, CPU utilization will not "
+    LOG_WARNING << "error initializing CPU metrics, CPU utilization may not "
                    "be available: "
                 << status.Message();
     return false;
@@ -756,9 +756,9 @@ Metrics::InitializeCpuMetrics()
   auto mem_info = std::make_shared<MemInfo>();
   status = ParseMemInfo(mem_info);
   if (!status.IsOk()) {
-    LOG_WARNING
-        << "error initializing CPU metrics, CPU memory will not be available: "
-        << status.Message();
+    LOG_WARNING << "error initializing CPU metrics, CPU memory metrics may not "
+                   "be available: "
+                << status.Message();
     return false;
   }
 
