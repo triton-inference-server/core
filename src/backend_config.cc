@@ -56,22 +56,6 @@ GetTFSpecializedBackendName(
 
   return Status::Success;
 }
-
-Status
-GetOVSpecializedBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map,
-    std::string* specialized_name)
-{
-  std::string ov_version_str = "2021_4";
-  const auto& itr = config_map.find("openvino");
-  if (itr != config_map.end()) {
-    BackendConfiguration(itr->second, "version", &ov_version_str);
-  }
-
-  *specialized_name += ("_" + ov_version_str);
-
-  return Status::Success;
-}
 }  // namespace
 
 Status
@@ -194,8 +178,6 @@ BackendConfigurationSpecializeBackendName(
   *specialized_name = backend_name;
   if (backend_name == "tensorflow") {
     RETURN_IF_ERROR(GetTFSpecializedBackendName(config_map, specialized_name));
-  } else if (backend_name == "openvino") {
-    RETURN_IF_ERROR(GetOVSpecializedBackendName(config_map, specialized_name));
   }
 
   return Status::Success;
