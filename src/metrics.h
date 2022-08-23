@@ -45,11 +45,20 @@
 namespace triton { namespace core {
 
 using MemInfo = std::unordered_map<std::string, uint64_t>;
+
+// References:
+// - htop source: https://stackoverflow.com/a/23376195
+// - Linux docs: https://www.kernel.org/doc/Documentation/filesystems/proc.txt
+// guest/guestnice values are counted in user/nice so we skip parsing them
 struct CpuInfo {
-  uint64_t user = 0;
-  uint64_t nice = 0;
-  uint64_t system = 0;
-  uint64_t idle = 0;
+  uint64_t user = 0;     // normal processes executing in user mode
+  uint64_t nice = 0;     // niced processes executing in user mode
+  uint64_t system = 0;   // processes executing in kernel mode
+  uint64_t idle = 0;     // twiddling thumbs
+  uint64_t iowait = 0;   // waiting for I/O to complete
+  uint64_t irq = 0;      // servicing interrupts
+  uint64_t softirq = 0;  // servicing softirqs
+  uint64_t steal = 0;    // involuntary wait
 };
 
 #ifdef TRITON_ENABLE_METRICS_GPU
@@ -282,11 +291,12 @@ class Metrics {
 
 #ifdef TRITON_ENABLE_METRICS_CPU
   // Parses "/proc/meminfo" for metrics, currently only supported on Linux.
-  bool ParseMemInfo(std::shared_ptr<MemInfo> info);
+  Status ParseMemInfo(std::shared_ptr<MemInfo> info);
   // Parses "/proc/stat" for metrics, currently only supported on Linux.
-  bool ParseCpuInfo(std::shared_ptr<CpuInfo> info);
-  // Computes CPU utilization between "info" and "last_cpu_info_" values
-  double CpuUtilization(std::shared_ptr<CpuInfo> info);
+  Status ParseCpuInfo(std::shared_ptr<CpuInfo> info);
+  // Computes CPU utilization between "info_new" and "info_old" values
+  double CpuUtilization(
+      std::shared_ptr<CpuInfo> info_new, std::shared_ptr<CpuInfo> info_old);
 
   prometheus::Family<prometheus::Gauge>& cpu_utilization_family_;
   prometheus::Family<prometheus::Gauge>& cpu_memory_total_family_;

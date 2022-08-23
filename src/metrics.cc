@@ -413,45 +413,50 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
 }
 
 #ifdef TRITON_ENABLE_METRICS_CPU
-bool
+Status
 Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
 {
 #ifdef _WIN32
-  // Note: CPU metrics not supported on Windows
-  return false;
+  return Status(
+      Status::Code::INTERNAL, "CPU metrics not supported on Windows.");
 #else
   std::ifstream ifs("/proc/stat");
   if (!ifs.good()) {
-    return false;
+    return Status(Status::Code::INTERNAL, "Failed to open /proc/stat.");
   }
 
   std::string line;
-  std::getline(ifs, line);
   // Verify first line is aggregate cpu line
+  std::getline(ifs, line);
   if (line.rfind("cpu ", 0) == std::string::npos) {
-    return false;
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to find aggregate CPU info in /proc/stat.");
   }
 
   std::string _;
   std::istringstream iss(line);
   // Use _ to skip "cpu" at start of line
-  if (!(iss >> _ >> info->user >> info->nice >> info->system >> info->idle)) {
-    return false;  // Parsing error
+  if (!(iss >> _ >> info->user >> info->nice >> info->system >> info->idle >>
+        info->iowait >> info->irq >> info->softirq >> info->steal)) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to parse aggregate CPU info in /proc/stat.");
   }
-  return true;
+  return Status::Success;
 #endif  // OS
 }
 
-bool
+Status
 Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
 {
 #ifdef _WIN32
-  // Note: CPU metrics not supported on Windows
-  return false;
+  return Status(
+      Status::Code::INTERNAL, "Memory metrics not supported on Windows.");
 #else
   std::ifstream ifs("/proc/meminfo");
   if (!ifs.good()) {
-    return false;
+    return Status(Status::Code::INTERNAL, "Failed to open /proc/meminfo.");
   }
 
   std::string line;
@@ -461,36 +466,62 @@ Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
     std::string name;
     uint64_t value = 0;
     if (iss >> name >> value) {
-      // Remove trailing ":" after field names, convert KB to bytes
       name.pop_back();
       (*info)[name] = value * KB;
     } else {
-      return false;  // Parsing error
+      return Status(
+          Status::Code::INTERNAL, "Encountered error parsing /proc/meminfo.");
     }
   }
-  return true;
+
+  if (info->find("MemTotal") == info->end() ||
+      info->find("MemAvailable") == info->end()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to find desired values in /proc/meminfo.");
+  }
+
+  // "Used" memory can be defined in many different ways. While many
+  // older applications consider "used = total - (free + cached)", a more
+  // accurate measure of available memory "MemAvailable" was added,
+  // so we choose "used = total - available" for a more accurate measure.
+  // This may change in the future if not sufficient for most use cases.
+  // See https://stackoverflow.com/a/35019697.
+  const uint64_t mem_total_bytes = (*info)["MemTotal"];
+  const uint64_t mem_avail_bytes = (*info)["MemAvailable"];
+  if (mem_total_bytes >= mem_avail_bytes) {
+    (*info)["MemUsed"] = mem_total_bytes - mem_avail_bytes;
+  } else {
+    return Status(
+        Status::Code::INTERNAL,
+        "Available bytes shouldn't be greater than Total bytes");
+  }
+
+  return Status::Success;
 #endif  // OS
 }
 
 double
-Metrics::CpuUtilization(std::shared_ptr<CpuInfo> info)
+Metrics::CpuUtilization(
+    std::shared_ptr<CpuInfo> info_new, std::shared_ptr<CpuInfo> info_old)
 {
-  if (info == nullptr || last_cpu_info_ == nullptr) {
+  if (info_new == nullptr || info_old == nullptr) {
     LOG_ERROR << "Received nullptr on computing CPU utilization.";
     return 0;
   }
 
-  if (info->user < last_cpu_info_->user || info->nice < last_cpu_info_->nice ||
-      info->system < last_cpu_info_->system ||
-      info->idle < last_cpu_info_->idle) {
-    LOG_ERROR << "Recent CPU time was less than older CPU time.";
-    return 0;
-  }
-
-  uint64_t util_diff = (info->user - last_cpu_info_->user) +
-                       (info->nice - last_cpu_info_->nice) +
-                       (info->system - last_cpu_info_->system);
-  uint64_t idle_diff = (info->idle - last_cpu_info_->idle);
+  // Account for overflow
+  const auto wrap_sub = [](uint64_t a, uint64_t b) {
+    return (a > b) ? (a - b) : 0;
+  };
+  uint64_t util_diff = wrap_sub(info_new->user, info_old->user) +
+                       wrap_sub(info_new->nice, info_old->nice) +
+                       wrap_sub(info_new->system, info_old->system) +
+                       wrap_sub(info_new->irq, info_old->irq) +
+                       wrap_sub(info_new->softirq, info_old->softirq) +
+                       wrap_sub(info_new->steal, info_old->steal);
+  uint64_t idle_diff = wrap_sub(info_new->idle, info_old->idle) +
+                       wrap_sub(info_new->iowait, info_old->iowait);
   double util_ratio = static_cast<double>(util_diff) / (util_diff + idle_diff);
   return util_ratio;
 }
@@ -505,8 +536,9 @@ Metrics::PollCpuMetrics()
   // CPU Utilization
   double cpu_util = 0.0;
   auto cpu_info = std::make_shared<CpuInfo>();
-  if (ParseCpuInfo(cpu_info)) {
-    cpu_util = CpuUtilization(cpu_info);
+  auto status = ParseCpuInfo(cpu_info);
+  if (status.IsOk()) {
+    cpu_util = CpuUtilization(cpu_info, last_cpu_info_);
     *last_cpu_info_ = *cpu_info;
   }
   cpu_utilization_->Set(cpu_util);  // [0.0, 1.0]
@@ -515,24 +547,14 @@ Metrics::PollCpuMetrics()
   double mem_total_bytes = 0.0;
   double mem_used_bytes = 0.0;
   auto mem_info = std::make_shared<MemInfo>();
-  if (ParseMemInfo(mem_info)) {
-    // In general this value should not change over time, but in case something
+  status = ParseMemInfo(mem_info);
+  if (status.IsOk()) {
+    // MemTotal will usually not change over time, but if something
     // goes wrong when querying memory, we can reflect that by updating.
-    auto iter = mem_info->find("MemTotal");
-    if (iter != mem_info->end()) {
-      mem_total_bytes = iter->second;
-    }
-    // "Used" memory can be defined in many different ways. While many
-    // older applications consider "used = total - (free + cached)", a more
-    // accurate measure of available memory "MemAvailable" was added in 2014,
-    // so we choose "used = total - available" for a more accurate measure.
-    // This may change in the future if not sufficient for most use cases.
-    // See https://stackoverflow.com/a/35019697.
-    iter = mem_info->find("MemAvailable");
-    if (iter != mem_info->end() && mem_total_bytes > 0) {
-      mem_used_bytes = mem_total_bytes - iter->second;
-    }
+    mem_total_bytes = (*mem_info)["MemTotal"];
+    mem_used_bytes = (*mem_info)["MemUsed"];
   }
+
   cpu_memory_total_->Set(mem_total_bytes);
   cpu_memory_used_->Set(mem_used_bytes);
 
@@ -722,17 +744,21 @@ Metrics::InitializeCpuMetrics()
 
   // Get baseline CPU info for future comparisons
   last_cpu_info_.reset(new CpuInfo());
-  if (!ParseCpuInfo(last_cpu_info_)) {
+  auto status = ParseCpuInfo(last_cpu_info_);
+  if (!status.IsOk()) {
     LOG_WARNING << "error initializing CPU metrics, CPU utilization will not "
-                   "be available";
+                   "be available: "
+                << status.Message();
     return false;
   }
 
   // Verify memory metrics can be parsed
   auto mem_info = std::make_shared<MemInfo>();
-  if (!ParseMemInfo(mem_info)) {
+  status = ParseMemInfo(mem_info);
+  if (!status.IsOk()) {
     LOG_WARNING
-        << "error initializing CPU metrics, CPU memory will not be available";
+        << "error initializing CPU metrics, CPU memory will not be available: "
+        << status.Message();
     return false;
   }
 
