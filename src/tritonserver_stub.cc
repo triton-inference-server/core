@@ -952,4 +952,9 @@ TRITONSERVER_GetMetricKind()
 {
 }
 
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
+{
+}
+
 } /* extern "C" */
