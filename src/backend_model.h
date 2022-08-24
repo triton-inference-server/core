@@ -51,8 +51,7 @@ class TritonModel : public Model {
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const std::string& model_name, const int64_t version,
-      const inference::ModelConfig& model_config,
-      std::unique_ptr<TritonModel>* model);
+      inference::ModelConfig model_config, std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
   const std::string& LocalizedModelPath() const
