@@ -197,15 +197,15 @@ Metrics::Metrics()
 #ifdef TRITON_ENABLE_METRICS_CPU
       cpu_utilization_family_(prometheus::BuildGauge()
                                   .Name("nv_cpu_utilization")
-                                  .Help("CPU utilization rate [0.0 - 1.0)")
+                                  .Help("CPU utilization rate [0.0 - 1.0]")
                                   .Register(*registry_)),
       cpu_memory_total_family_(prometheus::BuildGauge()
                                    .Name("nv_cpu_memory_total_bytes")
-                                   .Help("CPU total memory, in bytes")
+                                   .Help("CPU total memory (RAM), in bytes")
                                    .Register(*registry_)),
       cpu_memory_used_family_(prometheus::BuildGauge()
                                   .Name("nv_cpu_memory_used_bytes")
-                                  .Help("CPU used memory, in bytes")
+                                  .Help("CPU used memory (RAM), in bytes")
                                   .Register(*registry_)),
 #endif  // TRITON_ENABLE_METRICS_CPU
 
