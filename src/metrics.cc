@@ -728,6 +728,7 @@ Metrics::InitializeCacheMetrics(
   cache_insertion_duration_us_global_ =
       &cache_insertion_duration_us_family_.Add(cache_labels);
   cache_util_global_ = &cache_util_family_.Add(cache_labels);
+  LOG_INFO << "Collecting Response Cache metrics";
   return true;
 }
 
@@ -762,6 +763,7 @@ Metrics::InitializeCpuMetrics()
     return false;
   }
 
+  LOG_INFO << "Collecting CPU metrics";
   return true;
 #endif  // TRITON_ENABLE_METRICS_CPU
 }
