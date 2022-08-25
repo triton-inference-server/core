@@ -414,7 +414,7 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
 
 #ifdef TRITON_ENABLE_METRICS_CPU
 Status
-Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
+Metrics::ParseCpuInfo(CpuInfo& info)
 {
 #ifdef _WIN32
   return Status(
@@ -437,8 +437,7 @@ Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
   std::string _;
   std::istringstream iss(line);
   // Use _ to skip "cpu" at start of line
-  if (!(iss >> _ >> info->user >> info->nice >> info->system >> info->idle >>
-        info->iowait >> info->irq >> info->softirq >> info->steal)) {
+  if (!(iss >> _ >> info)) {
     return Status(
         Status::Code::INTERNAL,
         "Failed to parse aggregate CPU info in /proc/stat.");
@@ -448,7 +447,7 @@ Metrics::ParseCpuInfo(std::shared_ptr<CpuInfo> info)
 }
 
 Status
-Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
+Metrics::ParseMemInfo(MemInfo& info)
 {
 #ifdef _WIN32
   return Status(
@@ -467,15 +466,15 @@ Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
     uint64_t value = 0;
     if (iss >> name >> value) {
       name.pop_back();
-      (*info)[name] = value * KB;
+      info[name] = value * KB;
     } else {
       return Status(
           Status::Code::INTERNAL, "Encountered error parsing /proc/meminfo.");
     }
   }
 
-  if (info->find("MemTotal") == info->end() ||
-      info->find("MemAvailable") == info->end()) {
+  if (info.find("MemTotal") == info.end() ||
+      info.find("MemAvailable") == info.end()) {
     return Status(
         Status::Code::INTERNAL,
         "Failed to find desired values in /proc/meminfo.");
@@ -487,10 +486,10 @@ Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
   // so we choose "used = total - available" for a more accurate measure.
   // This may change in the future if not sufficient for most use cases.
   // See https://stackoverflow.com/a/35019697.
-  const uint64_t mem_total_bytes = (*info)["MemTotal"];
-  const uint64_t mem_avail_bytes = (*info)["MemAvailable"];
+  const uint64_t mem_total_bytes = info["MemTotal"];
+  const uint64_t mem_avail_bytes = info["MemAvailable"];
   if (mem_total_bytes >= mem_avail_bytes) {
-    (*info)["MemUsed"] = mem_total_bytes - mem_avail_bytes;
+    info["MemUsed"] = mem_total_bytes - mem_avail_bytes;
   } else {
     return Status(
         Status::Code::INTERNAL,
@@ -502,26 +501,20 @@ Metrics::ParseMemInfo(std::shared_ptr<MemInfo> info)
 }
 
 double
-Metrics::CpuUtilization(
-    std::shared_ptr<CpuInfo> info_new, std::shared_ptr<CpuInfo> info_old)
+Metrics::CpuUtilization(CpuInfo& info_new, CpuInfo& info_old)
 {
-  if (info_new == nullptr || info_old == nullptr) {
-    LOG_ERROR << "Received nullptr on computing CPU utilization.";
-    return 0;
-  }
-
   // Account for overflow
   const auto wrap_sub = [](uint64_t a, uint64_t b) {
     return (a > b) ? (a - b) : 0;
   };
-  uint64_t util_diff = wrap_sub(info_new->user, info_old->user) +
-                       wrap_sub(info_new->nice, info_old->nice) +
-                       wrap_sub(info_new->system, info_old->system) +
-                       wrap_sub(info_new->irq, info_old->irq) +
-                       wrap_sub(info_new->softirq, info_old->softirq) +
-                       wrap_sub(info_new->steal, info_old->steal);
-  uint64_t idle_diff = wrap_sub(info_new->idle, info_old->idle) +
-                       wrap_sub(info_new->iowait, info_old->iowait);
+  uint64_t util_diff = wrap_sub(info_new.user, info_old.user) +
+                       wrap_sub(info_new.nice, info_old.nice) +
+                       wrap_sub(info_new.system, info_old.system) +
+                       wrap_sub(info_new.irq, info_old.irq) +
+                       wrap_sub(info_new.softirq, info_old.softirq) +
+                       wrap_sub(info_new.steal, info_old.steal);
+  uint64_t idle_diff = wrap_sub(info_new.idle, info_old.idle) +
+                       wrap_sub(info_new.iowait, info_old.iowait);
   double util_ratio = static_cast<double>(util_diff) / (util_diff + idle_diff);
   return util_ratio;
 }
@@ -535,24 +528,24 @@ Metrics::PollCpuMetrics()
 #else
   // CPU Utilization
   double cpu_util = 0.0;
-  auto cpu_info = std::make_shared<CpuInfo>();
+  auto cpu_info = CpuInfo();
   auto status = ParseCpuInfo(cpu_info);
   if (status.IsOk()) {
     cpu_util = CpuUtilization(cpu_info, last_cpu_info_);
-    *last_cpu_info_ = *cpu_info;
+    last_cpu_info_ = cpu_info;
   }
   cpu_utilization_->Set(cpu_util);  // [0.0, 1.0]
 
   // RAM / Memory
   double mem_total_bytes = 0.0;
   double mem_used_bytes = 0.0;
-  auto mem_info = std::make_shared<MemInfo>();
+  auto mem_info = MemInfo();
   status = ParseMemInfo(mem_info);
   if (status.IsOk()) {
     // MemTotal will usually not change over time, but if something
     // goes wrong when querying memory, we can reflect that by updating.
-    mem_total_bytes = (*mem_info)["MemTotal"];
-    mem_used_bytes = (*mem_info)["MemUsed"];
+    mem_total_bytes = mem_info["MemTotal"];
+    mem_used_bytes = mem_info["MemUsed"];
   }
 
   cpu_memory_total_->Set(mem_total_bytes);
@@ -744,7 +737,7 @@ Metrics::InitializeCpuMetrics()
   cpu_memory_used_ = &cpu_memory_used_family_.Add(cpu_labels);
 
   // Get baseline CPU info for future comparisons
-  last_cpu_info_.reset(new CpuInfo());
+  last_cpu_info_ = CpuInfo();
   auto status = ParseCpuInfo(last_cpu_info_);
   if (!status.IsOk()) {
     LOG_WARNING << "error initializing CPU metrics, CPU utilization may not "
@@ -754,7 +747,7 @@ Metrics::InitializeCpuMetrics()
   }
 
   // Verify memory metrics can be parsed
-  auto mem_info = std::make_shared<MemInfo>();
+  auto mem_info = MemInfo();
   status = ParseMemInfo(mem_info);
   if (!status.IsOk()) {
     LOG_WARNING << "error initializing CPU metrics, CPU memory metrics may not "

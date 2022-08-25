@@ -44,6 +44,7 @@
 
 namespace triton { namespace core {
 
+#ifdef TRITON_ENABLE_METRICS_CPU
 using MemInfo = std::unordered_map<std::string, uint64_t>;
 
 // References:
@@ -60,6 +61,15 @@ struct CpuInfo {
   uint64_t softirq = 0;  // servicing softirqs
   uint64_t steal = 0;    // involuntary wait
 };
+
+inline std::istream&
+operator>>(std::istream& is, CpuInfo& info)
+{
+  is >> info.user >> info.nice >> info.system >> info.idle >> info.iowait >>
+      info.irq >> info.softirq >> info.steal;
+  return is;
+}
+#endif  // TRITON_ENABLE_METRICS_CPU
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 struct DcgmMetadata {
@@ -291,12 +301,11 @@ class Metrics {
 
 #ifdef TRITON_ENABLE_METRICS_CPU
   // Parses "/proc/meminfo" for metrics, currently only supported on Linux.
-  Status ParseMemInfo(std::shared_ptr<MemInfo> info);
+  Status ParseMemInfo(MemInfo& info);
   // Parses "/proc/stat" for metrics, currently only supported on Linux.
-  Status ParseCpuInfo(std::shared_ptr<CpuInfo> info);
+  Status ParseCpuInfo(CpuInfo& info);
   // Computes CPU utilization between "info_new" and "info_old" values
-  double CpuUtilization(
-      std::shared_ptr<CpuInfo> info_new, std::shared_ptr<CpuInfo> info_old);
+  double CpuUtilization(CpuInfo& info_new, CpuInfo& info_old);
 
   prometheus::Family<prometheus::Gauge>& cpu_utilization_family_;
   prometheus::Family<prometheus::Gauge>& cpu_memory_total_family_;
@@ -305,7 +314,7 @@ class Metrics {
   prometheus::Gauge* cpu_utilization_;
   prometheus::Gauge* cpu_memory_total_;
   prometheus::Gauge* cpu_memory_used_;
-  std::shared_ptr<CpuInfo> last_cpu_info_;
+  CpuInfo last_cpu_info_;
 #endif  // TRITON_ENABLE_METRICS_CPU
 
   // Thread for polling cache/gpu metrics periodically
