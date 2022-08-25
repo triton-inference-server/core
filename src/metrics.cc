@@ -480,28 +480,26 @@ Metrics::ParseMemInfo(MemInfo& info)
         "Failed to find desired values in /proc/meminfo.");
   }
 
+  if (info["MemAvailable"] > info["MemTotal"]) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Available bytes shouldn't be greater than Total bytes");
+  }
+
   // "Used" memory can be defined in many different ways. While many
   // older applications consider "used = total - (free + cached)", a more
   // accurate measure of available memory "MemAvailable" was added,
   // so we choose "used = total - available" for a more accurate measure.
   // This may change in the future if not sufficient for most use cases.
   // See https://stackoverflow.com/a/35019697.
-  const uint64_t mem_total_bytes = info["MemTotal"];
-  const uint64_t mem_avail_bytes = info["MemAvailable"];
-  if (mem_total_bytes >= mem_avail_bytes) {
-    info["MemUsed"] = mem_total_bytes - mem_avail_bytes;
-  } else {
-    return Status(
-        Status::Code::INTERNAL,
-        "Available bytes shouldn't be greater than Total bytes");
-  }
+  info["MemUsed"] = info["MemTotal"] - info["MemAvailable"];
 
   return Status::Success;
 #endif  // OS
 }
 
 double
-Metrics::CpuUtilization(CpuInfo& info_new, CpuInfo& info_old)
+Metrics::CpuUtilization(const CpuInfo& info_new, const CpuInfo& info_old)
 {
   // Account for overflow
   const auto wrap_sub = [](uint64_t a, uint64_t b) {

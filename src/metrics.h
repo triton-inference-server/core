@@ -305,7 +305,7 @@ class Metrics {
   // Parses "/proc/stat" for metrics, currently only supported on Linux.
   Status ParseCpuInfo(CpuInfo& info);
   // Computes CPU utilization between "info_new" and "info_old" values
-  double CpuUtilization(CpuInfo& info_new, CpuInfo& info_old);
+  double CpuUtilization(const CpuInfo& info_new, const CpuInfo& info_old);
 
   prometheus::Family<prometheus::Gauge>& cpu_utilization_family_;
   prometheus::Family<prometheus::Gauge>& cpu_memory_total_family_;
