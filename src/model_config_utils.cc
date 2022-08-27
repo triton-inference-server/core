@@ -637,7 +637,8 @@ GetNormalizedModelConfig(
 {
   // Server-side autofill only sets certain backend fields for the models that
   // belong to limited backends for backwards-compatibility. See TensorRT
-  // backend, ONNX Runtime backend, TensorFLow backend, and PyTorch backend.
+  // backend, ONNX Runtime backend, OpenVINO backend, TensorFLow backend, and
+  // PyTorch backend.
   // Extracting detailed information is delegated to the backend implementation
   // to auto-complete.
   RETURN_IF_ERROR(
@@ -993,6 +994,26 @@ AutoCompleteBackendFields(
     }
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kOnnxRuntimeOnnxFilename);
+    }
+    return Status::Success;
+  }
+
+  // OpenVINO
+  if (config->backend().empty()) {
+    if (config->default_model_filename() == kOpenVINORuntimeOpenVINOFilename) {
+      config->set_backend(kOpenVINORuntimeBackend);
+    } else if (
+        config->platform().empty() &&
+        config->default_model_filename().empty() && has_version) {
+      if (version_dir_content.find(kOpenVINORuntimeOpenVINOFilename) !=
+          version_dir_content.end()) {
+        config->set_backend(kOpenVINORuntimeBackend);
+      }
+    }
+  }
+  if (config->backend() == kOpenVINORuntimeBackend) {
+    if (config->default_model_filename().empty()) {
+      config->set_default_model_filename(kOpenVINORuntimeOpenVINOFilename);
     }
     return Status::Success;
   }
