@@ -44,6 +44,33 @@
 
 namespace triton { namespace core {
 
+#ifdef TRITON_ENABLE_METRICS_CPU
+using MemInfo = std::unordered_map<std::string, uint64_t>;
+
+// References:
+// - htop source: https://stackoverflow.com/a/23376195
+// - Linux docs: https://www.kernel.org/doc/Documentation/filesystems/proc.txt
+// guest/guestnice values are counted in user/nice so we skip parsing them
+struct CpuInfo {
+  uint64_t user = 0;     // normal processes executing in user mode
+  uint64_t nice = 0;     // niced processes executing in user mode
+  uint64_t system = 0;   // processes executing in kernel mode
+  uint64_t idle = 0;     // twiddling thumbs
+  uint64_t iowait = 0;   // waiting for I/O to complete
+  uint64_t irq = 0;      // servicing interrupts
+  uint64_t softirq = 0;  // servicing softirqs
+  uint64_t steal = 0;    // involuntary wait
+};
+
+inline std::istream&
+operator>>(std::istream& is, CpuInfo& info)
+{
+  is >> info.user >> info.nice >> info.system >> info.idle >> info.iowait >>
+      info.irq >> info.softirq >> info.steal;
+  return is;
+}
+#endif  // TRITON_ENABLE_METRICS_CPU
+
 #ifdef TRITON_ENABLE_METRICS_GPU
 struct DcgmMetadata {
   // DCGM handles for initialization and destruction
@@ -86,6 +113,9 @@ class Metrics {
 
   // Enable reporting of GPU metrics
   static void EnableGPUMetrics();
+
+  // Enable reporting of CPU metrics
+  static void EnableCpuMetrics();
 
   // Enable reporting of Cache metrics
   static void EnableCacheMetrics(
@@ -197,11 +227,13 @@ class Metrics {
   virtual ~Metrics();
   static Metrics* GetSingleton();
   bool InitializeDcgmMetrics();
+  bool InitializeCpuMetrics();
   bool InitializeCacheMetrics(
       std::shared_ptr<RequestResponseCache> response_cache);
   bool StartPollingThread(std::shared_ptr<RequestResponseCache> response_cache);
   bool PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache);
   bool PollDcgmMetrics();
+  bool PollCpuMetrics();
 
   std::string dcgmValueToErrorMessage(double val);
   std::string dcgmValueToErrorMessage(int64_t val);
@@ -267,15 +299,33 @@ class Metrics {
   DcgmMetadata dcgm_metadata_;
 #endif  // TRITON_ENABLE_METRICS_GPU
 
+#ifdef TRITON_ENABLE_METRICS_CPU
+  // Parses "/proc/meminfo" for metrics, currently only supported on Linux.
+  Status ParseMemInfo(MemInfo& info);
+  // Parses "/proc/stat" for metrics, currently only supported on Linux.
+  Status ParseCpuInfo(CpuInfo& info);
+  // Computes CPU utilization between "info_new" and "info_old" values
+  double CpuUtilization(const CpuInfo& info_new, const CpuInfo& info_old);
+
+  prometheus::Family<prometheus::Gauge>& cpu_utilization_family_;
+  prometheus::Family<prometheus::Gauge>& cpu_memory_total_family_;
+  prometheus::Family<prometheus::Gauge>& cpu_memory_used_family_;
+
+  prometheus::Gauge* cpu_utilization_;
+  prometheus::Gauge* cpu_memory_total_;
+  prometheus::Gauge* cpu_memory_used_;
+  CpuInfo last_cpu_info_;
+#endif  // TRITON_ENABLE_METRICS_CPU
+
   // Thread for polling cache/gpu metrics periodically
   std::unique_ptr<std::thread> poll_thread_;
   std::atomic<bool> poll_thread_exit_;
   bool metrics_enabled_;
   bool gpu_metrics_enabled_;
+  bool cpu_metrics_enabled_;
   bool cache_metrics_enabled_;
   bool poll_thread_started_;
-  std::mutex gpu_metrics_enabling_;
-  std::mutex cache_metrics_enabling_;
+  std::mutex metrics_enabling_;
   std::mutex poll_thread_starting_;
   uint64_t metrics_interval_ms_;
 };

@@ -193,8 +193,25 @@ Metrics::Metrics()
                     "started")
               .Register(*registry_)),
 #endif  // TRITON_ENABLE_METRICS_GPU
+
+#ifdef TRITON_ENABLE_METRICS_CPU
+      cpu_utilization_family_(prometheus::BuildGauge()
+                                  .Name("nv_cpu_utilization")
+                                  .Help("CPU utilization rate [0.0 - 1.0]")
+                                  .Register(*registry_)),
+      cpu_memory_total_family_(prometheus::BuildGauge()
+                                   .Name("nv_cpu_memory_total_bytes")
+                                   .Help("CPU total memory (RAM), in bytes")
+                                   .Register(*registry_)),
+      cpu_memory_used_family_(prometheus::BuildGauge()
+                                  .Name("nv_cpu_memory_used_bytes")
+                                  .Help("CPU used memory (RAM), in bytes")
+                                  .Register(*registry_)),
+#endif  // TRITON_ENABLE_METRICS_CPU
+
       metrics_enabled_(false), gpu_metrics_enabled_(false),
-      cache_metrics_enabled_(false), metrics_interval_ms_(2000)
+      cpu_metrics_enabled_(false), cache_metrics_enabled_(false),
+      metrics_interval_ms_(2000)
 {
 }
 
@@ -261,15 +278,12 @@ Metrics::EnableCacheMetrics(
 {
   auto singleton = GetSingleton();
   // Ensure thread-safe enabling of Cache Metrics
-  std::lock_guard<std::mutex> lock(singleton->cache_metrics_enabling_);
+  std::lock_guard<std::mutex> lock(singleton->metrics_enabling_);
   if (singleton->cache_metrics_enabled_) {
     return;
   }
 
-  // Setup metric families for cache metrics
   singleton->InitializeCacheMetrics(response_cache);
-
-  // Toggle flag so this function is only executed once
   singleton->cache_metrics_enabled_ = true;
 }
 
@@ -277,9 +291,8 @@ void
 Metrics::EnableGPUMetrics()
 {
   auto singleton = GetSingleton();
-
   // Ensure thread-safe enabling of GPU Metrics
-  std::lock_guard<std::mutex> lock(singleton->gpu_metrics_enabling_);
+  std::lock_guard<std::mutex> lock(singleton->metrics_enabling_);
   if (singleton->gpu_metrics_enabled_) {
     return;
   }
@@ -289,6 +302,20 @@ Metrics::EnableGPUMetrics()
   }
 
   singleton->gpu_metrics_enabled_ = true;
+}
+
+void
+Metrics::EnableCpuMetrics()
+{
+  auto singleton = GetSingleton();
+  // Ensure thread-safe enabling of CPU Metrics
+  std::lock_guard<std::mutex> lock(singleton->metrics_enabling_);
+  if (singleton->cpu_metrics_enabled_) {
+    return;
+  }
+
+  singleton->InitializeCpuMetrics();
+  singleton->cpu_metrics_enabled_ = true;
 }
 
 void
@@ -322,9 +349,10 @@ Metrics::StartPollingThread(
     std::shared_ptr<RequestResponseCache> response_cache)
 {
   // Nothing to poll if no polling metrics enabled, don't spawn a thread
-  if (!cache_metrics_enabled_ && !gpu_metrics_enabled_) {
-    LOG_WARNING << "Neither cache metrics nor gpu metrics are enabled. Not "
-                   "polling for them.";
+  if (!cache_metrics_enabled_ && !gpu_metrics_enabled_ &&
+      !cpu_metrics_enabled_) {
+    LOG_WARNING << "No polling metrics (CPU, GPU, Cache) are enabled. Will not "
+                   "poll for them.";
     return false;
   }
   poll_thread_exit_.store(false);
@@ -349,6 +377,12 @@ Metrics::StartPollingThread(
         PollDcgmMetrics();
       }
 #endif  // TRITON_ENABLE_METRICS_GPU
+
+#ifdef TRITON_ENABLE_METRICS_CPU
+      if (cpu_metrics_enabled_) {
+        PollCpuMetrics();
+      }
+#endif  // TRITON_ENABLE_METRICS_CPU
     }
   }));
 
@@ -376,6 +410,147 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
       response_cache->TotalInsertionLatencyNs() / 1000);
   cache_util_global_->Set(response_cache->TotalUtilization());
   return true;
+}
+
+#ifdef TRITON_ENABLE_METRICS_CPU
+Status
+Metrics::ParseCpuInfo(CpuInfo& info)
+{
+#ifdef _WIN32
+  return Status(
+      Status::Code::INTERNAL, "CPU metrics not supported on Windows.");
+#else
+  std::ifstream ifs("/proc/stat");
+  if (!ifs.good()) {
+    return Status(Status::Code::INTERNAL, "Failed to open /proc/stat.");
+  }
+
+  std::string line;
+  // Verify first line is aggregate cpu line
+  std::getline(ifs, line);
+  if (line.rfind("cpu ", 0) == std::string::npos) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to find aggregate CPU info in /proc/stat.");
+  }
+
+  std::string _;
+  std::istringstream iss(line);
+  // Use _ to skip "cpu" at start of line
+  if (!(iss >> _ >> info)) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to parse aggregate CPU info in /proc/stat.");
+  }
+  return Status::Success;
+#endif  // OS
+}
+
+Status
+Metrics::ParseMemInfo(MemInfo& info)
+{
+#ifdef _WIN32
+  return Status(
+      Status::Code::INTERNAL, "Memory metrics not supported on Windows.");
+#else
+  std::ifstream ifs("/proc/meminfo");
+  if (!ifs.good()) {
+    return Status(Status::Code::INTERNAL, "Failed to open /proc/meminfo.");
+  }
+
+  std::string line;
+  constexpr uint64_t KB = 1024;
+  while (std::getline(ifs, line)) {
+    std::istringstream iss(line);
+    std::string name;
+    uint64_t value = 0;
+    if (iss >> name >> value) {
+      name.pop_back();
+      info[name] = value * KB;
+    } else {
+      return Status(
+          Status::Code::INTERNAL, "Encountered error parsing /proc/meminfo.");
+    }
+  }
+
+  if (info.find("MemTotal") == info.end() ||
+      info.find("MemAvailable") == info.end()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to find desired values in /proc/meminfo.");
+  }
+
+  if (info["MemAvailable"] > info["MemTotal"]) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Available bytes shouldn't be greater than Total bytes");
+  }
+
+  // "Used" memory can be defined in many different ways. While many
+  // older applications consider "used = total - (free + cached)", a more
+  // accurate measure of available memory "MemAvailable" was added,
+  // so we choose "used = total - available" for a more accurate measure.
+  // This may change in the future if not sufficient for most use cases.
+  // See https://stackoverflow.com/a/35019697.
+  info["MemUsed"] = info["MemTotal"] - info["MemAvailable"];
+
+  return Status::Success;
+#endif  // OS
+}
+
+double
+Metrics::CpuUtilization(const CpuInfo& info_new, const CpuInfo& info_old)
+{
+  // Account for overflow
+  const auto wrap_sub = [](uint64_t a, uint64_t b) {
+    return (a > b) ? (a - b) : 0;
+  };
+  uint64_t util_diff = wrap_sub(info_new.user, info_old.user) +
+                       wrap_sub(info_new.nice, info_old.nice) +
+                       wrap_sub(info_new.system, info_old.system) +
+                       wrap_sub(info_new.irq, info_old.irq) +
+                       wrap_sub(info_new.softirq, info_old.softirq) +
+                       wrap_sub(info_new.steal, info_old.steal);
+  uint64_t idle_diff = wrap_sub(info_new.idle, info_old.idle) +
+                       wrap_sub(info_new.iowait, info_old.iowait);
+  double util_ratio = static_cast<double>(util_diff) / (util_diff + idle_diff);
+  return util_ratio;
+}
+#endif  // TRITON_ENABLE_METRICS_CPU
+
+bool
+Metrics::PollCpuMetrics()
+{
+#ifndef TRITON_ENABLE_METRICS_CPU
+  return false;
+#else
+  // CPU Utilization
+  double cpu_util = 0.0;
+  auto cpu_info = CpuInfo();
+  auto status = ParseCpuInfo(cpu_info);
+  if (status.IsOk()) {
+    cpu_util = CpuUtilization(cpu_info, last_cpu_info_);
+    last_cpu_info_ = cpu_info;
+  }
+  cpu_utilization_->Set(cpu_util);  // [0.0, 1.0]
+
+  // RAM / Memory
+  double mem_total_bytes = 0.0;
+  double mem_used_bytes = 0.0;
+  auto mem_info = MemInfo();
+  status = ParseMemInfo(mem_info);
+  if (status.IsOk()) {
+    // MemTotal will usually not change over time, but if something
+    // goes wrong when querying memory, we can reflect that by updating.
+    mem_total_bytes = mem_info["MemTotal"];
+    mem_used_bytes = mem_info["MemUsed"];
+  }
+
+  cpu_memory_total_->Set(mem_total_bytes);
+  cpu_memory_used_->Set(mem_used_bytes);
+
+  return true;
+#endif  // TRITON_ENABLE_METRICS_CPU
 }
 
 bool
@@ -544,7 +719,44 @@ Metrics::InitializeCacheMetrics(
   cache_insertion_duration_us_global_ =
       &cache_insertion_duration_us_family_.Add(cache_labels);
   cache_util_global_ = &cache_util_family_.Add(cache_labels);
+  LOG_INFO << "Collecting Response Cache metrics";
   return true;
+}
+
+bool
+Metrics::InitializeCpuMetrics()
+{
+#ifndef TRITON_ENABLE_METRICS_CPU
+  return false;
+#else
+  const std::map<std::string, std::string> cpu_labels;
+  cpu_utilization_ = &cpu_utilization_family_.Add(cpu_labels);
+  cpu_memory_total_ = &cpu_memory_total_family_.Add(cpu_labels);
+  cpu_memory_used_ = &cpu_memory_used_family_.Add(cpu_labels);
+
+  // Get baseline CPU info for future comparisons
+  last_cpu_info_ = CpuInfo();
+  auto status = ParseCpuInfo(last_cpu_info_);
+  if (!status.IsOk()) {
+    LOG_WARNING << "error initializing CPU metrics, CPU utilization may not "
+                   "be available: "
+                << status.Message();
+    return false;
+  }
+
+  // Verify memory metrics can be parsed
+  auto mem_info = MemInfo();
+  status = ParseMemInfo(mem_info);
+  if (!status.IsOk()) {
+    LOG_WARNING << "error initializing CPU metrics, CPU memory metrics may not "
+                   "be available: "
+                << status.Message();
+    return false;
+  }
+
+  LOG_INFO << "Collecting CPU metrics";
+  return true;
+#endif  // TRITON_ENABLE_METRICS_CPU
 }
 
 bool

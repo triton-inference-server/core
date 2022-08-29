@@ -382,6 +382,13 @@ if(${TRITON_ENABLE_METRICS_GPU})
   )
 endif() # TRITON_ENABLE_METRICS_GPU
 
+if(${TRITON_ENABLE_METRICS_CPU})
+  target_compile_definitions(
+    triton-core
+    PRIVATE TRITON_ENABLE_METRICS_CPU=1
+  )
+endif() # TRITON_ENABLE_METRICS_CPU
+
 if(${TRITON_ENABLE_GCS})
   target_compile_definitions(
     triton-core
