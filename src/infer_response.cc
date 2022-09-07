@@ -40,12 +40,7 @@ Status
 InferenceResponseFactory::CreateResponse(
     std::unique_ptr<InferenceResponse>* response)
 {
-  uint64_t response_index;
-  {
-    std::lock_guard<std::mutex> guard{mu_};
-    response_index = total_response_idx_;
-    total_response_idx_++;
-  }
+  uint64_t response_index = total_response_idx_++;
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
       response_delegator_, response_index, request_id_));

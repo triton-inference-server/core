@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <atomic>
 #include <deque>
 #include <functional>
 #include <string>
@@ -99,8 +100,8 @@ class InferenceResponseFactory {
   // to handle the nullptr case.
   std::shared_ptr<Model> model_;
 
-  // The ID of the corresponding request that should be included in
-  // every response.
+  // The ID of the corresponding request that should be included in every
+  // response. This is a property that can be optionally provided by the user.
   std::string id_;
 
   // The response allocator and user pointer. The 'allocator_' is a
@@ -125,12 +126,12 @@ class InferenceResponseFactory {
   std::shared_ptr<InferenceTraceProxy> trace_;
 #endif  // TRITON_ENABLE_TRACING
 
-  // The internal unique ID of the request
+  // The internal unique ID of the request. This is a unique identification
+  // that triton attaches to each request in case user does not provide id_.
   uint64_t request_id_;
 
   // Response index
-  uint64_t total_response_idx_;
-  std::mutex mu_;
+  std::atomic<uint64_t> total_response_idx_;
 };
 
 //
@@ -270,7 +271,7 @@ class InferenceResponse {
 
   // The unique request ID stored in triton.
   uint64_t RequestUniqueId() const { return request_id_; }
-
+  // The timestamp in nanoseconds when the response started.
   uint64_t ResponseStartNs() const { return response_start_; }
 
   // Add an output to the response. If 'output' is non-null
@@ -370,7 +371,7 @@ class InferenceResponse {
 
   // Representing the request id that the response was created from.
   uint64_t request_id_;
-
+  // Timestamp in nanoseconds when the response started.
   uint64_t response_start_;
 };
 

@@ -966,7 +966,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportResponseStatistics(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Response* response,
     const bool success, const uint64_t response_start,
-    const uint64_t compute_output_start, const uint64_t response_end,
+    const uint64_t compute_output_start, const uint64_t compute_output_end,
     const uint32_t response_flags)
 {
 #ifdef TRITON_ENABLE_STATS
@@ -976,7 +976,7 @@ TRITONBACKEND_ModelInstanceReportResponseStatistics(
   INFER_STATS_DECL_TIMESTAMP(response_end_ns);
   ti->Model()->MutableStatsAggregator()->UpdateResponse(
       ti->MetricReporter(), ir, response_start, compute_output_start,
-      response_end, response_end_ns, response_flags, success);
+      compute_output_end, response_end_ns, response_flags, success);
 #endif  // TRITON_ENABLE_STATS
   return nullptr;
 }

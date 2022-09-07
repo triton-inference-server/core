@@ -1257,7 +1257,7 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
 
 /// Record statistics for an inference response.
 ///
-/// Set 'success' true to indicate that the inference response completed
+/// Set 'success' to true to indicate that the inference response completed
 /// successfully. In this case all timestamps should be non-zero values reported
 /// in nanoseconds and should be collected using
 /// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.  Set

@@ -31,7 +31,6 @@
 #include <unordered_map>
 #include <vector>
 #include "buffer_attributes.h"
-#include "common.h"
 #include "infer_response.h"
 #include "infer_stats.h"
 #include "infer_trace.h"
@@ -48,6 +47,9 @@ class Model;
 class InferenceServer;
 class MetricModelReporter;
 
+// Count the number of InferenceRequest instance created
+static std::atomic<uint64_t> inference_request_count_(0);
+
 //
 // An inference request. A request can be used multiple times for
 // inference but before each inference run, PrepareForInference() must
@@ -56,7 +58,7 @@ class MetricModelReporter;
 // valid. Preparing involves removing/resetting any state left over
 // from the previous inference.
 //
-class InferenceRequest : CountedObject {
+class InferenceRequest {
  public:
   // Input tensor
   class Input {
@@ -284,6 +286,7 @@ class InferenceRequest : CountedObject {
         requested_model_version_(requested_model_version), flags_(0),
         correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true)
   {
+    inference_request_count_++;
     SetPriority(0);
   }
 
@@ -484,7 +487,7 @@ class InferenceRequest : CountedObject {
   {
     response_factory_.reset(new InferenceResponseFactory(
         model_shared_, id_, allocator, alloc_userp, response_fn, response_userp,
-        response_delegator_, InstanceIndex()));
+        response_delegator_, inference_request_count_));
     return Status::Success;
   }
 
