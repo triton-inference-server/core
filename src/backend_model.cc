@@ -368,6 +368,7 @@ TritonModel::UpdateModelConfig(
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability_, &config));
 
   RETURN_IF_ERROR(SetModelConfig(config));
+
   return Status::Success;
 }
 
