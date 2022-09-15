@@ -981,5 +981,17 @@ TRITONBACKEND_ModelInstanceReportResponseStatistics(
   return nullptr;
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportNoResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance)
+{
+#ifdef TRITON_ENABLE_STATS
+  TritonModelInstance* ti = reinterpret_cast<TritonModelInstance*>(instance);
+  ti->Model()->MutableStatsAggregator()->UpdateNoResponse(
+      ti->MetricReporter());
+#endif  // TRITON_ENABLE_STATS
+  return nullptr;
+}
+
 }  // extern C
 }}  // namespace triton::core

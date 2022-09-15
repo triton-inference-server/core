@@ -340,6 +340,14 @@ InferenceStatsAggregator::UpdateResponseStatsMap(
   }
 }
 
+void
+InferenceStatsAggregator::UpdateNoResponse(
+    MetricModelReporter* metric_reporter)
+{
+  std::lock_guard<std::mutex> lock(mu_);
+  no_response_count_++;
+}
+
 #endif  // TRITON_ENABLE_STATS
 
 }}  // namespace triton::core

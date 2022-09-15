@@ -120,7 +120,7 @@ class InferenceStatsAggregator {
 
   // Create an aggregator for model statistics
   InferenceStatsAggregator()
-      : last_inference_ms_(0), inference_count_(0), execution_count_(0)
+      : last_inference_ms_(0), inference_count_(0), execution_count_(0), no_response_count_(0)
   {
   }
 
@@ -128,15 +128,15 @@ class InferenceStatsAggregator {
   uint64_t InferenceCount() const { return inference_count_; }
   uint64_t ExecutionCount() const { return execution_count_; }
   const InferStats& ImmutableInferStats() const { return infer_stats_; }
-  const std::map<size_t, std::vector<ResponseStats>>& ImmutableResponseStats()
-      const
-  {
-    return response_stats_;
-  }
   const std::map<size_t, InferBatchStats>& ImmutableInferBatchStats() const
   {
     return batch_stats_;
   }
+  const std::map<size_t, std::vector<ResponseStats>>& ImmutableResponseStats() const
+  {
+    return response_stats_;
+  }
+  uint64_t NoResponseCount() const { return no_response_count_; }
 
   // Add durations to Infer stats for a failed inference request.
   void UpdateFailure(
@@ -203,7 +203,7 @@ class InferenceStatsAggregator {
       const uint64_t compute_output_duration, const uint64_t response_end,
       const uint32_t flags, const bool success);
 
-  void UpdateResponseStatsMap(const std::vector<ResponseStat>& response_stat);
+  void UpdateNoResponse(MetricModelReporter* metric_reporter);
 
  private:
   std::mutex mu_;
@@ -214,6 +214,9 @@ class InferenceStatsAggregator {
   std::map<size_t, InferBatchStats> batch_stats_;
   std::map<size_t, std::vector<ResponseStats>> response_stats_;
   std::map<uint64_t, std::vector<ResponseStat>> inflight_response_stats_;
+  uint64_t no_response_count_;
+
+  void UpdateResponseStatsMap(const std::vector<ResponseStat>& response_stat);
 #endif  // TRITON_ENABLE_STATS
 };
 

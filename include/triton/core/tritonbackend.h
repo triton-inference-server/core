@@ -1305,6 +1305,18 @@ TRITONBACKEND_ModelInstanceReportResponseStatistics(
     const uint64_t compute_output_start, const uint64_t response_end,
     const uint32_t response_flags);
 
+/// Record statistics for an inference with no response.
+///
+/// This API is used with models that return no response. If a model returns
+/// one or more responses, the
+/// TRITONBACKEND_ModelInstanceReportResponseStatistics should be used instead.
+///
+/// \param instance The model instance.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportNoResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance);
+
 ///
 /// The following functions can be implemented by a backend. Functions
 /// indicated as required must be implemented or the backend will fail

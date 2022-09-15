@@ -2746,6 +2746,8 @@ TRITONSERVER_ServerModelStatistics(
           model_stat.Add("batch_stats", std::move(batch_stats)));
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("response_stats", std::move(response_stats)));
+      RETURN_IF_STATUS_ERROR(model_stat.AddUInt("no_response_count", model->StatsAggregator().NoResponseCount()));
+
       RETURN_IF_STATUS_ERROR(model_stats_json.Append(std::move(model_stat)));
     }
   }
