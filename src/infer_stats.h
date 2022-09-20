@@ -29,7 +29,9 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <vector>
 #include "constants.h"
+#include "infer_response.h"
 #include "status.h"
 #include "tritonserver_apis.h"
 
@@ -88,9 +90,37 @@ class InferenceStatsAggregator {
     uint64_t compute_output_duration_ns_;
   };
 
+  struct ResponseStats {
+    ResponseStats()
+        : failure_count_(0), failure_duration_ns_(0), success_count_(0),
+          response_duration_ns_(0), compute_infer_duration_ns_(0),
+          compute_output_duration_ns_(0)
+    {
+    }
+    uint64_t failure_count_;
+    uint64_t failure_duration_ns_;
+
+    uint64_t success_count_;
+    uint64_t response_duration_ns_;
+    uint64_t compute_infer_duration_ns_;
+    uint64_t compute_output_duration_ns_;
+  };
+
+  struct ResponseStat {
+    ResponseStat()
+        : compute_infer_duration_ns_(0), compute_output_duration_ns_(0),
+          response_duration_ns_(0), success_(true)
+    {
+    }
+    uint64_t compute_infer_duration_ns_;
+    uint64_t compute_output_duration_ns_;
+    uint64_t response_duration_ns_;
+    bool success_;
+  };
+
   // Create an aggregator for model statistics
   InferenceStatsAggregator()
-      : last_inference_ms_(0), inference_count_(0), execution_count_(0)
+      : last_inference_ms_(0), inference_count_(0), execution_count_(0), no_response_count_(0)
   {
   }
 
@@ -102,6 +132,11 @@ class InferenceStatsAggregator {
   {
     return batch_stats_;
   }
+  const std::map<size_t, std::vector<ResponseStats>>& ImmutableResponseStats() const
+  {
+    return response_stats_;
+  }
+  uint64_t NoResponseCount() const { return no_response_count_; }
 
   // Add durations to Infer stats for a failed inference request.
   void UpdateFailure(
@@ -156,6 +191,20 @@ class InferenceStatsAggregator {
       const uint64_t compute_infer_duration_ns,
       const uint64_t compute_output_duration_ns);
 
+  void UpdateResponse(
+      MetricModelReporter* metric_reporter, InferenceResponse* response,
+      const uint64_t response_infer_start, const uint64_t compute_output_start,
+      const uint64_t compute_output_end, const uint64_t response_end,
+      const uint32_t flags, const bool success);
+
+  void UpdateResponseWithDuration(
+      MetricModelReporter* metric_reporter, InferenceResponse* response,
+      const uint64_t response_start, const uint64_t compute_infer_duration,
+      const uint64_t compute_output_duration, const uint64_t response_end,
+      const uint32_t flags, const bool success);
+
+  void UpdateNoResponse(MetricModelReporter* metric_reporter);
+
  private:
   std::mutex mu_;
   uint64_t last_inference_ms_;
@@ -163,6 +212,11 @@ class InferenceStatsAggregator {
   uint64_t execution_count_;
   InferStats infer_stats_;
   std::map<size_t, InferBatchStats> batch_stats_;
+  std::map<size_t, std::vector<ResponseStats>> response_stats_;
+  std::map<uint64_t, std::vector<ResponseStat>> inflight_response_stats_;
+  uint64_t no_response_count_;
+
+  void UpdateResponseStatsMap(const std::vector<ResponseStat>& response_stat);
 #endif  // TRITON_ENABLE_STATS
 };
 

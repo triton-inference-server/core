@@ -925,8 +925,9 @@ TRITONBACKEND_ResponseFactoryNew(
     TRITONBACKEND_ResponseFactory** factory, TRITONBACKEND_Request* request)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  InferenceResponseFactory* response_factory =
-      new InferenceResponseFactory(tr->ResponseFactory());
+  std::shared_ptr<InferenceResponseFactory>* response_factory =
+      new std::shared_ptr<InferenceResponseFactory>(tr->ResponseFactory());
+
   *factory = reinterpret_cast<TRITONBACKEND_ResponseFactory*>(response_factory);
   return nullptr;  // success
 }
@@ -934,9 +935,9 @@ TRITONBACKEND_ResponseFactoryNew(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseFactoryDelete(TRITONBACKEND_ResponseFactory* factory)
 {
-  InferenceResponseFactory* tf =
-      reinterpret_cast<InferenceResponseFactory*>(factory);
-  delete tf;
+  std::shared_ptr<InferenceResponseFactory>* response_factory =
+      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(factory);
+  delete response_factory;
   return nullptr;  // success
 }
 
@@ -944,9 +945,9 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseFactorySendFlags(
     TRITONBACKEND_ResponseFactory* factory, const uint32_t send_flags)
 {
-  InferenceResponseFactory* tf =
-      reinterpret_cast<InferenceResponseFactory*>(factory);
-  Status status = tf->SendFlags(send_flags);
+  std::shared_ptr<InferenceResponseFactory>* response_factory =
+      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(factory);
+  Status status = (*response_factory)->SendFlags(send_flags);
   if (!status.IsOk()) {
     return TRITONSERVER_ErrorNew(
         StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
@@ -964,7 +965,7 @@ TRITONBACKEND_ResponseNew(
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
 
   std::unique_ptr<InferenceResponse> tresp;
-  Status status = tr->ResponseFactory().CreateResponse(&tresp);
+  Status status = tr->ResponseFactory()->CreateResponse(&tresp);
   if (!status.IsOk()) {
     *response = nullptr;
     return TRITONSERVER_ErrorNew(
@@ -979,11 +980,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseNewFromFactory(
     TRITONBACKEND_Response** response, TRITONBACKEND_ResponseFactory* factory)
 {
-  InferenceResponseFactory* tf =
-      reinterpret_cast<InferenceResponseFactory*>(factory);
+  std::shared_ptr<InferenceResponseFactory>* response_factory =
+      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(factory);
 
   std::unique_ptr<InferenceResponse> tr;
-  Status status = tf->CreateResponse(&tr);
+  Status status = (*response_factory)->CreateResponse(&tr);
   if (!status.IsOk()) {
     *response = nullptr;
     return TRITONSERVER_ErrorNew(

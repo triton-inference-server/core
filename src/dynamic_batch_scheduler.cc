@@ -650,7 +650,7 @@ DynamicBatchScheduler::CacheLookUp(
   auto cache = model_->Server()->GetResponseCache();
   // Lookup request in cache
   std::unique_ptr<InferenceResponse> local_response;
-  request->ResponseFactory().CreateResponse(&local_response);
+  request->ResponseFactory()->CreateResponse(&local_response);
   auto status = cache->Lookup(local_response.get(), request.get());
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);

@@ -962,5 +962,36 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
   return nullptr;  // success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Response* response,
+    const bool success, const uint64_t response_start,
+    const uint64_t compute_output_start, const uint64_t compute_output_end,
+    const uint32_t response_flags)
+{
+#ifdef TRITON_ENABLE_STATS
+  TritonModelInstance* ti = reinterpret_cast<TritonModelInstance*>(instance);
+  InferenceResponse* ir = reinterpret_cast<InferenceResponse*>(response);
+
+  INFER_STATS_DECL_TIMESTAMP(response_end_ns);
+  ti->Model()->MutableStatsAggregator()->UpdateResponse(
+      ti->MetricReporter(), ir, response_start, compute_output_start,
+      compute_output_end, response_end_ns, response_flags, success);
+#endif  // TRITON_ENABLE_STATS
+  return nullptr;
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportNoResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance)
+{
+#ifdef TRITON_ENABLE_STATS
+  TritonModelInstance* ti = reinterpret_cast<TritonModelInstance*>(instance);
+  ti->Model()->MutableStatsAggregator()->UpdateNoResponse(
+      ti->MetricReporter());
+#endif  // TRITON_ENABLE_STATS
+  return nullptr;
+}
+
 }  // extern C
 }}  // namespace triton::core

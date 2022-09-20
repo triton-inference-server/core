@@ -236,6 +236,118 @@ InferenceStatsAggregator::UpdateInferBatchStatsWithDuration(
 #endif  // TRITON_ENABLE_METRICS
 }
 
+void
+InferenceStatsAggregator::UpdateResponse(
+    MetricModelReporter* metric_reporter, InferenceResponse* response,
+    const uint64_t response_infer_start, const uint64_t compute_output_start,
+    const uint64_t compute_output_end, const uint64_t response_end,
+    const uint32_t flags, const bool success)
+{
+  const uint64_t compute_infer_duration_ns =
+      compute_output_start - response_infer_start;
+  const uint64_t compute_output_duration_ns =
+      compute_output_end - compute_output_start;
+
+  UpdateResponseWithDuration(
+      metric_reporter, response, response->ResponseStartNs(),
+      compute_infer_duration_ns, compute_output_duration_ns, response_end,
+      flags, success);
+}
+
+void
+InferenceStatsAggregator::UpdateResponseWithDuration(
+    MetricModelReporter* metric_reporter, InferenceResponse* response,
+    const uint64_t response_start, const uint64_t compute_infer_duration,
+    const uint64_t compute_output_duration, const uint64_t response_end,
+    const uint32_t flags, const bool success)
+{
+  std::lock_guard<std::mutex> lock(mu_);
+
+  if (flags == TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
+    // If the corresponding request doesn't exist in the inflight response
+    // stats, it means that this request only has a single resposne.
+    auto it = inflight_response_stats_.find(response->RequestUniqueId());
+    if (it == inflight_response_stats_.end()) {
+      std::vector<ResponseStat> response_stats;
+      response_stats.emplace_back();
+      ResponseStat& response_stat = response_stats.back();
+      response_stat.response_duration_ns_ = response_end - response_start;
+      response_stat.success_ = success;
+      response_stat.compute_infer_duration_ns_ = compute_infer_duration;
+      response_stat.compute_output_duration_ns_ = compute_output_duration;
+      UpdateResponseStatsMap(response_stats);
+    } else {
+      inflight_response_stats_[response->RequestUniqueId()].emplace_back();
+      ResponseStat& response_stat =
+          inflight_response_stats_[response->RequestUniqueId()].back();
+      response_stat.response_duration_ns_ = response_end - response_start;
+      response_stat.success_ = success;
+      response_stat.compute_infer_duration_ns_ = compute_infer_duration;
+      response_stat.compute_output_duration_ns_ = compute_output_duration;
+      UpdateResponseStatsMap(
+          inflight_response_stats_[response->RequestUniqueId()]);
+
+      // Remove the request from list of inflight responses.
+      inflight_response_stats_.erase(response->RequestUniqueId());
+    }
+  } else {
+    auto it = inflight_response_stats_.find(response->RequestUniqueId());
+    if (it == inflight_response_stats_.end()) {
+      inflight_response_stats_.emplace(
+          response->RequestUniqueId(), std::vector<ResponseStat>());
+    }
+
+    inflight_response_stats_[response->RequestUniqueId()].emplace_back();
+    ResponseStat& response_stat =
+        inflight_response_stats_[response->RequestUniqueId()].back();
+    response_stat.response_duration_ns_ = response_end - response_start;
+    response_stat.success_ = success;
+    response_stat.compute_infer_duration_ns_ = compute_infer_duration;
+    response_stat.compute_output_duration_ns_ = compute_output_duration;
+  }
+}
+
+void
+InferenceStatsAggregator::UpdateResponseStatsMap(
+    const std::vector<ResponseStat>& response_stat)
+{
+  auto it = response_stats_.find(response_stat.size());
+  if (it == response_stats_.end()) {
+    it = response_stats_
+             .emplace(
+                 response_stat.size(),
+                 std::vector<ResponseStats>(response_stat.size()))
+             .first;
+  }
+
+  size_t response_count = response_stat.size();
+  auto i = 0;
+  for (auto& response_info : response_stat) {
+    if (response_info.success_) {
+      response_stats_[response_count][i].success_count_++;
+      response_stats_[response_count][i].response_duration_ns_ +=
+          response_info.response_duration_ns_;
+      response_stats_[response_count][i].compute_infer_duration_ns_ +=
+          response_info.compute_infer_duration_ns_;
+      response_stats_[response_count][i].compute_output_duration_ns_ +=
+          response_info.compute_output_duration_ns_;
+    } else {
+      response_stats_[response_count][i].failure_count_++;
+      response_stats_[response_count][i].failure_duration_ns_ +=
+          response_info.response_duration_ns_;
+    }
+    i++;
+  }
+}
+
+void
+InferenceStatsAggregator::UpdateNoResponse(
+    MetricModelReporter* metric_reporter)
+{
+  std::lock_guard<std::mutex> lock(mu_);
+  no_response_count_++;
+}
+
 #endif  // TRITON_ENABLE_STATS
 
 }}  // namespace triton::core

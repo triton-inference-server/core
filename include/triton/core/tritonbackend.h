@@ -1255,6 +1255,67 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics(
     const uint64_t exec_start_ns, const uint64_t compute_start_ns,
     const uint64_t compute_end_ns, const uint64_t exec_end_ns);
 
+/// Record statistics for an inference response.
+///
+/// Set 'success' to true to indicate that the inference response completed
+/// successfully. In this case all timestamps should be non-zero values reported
+/// in nanoseconds and should be collected using
+/// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.  Set
+/// 'success' to false to indicate that the inference response failed to
+/// complete successfully. In this case all timestamps values are ignored.
+///
+/// For consistency of measurement across different backends, the
+/// timestamps should be collected at the following points during
+/// TRITONBACKEND_ModelInstanceExecute.
+///
+///   TRITONBACKEND_ModelInstanceExecute()
+///     CAPTURE TIMESPACE (response_start)
+///     < when inference response object is created >
+///     CAPTURE TIMESPACE (compute_output_start)
+///     < allocate output buffers and extract output tensors, including
+///       copyting the tensors to/from GPU if necessary >
+///     CAPTURE TIMESPACE (response_end)
+///     return
+///
+/// Note that these statistics are associated with a valid
+/// TRITONBACKEND_Response object and so must be reported before the response is
+/// sent. This API can be used both with models that return a single response or
+/// multiple responses for each request. If the model performs a single
+/// inference and then provides multiple resposnes, it is recommended to account
+/// for the inference time in the request statistics instead of response
+/// statistics. However, if there is an inference time associated with every
+/// response, it must be accounted for in the response statistics.
+///
+/// \param instance The model instance.
+/// \param response The inference response that statistics are being
+/// reported for.
+/// \param success True if the inference response completed
+/// successfully, false if it failed to complete.
+/// \param response_start Timestamp for the start of execution
+/// computations.
+/// \param compute_output_start Timestamp for the end of execution
+/// computations.
+/// \param send_flags The flags that will be used for sending the response.
+/// \param response_end Timestamp for the end of execution.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Response* response,
+    const bool success, const uint64_t response_start,
+    const uint64_t compute_output_start, const uint64_t response_end,
+    const uint32_t response_flags);
+
+/// Record statistics for an inference with no response.
+///
+/// This API is used with models that return no response. If a model returns
+/// one or more responses, the
+/// TRITONBACKEND_ModelInstanceReportResponseStatistics should be used instead.
+///
+/// \param instance The model instance.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportNoResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance);
 
 ///
 /// The following functions can be implemented by a backend. Functions

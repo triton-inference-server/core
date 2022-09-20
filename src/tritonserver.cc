@@ -2637,6 +2637,8 @@ TRITONSERVER_ServerModelStatistics(
       const auto& infer_stats = model->StatsAggregator().ImmutableInferStats();
       const auto& infer_batch_stats =
           model->StatsAggregator().ImmutableInferBatchStats();
+      const auto& infer_response_stats =
+          model->StatsAggregator().ImmutableResponseStats();
 
       triton::common::TritonJson::Value inference_stats(
           metadata, triton::common::TritonJson::ValueType::OBJECT);
@@ -2691,6 +2693,39 @@ TRITONSERVER_ServerModelStatistics(
         RETURN_IF_STATUS_ERROR(batch_stats.Append(std::move(batch_stat)));
       }
 
+      triton::common::TritonJson::Value response_stats(
+          metadata, triton::common::TritonJson::ValueType::ARRAY);
+      for (const auto& stats : infer_response_stats) {
+        triton::common::TritonJson::Value response_stat(
+            metadata, triton::common::TritonJson::ValueType::OBJECT);
+        triton::common::TritonJson::Value responses(
+            metadata, triton::common::TritonJson::ValueType::ARRAY);
+        size_t i = 0;
+        for (const auto& stat : stats.second) {
+          triton::common::TritonJson::Value ith_response_stat(
+              metadata, triton::common::TritonJson::ValueType::OBJECT);
+          RETURN_IF_STATUS_ERROR(ith_response_stat.AddUInt("index", i));
+          SetDurationStat(
+              metadata, ith_response_stat, "success", stat.success_count_,
+              stat.response_duration_ns_);
+          SetDurationStat(
+              metadata, ith_response_stat, "fail", stat.failure_count_,
+              stat.failure_duration_ns_);
+          SetDurationStat(
+              metadata, ith_response_stat, "compute_infer", stat.success_count_,
+              stat.compute_infer_duration_ns_);
+          SetDurationStat(
+              metadata, ith_response_stat, "compute_output",
+              stat.success_count_, stat.compute_output_duration_ns_);
+          i++;
+          RETURN_IF_STATUS_ERROR(
+              responses.Append(std::move(ith_response_stat)));
+        }
+        RETURN_IF_STATUS_ERROR(
+            response_stat.Add("responses", std::move(responses)));
+        RETURN_IF_STATUS_ERROR(response_stats.Append(std::move(response_stat)));
+      }
+
       triton::common::TritonJson::Value model_stat(
           metadata, triton::common::TritonJson::ValueType::OBJECT);
       RETURN_IF_STATUS_ERROR(
@@ -2709,6 +2744,10 @@ TRITONSERVER_ServerModelStatistics(
           model_stat.Add("inference_stats", std::move(inference_stats)));
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("batch_stats", std::move(batch_stats)));
+      RETURN_IF_STATUS_ERROR(
+          model_stat.Add("response_stats", std::move(response_stats)));
+      RETURN_IF_STATUS_ERROR(model_stat.AddUInt("no_response_count", model->StatsAggregator().NoResponseCount()));
+
       RETURN_IF_STATUS_ERROR(model_stats_json.Append(std::move(model_stat)));
     }
   }
