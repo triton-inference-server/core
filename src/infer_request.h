@@ -275,20 +275,9 @@ class InferenceRequest {
   // (because we aren't using shared_from_this).
   InferenceRequest(
       const std::shared_ptr<Model>& model,
-      const int64_t requested_model_version)
-      : InferenceRequest(model.get(), requested_model_version)
-  {
-    model_shared_ = model;
-  }
+      const int64_t requested_model_version);
 
-  InferenceRequest(Model* model, const int64_t requested_model_version)
-      : needs_normalization_(true), model_raw_(model),
-        requested_model_version_(requested_model_version), flags_(0),
-        correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true)
-  {
-    inference_request_count_++;
-    SetPriority(0);
-  }
+  InferenceRequest(Model* model, const int64_t requested_model_version);
 
   const std::string& ModelName() const;
   int64_t RequestedModelVersion() const { return requested_model_version_; }

@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "gtest/gtest.h"
 
-#include <random>
 #include <thread>
 #include "memory.h"
 #include "response_cache.h"
@@ -53,6 +52,17 @@ InferenceResponseFactory::CreateResponse(
 //
 // InferenceRequest
 //
+InferenceRequest::InferenceRequest(
+    Model* model, const int64_t requested_model_version)
+    : needs_normalization_(true), model_raw_(model),
+      requested_model_version_(requested_model_version), flags_(0),
+      correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true)
+{
+  // Unit test doesn't need actual Response Factory logic
+  // or other priority/request_counting logic
+  response_factory_.reset(new InferenceResponseFactory());
+}
+
 InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count)
@@ -100,8 +110,6 @@ InferenceRequest::PrepareForInference()
   request_start_ns_ = 0;
 #endif  // TRITON_ENABLE_STATS
 
-  // LOG_VERBOSE(1) << "prepared: " << *this;
-
   return Status::Success;
 }
 
@@ -113,11 +121,6 @@ InferenceRequest::Input::DataBuffer(
   *base = data_->BufferAt(idx, byte_size, memory_type, memory_type_id);
 
   return Status::Success;
-}
-
-void
-InferenceRequest::SetPriority(unsigned int)
-{
 }
 
 Status
@@ -197,10 +200,10 @@ operator<<(std::ostream& out, const InferenceResponse& response)
 InferenceResponse::Output::~Output()
 {
   Status status = ReleaseDataBuffer();
-  /*if (!status.IsOk()) {
-    LOG_ERROR << "failed to release buffer for output '" << name_
+  if (!status.IsOk()) {
+    std::cerr << "[ERROR] failed to release buffer for output '" << name_
               << "': " << status.AsString();
-  }*/
+  }
 }
 
 Status
@@ -316,6 +319,7 @@ void
 cache_stats(std::unique_ptr<tc::RequestResponseCache>& cache)
 {
   std::cout << "Cache entries: " << cache->NumEntries() << std::endl;
+  std::cout << "Cache evictions: " << cache->NumEvictions() << std::endl;
   std::cout << "Cache free bytes: " << cache->FreeBytes() << std::endl;
   std::cout << "Cache alloc'd bytes: " << cache->AllocatedBytes() << std::endl;
   std::cout << "Cache total bytes: " << cache->TotalBytes() << std::endl;
@@ -382,7 +386,7 @@ tc::InferenceRequest*
 GenerateRequest(
     tc::Model* model, uint64_t model_version, inference::DataType dtype,
     TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
-    const std::vector<Tensor>& inputs)
+    const std::vector<Tensor>& inputs, const std::string& request_id)
 {
   auto request = new tc::InferenceRequest(model, model_version);
   for (const auto& tensor : inputs) {
@@ -407,18 +411,8 @@ GenerateRequest(
   }
   // PrepareForInference for use of ImmutableInputs()
   check_status(request->PrepareForInference());
+  request->SetId(request_id);  // for debugging purposes
   return request;
-}
-
-static std::vector<int>
-generate_data(size_t size)
-{
-  static std::default_random_engine generator;
-  static std::uniform_int_distribution<int> dist(0, 1000);
-
-  std::vector<int> data(size);
-  std::generate(data.begin(), data.end(), []() { return dist(generator); });
-  return data;
 }
 
 // Test Fixture
@@ -440,17 +434,22 @@ class RequestResponseCacheTest : public ::testing::Test {
     // Create three requests with same input name, two with same data, one with
     // different data
     request0 = GenerateRequest(
-        model, model_version, dtype, memory_type, memory_type_id, inputs0);
+        model, model_version, dtype, memory_type, memory_type_id, inputs0,
+        "request0");
     request1 = GenerateRequest(
-        model, model_version, dtype, memory_type, memory_type_id, inputs1);
+        model, model_version, dtype, memory_type, memory_type_id, inputs1,
+        "request1");
     request2 = GenerateRequest(
-        model, model_version, dtype, memory_type, memory_type_id, inputs2);
+        model, model_version, dtype, memory_type, memory_type_id, inputs2,
+        "request2");
     // Create two requests with the same two inputs but inserted in different
     // order
     request3 = GenerateRequest(
-        model, model_version, dtype, memory_type, memory_type_id, inputs3);
+        model, model_version, dtype, memory_type, memory_type_id, inputs3,
+        "request3");
     request4 = GenerateRequest(
-        model, model_version, dtype, memory_type, memory_type_id, inputs4);
+        model, model_version, dtype, memory_type, memory_type_id, inputs4,
+        "request4");
     // Verify requests were created correctly
     ASSERT_NE(request0, nullptr);
     ASSERT_NE(request1, nullptr);
@@ -458,18 +457,21 @@ class RequestResponseCacheTest : public ::testing::Test {
     ASSERT_NE(request3, nullptr);
     ASSERT_NE(request4, nullptr);
 
-    // Generate a set of random requests to use for various tests
-    for (size_t idx; idx < thread_count; idx++) {
-      std::vector<int>* data = new std::vector<int>(generate_data(4));
-      // Ensure data survives lifetime of tests. Automatically cleaned up
-      random_data.emplace_back(data);
+    // Generate a set of unique requests to use for parallelism tests
+    for (size_t idx = 0; idx < thread_count; idx++) {
+      // Use idx to enforce uniqueness
+      std::vector<int> data(thread_count, static_cast<int>(idx));
+      std::vector<Tensor> inputs{Tensor{"input" + std::to_string(idx), data}};
 
-      std::vector<Tensor> inputs{Tensor{"input", *data}};
+      std::string request_id = "unique" + std::to_string(idx);
+      std::cout << "Generating request: " << request_id << std::endl;
       auto request = GenerateRequest(
-          model, model_version, dtype, memory_type, memory_type_id, inputs);
+          model, model_version, dtype, memory_type, memory_type_id, inputs,
+          request_id);
       ASSERT_NE(request, nullptr);
-      random_requests.emplace_back(request);
+      unique_requests.emplace_back(request);
     }
+    ASSERT_EQ(unique_requests.size(), thread_count);
 
     // Sample outputs
     Tensor output_tensor0 = {"output", data0};
@@ -496,7 +498,7 @@ class RequestResponseCacheTest : public ::testing::Test {
     delete request2;
     delete request3;
     delete request4;
-    for (auto r : random_requests) {
+    for (auto r : unique_requests) {
       delete r;
     }
   }
@@ -514,8 +516,7 @@ class RequestResponseCacheTest : public ::testing::Test {
   std::vector<Tensor> inputs0, inputs1, inputs2, inputs3, inputs4, inputs100;
   std::vector<Tensor> outputs0, outputs100;
   tc::InferenceRequest *request0, *request1, *request2, *request3, *request4;
-  std::vector<std::unique_ptr<std::vector<int>>> random_data;
-  std::vector<tc::InferenceRequest*> random_requests;
+  std::vector<tc::InferenceRequest*> unique_requests;
   std::unique_ptr<tc::InferenceResponse> response0, response_400bytes;
 };
 
@@ -616,29 +617,29 @@ TEST_F(RequestResponseCacheTest, TestEviction)
   tc::RequestResponseCache::Create(cache_size, &cache);
   cache_stats(cache);
 
-  std::cout << "Lookup random_requests[0] in empty cache" << std::endl;
-  auto status = cache->Lookup(nullptr, random_requests[0]);
+  std::cout << "Lookup unique_requests[0] in empty cache" << std::endl;
+  auto status = cache->Lookup(nullptr, unique_requests[0]);
   // This hash not in cache yet
   ASSERT_FALSE(status.IsOk())
-      << "hash [" + std::to_string(random_requests[0]->CacheKey()) +
+      << "hash [" + std::to_string(unique_requests[0]->CacheKey()) +
              "] should not be in cache";
   std::cout << "Insert response into cache" << std::endl;
-  check_status(cache->Insert(*response_400bytes, random_requests[0]));
+  check_status(cache->Insert(*response_400bytes, unique_requests[0]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 1u);
   ASSERT_EQ(cache->NumEvictions(), 0u);
 
-  check_status(cache->Insert(*response_400bytes, random_requests[1]));
+  check_status(cache->Insert(*response_400bytes, unique_requests[1]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 0u);
 
-  check_status(cache->Insert(*response_400bytes, random_requests[2]));
+  check_status(cache->Insert(*response_400bytes, unique_requests[2]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 1u);
 
-  check_status(cache->Insert(*response_400bytes, random_requests[3]));
+  check_status(cache->Insert(*response_400bytes, unique_requests[3]));
   cache_stats(cache);
   ASSERT_EQ(cache->NumEntries(), 2u);
   ASSERT_EQ(cache->NumEvictions(), 2u);
@@ -663,7 +664,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsertion)
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(std::thread(
         &tc::RequestResponseCache::Insert, cache.get(),
-        std::ref(*response_400bytes), random_requests[idx]));
+        std::ref(*response_400bytes), unique_requests[idx]));
   }
 
   // Join threads
@@ -697,7 +698,7 @@ TEST_F(RequestResponseCacheTest, TestParallelEviction)
 
   // Insert [thread_count] entries into cache sequentially
   for (size_t idx = 0; idx < thread_count; idx++) {
-    cache->Insert(*response0, random_requests[idx]);
+    cache->Insert(*response0, unique_requests[idx]);
   }
 
   // Assert all entries were put into cache and no evictions occurred yet
@@ -739,57 +740,57 @@ TEST_F(RequestResponseCacheTest, TestLRU)
   cache_stats(cache);
 
   // Insert 3 items into cache: 0, 1, 2
-  check_status(cache->Insert(*response0, random_requests[0]));
-  check_status(cache->Insert(*response0, random_requests[1]));
-  check_status(cache->Insert(*response0, random_requests[2]));
+  check_status(cache->Insert(*response0, unique_requests[0]));
+  check_status(cache->Insert(*response0, unique_requests[1]));
+  check_status(cache->Insert(*response0, unique_requests[2]));
 
   // Verify items 0, 1, 2, in cache
-  reset_response(&response0, random_requests[0]);
-  check_status(cache->Lookup(response0.get(), random_requests[0]));
-  reset_response(&response0, random_requests[1]);
-  check_status(cache->Lookup(response0.get(), random_requests[1]));
-  reset_response(&response0, random_requests[2]);
-  check_status(cache->Lookup(response0.get(), random_requests[2]));
+  reset_response(&response0, unique_requests[0]);
+  check_status(cache->Lookup(response0.get(), unique_requests[0]));
+  reset_response(&response0, unique_requests[1]);
+  check_status(cache->Lookup(response0.get(), unique_requests[1]));
+  reset_response(&response0, unique_requests[2]);
+  check_status(cache->Lookup(response0.get(), unique_requests[2]));
 
   // Evict item from cache, should be item 0 since it was looked up last
   cache->Evict();
   // Assert Lookup for item 0 fails but items 1, 2 succeed
   tc::Status status;
-  reset_response(&response0, random_requests[0]);
-  status = cache->Lookup(response0.get(), random_requests[0]);
+  reset_response(&response0, unique_requests[0]);
+  status = cache->Lookup(response0.get(), unique_requests[0]);
   ASSERT_FALSE(status.IsOk());
-  reset_response(&response0, random_requests[1]);
-  check_status(cache->Lookup(response0.get(), random_requests[1]));
-  reset_response(&response0, random_requests[2]);
-  check_status(cache->Lookup(response0.get(), random_requests[2]));
+  reset_response(&response0, unique_requests[1]);
+  check_status(cache->Lookup(response0.get(), unique_requests[1]));
+  reset_response(&response0, unique_requests[2]);
+  check_status(cache->Lookup(response0.get(), unique_requests[2]));
 
   // Insert item 3, 4
-  check_status(cache->Insert(*response0, random_requests[3]));
-  check_status(cache->Insert(*response0, random_requests[4]));
+  check_status(cache->Insert(*response0, unique_requests[3]));
+  check_status(cache->Insert(*response0, unique_requests[4]));
 
   // Evict twice, assert items 1 and 2 were evicted
   cache->Evict();
   cache->Evict();
-  reset_response(&response0, random_requests[1]);
-  status = cache->Lookup(response0.get(), random_requests[1]);
+  reset_response(&response0, unique_requests[1]);
+  status = cache->Lookup(response0.get(), unique_requests[1]);
   ASSERT_FALSE(status.IsOk());
-  reset_response(&response0, random_requests[2]);
-  status = cache->Lookup(response0.get(), random_requests[2]);
+  reset_response(&response0, unique_requests[2]);
+  status = cache->Lookup(response0.get(), unique_requests[2]);
   ASSERT_FALSE(status.IsOk());
 
   // Lookup items 3 and 4
-  reset_response(&response0, random_requests[3]);
-  check_status(cache->Lookup(response0.get(), random_requests[3]));
-  reset_response(&response0, random_requests[4]);
-  check_status(cache->Lookup(response0.get(), random_requests[4]));
+  reset_response(&response0, unique_requests[3]);
+  check_status(cache->Lookup(response0.get(), unique_requests[3]));
+  reset_response(&response0, unique_requests[4]);
+  check_status(cache->Lookup(response0.get(), unique_requests[4]));
 
   // Evict, assert item 3 was evicted
   cache->Evict();
-  reset_response(&response0, random_requests[3]);
-  status = cache->Lookup(response0.get(), random_requests[3]);
+  reset_response(&response0, unique_requests[3]);
+  status = cache->Lookup(response0.get(), unique_requests[3]);
   ASSERT_FALSE(status.IsOk());
-  reset_response(&response0, random_requests[4]);
-  check_status(cache->Lookup(response0.get(), random_requests[4]));
+  reset_response(&response0, unique_requests[4]);
+  check_status(cache->Lookup(response0.get(), unique_requests[4]));
 }
 
 // Test looking up from cache with multiple threads in parallel
@@ -812,10 +813,10 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
     check_status(
-        random_requests[idx]->ResponseFactory()->CreateResponse(&response));
+        unique_requests[idx]->ResponseFactory()->CreateResponse(&response));
     responses.push_back(std::move(response));
     // Insert response for each thread
-    cache->Insert(*response0, random_requests[idx]);
+    cache->Insert(*response0, unique_requests[idx]);
   }
 
   // Assert all entries were put into cache and no evictions occurred yet
@@ -831,7 +832,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   for (size_t idx = 0; idx < thread_count; idx++) {
     threads.emplace_back(std::thread(
         &tc::RequestResponseCache::Lookup, cache.get(), responses[idx].get(),
-        random_requests[idx]));
+        unique_requests[idx]));
   }
 
   // Join threads
