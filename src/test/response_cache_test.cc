@@ -58,8 +58,9 @@ InferenceRequest::InferenceRequest(
       requested_model_version_(requested_model_version), flags_(0),
       correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true)
 {
-  // Unit test doesn't need actual Response Factory logic
-  // or other priority/request_counting logic
+  // Unit test doesn't need actual response factory logic
+  // or other priority/request_counting logic, it just needs
+  // a non-null reponse factory object.
   response_factory_.reset(new InferenceResponseFactory());
 }
 
@@ -459,7 +460,6 @@ class RequestResponseCacheTest : public ::testing::Test {
 
     // Generate a set of unique requests to use for parallelism tests
     for (size_t idx = 0; idx < thread_count; idx++) {
-      // Use idx to enforce uniqueness
       std::vector<int> data(thread_count, static_cast<int>(idx));
       std::vector<Tensor> inputs{Tensor{"input" + std::to_string(idx), data}};
 
