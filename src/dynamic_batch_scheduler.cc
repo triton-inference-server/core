@@ -141,6 +141,7 @@ DynamicBatchScheduler::Create(
 
   sched->scheduler_thread_exit_.store(false);
   if (dynamic_batching_enabled) {
+    sched->NewPayload();
     sched->scheduler_thread_ =
         std::thread([dyna_sched, nice]() { dyna_sched->BatcherThread(nice); });
   }
@@ -304,7 +305,6 @@ DynamicBatchScheduler::BatcherThread(const int nice)
   auto wait_for_slots = [this]() {
     return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(model_);
   };
-  NewPayload();
   const uint64_t default_wait_microseconds = 500 * 1000;
 
   while (!scheduler_thread_exit_.load()) {
