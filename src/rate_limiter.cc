@@ -27,6 +27,7 @@
 #include "rate_limiter.h"
 
 #include "triton/common/logging.h"
+#include <limits>
 
 namespace triton { namespace core {
 
@@ -179,7 +180,7 @@ RateLimiter::DequeuePayload(
   }
   PayloadQueue* payload_queue = payload_queues_[instances[0]->Model()].get();
   std::vector<std::shared_ptr<Payload>> merged_payloads;
-  size_t instance_index;
+  size_t instance_index = std::numeric_limits<std::size_t>::max();
   {
     std::unique_lock<std::mutex> lk(payload_queue->mu_);
     payload_queue->cv_.wait(lk, [&instances, &instance_index, payload_queue]() {
