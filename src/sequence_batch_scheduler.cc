@@ -163,7 +163,7 @@ SequenceBatchScheduler::Create(
 
   // Initialize payload.
   sched->NewPayload();
-  
+
   // Create a reaper thread that watches for idle sequences. Run the
   // reaper a lower priority.
   SequenceBatchScheduler* raw = sched.release();
