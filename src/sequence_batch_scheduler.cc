@@ -142,6 +142,7 @@ SequenceBatchScheduler::Create(
           sched.get(), index, seq_slot_cnt, instance.get(),
           enforce_equal_shape_tensors, has_optional_input, start, end, startend,
           cont, notready, &init_state));
+      sb->NewPayload();
     }
 
     if (init_state) {
@@ -160,9 +161,6 @@ SequenceBatchScheduler::Create(
         Status::Code::INTERNAL,
         "Initialization failed for all sequence-batch scheduler threads");
   }
-
-  // Initialize payload.
-  sched->NewPayload();
 
   // Create a reaper thread that watches for idle sequences. Run the
   // reaper a lower priority.
