@@ -161,6 +161,9 @@ SequenceBatchScheduler::Create(
         "Initialization failed for all sequence-batch scheduler threads");
   }
 
+  // Initialize payload.
+  sched->NewPayload();
+  
   // Create a reaper thread that watches for idle sequences. Run the
   // reaper a lower priority.
   SequenceBatchScheduler* raw = sched.release();
@@ -1204,8 +1207,6 @@ DirectSequenceBatch::BatcherThread(const int nice)
   }
 
   const uint64_t default_wait_microseconds = 500 * 1000;
-
-  NewPayload();
   exec_complete_ = true;
 
   // When there is optional input or input shape must be enforced,
