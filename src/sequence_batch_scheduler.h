@@ -302,10 +302,10 @@ class DirectSequenceBatch : public SequenceBatch {
       const uint32_t seq_slot,
       const InferenceRequest::SequenceId& correlation_id,
       std::unique_ptr<InferenceRequest>& request) override;
+  void NewPayload();
 
  private:
   void BatcherThread(const int nice);
-  void NewPayload();
 
   std::shared_ptr<Payload> curr_payload_;
   TritonModelInstance* model_instance_;
