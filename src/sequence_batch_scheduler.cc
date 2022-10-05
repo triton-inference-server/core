@@ -138,11 +138,14 @@ SequenceBatchScheduler::Create(
           enforce_equal_shape_tensors, has_optional_input, start, end, startend,
           cont, notready, &init_state));
     } else {
-      sb.reset(new DirectSequenceBatch(
+      auto batch = new DirectSequenceBatch(
           sched.get(), index, seq_slot_cnt, instance.get(),
           enforce_equal_shape_tensors, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
-      sb->NewPayload();
+          cont, notready, &init_state);
+      if (index == 0) {
+        batch->NewPayload();
+      }
+      sb.reset(batch);
     }
 
     if (init_state) {
