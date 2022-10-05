@@ -29,6 +29,7 @@
 #include "status.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
+#include "filesystem.h"
 
 namespace triton { namespace core {
 
@@ -89,7 +90,7 @@ Status GetNormalizedModelConfig(
 /// Auto-complete backend related fields (platform, backend and default model
 /// filename) if not set, note that only Triton recognized backends will be
 /// checked.
-/// \param model_path The name of the model.
+/// \param model_name The name of the model.
 /// \param model_path The full-path to the directory containing the
 /// model configuration.
 /// \param config Returns the auto-completed model configuration.
@@ -116,6 +117,16 @@ Status NormalizeInstanceGroup(
     const double min_compute_capability,
     const std::vector<inference::ModelInstanceGroup>& preferred_groups,
     inference::ModelConfig* config);
+
+/// [FIXME] Remove once a more permanent solution is implemented
+/// Localize EXECUTION_ENV_PATH in python backend.
+/// \param model_path The full-path to the directory containing the model
+/// configuration, before localization.
+/// \param config The model configuration
+/// \return The error status
+Status LocalizePythonBackendExecutionEnvironmentPath(
+    const std::string& model_path, inference::ModelConfig* config,
+    std::shared_ptr<LocalizedDirectory>* localized_model_dir);
 
 /// Auto-complete the instance count based on instance kind and backend name.
 /// \param group The instance group to set the count for.

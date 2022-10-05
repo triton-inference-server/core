@@ -61,6 +61,11 @@ class LocalizedDirectory {
     return (local_path_.empty()) ? original_path_ : local_path_;
   }
 
+  // Maintain a vector of LocalizedDirectory that should be kept available for
+  // the lifetime of this object
+  // FIXME: Remove when no longer required
+  std::vector<std::shared_ptr<LocalizedDirectory>> other_localized_directory;
+
  private:
   std::string original_path_;
   std::string local_path_;

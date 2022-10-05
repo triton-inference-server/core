@@ -79,6 +79,11 @@ TritonModel::Create(
   std::shared_ptr<LocalizedDirectory> localized_model_dir;
   RETURN_IF_ERROR(LocalizeDirectory(model_path, &localized_model_dir));
 
+  // Localize paths in backend model config
+  // FIXME: Remove once a more permanent solution is implemented
+  RETURN_IF_ERROR(LocalizePythonBackendExecutionEnvironmentPath(
+      model_path, &model_config, &localized_model_dir));
+
   // Get some internal configuration values needed for initialization.
   std::string backend_dir;
   RETURN_IF_ERROR(BackendConfigurationGlobalBackendsDirectory(
