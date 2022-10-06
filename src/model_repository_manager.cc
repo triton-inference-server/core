@@ -1094,7 +1094,7 @@ ModelRepositoryManager::InitializeModelInfo(
       if (!err.IsOk()) {
         return Status(
             Status::Code::INVALID_ARG,
-            "Unrecognized config override: " + std::string(err.Message()));
+            "Invalid config override: " + std::string(err.Message()));
       }
       parsed_config = true;
       break;
