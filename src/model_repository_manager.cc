@@ -1089,8 +1089,13 @@ ModelRepositoryManager::InitializeModelInfo(
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();
-      RETURN_IF_ERROR(JsonToModelConfig(
-          override_config, 1 /* config_version */, &linfo->model_config_));
+      auto err = JsonToModelConfig(
+          override_config, 1 /* config_version */, &linfo->model_config_);
+      if (!err.IsOk()) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "Unrecognized config override: " + std::string(err.Message()));
+      }
       parsed_config = true;
       break;
     } else if (override_parameter->Name().rfind(file_prefix, 0) != 0) {

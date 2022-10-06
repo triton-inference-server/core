@@ -2100,8 +2100,12 @@ JsonToModelConfig(
   ::google::protobuf::util::JsonParseOptions options;
   options.case_insensitive_enum_parsing = true;
   options.ignore_unknown_fields = false;
-  ::google::protobuf::util::JsonStringToMessage(
+  auto err = ::google::protobuf::util::JsonStringToMessage(
       json_config, protobuf_config, options);
+  if (!err.ok()) {
+    return Status(Status::Code::INVALID_ARG, std::string(err.message()));
+  }
+
   return Status::Success;
 }
 
