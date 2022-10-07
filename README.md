@@ -33,7 +33,7 @@
 This repository holds the source code and headers for the library that
 implements the core functionality of Triton. The *core* library can be
 built as described below and used directly via its [C
-API](https://github.com/triton-inference-server/server/blob/main/docs/inference_protocols.md#in-process-triton-server-api). To
+API](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/inference_protocols.md#in-process-triton-server-api). To
 be useful the core library must be paired with one or more backends.
 You can learn more about backends in the [backend
 repo](https://github.com/triton-inference-server/backend).
@@ -52,7 +52,7 @@ page](https://github.com/triton-inference-server/server/issues).
 
 Before building the Triton core library, your build system must
 install the required dependencies described in the [build
-documentation](https://github.com/triton-inference-server/server/blob/main/docs/build.md). For
+documentation](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md). For
 example, if you are building the core library with GPU support
 (-DTRITON_ENABLE_GPU=ON), then you must install the CUDA, cuDNN, and
 TensorRT dependencies required for the version of Triton you are
