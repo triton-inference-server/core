@@ -285,7 +285,7 @@ class RateLimiter {
   std::mutex payload_mu_;
 
   // Mutex to serialize Payload Queues deallocation
-  std::mutex payload_queue_mu_;
+  std::mutex payload_queues_mu_;
 
   // Keep some number of Payload objects for reuse to avoid the overhead
   // of creating a Payload for every new request.
