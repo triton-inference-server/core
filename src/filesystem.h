@@ -64,7 +64,7 @@ class LocalizedDirectory {
   // Maintain a vector of LocalizedDirectory that should be kept available for
   // the lifetime of this object
   // FIXME: Remove when no longer required
-  std::vector<std::shared_ptr<LocalizedDirectory>> other_localized_directory;
+  std::vector<std::shared_ptr<LocalizedDirectory>> other_localized_path;
 
  private:
   std::string original_path_;
@@ -145,6 +145,14 @@ Status ReadTextFile(const std::string& path, std::string* contents);
 /// representing the local copy of the directory.
 /// \return Error status
 Status LocalizeDirectory(
+    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized);
+
+/// Create an object representing a local copy of a file.
+/// \param path The path of the file.
+/// \param localized Returns the LocalizedDirectory object
+/// representing the local copy of the file.
+/// \return Error status
+Status LocalizeFile(
     const std::string& path, std::shared_ptr<LocalizedDirectory>* localized);
 
 /// Write a string to a file.

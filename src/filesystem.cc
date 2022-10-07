@@ -144,6 +144,9 @@ class FileSystem {
   virtual Status LocalizeDirectory(
       const std::string& path,
       std::shared_ptr<LocalizedDirectory>* localized) = 0;
+  virtual Status LocalizeFile(
+      const std::string& path,
+      std::shared_ptr<LocalizedDirectory>* localized) = 0;
   virtual Status WriteTextFile(
       const std::string& path, const std::string& contents) = 0;
   virtual Status WriteBinaryFile(
@@ -169,6 +172,9 @@ class LocalFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizeDirectory(
+      const std::string& path,
+      std::shared_ptr<LocalizedDirectory>* localized) override;
+  Status LocalizeFile(
       const std::string& path,
       std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
@@ -319,6 +325,16 @@ LocalFileSystem::LocalizeDirectory(
 {
   // For local file system we don't actually need to download the
   // directory. We use it in place.
+  localized->reset(new LocalizedDirectory(path));
+  return Status::Success;
+}
+
+Status
+LocalFileSystem::LocalizeFile(
+    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+{
+  // For local file system we don't actually need to download the file. We use
+  // it in place.
   localized->reset(new LocalizedDirectory(path));
   return Status::Success;
 }
@@ -521,6 +537,9 @@ class GCSFileSystem : public FileSystem {
   Status LocalizeDirectory(
       const std::string& path,
       std::shared_ptr<LocalizedDirectory>* localized) override;
+  Status LocalizeFile(
+      const std::string& path,
+      std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
@@ -542,7 +561,8 @@ class GCSFileSystem : public FileSystem {
 
 GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
 {
-  auto creds = gcs::oauth2::CreateServiceAccountCredentialsFromJsonFilePath(gs_cred.path_);
+  auto creds = gcs::oauth2::CreateServiceAccountCredentialsFromJsonFilePath(
+      gs_cred.path_);
   if (creds) {
     client_ = gcs::Client(gcs::ClientOptions(*creds));
   }
@@ -878,6 +898,15 @@ GCSFileSystem::LocalizeDirectory(
 }
 
 Status
+GCSFileSystem::LocalizeFile(
+    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Localize file operation not yet implemented " + path);
+}
+
+Status
 GCSFileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
@@ -974,6 +1003,9 @@ class ASFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizeDirectory(
+      const std::string& path,
+      std::shared_ptr<LocalizedDirectory>* localized) override;
+  Status LocalizeFile(
       const std::string& path,
       std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
@@ -1294,6 +1326,15 @@ ASFileSystem::LocalizeDirectory(
 }
 
 Status
+ASFileSystem::LocalizeFile(
+    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+{
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "Localize file operation not yet implemented " + path);
+}
+
+Status
 ASFileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
@@ -1415,6 +1456,9 @@ class S3FileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizeDirectory(
+      const std::string& path,
+      std::shared_ptr<LocalizedDirectory>* localized) override;
+  Status LocalizeFile(
       const std::string& path,
       std::shared_ptr<LocalizedDirectory>* localized) override;
   Status WriteTextFile(
@@ -1971,6 +2015,74 @@ S3FileSystem::LocalizeDirectory(
 }
 
 Status
+S3FileSystem::LocalizeFile(
+    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+{
+  // Check if file exists
+  bool exists;
+  RETURN_IF_ERROR(FileExists(path, &exists));
+  bool is_dir = false;
+  if (exists) {
+    RETURN_IF_ERROR(IsDirectory(path, &is_dir));
+  }
+  if (is_dir) {
+    return Status(Status::Code::INTERNAL, "file does not exist at " + path);
+  }
+
+  // Split path into directory path and file name
+  std::size_t split_loc = path.find_last_of('/');
+  std::string dir_path = path.substr(0, split_loc);
+  std::string file_name = path.substr(split_loc + 1);
+
+  // Cleanup extra slashes
+  std::string clean_path;
+  RETURN_IF_ERROR(CleanPath(dir_path, &clean_path));
+
+  std::string effective_path, protocol, host_name, host_port, bucket, object;
+  if (RE2::FullMatch(
+          clean_path, s3_regex_, &protocol, &host_name, &host_port, &bucket,
+          &object)) {
+    effective_path = "s3://" + bucket + object;
+  } else {
+    effective_path = dir_path;
+  }
+  std::string s3_path = effective_path + "/" + file_name;
+
+  // Create local temporary location
+  std::string tmp_folder;
+  RETURN_IF_ERROR(
+      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
+  std::string tmp_path = tmp_folder + "/" + file_name;
+
+  localized->reset(new LocalizedDirectory(s3_path, tmp_path));
+
+  // Create local copy of file
+  std::string file_bucket, file_object;
+  RETURN_IF_ERROR(ParsePath(s3_path, &file_bucket, &file_object));
+
+  s3::Model::GetObjectRequest object_request;
+  object_request.SetBucket(file_bucket.c_str());
+  object_request.SetKey(file_object.c_str());
+
+  auto get_object_outcome = client_->GetObject(object_request);
+  if (get_object_outcome.IsSuccess()) {
+    auto& retrieved_file =
+        get_object_outcome.GetResultWithOwnership().GetBody();
+    std::ofstream output_file(tmp_path.c_str(), std::ios::binary);
+    output_file << retrieved_file.rdbuf();
+    output_file.close();
+  } else {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to get object at " + s3_path + " due to exception: " +
+            get_object_outcome.GetError().GetExceptionName() +
+            ", error message: " + get_object_outcome.GetError().GetMessage());
+  }
+
+  return Status::Success;
+}
+
+Status
 S3FileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
@@ -2518,6 +2630,15 @@ LocalizeDirectory(
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
   return fs->LocalizeDirectory(path, localized);
+}
+
+Status
+LocalizeFile(
+    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+{
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
+  return fs->LocalizeFile(path, localized);
 }
 
 Status

@@ -871,7 +871,6 @@ LocalizePythonBackendExecutionEnvironmentPath(
               exec_env_path.substr(pos, prev_pos - pos) + abs_exec_env_path;
         }
         skip = skip > 0 ? skip - 1 : skip;
-        std::cerr << "\npos: " << pos << "\n";
         if (pos >= 3 && exec_env_path.substr(pos - 3, 3) == "/..") {
           skip += 2;
         }
@@ -879,22 +878,17 @@ LocalizePythonBackendExecutionEnvironmentPath(
         pos = exec_env_path.find_last_of('/', prev_pos - 1);
       }
       abs_exec_env_path = exec_env_path.substr(0, prev_pos) + abs_exec_env_path;
-      // Split path into directory path and file name
-      std::size_t split_loc = abs_exec_env_path.find_last_of('/');
-      std::string exec_env_dir = abs_exec_env_path.substr(0, split_loc);
-      std::string exec_env_name = abs_exec_env_path.substr(split_loc + 1);
-      // Localize the directory
-      std::shared_ptr<LocalizedDirectory> localized_exec_env_dir;
-      RETURN_IF_ERROR(LocalizeDirectory(exec_env_dir, &localized_exec_env_dir));
+      // Localize the file
+      std::shared_ptr<LocalizedDirectory> localized_exec_env_path;
+      RETURN_IF_ERROR(
+          LocalizeFile(abs_exec_env_path, &localized_exec_env_path));
       // Persist the localized temporary path
       (*localized_model_dir)
-          ->other_localized_directory.push_back(localized_exec_env_dir);
+          ->other_localized_path.push_back(localized_exec_env_path);
       // Rewrite EXECUTION_ENV_PATH
-      std::string new_exec_env_path =
-          localized_exec_env_dir->Path() + '/' + exec_env_name;
       config->mutable_parameters()
           ->at("EXECUTION_ENV_PATH")
-          .set_string_value(new_exec_env_path);
+          .set_string_value(localized_exec_env_path->Path());
     }
   }
   return Status::Success;
