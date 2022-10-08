@@ -2021,7 +2021,7 @@ S3FileSystem::LocalizeFile(
   // Check if file exists
   bool exists;
   RETURN_IF_ERROR(FileExists(path, &exists));
-  bool is_dir = false;
+  bool is_dir = true;
   if (exists) {
     RETURN_IF_ERROR(IsDirectory(path, &is_dir));
   }

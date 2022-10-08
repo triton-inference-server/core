@@ -118,7 +118,7 @@ Status NormalizeInstanceGroup(
     const std::vector<inference::ModelInstanceGroup>& preferred_groups,
     inference::ModelConfig* config);
 
-/// [FIXME] Remove once a more permanent solution is implemented
+/// [FIXME] Remove once a more permanent solution is implemented  (DLIS-4211)
 /// Localize EXECUTION_ENV_PATH in python backend.
 /// \param model_path The full-path to the directory containing the model
 /// configuration, before localization.

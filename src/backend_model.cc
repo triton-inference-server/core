@@ -80,7 +80,7 @@ TritonModel::Create(
   RETURN_IF_ERROR(LocalizeDirectory(model_path, &localized_model_dir));
 
   // Localize paths in backend model config
-  // FIXME: Remove once a more permanent solution is implemented
+  // [FIXME] Remove once a more permanent solution is implemented (DLIS-4211)
   RETURN_IF_ERROR(LocalizePythonBackendExecutionEnvironmentPath(
       model_path, &model_config, &localized_model_dir));
 
