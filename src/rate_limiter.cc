@@ -26,8 +26,8 @@
 
 #include "rate_limiter.h"
 
-#include "triton/common/logging.h"
 #include <limits>
+#include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
@@ -107,8 +107,11 @@ RateLimiter::UnregisterModel(const TritonModel* model)
     RETURN_IF_ERROR(resource_manager_->UpdateResourceLimits());
   }
 
-  if (payload_queues_.find(model) != payload_queues_.end()) {
-    payload_queues_.erase(model);
+  {
+    std::lock_guard<std::mutex> lk(payload_queues_mu_);
+    if (payload_queues_.find(model) != payload_queues_.end()) {
+      payload_queues_.erase(model);
+    }
   }
 
   return Status::Success;
@@ -227,7 +230,7 @@ RateLimiter::GetPayload(
   std::shared_ptr<Payload> payload;
 
   if (max_payload_bucket_count_ > 0) {
-    std::lock_guard<std::mutex> lock(alloc_mu_);
+    std::lock_guard<std::mutex> lock(payload_mu_);
 
     if (!payload_bucket_.empty()) {
       payload = payload_bucket_.back();
@@ -256,7 +259,7 @@ RateLimiter::PayloadRelease(std::shared_ptr<Payload>& payload)
 {
   payload->OnRelease();
   if (max_payload_bucket_count_ > 0) {
-    std::lock_guard<std::mutex> lock(alloc_mu_);
+    std::lock_guard<std::mutex> lock(payload_mu_);
 
     if (payloads_in_use_.size() + payload_bucket_.size() <
         max_payload_bucket_count_) {
@@ -299,11 +302,14 @@ RateLimiter::InitializePayloadQueues(const TritonModelInstance* instance)
   } else {
     max_queue_delay_microseconds = 0;
   }
-  if (payload_queues_.find(instance->Model()) == payload_queues_.end()) {
-    payload_queues_.emplace(
-        instance->Model(),
-        new PayloadQueue(
-            config.max_batch_size(), max_queue_delay_microseconds * 1000));
+  {
+    std::lock_guard<std::mutex> lk(payload_queues_mu_);
+    if (payload_queues_.find(instance->Model()) == payload_queues_.end()) {
+      payload_queues_.emplace(
+          instance->Model(),
+          new PayloadQueue(
+              config.max_batch_size(), max_queue_delay_microseconds * 1000));
+    }
   }
   PayloadQueue* payload_queue = payload_queues_[instance->Model()].get();
   if (payload_queue->specific_queues_.find(instance) ==
