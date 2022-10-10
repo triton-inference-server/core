@@ -179,7 +179,7 @@ class ModelLifeCycle {
   // the load is finished sucessfully.
   Status AsyncLoad(
       const std::string& model_name, const std::string& model_path,
-      const inference::ModelConfig& model_config,
+      const inference::ModelConfig& model_config, const bool is_config_override,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)>&& OnComplete);
 
@@ -222,13 +222,14 @@ class ModelLifeCycle {
     ModelInfo(
         const std::string& model_path,
         const inference::ModelConfig& model_config,
-        const uint64_t last_update_ns)
+        const bool is_config_override, const uint64_t last_update_ns)
         : model_config_(model_config), model_path_(model_path),
 #ifdef TRITON_ENABLE_ENSEMBLE
           is_ensemble_(model_config.platform() == kEnsemblePlatform),
 #else
           is_ensemble_(false),
 #endif  // TRITON_ENABLE_ENSEMBLE
+          is_config_override_(is_config_override),
           last_update_ns_(last_update_ns), state_(ModelReadyState::UNKNOWN)
     {
     }
@@ -247,6 +248,7 @@ class ModelLifeCycle {
     const inference::ModelConfig model_config_;
     const std::string model_path_;
     const bool is_ensemble_;
+    const bool is_config_override_;
 
     std::mutex mtx_;
 

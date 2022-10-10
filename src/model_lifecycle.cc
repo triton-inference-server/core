@@ -421,7 +421,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
 Status
 ModelLifeCycle::AsyncLoad(
     const std::string& model_name, const std::string& model_path,
-    const inference::ModelConfig& model_config,
+    const inference::ModelConfig& model_config, const bool is_config_override,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)>&& OnComplete)
 {
@@ -453,7 +453,7 @@ ModelLifeCycle::AsyncLoad(
       new LoadTracker(versions.size(), now_ns));
   for (const auto& version : versions) {
     std::unique_ptr<ModelInfo> linfo(
-        new ModelInfo(model_path, model_config, now_ns));
+        new ModelInfo(model_path, model_config, is_config_override, now_ns));
     ModelInfo* model_info = linfo.get();
 
     LOG_INFO << "loading: " << model_name << ":" << version;
@@ -518,7 +518,8 @@ ModelLifeCycle::CreateModel(
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
         server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
-        model_name, version, model_config, &model);
+        model_name, version, model_config, model_info->is_config_override_,
+        &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE

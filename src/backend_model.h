@@ -51,7 +51,8 @@ class TritonModel : public Model {
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const std::string& model_name, const int64_t version,
-      inference::ModelConfig model_config, std::unique_ptr<TritonModel>* model);
+      inference::ModelConfig model_config, const bool is_config_override,
+      std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
   const std::string& LocalizedModelPath() const
@@ -81,7 +82,8 @@ class TritonModel : public Model {
       const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
       const std::shared_ptr<TritonBackend>& backend,
       const double min_compute_capability, const int64_t version,
-      const inference::ModelConfig& config, const bool auto_complete_config);
+      const inference::ModelConfig& config, const bool is_config_override,
+      const bool auto_complete_config);
 
   // Set the scheduler based on the model configuration. The scheduler
   // can only be set once for a backend.

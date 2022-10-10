@@ -271,10 +271,15 @@ struct ModelRepositoryManager::ModelInfo {
       const int64_t mtime_nsec, const int64_t prev_mtime_ns,
       const std::string& model_path)
       : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
-        explicitly_load_(true), model_path_(model_path)
+        explicitly_load_(true), model_path_(model_path),
+        is_config_override_(false)
   {
   }
-  ModelInfo() : mtime_nsec_(0), prev_mtime_ns_(0), explicitly_load_(true) {}
+  ModelInfo()
+      : mtime_nsec_(0), prev_mtime_ns_(0), explicitly_load_(true),
+        is_config_override_(false)
+  {
+  }
   int64_t mtime_nsec_;
   int64_t prev_mtime_ns_;
   bool explicitly_load_;
@@ -284,6 +289,7 @@ struct ModelRepositoryManager::ModelInfo {
   // the ownership must transfer to ModelLifeCycle to ensure
   // the agent model life cycle is handled properly.
   std::shared_ptr<TritonRepoAgentModelList> agent_model_list_;
+  bool is_config_override_;
 };
 
 ModelRepositoryManager::ModelRepositoryManager(
@@ -490,8 +496,8 @@ ModelRepositoryManager::LoadModelByDependency()
       const auto itr = infos_.find(valid_model->model_name_);
       auto status = model_life_cycle_->AsyncLoad(
           valid_model->model_name_, itr->second->model_path_,
-          valid_model->model_config_, itr->second->agent_model_list_,
-          [model_state](Status load_status) {
+          valid_model->model_config_, itr->second->is_config_override_,
+          itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();
           });
@@ -1087,6 +1093,7 @@ ModelRepositoryManager::InitializeModelInfo(
       // the override while the local files may still be unchanged.
       linfo->mtime_nsec_ = 0;
       unmodified = false;
+      linfo->is_config_override_ = true;
 
       const std::string& override_config = override_parameter->ValueString();
       auto err = JsonToModelConfig(
@@ -1105,6 +1112,8 @@ ModelRepositoryManager::InitializeModelInfo(
               "' with type '" +
               TRITONSERVER_ParameterTypeString(override_parameter->Type()) +
               "'");
+    } else {
+      linfo->is_config_override_ = false;
     }
   }
 

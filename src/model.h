@@ -42,10 +42,11 @@ class Model {
  public:
   explicit Model(
       const double min_compute_capability, const std::string& model_dir,
-      const int64_t version, const inference::ModelConfig& config)
+      const int64_t version, const inference::ModelConfig& config,
+      const bool is_config_override)
       : config_(config), min_compute_capability_(min_compute_capability),
         version_(version), required_input_count_(0), model_dir_(model_dir),
-        set_model_config_(false)
+        set_model_config_(false), is_config_override_(is_config_override)
   {
   }
   virtual ~Model() {}
@@ -157,6 +158,9 @@ class Model {
 
   // Whether or not model config has been set.
   bool set_model_config_;
+
+  // Whether or not the model config override has been provided.
+  bool is_config_override_;
 };
 
 }}  // namespace triton::core

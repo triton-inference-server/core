@@ -61,7 +61,8 @@ TritonModel::Create(
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const std::string& model_name, const int64_t version,
-    inference::ModelConfig model_config, std::unique_ptr<TritonModel>* model)
+    inference::ModelConfig model_config, const bool is_config_override,
+    std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -158,7 +159,7 @@ TritonModel::Create(
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
-      model_config, auto_complete_config));
+      model_config, is_config_override, auto_complete_config));
 
   TritonModel* raw_local_model = local_model.get();
 
@@ -450,9 +451,11 @@ TritonModel::TritonModel(
     const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
     const double min_compute_capability, const int64_t version,
-    const inference::ModelConfig& config, const bool auto_complete_config)
+    const inference::ModelConfig& config, const bool is_config_override,
+    const bool auto_complete_config)
     : Model(
-          min_compute_capability, localized_model_dir->Path(), version, config),
+          min_compute_capability, localized_model_dir->Path(), version, config,
+          is_config_override),
       server_(server), min_compute_capability_(min_compute_capability),
       auto_complete_config_(auto_complete_config),
       localized_model_dir_(localized_model_dir), backend_(backend),

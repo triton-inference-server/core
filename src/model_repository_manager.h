@@ -81,7 +81,6 @@ class ModelRepositoryManager {
     std::string model_name_;
     Status status_;
     bool checked_;
-    // FIXME
     bool explicitly_load_;
     inference::ModelConfig model_config_;
     std::set<int64_t> loaded_versions_;
