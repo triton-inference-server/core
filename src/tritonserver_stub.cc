@@ -854,14 +854,6 @@ TRITONBACKEND_ModelInstanceReportBatchStatistics()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_ModelInstanceReportResponseStatistics()
-{
-}
-TRITONAPI_DECLSPEC void
-TRITONBACKEND_ModelInstanceReportNoResponseStatistics()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONREPOAGENT_ApiVersion()
 {
 }

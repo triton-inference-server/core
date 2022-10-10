@@ -40,11 +40,11 @@ namespace triton { namespace core {
 //
 Status
 InferenceResponseFactory::CreateResponse(
-    std::unique_ptr<InferenceResponse>* response)
+    std::unique_ptr<InferenceResponse>* response) const
 {
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_, 0 /* request id */, 0 /* response id */));
+      response_delegator_));
 
   return Status::Success;
 }
@@ -178,8 +178,7 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp,
     const std::function<
-        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-    const uint64_t response_idx, const uint64_t request_id)
+        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
       response_delegator_(delegator), null_response_(false)
