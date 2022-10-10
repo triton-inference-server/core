@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -46,9 +45,6 @@ namespace triton { namespace core {
 class Model;
 class InferenceServer;
 class MetricModelReporter;
-
-// Count the number of InferenceRequest instance created
-static std::atomic<uint64_t> inference_request_count_(0);
 
 //
 // An inference request. A request can be used multiple times for
@@ -476,7 +472,7 @@ class InferenceRequest {
   {
     response_factory_.reset(new InferenceResponseFactory(
         model_shared_, id_, allocator, alloc_userp, response_fn, response_userp,
-        response_delegator_, inference_request_count_));
+        response_delegator_));
     return Status::Success;
   }
 

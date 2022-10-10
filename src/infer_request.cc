@@ -105,7 +105,6 @@ InferenceRequest::InferenceRequest(
       requested_model_version_(requested_model_version), flags_(0),
       correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true)
 {
-  inference_request_count_++;
   SetPriority(0);
 }
 
