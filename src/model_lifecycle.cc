@@ -526,7 +526,7 @@ ModelLifeCycle::CreateModel(
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
           server_, model_info->model_path_, version, model_config,
-          min_compute_capability_, &is);
+          model_info->is_config_override_, min_compute_capability_, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to
       // obtained from server because this may happen during server
