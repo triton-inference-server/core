@@ -38,12 +38,11 @@ namespace triton { namespace core {
 //
 Status
 InferenceResponseFactory::CreateResponse(
-    std::unique_ptr<InferenceResponse>* response)
+    std::unique_ptr<InferenceResponse>* response) const
 {
-  uint64_t response_index = total_response_idx_++;
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_, response_index, request_id_));
+      response_delegator_));
 #ifdef TRITON_ENABLE_TRACING
   (*response)->SetTrace(trace_);
 #endif  // TRITON_ENABLE_TRACING
@@ -73,17 +72,11 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp,
     const std::function<
-        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-    uint64_t response_idx, uint64_t request_id)
+        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
-      response_delegator_(delegator), null_response_(false),
-      response_idx_(response_idx), request_id_(request_id)
+      response_delegator_(delegator), null_response_(false)
 {
-  response_start_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count();
-
   // If the allocator has a start_fn then invoke it.
   TRITONSERVER_ResponseAllocatorStartFn_t start_fn = allocator_->StartFn();
   if (start_fn != nullptr) {
