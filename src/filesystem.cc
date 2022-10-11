@@ -97,9 +97,8 @@ namespace triton { namespace core {
 
 namespace {
 
-// Check if a local path is a directory. We need to use this in
-// LocalFileSystem and LocalizedDirectory so have this common
-// function.
+// Check if a local path is a directory. We need to use this in LocalFileSystem
+// and LocalizedPath so have this common function.
 Status
 IsPathDirectory(const std::string& path, bool* is_dir)
 {
@@ -116,12 +115,14 @@ IsPathDirectory(const std::string& path, bool* is_dir)
 
 }  // namespace
 
-LocalizedDirectory::~LocalizedDirectory()
+LocalizedPath::~LocalizedPath()
 {
   if (!local_path_.empty()) {
+    bool is_dir = true;
+    IsDirectory(local_path_, &is_dir);
     LOG_STATUS_ERROR(
-        DeleteDirectory(local_path_),
-        "failed to delete localized model directory");
+        DeletePath(is_dir ? local_path_ : DirName(local_path_)),
+        "failed to delete localized path");
   }
 }
 
@@ -141,12 +142,8 @@ class FileSystem {
       const std::string& path, std::set<std::string>* files) = 0;
   virtual Status ReadTextFile(
       const std::string& path, std::string* contents) = 0;
-  virtual Status LocalizeDirectory(
-      const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) = 0;
-  virtual Status LocalizeFile(
-      const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) = 0;
+  virtual Status LocalizePath(
+      const std::string& path, std::shared_ptr<LocalizedPath>* localized) = 0;
   virtual Status WriteTextFile(
       const std::string& path, const std::string& contents) = 0;
   virtual Status WriteBinaryFile(
@@ -155,7 +152,7 @@ class FileSystem {
   virtual Status MakeDirectory(
       const std::string& dir, const bool recursive) = 0;
   virtual Status MakeTemporaryDirectory(std::string* temp_dir) = 0;
-  virtual Status DeleteDirectory(const std::string& path) = 0;
+  virtual Status DeletePath(const std::string& path) = 0;
 };
 
 class LocalFileSystem : public FileSystem {
@@ -171,12 +168,9 @@ class LocalFileSystem : public FileSystem {
   Status GetDirectoryFiles(
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
-  Status LocalizeDirectory(
+  Status LocalizePath(
       const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
-  Status LocalizeFile(
-      const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
+      std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
@@ -184,7 +178,7 @@ class LocalFileSystem : public FileSystem {
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
-  Status DeleteDirectory(const std::string& path) override;
+  Status DeletePath(const std::string& path) override;
 };
 
 Status
@@ -320,22 +314,12 @@ LocalFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 }
 
 Status
-LocalFileSystem::LocalizeDirectory(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+LocalFileSystem::LocalizePath(
+    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
 {
   // For local file system we don't actually need to download the
-  // directory. We use it in place.
-  localized->reset(new LocalizedDirectory(path));
-  return Status::Success;
-}
-
-Status
-LocalFileSystem::LocalizeFile(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
-{
-  // For local file system we don't actually need to download the file. We use
-  // it in place.
-  localized->reset(new LocalizedDirectory(path));
+  // directory or file. We use it in place.
+  localized->reset(new LocalizedPath(path));
   return Status::Success;
 }
 
@@ -455,23 +439,20 @@ LocalFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
 }
 
 Status
-LocalFileSystem::DeleteDirectory(const std::string& path)
+LocalFileSystem::DeletePath(const std::string& path)
 {
-  std::set<std::string> contents;
-  RETURN_IF_ERROR(GetDirectoryContents(path, &contents));
-
-  for (const auto& content : contents) {
-    std::string full_path = JoinPath({path, content});
-    bool is_dir = false;
-    RETURN_IF_ERROR(IsDirectory(full_path, &is_dir));
-    if (is_dir) {
-      DeleteDirectory(full_path);
-    } else {
-      remove(full_path.c_str());
+  bool is_dir = false;
+  RETURN_IF_ERROR(IsDirectory(path, &is_dir));
+  if (is_dir) {
+    std::set<std::string> contents;
+    RETURN_IF_ERROR(GetDirectoryContents(path, &contents));
+    for (const auto& content : contents) {
+      RETURN_IF_ERROR(DeletePath(JoinPath({path, content})));
     }
+    rmdir(path.c_str());
+  } else {
+    remove(path.c_str());
   }
-  rmdir(path.c_str());
-
   return Status::Success;
 }
 
@@ -534,12 +515,9 @@ class GCSFileSystem : public FileSystem {
   Status GetDirectoryFiles(
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
-  Status LocalizeDirectory(
+  Status LocalizePath(
       const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
-  Status LocalizeFile(
-      const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
+      std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
@@ -547,7 +525,7 @@ class GCSFileSystem : public FileSystem {
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
-  Status DeleteDirectory(const std::string& path) override;
+  Status DeletePath(const std::string& path) override;
 
  private:
   Status ParsePath(
@@ -808,27 +786,29 @@ GCSFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 }
 
 Status
-GCSFileSystem::LocalizeDirectory(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+GCSFileSystem::LocalizePath(
+    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
 {
   bool exists;
   RETURN_IF_ERROR(FileExists(path, &exists));
-
-  bool is_dir = false;
-  if (exists) {
-    RETURN_IF_ERROR(IsDirectory(path, &is_dir));
+  if (!exists) {
+    return Status(
+        Status::Code::INTERNAL, "directory or file does not exist at " + path);
   }
 
+  bool is_dir;
+  RETURN_IF_ERROR(IsDirectory(path, &is_dir));
   if (!is_dir) {
     return Status(
-        Status::Code::INTERNAL, "directory does not exist at " + path);
+        Status::Code::UNSUPPORTED,
+        "GCS file localization not yet implemented " + path);
   }
 
   std::string tmp_folder;
   RETURN_IF_ERROR(
       triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
 
-  localized->reset(new LocalizedDirectory(path, tmp_folder));
+  localized->reset(new LocalizedPath(path, tmp_folder));
 
   std::set<std::string> contents, filenames;
   RETURN_IF_ERROR(GetDirectoryContents(path, &filenames));
@@ -898,15 +878,6 @@ GCSFileSystem::LocalizeDirectory(
 }
 
 Status
-GCSFileSystem::LocalizeFile(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
-{
-  return Status(
-      Status::Code::UNSUPPORTED,
-      "Localize file operation not yet implemented " + path);
-}
-
-Status
 GCSFileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
@@ -941,11 +912,10 @@ GCSFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
 }
 
 Status
-GCSFileSystem::DeleteDirectory(const std::string& path)
+GCSFileSystem::DeletePath(const std::string& path)
 {
   return Status(
-      Status::Code::UNSUPPORTED,
-      "Delete directory operation not yet implemented");
+      Status::Code::UNSUPPORTED, "Delete path operation not yet implemented");
 }
 
 #endif  // TRITON_ENABLE_GCS
@@ -1002,12 +972,9 @@ class ASFileSystem : public FileSystem {
   Status GetDirectoryFiles(
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
-  Status LocalizeDirectory(
+  Status LocalizePath(
       const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
-  Status LocalizeFile(
-      const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
+      std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
@@ -1015,7 +982,7 @@ class ASFileSystem : public FileSystem {
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
-  Status DeleteDirectory(const std::string& path) override;
+  Status DeletePath(const std::string& path) override;
 
  private:
   Status ParsePath(
@@ -1291,19 +1258,22 @@ ASFileSystem::DownloadFolder(
 }
 
 Status
-ASFileSystem::LocalizeDirectory(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+ASFileSystem::LocalizePath(
+    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
 {
   bool exists;
   RETURN_IF_ERROR(FileExists(path, &exists));
-
-  bool is_dir = false;
-  if (exists) {
-    RETURN_IF_ERROR(IsDirectory(path, &is_dir));
+  if (!exists) {
+    return Status(
+        Status::Code::INTERNAL, "directory or file does not exist at " + path);
   }
+
+  bool is_dir;
+  RETURN_IF_ERROR(IsDirectory(path, &is_dir));
   if (!is_dir) {
     return Status(
-        Status::Code::INTERNAL, "directory does not exist at " + path);
+        Status::Code::UNSUPPORTED,
+        "AS file localization not yet implemented " + path);
   }
 
   std::string folder_template = "/tmp/folderXXXXXX";
@@ -1314,7 +1284,7 @@ ASFileSystem::LocalizeDirectory(
         "Failed to create local temp folder: " + folder_template +
             ", errno:" + strerror(errno));
   }
-  localized->reset(new LocalizedDirectory(path, tmp_folder));
+  localized->reset(new LocalizedPath(path, tmp_folder));
 
   std::string dest(folder_template);
 
@@ -1323,15 +1293,6 @@ ASFileSystem::LocalizeDirectory(
   std::string container, object;
   RETURN_IF_ERROR(ParsePath(path, &container, &object));
   return DownloadFolder(container, object, dest);
-}
-
-Status
-ASFileSystem::LocalizeFile(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
-{
-  return Status(
-      Status::Code::UNSUPPORTED,
-      "Localize file operation not yet implemented " + path);
 }
 
 Status
@@ -1381,11 +1342,10 @@ ASFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
 }
 
 Status
-ASFileSystem::DeleteDirectory(const std::string& path)
+ASFileSystem::DeletePath(const std::string& path)
 {
   return Status(
-      Status::Code::UNSUPPORTED,
-      "Delete directory operation not yet implemented");
+      Status::Code::UNSUPPORTED, "Delete path operation not yet implemented");
 }
 
 #endif  // TRITON_ENABLE_AZURE_STORAGE
@@ -1455,12 +1415,9 @@ class S3FileSystem : public FileSystem {
   Status GetDirectoryFiles(
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
-  Status LocalizeDirectory(
+  Status LocalizePath(
       const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
-  Status LocalizeFile(
-      const std::string& path,
-      std::shared_ptr<LocalizedDirectory>* localized) override;
+      std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
@@ -1468,7 +1425,7 @@ class S3FileSystem : public FileSystem {
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
-  Status DeleteDirectory(const std::string& path) override;
+  Status DeletePath(const std::string& path) override;
 
  private:
   Status ParsePath(
@@ -1909,26 +1866,22 @@ S3FileSystem::ReadTextFile(const std::string& path, std::string* contents)
 }
 
 Status
-S3FileSystem::LocalizeDirectory(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+S3FileSystem::LocalizePath(
+    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
 {
+  // Check if the directory or file exists
   bool exists;
   RETURN_IF_ERROR(FileExists(path, &exists));
-
-  bool is_dir = false;
-  if (exists) {
-    RETURN_IF_ERROR(IsDirectory(path, &is_dir));
-  }
-
-  if (!is_dir) {
+  if (!exists) {
     return Status(
-        Status::Code::INTERNAL, "directory does not exist at " + path);
+        Status::Code::INTERNAL, "directory or file does not exist at " + path);
   }
 
   // Cleanup extra slashes
   std::string clean_path;
   RETURN_IF_ERROR(CleanPath(path, &clean_path));
 
+  // Remove protocol and host name and port
   std::string effective_path, protocol, host_name, host_port, bucket, object;
   if (RE2::FullMatch(
           clean_path, s3_regex_, &protocol, &host_name, &host_port, &bucket,
@@ -1938,27 +1891,46 @@ S3FileSystem::LocalizeDirectory(
     effective_path = path;
   }
 
+  // Create temporary directory
   std::string tmp_folder;
   RETURN_IF_ERROR(
       triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
 
-  localized->reset(new LocalizedDirectory(effective_path, tmp_folder));
-
-  std::set<std::string> contents, filenames;
-  RETURN_IF_ERROR(GetDirectoryContents(effective_path, &filenames));
-  for (auto itr = filenames.begin(); itr != filenames.end(); ++itr) {
-    contents.insert(JoinPath({effective_path, *itr}));
+  // Specify contents to be downloaded
+  std::set<std::string> contents;
+  bool is_dir;
+  RETURN_IF_ERROR(IsDirectory(path, &is_dir));
+  if (is_dir) {
+    // Set localized path
+    localized->reset(new LocalizedPath(effective_path, tmp_folder));
+    // Specify the entire directory to be downloaded
+    std::set<std::string> filenames;
+    RETURN_IF_ERROR(GetDirectoryContents(effective_path, &filenames));
+    for (auto itr = filenames.begin(); itr != filenames.end(); ++itr) {
+      contents.insert(JoinPath({effective_path, *itr}));
+    }
+  } else {
+    // Set localized path
+    std::string filename =
+        effective_path.substr(effective_path.find_last_of('/') + 1);
+    localized->reset(
+        new LocalizedPath(effective_path, JoinPath({tmp_folder, filename})));
+    // Specify only the file to be downloaded
+    contents.insert(effective_path);
   }
 
+  // Download all specified contents and nested contents
   while (contents.size() != 0) {
     std::set<std::string> tmp_contents = contents;
     contents.clear();
     for (auto iter = tmp_contents.begin(); iter != tmp_contents.end(); ++iter) {
-      bool is_subdir;
       std::string s3_fpath = *iter;
       std::string s3_removed_path = s3_fpath.substr(effective_path.size());
       std::string local_fpath =
-          JoinPath({(*localized)->Path(), s3_removed_path});
+          s3_removed_path.empty()
+              ? (*localized)->Path()
+              : JoinPath({(*localized)->Path(), s3_removed_path});
+      bool is_subdir;
       RETURN_IF_ERROR(IsDirectory(s3_fpath, &is_subdir));
       if (is_subdir) {
         // Create local mirror of sub-directories
@@ -2015,74 +1987,6 @@ S3FileSystem::LocalizeDirectory(
 }
 
 Status
-S3FileSystem::LocalizeFile(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
-{
-  // Check if file exists
-  bool exists;
-  RETURN_IF_ERROR(FileExists(path, &exists));
-  bool is_dir = true;
-  if (exists) {
-    RETURN_IF_ERROR(IsDirectory(path, &is_dir));
-  }
-  if (is_dir) {
-    return Status(Status::Code::INTERNAL, "file does not exist at " + path);
-  }
-
-  // Split path into directory path and file name
-  std::size_t split_loc = path.find_last_of('/');
-  std::string dir_path = path.substr(0, split_loc);
-  std::string file_name = path.substr(split_loc + 1);
-
-  // Cleanup extra slashes
-  std::string clean_path;
-  RETURN_IF_ERROR(CleanPath(dir_path, &clean_path));
-
-  std::string effective_path, protocol, host_name, host_port, bucket, object;
-  if (RE2::FullMatch(
-          clean_path, s3_regex_, &protocol, &host_name, &host_port, &bucket,
-          &object)) {
-    effective_path = "s3://" + bucket + object;
-  } else {
-    effective_path = dir_path;
-  }
-  std::string s3_path = effective_path + "/" + file_name;
-
-  // Create local temporary location
-  std::string tmp_folder;
-  RETURN_IF_ERROR(
-      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
-  std::string tmp_path = tmp_folder + "/" + file_name;
-
-  localized->reset(new LocalizedDirectory(s3_path, tmp_path));
-
-  // Create local copy of file
-  std::string file_bucket, file_object;
-  RETURN_IF_ERROR(ParsePath(s3_path, &file_bucket, &file_object));
-
-  s3::Model::GetObjectRequest object_request;
-  object_request.SetBucket(file_bucket.c_str());
-  object_request.SetKey(file_object.c_str());
-
-  auto get_object_outcome = client_->GetObject(object_request);
-  if (get_object_outcome.IsSuccess()) {
-    auto& retrieved_file =
-        get_object_outcome.GetResultWithOwnership().GetBody();
-    std::ofstream output_file(tmp_path.c_str(), std::ios::binary);
-    output_file << retrieved_file.rdbuf();
-    output_file.close();
-  } else {
-    return Status(
-        Status::Code::INTERNAL,
-        "Failed to get object at " + s3_path + " due to exception: " +
-            get_object_outcome.GetError().GetExceptionName() +
-            ", error message: " + get_object_outcome.GetError().GetMessage());
-  }
-
-  return Status::Success;
-}
-
-Status
 S3FileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
@@ -2117,11 +2021,10 @@ S3FileSystem::MakeTemporaryDirectory(std::string* temp_dir)
 }
 
 Status
-S3FileSystem::DeleteDirectory(const std::string& path)
+S3FileSystem::DeletePath(const std::string& path)
 {
   return Status(
-      Status::Code::UNSUPPORTED,
-      "Delete directory operation not yet implemented");
+      Status::Code::UNSUPPORTED, "Delete path operation not yet implemented");
 }
 
 
@@ -2624,21 +2527,11 @@ ReadTextProto(const std::string& path, google::protobuf::Message* msg)
 }
 
 Status
-LocalizeDirectory(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
+LocalizePath(const std::string& path, std::shared_ptr<LocalizedPath>* localized)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
-  return fs->LocalizeDirectory(path, localized);
-}
-
-Status
-LocalizeFile(
-    const std::string& path, std::shared_ptr<LocalizedDirectory>* localized)
-{
-  std::shared_ptr<FileSystem> fs;
-  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
-  return fs->LocalizeFile(path, localized);
+  return fs->LocalizePath(path, localized);
 }
 
 Status
@@ -2699,11 +2592,11 @@ MakeTemporaryDirectory(const FileSystemType type, std::string* temp_dir)
 }
 
 Status
-DeleteDirectory(const std::string& path)
+DeletePath(const std::string& path)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
-  return fs->DeleteDirectory(path);
+  return fs->DeletePath(path);
 }
 
 Status

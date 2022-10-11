@@ -123,10 +123,11 @@ Status NormalizeInstanceGroup(
 /// \param model_path The full-path to the directory containing the model
 /// configuration, before localization.
 /// \param config The model configuration
+/// \param localized_model_dir The localized model directory
 /// \return The error status
 Status LocalizePythonBackendExecutionEnvironmentPath(
     const std::string& model_path, inference::ModelConfig* config,
-    std::shared_ptr<LocalizedDirectory>* localized_model_dir);
+    std::shared_ptr<LocalizedPath>* localized_model_dir);
 
 /// Auto-complete the instance count based on instance kind and backend name.
 /// \param group The instance group to set the count for.
