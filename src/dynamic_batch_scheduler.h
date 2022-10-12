@@ -169,6 +169,9 @@ class DynamicBatchScheduler : public Scheduler {
   // Lock to protect the completion_queues_
   std::mutex completion_queue_mtx_;
 
+  // Preserves the order in which responses are finalized
+  std::mutex finalize_mtx_;
+
   // Reporter for metrics, or nullptr if no metrics should be reported
   std::shared_ptr<MetricModelReporter> reporter_;
 };
