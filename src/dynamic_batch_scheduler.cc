@@ -667,8 +667,7 @@ DynamicBatchScheduler::FinalizeResponses()
 {
   // Need exclusive access of the function to ensure responses are sent
   // in order
-  static std::mutex finalize_mtx;
-  std::lock_guard<std::mutex> lock(finalize_mtx);
+  std::lock_guard<std::mutex> lock(finalize_mtx_);
   // Finalize the completed payloads in-order as far as possible
   std::deque<std::pair<std::unique_ptr<InferenceResponse>, const uint32_t>>
       responses;
