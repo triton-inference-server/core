@@ -40,7 +40,7 @@ class EnsembleModel : public Model {
 
   static Status Create(
       InferenceServer* server, const std::string& path, const int64_t version,
-      const inference::ModelConfig& model_config, const bool is_config_override,
+      const inference::ModelConfig& model_config, const bool is_config_provided,
       const double min_compute_capability, std::unique_ptr<Model>* model);
 
  private:
@@ -48,11 +48,8 @@ class EnsembleModel : public Model {
 
   explicit EnsembleModel(
       const double min_compute_capability, const std::string& model_dir,
-      const int64_t version, const inference::ModelConfig& config,
-      const bool is_config_override)
-      : Model(
-            min_compute_capability, model_dir, version, config,
-            is_config_override)
+      const int64_t version, const inference::ModelConfig& config)
+      : Model(min_compute_capability, model_dir, version, config)
   {
   }
   friend std::ostream& operator<<(std::ostream&, const EnsembleModel&);

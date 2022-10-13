@@ -37,14 +37,14 @@ namespace triton { namespace core {
 Status
 EnsembleModel::Create(
     InferenceServer* server, const std::string& path, const int64_t version,
-    const inference::ModelConfig& model_config, const bool is_config_override,
+    const inference::ModelConfig& model_config, const bool is_config_provided,
     const double min_compute_capability, std::unique_ptr<Model>* model)
 {
   // Create the ensemble model.
-  std::unique_ptr<EnsembleModel> local_model(new EnsembleModel(
-      min_compute_capability, path, version, model_config, is_config_override));
+  std::unique_ptr<EnsembleModel> local_model(
+      new EnsembleModel(min_compute_capability, path, version, model_config));
 
-  RETURN_IF_ERROR(local_model->Init());
+  RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
   std::unique_ptr<Scheduler> scheduler;
   RETURN_IF_ERROR(EnsembleScheduler::Create(

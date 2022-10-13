@@ -88,7 +88,7 @@ Model::SetScheduler(std::unique_ptr<Scheduler> scheduler)
 }
 
 Status
-Model::Init()
+Model::Init(const bool is_config_provided)
 {
   // If the model configuration has not been set, then look
   // whether the config file was explicitly provided.
@@ -96,7 +96,7 @@ Model::Init()
     const auto config_path = JoinPath({model_dir_, kModelConfigPbTxt});
     bool exists = false;
     RETURN_IF_ERROR(FileExists(config_path, &exists));
-    if (!exists && !is_config_override_) {
+    if (!exists && !is_config_provided) {
       return Status(
           Status::Code::NOT_FOUND,
           "unable to find the model configuration file '" + config_path +

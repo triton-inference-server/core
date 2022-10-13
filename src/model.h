@@ -42,11 +42,10 @@ class Model {
  public:
   explicit Model(
       const double min_compute_capability, const std::string& model_dir,
-      const int64_t version, const inference::ModelConfig& config,
-      const bool is_config_override)
+      const int64_t version, const inference::ModelConfig& config)
       : config_(config), min_compute_capability_(min_compute_capability),
         version_(version), required_input_count_(0), model_dir_(model_dir),
-        set_model_config_(false), is_config_override_(is_config_override)
+        set_model_config_(false)
   {
   }
   virtual ~Model() {}
@@ -88,7 +87,7 @@ class Model {
   }
 
   // Initialize the instance for Triton core usage
-  Status Init();
+  Status Init(const bool is_config_provided);
 
   // Enqueue a request for execution. If Status::Success is returned
   // then the model has taken ownership of the request object and so
@@ -158,9 +157,6 @@ class Model {
 
   // Whether or not model config has been set.
   bool set_model_config_;
-
-  // Whether or not the model config override has been provided.
-  bool is_config_override_;
 };
 
 }}  // namespace triton::core
