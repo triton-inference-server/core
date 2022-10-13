@@ -138,14 +138,10 @@ SequenceBatchScheduler::Create(
           enforce_equal_shape_tensors, has_optional_input, start, end, startend,
           cont, notready, &init_state));
     } else {
-      auto batch = new DirectSequenceBatch(
+      sb.reset(new DirectSequenceBatch(
           sched.get(), index, seq_slot_cnt, instance.get(),
           enforce_equal_shape_tensors, has_optional_input, start, end, startend,
-          cont, notready, &init_state);
-      if (index == 0) {
-        batch->NewPayload();
-      }
-      sb.reset(batch);
+          cont, notready, &init_state));
     }
 
     if (init_state) {
@@ -1116,6 +1112,7 @@ DirectSequenceBatch::DirectSequenceBatch(
   // Create a scheduler thread associated with 'batcher_idx' that
   // executes the queued requests.
   const int nice = 0;
+  NewPayload();
   scheduler_thread_.reset(
       new std::thread([this, nice]() { BatcherThread(nice); }));
 
