@@ -1112,6 +1112,7 @@ DirectSequenceBatch::DirectSequenceBatch(
   // Create a scheduler thread associated with 'batcher_idx' that
   // executes the queued requests.
   const int nice = 0;
+  NewPayload();
   scheduler_thread_.reset(
       new std::thread([this, nice]() { BatcherThread(nice); }));
 
@@ -1204,8 +1205,6 @@ DirectSequenceBatch::BatcherThread(const int nice)
   }
 
   const uint64_t default_wait_microseconds = 500 * 1000;
-
-  NewPayload();
   exec_complete_ = true;
 
   // When there is optional input or input shape must be enforced,
