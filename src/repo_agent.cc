@@ -342,7 +342,7 @@ TritonRepoAgentModel::DeleteMutableLocation()
         Status::Code::UNAVAILABLE, "No mutable location to be deleted");
   }
 
-  auto status = DeleteDirectory(acquired_location_);
+  auto status = DeletePath(acquired_location_);
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to delete previously acquired location '"
               << acquired_location_ << "': " << status.AsString();

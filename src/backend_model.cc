@@ -76,8 +76,13 @@ TritonModel::Create(
   // Localize the content of the model repository corresponding to
   // 'model_name'. This model holds a handle to the localized content
   // so that it persists as long as the model is loaded.
-  std::shared_ptr<LocalizedDirectory> localized_model_dir;
-  RETURN_IF_ERROR(LocalizeDirectory(model_path, &localized_model_dir));
+  std::shared_ptr<LocalizedPath> localized_model_dir;
+  RETURN_IF_ERROR(LocalizePath(model_path, &localized_model_dir));
+
+  // Localize paths in backend model config
+  // [FIXME] Remove once a more permanent solution is implemented (DLIS-4211)
+  RETURN_IF_ERROR(LocalizePythonBackendExecutionEnvironmentPath(
+      model_path, &model_config, &localized_model_dir));
 
   // Get some internal configuration values needed for initialization.
   std::string backend_dir;
@@ -447,7 +452,7 @@ TritonModel::WarmUp()
 
 TritonModel::TritonModel(
     InferenceServer* server,
-    const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
+    const std::shared_ptr<LocalizedPath>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
     const double min_compute_capability, const int64_t version,
     const inference::ModelConfig& config, const bool auto_complete_config)

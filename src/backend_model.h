@@ -78,7 +78,7 @@ class TritonModel : public Model {
 
   TritonModel(
       InferenceServer* server,
-      const std::shared_ptr<LocalizedDirectory>& localized_model_dir,
+      const std::shared_ptr<LocalizedPath>& localized_model_dir,
       const std::shared_ptr<TritonBackend>& backend,
       const double min_compute_capability, const int64_t version,
       const inference::ModelConfig& config, const bool auto_complete_config);
@@ -116,7 +116,7 @@ class TritonModel : public Model {
   // The localized repo directory holding the model. If localization
   // required creation of a temporary local copy then that copy will
   // persist as along as this object is retained by this model.
-  std::shared_ptr<LocalizedDirectory> localized_model_dir_;
+  std::shared_ptr<LocalizedPath> localized_model_dir_;
 
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;

@@ -846,6 +846,61 @@ NormalizeInstanceGroup(
 }
 
 Status
+LocalizePythonBackendExecutionEnvironmentPath(
+    const std::string& model_path, inference::ModelConfig* config,
+    std::shared_ptr<LocalizedPath>* localized_model_dir)
+{
+  if (config->backend() == "python") {
+    if (config->parameters().contains("EXECUTION_ENV_PATH")) {
+      // Read EXECUTION_ENV_PATH
+      std::string exec_env_path =
+          config->parameters().at("EXECUTION_ENV_PATH").string_value();
+      // Replace model directory variable with model_path
+      std::string model_dir_var = "$$TRITON_MODEL_DIRECTORY";
+      if (exec_env_path.substr(0, model_dir_var.size()) == model_dir_var) {
+        exec_env_path.replace(0, model_dir_var.size(), model_path);
+      }
+      // Collapse any .. in the path
+      std::string abs_exec_env_path;
+      std::size_t prev_pos = exec_env_path.size();
+      std::size_t pos = exec_env_path.find_last_of('/', prev_pos - 1);
+      int skip = 0;
+      while (pos != std::string::npos && prev_pos > 0) {
+        if (!skip) {
+          abs_exec_env_path =
+              exec_env_path.substr(pos, prev_pos - pos) + abs_exec_env_path;
+        }
+        skip = skip > 0 ? skip - 1 : skip;
+        if (pos >= 3 && exec_env_path.substr(pos - 3, 3) == "/..") {
+          skip += 2;
+        }
+        prev_pos = pos;
+        pos = exec_env_path.find_last_of('/', prev_pos - 1);
+      }
+      abs_exec_env_path = exec_env_path.substr(0, prev_pos) + abs_exec_env_path;
+      // Localize iff abs_exec_env_path is outside the model directory
+      std::string model_path_slash =
+          model_path.back() == '/' ? model_path : model_path + "/";
+      if (abs_exec_env_path.substr(0, model_path_slash.size()) !=
+          model_path_slash) {
+        // Localize the file
+        std::shared_ptr<LocalizedPath> localized_exec_env_path;
+        RETURN_IF_ERROR(
+            LocalizePath(abs_exec_env_path, &localized_exec_env_path));
+        // Persist the localized temporary path
+        (*localized_model_dir)
+            ->other_localized_path.push_back(localized_exec_env_path);
+        // Rewrite EXECUTION_ENV_PATH
+        config->mutable_parameters()
+            ->at("EXECUTION_ENV_PATH")
+            .set_string_value(localized_exec_env_path->Path());
+      }
+    }
+  }
+  return Status::Success;
+}
+
+Status
 SetDefaultInstanceCount(
     inference::ModelInstanceGroup* group, const std::string& backend)
 {
