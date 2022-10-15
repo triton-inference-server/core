@@ -421,7 +421,7 @@ ModelLifeCycle::AsyncUnload(const std::string& model_name)
 Status
 ModelLifeCycle::AsyncLoad(
     const std::string& model_name, const std::string& model_path,
-    const inference::ModelConfig& model_config,
+    const inference::ModelConfig& model_config, const bool is_config_provided,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)>&& OnComplete)
 {
@@ -492,8 +492,8 @@ ModelLifeCycle::AsyncLoad(
 
     // Load model asynchronously via thread pool
     load_pool_->Enqueue([this, model_name, version, model_info, OnComplete,
-                         load_tracker]() {
-      CreateModel(model_name, version, model_info);
+                         load_tracker, is_config_provided]() {
+      CreateModel(model_name, version, model_info, is_config_provided);
       OnLoadComplete(model_name, version, model_info, OnComplete, load_tracker);
     });
   }
@@ -503,7 +503,8 @@ ModelLifeCycle::AsyncLoad(
 
 void
 ModelLifeCycle::CreateModel(
-    const std::string& model_name, const int64_t version, ModelInfo* model_info)
+    const std::string& model_name, const int64_t version, ModelInfo* model_info,
+    const bool is_config_provided)
 {
   LOG_VERBOSE(2) << "CreateModel() '" << model_name << "' version " << version;
   const auto& model_config = model_info->model_config_;
@@ -518,14 +519,14 @@ ModelLifeCycle::CreateModel(
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
         server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
-        model_name, version, model_config, &model);
+        model_name, version, model_config, is_config_provided, &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
           server_, model_info->model_path_, version, model_config,
-          min_compute_capability_, &is);
+          is_config_provided, min_compute_capability_, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to
       // obtained from server because this may happen during server

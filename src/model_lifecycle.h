@@ -179,7 +179,7 @@ class ModelLifeCycle {
   // the load is finished sucessfully.
   Status AsyncLoad(
       const std::string& model_name, const std::string& model_path,
-      const inference::ModelConfig& model_config,
+      const inference::ModelConfig& model_config, const bool is_config_provided,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)>&& OnComplete);
 
@@ -292,7 +292,7 @@ class ModelLifeCycle {
 
   void CreateModel(
       const std::string& model_name, const int64_t version,
-      ModelInfo* model_info);
+      ModelInfo* model_info, const bool is_config_provided);
   // Callback function template for model load.
   // 'OnComplete' needs to be passed by value for now as there can be
   // multiple versions to be loaded and each holds a copy of

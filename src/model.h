@@ -1,4 +1,4 @@
-// Copyright 2018-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -87,7 +87,7 @@ class Model {
   }
 
   // Initialize the instance for Triton core usage
-  Status Init();
+  Status Init(const bool is_config_provided);
 
   // Enqueue a request for execution. If Status::Success is returned
   // then the model has taken ownership of the request object and so

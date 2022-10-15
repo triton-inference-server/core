@@ -61,7 +61,8 @@ TritonModel::Create(
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const std::string& model_name, const int64_t version,
-    inference::ModelConfig model_config, std::unique_ptr<TritonModel>* model)
+    inference::ModelConfig model_config, const bool is_config_provided,
+    std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -184,7 +185,7 @@ TritonModel::Create(
   }
 
   // Initialize the model for Triton core usage
-  RETURN_IF_ERROR(local_model->Init());
+  RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
   bool device_blocking = false;
   if (local_model->backend_->ExecutionPolicy() ==

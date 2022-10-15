@@ -1,4 +1,4 @@
-// Copyright 2018-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -88,20 +88,12 @@ Model::SetScheduler(std::unique_ptr<Scheduler> scheduler)
 }
 
 Status
-Model::Init()
+Model::Init(const bool is_config_provided)
 {
-  // If the model configuration has not been set, then look
-  // whether the config file was explicitly provided.
-  if (!set_model_config_) {
-    const auto config_path = JoinPath({model_dir_, kModelConfigPbTxt});
-    bool exists = false;
-    RETURN_IF_ERROR(FileExists(config_path, &exists));
-    if (!exists) {
-      return Status(
-          Status::Code::NOT_FOUND,
-          "unable to find the model configuration file '" + config_path +
-              "' for model '" + Name() + "'");
-    }
+  if (!set_model_config_ && !is_config_provided) {
+    return Status(
+        Status::Code::NOT_FOUND,
+        "model configuration is not provided for model '" + Name() + "'");
   }
 
   RETURN_IF_ERROR(ValidateModelConfig(config_, min_compute_capability_));

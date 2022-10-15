@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -40,7 +40,7 @@ class EnsembleModel : public Model {
 
   static Status Create(
       InferenceServer* server, const std::string& path, const int64_t version,
-      const inference::ModelConfig& model_config,
+      const inference::ModelConfig& model_config, const bool is_config_provided,
       const double min_compute_capability, std::unique_ptr<Model>* model);
 
  private:
