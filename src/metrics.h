@@ -36,7 +36,7 @@
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
 #include "prometheus/text_serializer.h"
-#include "response_cache.h"
+#include "cache_manager.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <dcgm_agent.h>
@@ -119,11 +119,11 @@ class Metrics {
 
   // Enable reporting of Cache metrics
   static void EnableCacheMetrics(
-      std::shared_ptr<RequestResponseCache> response_cache);
+      std::shared_ptr<TritonCache> response_cache);
 
   // Start a thread for polling enabled metrics if any
   static void StartPollingThreadSingleton(
-      std::shared_ptr<RequestResponseCache> response_cache);
+      std::shared_ptr<TritonCache> response_cache);
 
   // Set the time interval in secs at which metrics are collected
   static void SetMetricsInterval(uint64_t metrics_interval_ms);
@@ -229,9 +229,9 @@ class Metrics {
   bool InitializeDcgmMetrics();
   bool InitializeCpuMetrics();
   bool InitializeCacheMetrics(
-      std::shared_ptr<RequestResponseCache> response_cache);
-  bool StartPollingThread(std::shared_ptr<RequestResponseCache> response_cache);
-  bool PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache);
+      std::shared_ptr<TritonCache> response_cache);
+  bool StartPollingThread(std::shared_ptr<TritonCache> response_cache);
+  bool PollCacheMetrics(std::shared_ptr<TritonCache> response_cache);
   bool PollDcgmMetrics();
   bool PollCpuMetrics();
 

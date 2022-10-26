@@ -176,18 +176,21 @@ InferenceServer::Init()
     return status;
   }
 
-  if (response_cache_byte_size_ > 0) {
-    std::unique_ptr<RequestResponseCache> local_response_cache;
-    status = RequestResponseCache::Create(
-        response_cache_byte_size_, &local_response_cache);
-    if (!status.IsOk()) {
-      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-      return status;
-    }
-
-    response_cache_ = std::move(local_response_cache);
+  status = TritonCacheManager::Create(&cache_manager_);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
   }
 
+  std::shared_ptr<TritonCache> cache;
+  // TODO: parse cache config into message somewhere
+  const TritonServerMessage* cache_config = nullptr;
+  // TODO: propogate args correctly
+  status = cache_manager_->CreateCache("cache_name", "cache_dir", "cache_libpath", cache_config, &cache);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
 
 #ifdef TRITON_ENABLE_GPU
   // Set the default CUDA memory pool size for GPUs where it is not

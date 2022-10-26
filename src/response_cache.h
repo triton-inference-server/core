@@ -79,12 +79,12 @@ class RequestResponseCache {
   // 'response' on cache hit or nullptr on cache miss
   // Return Status object indicating success or failure.
   Status Lookup(
-      InferenceResponse* const response, InferenceRequest* const request);
+      InferenceResponse* const response, uint64_t key);
   // Insert response into cache, evict entries to make space if necessary
   // Return Status object indicating success or failure.
   Status Insert(
-      const InferenceResponse& response, InferenceRequest* const request);
-  // Evict entry from cache based on policy
+      const InferenceResponse& response, uint64_t key);
+  // Evict entry from cache based on policy. 
   // Return Status object indicating success or failure.
   Status Evict();
   // Returns number of items in cache
@@ -117,18 +117,16 @@ class RequestResponseCache {
     std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
     return num_misses_;
   }
-  // Returns the total lookup latency (nanoseconds) of all lookups in cache
-  // lifespan
+
+  // TODO: Remove
   uint64_t TotalLookupLatencyNs()
   {
-    std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
-    return total_lookup_latency_ns_;
+    return 0;
   }
 
   uint64_t TotalInsertionLatencyNs()
   {
-    std::lock_guard<std::recursive_mutex> lk(cache_mtx_);
-    return total_insertion_latency_ns_;
+    return 0;
   }
 
   // Returns total number of bytes allocated for cache
@@ -187,8 +185,6 @@ class RequestResponseCache {
   size_t num_lookups_ = 0;
   size_t num_hits_ = 0;
   size_t num_misses_ = 0;
-  uint64_t total_lookup_latency_ns_ = 0;
-  uint64_t total_insertion_latency_ns_ = 0;
   // Mutex for buffer synchronization
   std::recursive_mutex buffer_mtx_;
   // Mutex for cache synchronization

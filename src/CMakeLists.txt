@@ -106,6 +106,7 @@ set(
   backend_model.cc
   backend_model_instance.cc
   buffer_attributes.cc
+  cache_manager.cc # TODO
   cuda_utils.cc
   dynamic_batch_scheduler.cc
   ensemble_scheduler.cc
@@ -131,7 +132,7 @@ set(
   pinned_memory_manager.cc
   rate_limiter.cc
   repo_agent.cc
-  response_cache.cc
+  response_cache.cc # TODO
   scheduler_utils.cc
   sequence_batch_scheduler.cc
   sequence_state.cc
@@ -149,6 +150,7 @@ set(
   backend_model.h
   backend_model_instance.h
   buffer_attributes.h
+  cache_manager.h # TODO
   constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h
@@ -176,7 +178,7 @@ set(
   rate_limiter.h
   repo_agent.h
   response_allocator.h
-  response_cache.h
+  response_cache.h # TODO
   scheduler.h
   scheduler_utils.h
   sequence_batch_scheduler.h

@@ -2138,7 +2138,7 @@ TRITONSERVER_ServerNew(
   if (loptions->Metrics() && lserver->ResponseCacheEnabled()) {
     // NOTE: Cache metrics must be enabled after cache initialized in
     // server->Init()
-    tc::Metrics::EnableCacheMetrics(lserver->GetResponseCache());
+    tc::Metrics::EnableCacheMetrics(lserver->CacheManager()->Cache());
   }
 #ifdef TRITON_ENABLE_METRICS_GPU
   if (loptions->Metrics() && loptions->GpuMetrics()) {
@@ -2157,7 +2157,7 @@ TRITONSERVER_ServerNew(
        loptions->CpuMetrics());
   if (loptions->Metrics() && poll_metrics) {
     // Start thread to poll enabled metrics periodically
-    tc::Metrics::StartPollingThreadSingleton(lserver->GetResponseCache());
+    tc::Metrics::StartPollingThreadSingleton(lserver->CacheManager()->Cache());
   }
 #endif  // TRITON_ENABLE_METRICS
 

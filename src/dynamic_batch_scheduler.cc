@@ -600,31 +600,33 @@ DynamicBatchScheduler::DelegateResponse(
   std::lock_guard<std::mutex> lock(completion_queue_mtx_);
   completion_queue_.emplace_back();
   auto queue_slot = &completion_queue_.back();
-  // Pass raw ptr to lambda for tracking stats from cache and updating
-  // metric reporter on cache miss stats after insertion
-  InferenceRequest* raw_request_ptr = request.get();
+
+  // TODO
+  uint64_t key = request->CacheKey();
 
   request->SetResponseDelegator(
-      [this, queue_slot, raw_request_ptr](
+      [this, queue_slot, key](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
-        if (response_cache_enabled_ && raw_request_ptr->CacheKeyIsSet()) {
+        if (response_cache_enabled_) {
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
-          auto cache = model_->Server()->GetResponseCache();
-          auto status = cache->Insert(*response, raw_request_ptr);
+          auto cache = model_->Server()->CacheManager()->Cache();
+          auto status = cache->Insert(*response, key);
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
 #ifdef TRITON_ENABLE_STATS
+            // TODO: Use model_ directly or alternative instead of request
+            // because request can be released before we get to this callback
+
             // Update cache miss statistics even on failure to insert
             // as we still spend time on lookup and attempting to insert
-            raw_request_ptr->ReportStatisticsCacheMiss(reporter_.get());
+            //raw_request_ptr->ReportStatisticsCacheMiss(reporter_.get());
 #endif  // TRITON_ENABLE_STATS
 
             if (!status.IsOk()) {
-              LOG_ERROR << raw_request_ptr->LogRequest()
-                        << "Failed to insert request_hash ["
-                        << raw_request_ptr->CacheKey()
+              LOG_ERROR << "Failed to insert key ["
+                        << std::to_string(key)
                         << "] into response cache: " << status.Message();
             }
           }  // Otherwise do nothing; we update cache hit statistics on Lookup
@@ -647,11 +649,21 @@ DynamicBatchScheduler::CacheLookUp(
     std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response)
 {
-  auto cache = model_->Server()->GetResponseCache();
+  Status status;
+  auto cache = model_->Server()->CacheManager()->Cache();
   // Lookup request in cache
   std::unique_ptr<InferenceResponse> local_response;
   request->ResponseFactory()->CreateResponse(&local_response);
-  auto status = cache->Lookup(local_response.get(), request.get());
+  uint64_t key = 0;  // TODO: Support generic hash type
+  if (!request->CacheKeyIsSet()) {
+    status = cache->Hash(*request, &key); // TODO: Check error
+    if (!status.IsOk()) {
+        LOG_ERROR << "Failed to hash request";
+        return;
+    }
+    request->SetCacheKey(key);
+  }
+  status = cache->Lookup(local_response.get(), request->CacheKey()); 
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
 #ifdef TRITON_ENABLE_STATS

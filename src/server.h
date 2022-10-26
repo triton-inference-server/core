@@ -34,11 +34,11 @@
 #include <vector>
 
 #include "backend_manager.h"
+#include "cache_manager.h"
 #include "infer_parameter.h"
 #include "model_config.pb.h"
 #include "model_repository_manager.h"
 #include "rate_limiter.h"
-#include "response_cache.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 
@@ -274,14 +274,14 @@ class InferenceServer {
     return backend_manager_;
   }
 
+  // Get the Cache Manager
+  const std::shared_ptr<TritonCacheManager>& CacheManager()
+  {
+    return cache_manager_;
+  }
+
   // Return the pointer to RateLimiter object.
   std::shared_ptr<RateLimiter> GetRateLimiter() { return rate_limiter_; }
-
-  // Return the pointer to response cache object.
-  std::shared_ptr<RequestResponseCache> GetResponseCache()
-  {
-    return response_cache_;
-  }
 
  private:
   const std::string version_;
@@ -297,6 +297,7 @@ class InferenceServer {
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;
   uint64_t pinned_memory_pool_size_;
+  // TODO: remove or extract?
   uint64_t response_cache_byte_size_;
   bool response_cache_enabled_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
@@ -320,7 +321,7 @@ class InferenceServer {
   std::shared_ptr<RateLimiter> rate_limiter_;
   std::unique_ptr<ModelRepositoryManager> model_repository_manager_;
   std::shared_ptr<TritonBackendManager> backend_manager_;
-  std::shared_ptr<RequestResponseCache> response_cache_;
+  std::shared_ptr<TritonCacheManager> cache_manager_;
 };
 
 }}  // namespace triton::core
