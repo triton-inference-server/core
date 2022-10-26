@@ -278,9 +278,8 @@ PriorityQueue::PriorityQueue(
     // All priorities with user-given policy are instantiated. We do not
     // permanently add default PolicyQueue because those will be dynamically
     // created and erased to keep memory footprint low
-    for (auto it = queue_policy_map.begin(); it != queue_policy_map.end();
-         ++it) {
-      queues_.emplace((uint32_t)it->first, PolicyQueue(it->second, true));
+    for (const auto& qp : queue_policy_map) {
+      queues_.emplace((uint32_t)qp.first, PolicyQueue(qp.second, true));
     }
   }
   front_priority_level_ = queues_.empty() ? 0 : queues_.begin()->first;
