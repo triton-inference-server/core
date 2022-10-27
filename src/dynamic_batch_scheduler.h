@@ -113,6 +113,9 @@ class DynamicBatchScheduler : public Scheduler {
   TritonModel* model_;
   TritonModelInstance* model_instance_;
 
+  // Name of the model.
+  std::string model_name_;
+
   // True if dynamic batching is enabled.
   const bool dynamic_batching_enabled_;
 

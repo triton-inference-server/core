@@ -57,6 +57,7 @@ DynamicBatchScheduler::DynamicBatchScheduler(
     const inference::ModelQueuePolicy& default_queue_policy,
     const uint32_t priority_levels, const ModelQueuePolicyMap& queue_policy_map)
     : model_(model), model_instance_(model_instance),
+      model_name_(model->Name()),
       dynamic_batching_enabled_(dynamic_batching_enabled),
       queue_(default_queue_policy, priority_levels, queue_policy_map),
       stop_(false), max_batch_size_((size_t)std::max(1, max_batch_size)),
@@ -76,7 +77,7 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   // Initialize metric reporter for cache statistics if cache enabled
   if (response_cache_enabled_) {
     MetricModelReporter::Create(
-        model_->Name(), model_->Version(), METRIC_REPORTER_ID_RESPONSE_CACHE,
+        model_name_, model_->Version(), METRIC_REPORTER_ID_RESPONSE_CACHE,
         model_->Config().metric_tags(), &reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
@@ -279,15 +280,15 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 {
 #ifndef _WIN32
   if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
-    LOG_VERBOSE(1) << "Starting dynamic-batcher thread for " << model_->Name()
+    LOG_VERBOSE(1) << "Starting dynamic-batcher thread for " << model_name_
                    << " at nice " << nice << "...";
   } else {
-    LOG_VERBOSE(1) << "Starting dynamic-batcher thread for " << model_->Name()
+    LOG_VERBOSE(1) << "Starting dynamic-batcher thread for " << model_name_
                    << " at default nice (requested nice " << nice
                    << " failed)...";
   }
 #else
-  LOG_VERBOSE(1) << "Starting dynamic-batcher thread for " << model_->Name()
+  LOG_VERBOSE(1) << "Starting dynamic-batcher thread for " << model_name_
                  << " at default nice...";
 #endif
   // For debugging/testing, delay start of threads until the queue
@@ -297,7 +298,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     const char* dstr = getenv("TRITONSERVER_DELAY_SCHEDULER");
     if (dstr != nullptr) {
       delay_cnt = atoi(dstr);
-      LOG_VERBOSE(1) << "Delaying batcher thread for " << model_->Name()
+      LOG_VERBOSE(1) << "Delaying batcher thread for " << model_name_
                      << " until " << delay_cnt << " queued requests...";
     }
   }
@@ -308,7 +309,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
   const uint64_t default_wait_microseconds = 500 * 1000;
 
   while (!scheduler_thread_exit_.load()) {
-    NVTX_RANGE(nvtx_, "DynamicBatcher " + model_->Name());
+    NVTX_RANGE(nvtx_, "DynamicBatcher " + model_name_);
 
     std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>
         rejected_requests;
@@ -333,8 +334,8 @@ DynamicBatchScheduler::BatcherThread(const int nice)
         if (queue_.Size() >= delay_cnt) {
           delay_cnt = 0;
         }
-        LOG_VERBOSE(1) << "Delaying batcher thread " << model_->Name()
-                       << " until " << delay_cnt
+        LOG_VERBOSE(1) << "Delaying batcher thread " << model_name_ << " until "
+                       << delay_cnt
                        << " queued requests, current total = " << queue_.Size();
       } else if (queue_.Empty()) {
         wait_microseconds = default_wait_microseconds;
@@ -421,7 +422,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     }
   }  // end runner loop
 
-  LOG_VERBOSE(1) << "Stopping dynamic-batcher thread for " << model_->Name()
+  LOG_VERBOSE(1) << "Stopping dynamic-batcher thread for " << model_name_
                  << "...";
 }
 
