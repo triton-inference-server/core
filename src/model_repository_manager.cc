@@ -451,7 +451,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
       return Status::Success;
     }
 
-    // Update dependencies 
+    // Update dependencies
     RETURN_IF_ERROR(UpdateDependencyGraph(
         added, deleted, modified, new_infos, &new_dependency_graph));
     UpdateTransition(new_dependency_graph, added, true);
@@ -461,13 +461,20 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     // Write intermediate state
     infos_.swap(new_infos);
     dependency_graph_.swap(new_dependency_graph);
+    CopyModelInfos(&new_infos);
+    CopyDependencyGraph(&new_dependency_graph);
   }
 
   for (const auto& name : deleted) {
     model_life_cycle_->AsyncUnload(name);
   }
+  // do not mark the current affected models as in transition, to distinguish
+  // between models loading/unloading by other threads
+  UpdateTransition(new_dependency_graph, added, false);
+  UpdateTransition(new_dependency_graph, deleted, false);
+  UpdateTransition(new_dependency_graph, modified, false);
   // model loading / unloading error will be printed but ignored
-  LoadModelByDependency();
+  LoadModelByDependency(new_infos, new_dependency_graph);
 
   // mark in transition models as completed
   {
@@ -475,13 +482,21 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     UpdateTransition(dependency_graph_, added, false);
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
+    // save checked_
+    for (auto& name : added) {
+      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+    }
+    for (auto& name : modified) {
+      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+    }
   }
 
   return Status::Success;
 }
 
 std::map<std::string, Status>
-ModelRepositoryManager::LoadModelByDependency()
+ModelRepositoryManager::LoadModelByDependency(
+    const ModelInfoMap& infos, const DependencyGraph& dependency_graph) const
 {
   std::map<std::string, Status> res;
   struct ModelState {
@@ -491,7 +506,7 @@ ModelRepositoryManager::LoadModelByDependency()
     std::promise<void> ready_;
   };
   NodeSet loaded_models;
-  auto set_pair = ModelsToLoadUnload(loaded_models);
+  auto set_pair = ModelsToLoadUnload(dependency_graph, loaded_models);
   // Loop until all model are loaded / unloaded
   while ((!set_pair.first.empty()) || (!set_pair.second.empty())) {
     loaded_models.clear();
@@ -507,7 +522,7 @@ ModelRepositoryManager::LoadModelByDependency()
     for (auto& valid_model : set_pair.first) {
       model_states.emplace_back(new ModelState(valid_model));
       auto model_state = model_states.back().get();
-      const auto itr = infos_.find(valid_model->model_name_);
+      const auto itr = infos.find(valid_model->model_name_);
       auto status = model_life_cycle_->AsyncLoad(
           valid_model->model_name_, itr->second->model_path_,
           valid_model->model_config_, itr->second->is_config_provided_,
@@ -538,14 +553,14 @@ ModelRepositoryManager::LoadModelByDependency()
       // ensure the next load request will attempt to load the model again
       // for operation consistency.
       if (!model_state->status_.IsOk()) {
-        auto& model_info = infos_.find(model_state->node_->model_name_)->second;
+        auto& model_info = infos.find(model_state->node_->model_name_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
-    set_pair = ModelsToLoadUnload(loaded_models);
+    set_pair = ModelsToLoadUnload(dependency_graph, loaded_models);
   }
   // Clear temporary stored agent model list after all loads are triggerred
-  for (auto& info : infos_) {
+  for (auto& info : infos) {
     info.second->agent_model_list_.reset();
   }
   return res;
@@ -586,6 +601,7 @@ ModelRepositoryManager::LoadUnloadModel(
           Status::Code::INTERNAL,
           "failed to load '" + model_name + "', no version is available");
     }
+    std::lock_guard<std::mutex> lock(poll_mu_);  // protect infos_
     auto it = infos_.find(model_name);
     if (it == infos_.end()) {
       return Status(
@@ -637,6 +653,8 @@ ModelRepositoryManager::LoadUnloadModels(
       for (const auto& model : models) {
         deleted.insert(model.first);
       }
+      CopyModelInfos(&new_infos);
+      CopyDependencyGraph(&new_dependency_graph);
     }
     // ActionType::LOAD and in model control mode
     else {
@@ -701,10 +719,10 @@ ModelRepositoryManager::LoadUnloadModels(
     RETURN_IF_ERROR(UpdateDependencyGraph(
         added, deleted, modified, new_infos, &new_dependency_graph,
         unload_dependents ? &deleted_dependents : nullptr));
-    UpdateTransition(dependency_graph_, added, true);
-    UpdateTransition(dependency_graph_, deleted, true);
-    UpdateTransition(dependency_graph_, modified, true);
-    UpdateTransition(dependency_graph_, deleted_dependents, true);
+    UpdateTransition(new_dependency_graph, added, true);
+    UpdateTransition(new_dependency_graph, deleted, true);
+    UpdateTransition(new_dependency_graph, modified, true);
+    UpdateTransition(new_dependency_graph, deleted_dependents, true);
 
     // The models are in 'deleted' either when they are asked to be unloaded or
     // they are not found / are duplicated across all model repositories.
@@ -716,14 +734,22 @@ ModelRepositoryManager::LoadUnloadModels(
     // Write intermediate state
     infos_.swap(new_infos);
     dependency_graph_.swap(new_dependency_graph);
+    CopyModelInfos(&new_infos);
+    CopyDependencyGraph(&new_dependency_graph);
   }
 
   for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
     model_life_cycle_->AsyncUnload(name);
   }
+  // do not mark the current affected models as in transition, to distinguish
+  // between models loading/unloading by other threads
+  UpdateTransition(new_dependency_graph, added, false);
+  UpdateTransition(new_dependency_graph, deleted, false);
+  UpdateTransition(new_dependency_graph, modified, false);
+  UpdateTransition(new_dependency_graph, deleted_dependents, false);
   // load / unload the models affected, and check the load status of
   // the requested models
-  const auto& load_status = LoadModelByDependency();
+  const auto& load_status = LoadModelByDependency(new_infos, new_dependency_graph);
 
   // mark in transition models as completed
   {
@@ -732,6 +758,13 @@ ModelRepositoryManager::LoadUnloadModels(
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
     UpdateTransition(dependency_graph_, deleted_dependents, false);
+    // save checked_
+    for (auto& name : added) {
+      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+    }
+    for (auto& name : modified) {
+      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+    }
   }
 
   if (status.IsOk() && (type == ActionType::LOAD)) {
@@ -875,7 +908,7 @@ ModelRepositoryManager::RepositoryIndex(
 Status
 ModelRepositoryManager::GetModel(
     const std::string& model_name, const int64_t model_version,
-    std::shared_ptr<Model>* model)
+    std::shared_ptr<Model>* model) const
 {
   Status status = model_life_cycle_->GetModel(model_name, model_version, model);
   if (!status.IsOk()) {
@@ -1654,16 +1687,17 @@ ModelRepositoryManager::UpdateTransition(const DependencyGraph& graph, const std
 }
 
 std::pair<ModelRepositoryManager::NodeSet, ModelRepositoryManager::NodeSet>
-ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
+ModelRepositoryManager::ModelsToLoadUnload(
+    const DependencyGraph& dependency_graph, const NodeSet& loaded_models) const
 {
   // <valid model set, invalid model set>
   std::pair<NodeSet, NodeSet> res;
   // first call to this function
   if (loaded_models.empty()) {
-    for (auto& pair : dependency_graph_.first) {
+    for (auto& pair : dependency_graph.first) {
       auto node = pair.second.get();
       // only care about nodes that are affected by the update
-      if (!node->checked_) {
+      if (!node->checked_ && !node->in_transition_) {
         if (CheckNode(node)) {
           if (node->status_.IsOk()) {
             res.first.emplace(node);
@@ -1677,7 +1711,7 @@ ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
     for (const auto& model : loaded_models) {
       for (auto node : model->downstreams_) {
         // only care about nodes that are affected by the update
-        if (!node->checked_) {
+        if (!node->checked_ && !node->in_transition_) {
           if (CheckNode(node)) {
             if (node->status_.IsOk()) {
               res.first.emplace(node);
@@ -1699,7 +1733,7 @@ ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
 }
 
 bool
-ModelRepositoryManager::CheckNode(DependencyNode* node)
+ModelRepositoryManager::CheckNode(DependencyNode* node) const
 {
   bool node_ready = true;
   // if the node is in invalid status, mark as ready as we know

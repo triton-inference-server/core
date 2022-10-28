@@ -183,7 +183,7 @@ class ModelRepositoryManager {
   /// \return error status.
   Status GetModel(
       const std::string& model_name, const int64_t model_version,
-      std::shared_ptr<Model>* model);
+      std::shared_ptr<Model>* model) const;
 
   // Register model repository path.
   /// \param repository Path to model repository.
@@ -273,7 +273,7 @@ class ModelRepositoryManager {
   /// \param infos The model infos.
   /// \param dependency_graph The dependency graph.
   /// \return The status of the model loads.
-  std::map<std::string, Status> LoadModelByDependency();
+  std::map<std::string, Status> LoadModelByDependency(const ModelInfoMap& infos, const DependencyGraph& dependency_graph) const;
 
   /// Helper function to update the dependency graph based on the poll result
   /// \param added The names of the models added to the repository.
@@ -345,14 +345,14 @@ class ModelRepositoryManager {
   /// Unloaded models will be represented as models with no loaded versions.
   /// \return A pair of node set containing models to be loaded and models to be
   /// unloaded for the next iteration.
-  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(const NodeSet& loaded_models);
+  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(const DependencyGraph& dependency_graph, const NodeSet& loaded_models) const;
 
   /// Check if the node is ready for the next iteration. A node is ready if the
   /// node is invalid (containing invalid model config or its depdencies failed
   /// to load) or all of its dependencies are satisfied.
   /// \param node The node to be checked.
   /// \return True if the node is ready. False otherwise.
-  bool CheckNode(DependencyNode* node);
+  bool CheckNode(DependencyNode* node) const;
 
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node) const;
