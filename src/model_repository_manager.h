@@ -74,7 +74,7 @@ class ModelRepositoryManager {
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const std::string& model_name)
-        : model_name_(model_name), status_(Status::Success), checked_(false)
+        : model_name_(model_name), status_(Status::Success), checked_(false), in_transition_(false)
     {
     }
 
@@ -82,6 +82,7 @@ class ModelRepositoryManager {
     Status status_;
     bool checked_;
     bool explicitly_load_;
+    bool in_transition_;  // is the model currently loading/unloading
     inference::ModelConfig model_config_;
     std::set<int64_t> loaded_versions_;
     std::set<DependencyNode*> missing_upstreams_;
@@ -204,6 +205,10 @@ class ModelRepositoryManager {
   // Map from model name to information about the model.
   using ModelInfoMap =
       std::unordered_map<std::string, std::unique_ptr<ModelInfo>>;
+  // Dependency between models <present nodes, missing nodes>, where each of
+  // the two nodes maps model name -> DependencyNode
+  using DependencyGraph =
+      std::pair<std::unordered_map<std::string, std::unique_ptr<DependencyNode>>, std::unordered_map<std::string, std::unique_ptr<DependencyNode>>>;
 
   // Set of DependencyNode
   using NodeSet = std::set<DependencyNode*>;
@@ -247,7 +252,7 @@ class ModelRepositoryManager {
           std::string, std::vector<const InferenceParameter*>>& models,
       std::set<std::string>* added, std::set<std::string>* deleted,
       std::set<std::string>* modified, std::set<std::string>* unmodified,
-      ModelInfoMap* updated_infos, bool* all_models_polled);
+      ModelInfoMap* updated_infos, bool* all_models_polled) const;
 
   /// Helper function for Poll() to initialize ModelInfo for the model.
   /// \param name The name of the model.
@@ -260,11 +265,13 @@ class ModelRepositoryManager {
   Status InitializeModelInfo(
       const std::string& name, const std::string& path,
       const std::vector<const InferenceParameter*>& params,
-      std::unique_ptr<ModelInfo>* info);
+      std::unique_ptr<ModelInfo>* info) const;
 
   /// Load models based on the dependency graph. The function will iteratively
   /// load models that all the models they depend on has been loaded, and unload
   /// models if their dependencies are no longer satisfied.
+  /// \param infos The model infos.
+  /// \param dependency_graph The dependency graph.
   /// \return The status of the model loads.
   std::map<std::string, Status> LoadModelByDependency();
 
@@ -273,31 +280,64 @@ class ModelRepositoryManager {
   /// \param deleted The names of the models removed from the repository.
   /// \param modified The names of the models remaining in the
   /// repository that have been changed.
+  /// \param model_infos The model infos.
+  /// \param updated_graph The dependency graph.
   /// \param deleted_dependents The names of dependent models to be removed
   /// from the repository.
   /// \return The error status.
   Status UpdateDependencyGraph(
       const std::set<std::string>& added, const std::set<std::string>& deleted,
-      const std::set<std::string>& modified,
-      std::set<std::string>* deleted_dependents = nullptr);
+      const std::set<std::string>& modified, const ModelInfoMap& model_infos, 
+      DependencyGraph* updated_graph, std::set<std::string>* deleted_dependents = nullptr) const;
+
+  /// Helper function to deep copy the dependency graph
+  /// \param new_graph The new graph to be cleared and copied into
+  void CopyDependencyGraph(DependencyGraph* new_graph) const;
+
+  /// Helper function to re-map dependency graph nodes pointers from old nodes
+  /// to new nodes.
+  /// The function search for matching pointers in the new_nodes first, if not
+  /// found, then the matching pointer must be in the ref_nodes.
+  /// \param ref_nodes The reference nodes for pointers not in new_nodes
+  /// \param new_nodes The new nodes to be re-mapped
+  void ReMapDependencyGraphPointers(
+      const std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* ref_nodes,
+      std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* new_nodes) const;
 
   /// Helper function to uncheck the nodes because the model that they depends
   /// on has changed. The unchecked nodes will be validated again.
   /// The function will be call recursively to uncheck all downstreams.
   /// \param downstreams The nodes to be unchecked.
   /// \param updated_nodes Return the nodes that have been unchecked
-  void UncheckDownstream(NodeSet* downstreams, NodeSet* updated_nodes);
+  void UncheckDownstream(NodeSet* downstreams, NodeSet* updated_nodes) const;
 
   /// Helper function to construct the edges between nodes in dependency graph.
+  /// \param graph The dependency graph.
   /// \param updated_node The node that is newly added or modified.
   /// \return True if the node represents an ensemble model. False otherwise.
-  bool ConnectDependencyGraph(DependencyNode* updated_node);
+  bool ConnectDependencyGraph(DependencyGraph* graph, DependencyNode* updated_node) const;
 
   /// Get the model info for a named model.
+  /// \param model_infos Map of model names to its infomation.
   /// \param name The model name.
   /// \param model_info Returns the model information.
   /// \return OK if found, NOT_FOUND otherwise.
-  Status GetModelInfo(const std::string& name, ModelInfo** model_info);
+  Status GetModelInfo(const ModelInfoMap& model_infos, const std::string& name, ModelInfo** model_info) const;
+
+  /// Helper function to deep copy the model infos
+  /// \param new_infos The new model infos to be cleared and copied into
+  void CopyModelInfos(ModelInfoMap* new_infos) const;
+
+  /// Check if a dependency node (model) is currently loading/unloading
+  /// \param dependency_node The dependency node to check
+  /// \return OK if NOT in transit, INVALID_ARG if in transit
+  Status InTransit(const DependencyNode* dependency_node) const;
+
+  /// Mark the nodes (model) in dependency graph to currently loading/unloading
+  /// \param graph The dependency graph
+  /// \param names The name of models to be in transition
+  /// \param transition True for loading, False for unloading
+  void UpdateTransition(const DependencyGraph& graph, const std::set<std::string>& names, bool transition) const;
 
   /// Get the models to be loaded / unloaded based on the model loaded in
   /// previous iteration.
@@ -315,10 +355,10 @@ class ModelRepositoryManager {
   bool CheckNode(DependencyNode* node);
 
   Status CircularcyCheck(
-      DependencyNode* current_node, const DependencyNode* start_node);
+      DependencyNode* current_node, const DependencyNode* start_node) const;
 
   bool ModelDirectoryOverride(
-      const std::vector<const InferenceParameter*>& model_params);
+      const std::vector<const InferenceParameter*>& model_params) const;
 
   std::set<std::string> repository_paths_;
   const bool autofill_;
@@ -327,12 +367,14 @@ class ModelRepositoryManager {
   const double min_compute_capability_;
 
   std::mutex poll_mu_;
-  ModelInfoMap infos_;
 
-  std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
-      dependency_graph_;
-  std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
-      missing_nodes_;
+  ModelInfoMap infos_;
+  DependencyGraph dependency_graph_;
+
+  //std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
+  //    dependency_graph_;
+  //std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
+  //    missing_nodes_;
 
   // Mappings from (overridden) model names to a pair of their repository and
   // absolute path
