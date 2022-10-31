@@ -43,7 +43,7 @@ part of the *tritonserver* executable. The *tritonserver* executable
 is built in the [server
 repo](https://github.com/triton-inference-server/server) as described
 in the [server build
-documentation](https://github.com/triton-inference-server/server/blob/main/docs/build.md).
+documentation](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/build.md).
 
 Ask questions or report problems in the main Triton [issues
 page](https://github.com/triton-inference-server/server/issues).
