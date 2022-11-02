@@ -74,7 +74,8 @@ class ModelRepositoryManager {
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const std::string& model_name)
-        : model_name_(model_name), status_(Status::Success), checked_(false), in_transition_(false)
+        : model_name_(model_name), status_(Status::Success), checked_(false),
+          in_transition_(false)
     {
     }
 
@@ -207,8 +208,9 @@ class ModelRepositoryManager {
       std::unordered_map<std::string, std::unique_ptr<ModelInfo>>;
   // Dependency between models <present nodes, missing nodes>, where each of
   // the two nodes maps model name -> DependencyNode
-  using DependencyGraph =
-      std::pair<std::unordered_map<std::string, std::unique_ptr<DependencyNode>>, std::unordered_map<std::string, std::unique_ptr<DependencyNode>>>;
+  using DependencyGraph = std::pair<
+      std::unordered_map<std::string, std::unique_ptr<DependencyNode>>,
+      std::unordered_map<std::string, std::unique_ptr<DependencyNode>>>;
 
   // Set of DependencyNode
   using NodeSet = std::set<DependencyNode*>;
@@ -273,7 +275,8 @@ class ModelRepositoryManager {
   /// \param infos The model infos.
   /// \param dependency_graph The dependency graph.
   /// \return The status of the model loads.
-  std::map<std::string, Status> LoadModelByDependency(const ModelInfoMap& infos, const DependencyGraph& dependency_graph) const;
+  std::map<std::string, Status> LoadModelByDependency(
+      const ModelInfoMap& infos, const DependencyGraph& dependency_graph) const;
 
   /// Helper function to update the dependency graph based on the poll result
   /// \param added The names of the models added to the repository.
@@ -287,8 +290,9 @@ class ModelRepositoryManager {
   /// \return The error status.
   Status UpdateDependencyGraph(
       const std::set<std::string>& added, const std::set<std::string>& deleted,
-      const std::set<std::string>& modified, const ModelInfoMap& model_infos, 
-      DependencyGraph* updated_graph, std::set<std::string>* deleted_dependents = nullptr) const;
+      const std::set<std::string>& modified, const ModelInfoMap& model_infos,
+      DependencyGraph* updated_graph,
+      std::set<std::string>* deleted_dependents = nullptr) const;
 
   /// Helper function to deep copy the dependency graph
   /// \param new_graph The new graph to be cleared and copied into
@@ -301,8 +305,10 @@ class ModelRepositoryManager {
   /// \param ref_nodes The reference nodes for pointers not in new_nodes
   /// \param new_nodes The new nodes to be re-mapped
   void ReMapDependencyGraphPointers(
-      const std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* ref_nodes,
-      std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* new_nodes) const;
+      const std::unordered_map<std::string, std::unique_ptr<DependencyNode>>*
+          ref_nodes,
+      std::unordered_map<std::string, std::unique_ptr<DependencyNode>>*
+          new_nodes) const;
 
   /// Helper function to uncheck the nodes because the model that they depends
   /// on has changed. The unchecked nodes will be validated again.
@@ -315,14 +321,17 @@ class ModelRepositoryManager {
   /// \param graph The dependency graph.
   /// \param updated_node The node that is newly added or modified.
   /// \return True if the node represents an ensemble model. False otherwise.
-  bool ConnectDependencyGraph(DependencyGraph* graph, DependencyNode* updated_node) const;
+  bool ConnectDependencyGraph(
+      DependencyGraph* graph, DependencyNode* updated_node) const;
 
   /// Get the model info for a named model.
   /// \param model_infos Map of model names to its infomation.
   /// \param name The model name.
   /// \param model_info Returns the model information.
   /// \return OK if found, NOT_FOUND otherwise.
-  Status GetModelInfo(const ModelInfoMap& model_infos, const std::string& name, ModelInfo** model_info) const;
+  Status GetModelInfo(
+      const ModelInfoMap& model_infos, const std::string& name,
+      ModelInfo** model_info) const;
 
   /// Helper function to deep copy the model infos
   /// \param new_infos The new model infos to be cleared and copied into
@@ -337,7 +346,17 @@ class ModelRepositoryManager {
   /// \param graph The dependency graph
   /// \param names The name of models to be in transition
   /// \param transition True for loading, False for unloading
-  void UpdateTransition(const DependencyGraph& graph, const std::set<std::string>& names, bool transition) const;
+  void UpdateTransition(
+      const DependencyGraph& graph, const std::set<std::string>& names,
+      bool transition) const;
+
+  /// Write updated state into the main model infos and dependency graph
+  /// \param names The name of models updated
+  /// \param infos Model infos with the update state
+  /// \param graph Dependency graph with the update state
+  void UpdateState(
+      const std::set<std::string>& names, const ModelInfoMap& infos,
+      const DependencyGraph& graph);
 
   /// Get the models to be loaded / unloaded based on the model loaded in
   /// previous iteration.
@@ -345,7 +364,9 @@ class ModelRepositoryManager {
   /// Unloaded models will be represented as models with no loaded versions.
   /// \return A pair of node set containing models to be loaded and models to be
   /// unloaded for the next iteration.
-  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(const DependencyGraph& dependency_graph, const NodeSet& loaded_models) const;
+  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(
+      const DependencyGraph& dependency_graph,
+      const NodeSet& loaded_models) const;
 
   /// Check if the node is ready for the next iteration. A node is ready if the
   /// node is invalid (containing invalid model config or its depdencies failed
@@ -370,11 +391,6 @@ class ModelRepositoryManager {
 
   ModelInfoMap infos_;
   DependencyGraph dependency_graph_;
-
-  //std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
-  //    dependency_graph_;
-  //std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
-  //    missing_nodes_;
 
   // Mappings from (overridden) model names to a pair of their repository and
   // absolute path

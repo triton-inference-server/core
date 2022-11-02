@@ -482,19 +482,8 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     UpdateTransition(dependency_graph_, added, false);
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
-    // save state changes
-    for (auto& name : added) {
-      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
-      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
-      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
-      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
-    }
-    for (auto& name : modified) {
-      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
-      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
-      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
-      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
-    }
+    UpdateState(added, new_infos, new_dependency_graph);
+    UpdateState(modified, new_infos, new_dependency_graph);
   }
 
   return Status::Success;
@@ -651,7 +640,8 @@ ModelRepositoryManager::LoadUnloadModels(
   DependencyGraph new_dependency_graph;
 
   // Update ModelInfo related to file system accordingly
-  std::set<std::string> added, deleted, modified, unmodified, deleted_dependents;
+  std::set<std::string> added, deleted, modified, unmodified,
+      deleted_dependents;
   {
     std::lock_guard<std::mutex> lock(poll_mu_);
 
@@ -733,7 +723,8 @@ ModelRepositoryManager::LoadUnloadModels(
     // The models are in 'deleted' either when they are asked to be unloaded or
     // they are not found / are duplicated across all model repositories.
     // In all cases, should unload them and remove from 'infos_' explicitly.
-    for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
+    for (const auto& name :
+         (unload_dependents ? deleted_dependents : deleted)) {
       new_infos.erase(name);
     }
 
@@ -755,7 +746,8 @@ ModelRepositoryManager::LoadUnloadModels(
   UpdateTransition(new_dependency_graph, deleted_dependents, false);
   // load / unload the models affected, and check the load status of
   // the requested models
-  const auto& load_status = LoadModelByDependency(new_infos, new_dependency_graph);
+  const auto& load_status =
+      LoadModelByDependency(new_infos, new_dependency_graph);
 
   // mark in transition models as completed
   {
@@ -764,19 +756,8 @@ ModelRepositoryManager::LoadUnloadModels(
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
     UpdateTransition(dependency_graph_, deleted_dependents, false);
-    // save state changes
-    for (auto& name : added) {
-      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
-      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
-      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
-      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
-    }
-    for (auto& name : modified) {
-      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
-      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
-      dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
-      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
-    }
+    UpdateState(added, new_infos, new_dependency_graph);
+    UpdateState(modified, new_infos, new_dependency_graph);
   }
 
   if (status.IsOk() && (type == ActionType::LOAD)) {
@@ -1277,7 +1258,8 @@ Status
 ModelRepositoryManager::UpdateDependencyGraph(
     const std::set<std::string>& added, const std::set<std::string>& deleted,
     const std::set<std::string>& modified, const ModelInfoMap& model_infos,
-    DependencyGraph* updated_graph, std::set<std::string>* deleted_dependents) const
+    DependencyGraph* updated_graph,
+    std::set<std::string>* deleted_dependents) const
 {
   // update dependency graph, if the state of a node is changed, all its
   // downstreams will be affected
@@ -1382,8 +1364,7 @@ ModelRepositoryManager::UpdateDependencyGraph(
     added_node->model_config_ = info->model_config_;
     added_node->explicitly_load_ = info->explicitly_load_;
     updated_nodes.emplace(added_node.get());
-    present_nodes.emplace(
-        std::make_pair(model_name, std::move(added_node)));
+    present_nodes.emplace(std::make_pair(model_name, std::move(added_node)));
   }
 
   auto& affected_ensembles = affected_nodes;
@@ -1546,10 +1527,12 @@ ModelRepositoryManager::CopyDependencyGraph(DependencyGraph* new_graph) const
   new_graph->second.clear();
   // copy nodes
   for (auto& pair : dependency_graph_.first) {
-    new_graph->first.emplace(pair.first, std::make_unique<DependencyNode>(*pair.second));
+    new_graph->first.emplace(
+        pair.first, std::make_unique<DependencyNode>(*pair.second));
   }
   for (auto& pair : dependency_graph_.second) {
-    new_graph->second.emplace(pair.first, std::make_unique<DependencyNode>(*pair.second));
+    new_graph->second.emplace(
+        pair.first, std::make_unique<DependencyNode>(*pair.second));
   }
   // re-map pointers to new nodes
   ReMapDependencyGraphPointers(&new_graph->second, &new_graph->first);
@@ -1558,8 +1541,10 @@ ModelRepositoryManager::CopyDependencyGraph(DependencyGraph* new_graph) const
 
 void
 ModelRepositoryManager::ReMapDependencyGraphPointers(
-    const std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* ref_nodes,
-    std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* new_nodes) const
+    const std::unordered_map<std::string, std::unique_ptr<DependencyNode>>*
+        ref_nodes,
+    std::unordered_map<std::string, std::unique_ptr<DependencyNode>>* new_nodes)
+    const
 {
   // lambda to find if the name is in ref_nodes or new_nodes
   auto find_nodes = [ref_nodes, new_nodes](const std::string& name) {
@@ -1653,7 +1638,8 @@ ModelRepositoryManager::ConnectDependencyGraph(
 
 Status
 ModelRepositoryManager::GetModelInfo(
-    const ModelInfoMap& model_infos, const std::string& name, ModelInfo** model_info) const
+    const ModelInfoMap& model_infos, const std::string& name,
+    ModelInfo** model_info) const
 {
   const auto itr = model_infos.find(name);
   if (itr == model_infos.end()) {
@@ -1678,13 +1664,18 @@ Status
 ModelRepositoryManager::InTransit(const DependencyNode* dependency_node) const
 {
   if (dependency_node->in_transition_) {
-    return Status(Status::Code::INVALID_ARG, "a related model '" + dependency_node->model_name_ + "' to a load/unload request is currently loading or unloading");
+    return Status(
+        Status::Code::INVALID_ARG,
+        "a related model '" + dependency_node->model_name_ +
+            "' to a load/unload request is currently loading or unloading");
   }
   return Status::Success;
 }
 
 void
-ModelRepositoryManager::UpdateTransition(const DependencyGraph& graph, const std::set<std::string>& names, bool transition) const
+ModelRepositoryManager::UpdateTransition(
+    const DependencyGraph& graph, const std::set<std::string>& names,
+    bool transition) const
 {
   for (auto& name : names) {
     auto it = graph.first.find(name);
@@ -1695,6 +1686,20 @@ ModelRepositoryManager::UpdateTransition(const DependencyGraph& graph, const std
     if (it != graph.second.end()) {
       it->second->in_transition_ = transition;
     }
+  }
+}
+
+void
+ModelRepositoryManager::UpdateState(
+    const std::set<std::string>& names, const ModelInfoMap& infos,
+    const DependencyGraph& graph)
+{
+  for (auto& name : names) {
+    infos_.at(name)->mtime_nsec_ = infos.at(name)->mtime_nsec_;
+    dependency_graph_.first.at(name)->status_ = graph.first.at(name)->status_;
+    dependency_graph_.first.at(name)->checked_ = graph.first.at(name)->checked_;
+    dependency_graph_.first.at(name)->loaded_versions_ =
+        graph.first.at(name)->loaded_versions_;
   }
 }
 
