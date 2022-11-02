@@ -482,12 +482,18 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     UpdateTransition(dependency_graph_, added, false);
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
-    // save checked_
+    // save state changes
     for (auto& name : added) {
+      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
+      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
       dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
     }
     for (auto& name : modified) {
+      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
+      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
       dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
     }
   }
 
@@ -758,12 +764,18 @@ ModelRepositoryManager::LoadUnloadModels(
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
     UpdateTransition(dependency_graph_, deleted_dependents, false);
-    // save checked_
+    // save state changes
     for (auto& name : added) {
+      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
+      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
       dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
     }
     for (auto& name : modified) {
+      infos_.at(name)->mtime_nsec_ = new_infos.at(name)->mtime_nsec_;
+      dependency_graph_.first.at(name)->status_ = new_dependency_graph.first.at(name)->status_;
       dependency_graph_.first.at(name)->checked_ = new_dependency_graph.first.at(name)->checked_;
+      dependency_graph_.first.at(name)->loaded_versions_ = new_dependency_graph.first.at(name)->loaded_versions_;
     }
   }
 
