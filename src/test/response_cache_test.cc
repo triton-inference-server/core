@@ -27,7 +27,7 @@
 
 #include <thread>
 #include "memory.h"
-#include "response_cache.h"
+//#include "response_cache.h"  // TODO: FIXME
 #include "triton/common/logging.h"
 
 namespace tc = triton::core;

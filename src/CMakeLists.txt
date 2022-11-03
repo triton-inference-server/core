@@ -132,7 +132,6 @@ set(
   pinned_memory_manager.cc
   rate_limiter.cc
   repo_agent.cc
-  response_cache.cc # TODO
   scheduler_utils.cc
   sequence_batch_scheduler.cc
   sequence_state.cc
@@ -178,7 +177,6 @@ set(
   rate_limiter.h
   repo_agent.h
   response_allocator.h
-  response_cache.h # TODO
   scheduler.h
   scheduler_utils.h
   sequence_batch_scheduler.h

@@ -89,6 +89,26 @@ target_include_directories(
 )
 
 #
+# Triton Cache API
+#
+add_library(
+  triton-core-cacheapi INTERFACE
+)
+
+add_library(
+  TritonCore::triton-core-cacheapi ALIAS triton-core-cacheapi
+)
+
+target_include_directories(
+  triton-core-cacheapi
+  INTERFACE
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+
+
+#
 # Stub library for libtritonserver.so that stubs Triton Server API and
 # Triton Backend API
 #
@@ -310,6 +330,7 @@ install(
   TARGETS
     triton-core-backendapi
     triton-core-repoagentapi
+    triton-core-cacheapi
     triton-core-serverapi
   EXPORT
     triton-core-targets
