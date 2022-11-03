@@ -420,13 +420,16 @@ Status
 ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
 {
   // Do not modify model data structures in place to allow easy rollback due to
-  // any error or in transition dependencies during processing.
+  // any error or conflicting in transition models during processing.
+  // They correspond to the infos_ and dependency_graph_ in the class object,
+  // and if no conflicting in transition models are found, they will become the
+  // class held infos_ and dependency_graph_ objects.
   ModelInfoMap new_infos;
   DependencyGraph new_dependency_graph;
 
   std::set<std::string> added, deleted, modified, unmodified;
   {
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
 
     // Each subdirectory of repository path is a model directory from
     // which we read the model configuration.
@@ -478,7 +481,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
 
   // mark in transition models as completed
   {
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
     UpdateTransition(dependency_graph_, added, false);
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
@@ -596,7 +599,7 @@ ModelRepositoryManager::LoadUnloadModel(
           Status::Code::INTERNAL,
           "failed to load '" + model_name + "', no version is available");
     }
-    std::lock_guard<std::mutex> lock(poll_mu_);  // protect infos_
+    std::lock_guard<std::mutex> lock(mu_);  // protect infos_
     auto it = infos_.find(model_name);
     if (it == infos_.end()) {
       return Status(
@@ -635,7 +638,10 @@ ModelRepositoryManager::LoadUnloadModels(
   *all_models_polled = true;
 
   // Do not modify model data structures in place to allow easy rollback due to
-  // any error or in transition dependencies during processing.
+  // any error or conflicting in transition models during processing.
+  // They correspond to the infos_ and dependency_graph_ in the class object,
+  // and if no conflicting in transition models are found, they will become the
+  // class held infos_ and dependency_graph_ objects.
   ModelInfoMap new_infos;
   DependencyGraph new_dependency_graph;
 
@@ -643,7 +649,7 @@ ModelRepositoryManager::LoadUnloadModels(
   std::set<std::string> added, deleted, modified, unmodified,
       deleted_dependents;
   {
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
 
     if (type == ActionType::UNLOAD) {
       for (const auto& model : models) {
@@ -751,7 +757,7 @@ ModelRepositoryManager::LoadUnloadModels(
 
   // mark in transition models as completed
   {
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
     UpdateTransition(dependency_graph_, added, false);
     UpdateTransition(dependency_graph_, deleted, false);
     UpdateTransition(dependency_graph_, modified, false);
@@ -1433,7 +1439,7 @@ ModelRepositoryManager::RegisterModelRepository(
 
   {
     // Serialize all operations that change model state
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
 
     // Check repository and mapped models do not yet exist.
     if (repository_paths_.find(repository) != repository_paths_.end()) {
@@ -1475,7 +1481,7 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
         "EXPLICIT");
   }
   {
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
     if (repository_paths_.erase(repository) != 1) {
       return Status(
           Status::Code::INVALID_ARG,
@@ -1674,7 +1680,7 @@ ModelRepositoryManager::InTransit(const DependencyNode* dependency_node) const
 
 void
 ModelRepositoryManager::UpdateTransition(
-    const DependencyGraph& graph, const std::set<std::string>& names,
+    DependencyGraph& graph, const std::set<std::string>& names,
     bool transition) const
 {
   for (auto& name : names) {

@@ -302,6 +302,10 @@ class ModelRepositoryManager {
   /// to new nodes.
   /// The function search for matching pointers in the new_nodes first, if not
   /// found, then the matching pointer must be in the ref_nodes.
+  /// The dependency graph is split into present nodes and missing nodes,
+  /// pointers from the missing nodes can reference into present nodes and vice
+  /// versa. Thus, ref_nodes and new_nodes must come from the same dependency
+  /// graph, and must not be any arbitrary nodes.
   /// \param ref_nodes The reference nodes for pointers not in new_nodes
   /// \param new_nodes The new nodes to be re-mapped
   void ReMapDependencyGraphPointers(
@@ -347,7 +351,7 @@ class ModelRepositoryManager {
   /// \param names The name of models to be in transition
   /// \param transition True for loading, False for unloading
   void UpdateTransition(
-      const DependencyGraph& graph, const std::set<std::string>& names,
+      DependencyGraph& graph, const std::set<std::string>& names,
       bool transition) const;
 
   /// Write updated state into the main model infos and dependency graph
@@ -387,8 +391,10 @@ class ModelRepositoryManager {
   const bool model_control_enabled_;
   const double min_compute_capability_;
 
-  std::mutex poll_mu_;
+  // Protects all the data structures defined in this class
+  std::mutex mu_;
 
+  // FIXME: These two objects and their functions do not belong here DLIS-4303
   ModelInfoMap infos_;
   DependencyGraph dependency_graph_;
 
