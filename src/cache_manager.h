@@ -55,17 +55,19 @@ class TritonCache {
   const TritonServerMessage* CacheConfig() const { return cache_config_; }
   // TODO
   Status Insert(const InferenceResponse& response, uint64_t key);
-  Status Lookup(InferenceResponse* response, uint64_t key);
+  Status Lookup(InferenceResponse* response, const std::string& key);
   Status Hash(const InferenceRequest& request, uint64_t* key);
   Status Evict();
 
  private:
   TritonCache(
-    const std::string& name, const std::string& dir, const std::string& libpath,
-    const TritonServerMessage* cache_config);
+      const std::string& name, const std::string& dir,
+      const std::string& libpath, const TritonServerMessage* cache_config);
 
   void ClearHandles();
   Status LoadCacheLibrary();
+  Status InitializeCacheImpl();
+  Status TestCacheImpl();  // TODO: Remove
 
   // TODO: needed?
   // The name of the cache.
@@ -82,12 +84,24 @@ class TritonCache {
   // TODO: const ref over ptr
   const TritonServerMessage* cache_config_;
 
+
+  // Cache Implementation
+  TRITONCACHE_Cache* cache_impl_;  // TODO: Smart pointer / custom deleter?
+
   // dlopen / dlsym handles
   void* dlhandle_;
-  // TODO: Create types for each function?
-  std::function<void()> cache_init_fn_;
-  std::function<void()> cache_fini_fn_;
-  // TODO: Hash/Insert/Lookup
+  // TODO: std::function doesn't work here?
+  // using TritonCacheInitFn_t =
+  // std::function<TRITONSERVER_Error*(TRITONCACHE_Cache**)>;
+  typedef TRITONSERVER_Error* (*TritonCacheInitFn_t)(TRITONCACHE_Cache** cache);
+  TritonCacheInitFn_t init_fn_;
+  typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
+  TritonCacheFiniFn_t fini_fn_;
+  typedef TRITONSERVER_Error* (*TritonCacheLookupFn_t)(
+      TRITONCACHE_Cache* cache, const char* key, void** entries, size_t** sizes,
+      size_t* num_entries);
+  TritonCacheLookupFn_t lookup_fn_;
+  // TODO: Insert/Evict
 };
 
 //
@@ -99,8 +113,7 @@ class TritonCacheManager {
 
   Status CreateCache(
       const std::string& name, const std::string& dir,
-      const std::string& libpath,
-      const TritonServerMessage* cache_config,
+      const std::string& libpath, const TritonServerMessage* cache_config,
       std::shared_ptr<TritonCache>* cache);
 
   std::shared_ptr<TritonCache> Cache() { return cache_; }

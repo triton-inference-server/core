@@ -186,7 +186,11 @@ InferenceServer::Init()
   // TODO: parse cache config into message somewhere
   const TritonServerMessage* cache_config = nullptr;
   // TODO: propogate args correctly
-  status = cache_manager_->CreateCache("cache_name", "cache_dir", "cache_libpath", cache_config, &cache);
+  status = cache_manager_->CreateCache(
+      "local_cache" /* name */, "/opt/tritonserver/caches" /* dir */,
+      "/opt/tritonserver/caches/local/libtritoncache_local.so" /* libpath */
+      ,                                                        // TODO
+      cache_config, &cache);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;

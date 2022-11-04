@@ -115,6 +115,19 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
     TRITONCACHE_Cache* cache);
 
+// TODO
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
+    TRITONCACHE_Cache* cache);
+
+// TODO
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
+    TRITONCACHE_Cache* cache, char* key, void** data, size_t* data_sizes,
+    size_t num_data);
+
+// TODO
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEvict(
+    TRITONCACHE_Cache* cache);
+
 #ifdef __cplusplus
 }
 #endif

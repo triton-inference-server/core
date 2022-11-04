@@ -334,6 +334,7 @@ class TritonServerOptions {
   double min_compute_capability_;
   std::string backend_dir_;
   std::string repoagent_dir_;
+  std::string cache_dir_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
@@ -354,7 +355,8 @@ TritonServerOptions::TritonServerOptions()
       min_compute_capability_(0),
 #endif  // TRITON_ENABLE_GPU
       backend_dir_("/opt/tritonserver/backends"),
-      repoagent_dir_("/opt/tritonserver/repoagents")
+      repoagent_dir_("/opt/tritonserver/repoagents"),
+      cache_dir_("/opt/tritonserver/caches")
 {
 #ifndef TRITON_ENABLE_METRICS
   metrics_ = false;
