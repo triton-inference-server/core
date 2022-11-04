@@ -266,6 +266,17 @@ IsModified(const std::string& path, int64_t* last_ns)
 
 }  // namespace
 
+#define RETURN_ERROR_IF_IN_TRANSIT(DEPENDENCY_NODE)                            \
+  do {                                                                         \
+    const DependencyNode* dependency_node__ = (DEPENDENCY_NODE);               \
+    if (dependency_node__->in_transition_) {                                   \
+      return Status(                                                           \
+          Status::Code::INVALID_ARG,                                           \
+          "a related model '" + dependency_node__->model_name_ +               \
+              "' to a load/unload request is currently loading or unloading"); \
+    }                                                                          \
+  } while (false)
+
 struct ModelRepositoryManager::ModelInfo {
   ModelInfo(
       const int64_t mtime_nsec, const int64_t prev_mtime_ns,
@@ -457,9 +468,9 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     // Update dependencies
     RETURN_IF_ERROR(UpdateDependencyGraph(
         added, deleted, modified, new_infos, &new_dependency_graph));
-    UpdateTransition(new_dependency_graph, added, true);
-    UpdateTransition(new_dependency_graph, deleted, true);
-    UpdateTransition(new_dependency_graph, modified, true);
+    UpdateTransition(&new_dependency_graph, added, true);
+    UpdateTransition(&new_dependency_graph, deleted, true);
+    UpdateTransition(&new_dependency_graph, modified, true);
 
     // Write intermediate state
     infos_.swap(new_infos);
@@ -473,18 +484,18 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
   }
   // do not mark the current affected models as in transition, to distinguish
   // between models loading/unloading by other threads
-  UpdateTransition(new_dependency_graph, added, false);
-  UpdateTransition(new_dependency_graph, deleted, false);
-  UpdateTransition(new_dependency_graph, modified, false);
+  UpdateTransition(&new_dependency_graph, added, false);
+  UpdateTransition(&new_dependency_graph, deleted, false);
+  UpdateTransition(&new_dependency_graph, modified, false);
   // model loading / unloading error will be printed but ignored
   LoadModelByDependency(new_infos, new_dependency_graph);
 
   // mark in transition models as completed
   {
     std::lock_guard<std::mutex> lock(mu_);
-    UpdateTransition(dependency_graph_, added, false);
-    UpdateTransition(dependency_graph_, deleted, false);
-    UpdateTransition(dependency_graph_, modified, false);
+    UpdateTransition(&dependency_graph_, added, false);
+    UpdateTransition(&dependency_graph_, deleted, false);
+    UpdateTransition(&dependency_graph_, modified, false);
     UpdateState(added, new_infos, new_dependency_graph);
     UpdateState(modified, new_infos, new_dependency_graph);
   }
@@ -721,10 +732,10 @@ ModelRepositoryManager::LoadUnloadModels(
     RETURN_IF_ERROR(UpdateDependencyGraph(
         added, deleted, modified, new_infos, &new_dependency_graph,
         unload_dependents ? &deleted_dependents : nullptr));
-    UpdateTransition(new_dependency_graph, added, true);
-    UpdateTransition(new_dependency_graph, deleted, true);
-    UpdateTransition(new_dependency_graph, modified, true);
-    UpdateTransition(new_dependency_graph, deleted_dependents, true);
+    UpdateTransition(&new_dependency_graph, added, true);
+    UpdateTransition(&new_dependency_graph, deleted, true);
+    UpdateTransition(&new_dependency_graph, modified, true);
+    UpdateTransition(&new_dependency_graph, deleted_dependents, true);
 
     // The models are in 'deleted' either when they are asked to be unloaded or
     // they are not found / are duplicated across all model repositories.
@@ -746,10 +757,10 @@ ModelRepositoryManager::LoadUnloadModels(
   }
   // do not mark the current affected models as in transition, to distinguish
   // between models loading/unloading by other threads
-  UpdateTransition(new_dependency_graph, added, false);
-  UpdateTransition(new_dependency_graph, deleted, false);
-  UpdateTransition(new_dependency_graph, modified, false);
-  UpdateTransition(new_dependency_graph, deleted_dependents, false);
+  UpdateTransition(&new_dependency_graph, added, false);
+  UpdateTransition(&new_dependency_graph, deleted, false);
+  UpdateTransition(&new_dependency_graph, modified, false);
+  UpdateTransition(&new_dependency_graph, deleted_dependents, false);
   // load / unload the models affected, and check the load status of
   // the requested models
   const auto& load_status =
@@ -758,10 +769,10 @@ ModelRepositoryManager::LoadUnloadModels(
   // mark in transition models as completed
   {
     std::lock_guard<std::mutex> lock(mu_);
-    UpdateTransition(dependency_graph_, added, false);
-    UpdateTransition(dependency_graph_, deleted, false);
-    UpdateTransition(dependency_graph_, modified, false);
-    UpdateTransition(dependency_graph_, deleted_dependents, false);
+    UpdateTransition(&dependency_graph_, added, false);
+    UpdateTransition(&dependency_graph_, deleted, false);
+    UpdateTransition(&dependency_graph_, modified, false);
+    UpdateTransition(&dependency_graph_, deleted_dependents, false);
     UpdateState(added, new_infos, new_dependency_graph);
     UpdateState(modified, new_infos, new_dependency_graph);
   }
@@ -1288,10 +1299,10 @@ ModelRepositoryManager::UpdateDependencyGraph(
     for (const auto& model_name : current_deleted) {
       auto it = present_nodes.find(model_name);
       if (it != present_nodes.end()) {
-        RETURN_IF_ERROR(InTransit(it->second.get()));
+        RETURN_ERROR_IF_IN_TRANSIT(it->second.get());
         // remove this node from its upstreams
         for (auto& upstream : it->second->upstreams_) {
-          RETURN_IF_ERROR(InTransit(upstream.first));
+          RETURN_ERROR_IF_IN_TRANSIT(upstream.first);
           upstream.first->downstreams_.erase(it->second.get());
           // Check if the upstream should be removed as well
           if ((deleted_dependents != nullptr) &&
@@ -1327,7 +1338,7 @@ ModelRepositoryManager::UpdateDependencyGraph(
   for (const auto& model_name : modified) {
     auto it = present_nodes.find(model_name);
     if (it != present_nodes.end()) {
-      RETURN_IF_ERROR(InTransit(it->second.get()));
+      RETURN_ERROR_IF_IN_TRANSIT(it->second.get());
       UncheckDownstream(&it->second->downstreams_, &affected_nodes);
       ModelInfo* info = nullptr;
       GetModelInfo(model_infos, model_name, &info);
@@ -1335,7 +1346,7 @@ ModelRepositoryManager::UpdateDependencyGraph(
       it->second->explicitly_load_ = info->explicitly_load_;
       // remove this node from its upstream node
       for (auto& upstream : it->second->upstreams_) {
-        RETURN_IF_ERROR(InTransit(upstream.first));
+        RETURN_ERROR_IF_IN_TRANSIT(upstream.first);
         upstream.first->downstreams_.erase(it->second.get());
       }
       it->second->upstreams_.clear();
@@ -1351,7 +1362,7 @@ ModelRepositoryManager::UpdateDependencyGraph(
     std::unique_ptr<DependencyNode> added_node;
     auto it = missing_nodes.find(model_name);
     if (it != missing_nodes.end()) {
-      RETURN_IF_ERROR(InTransit(it->second.get()));
+      RETURN_ERROR_IF_IN_TRANSIT(it->second.get());
       UncheckDownstream(&it->second->downstreams_, &affected_nodes);
       // remove this node from missing upstream node in its downstream nodes
       for (auto& downstream : it->second->downstreams_) {
@@ -1383,10 +1394,10 @@ ModelRepositoryManager::UpdateDependencyGraph(
 
   // check if affected_ensembles are in transition
   for (auto& affected_ensemble : affected_ensembles) {
-    RETURN_IF_ERROR(InTransit(affected_ensemble));
+    RETURN_ERROR_IF_IN_TRANSIT(affected_ensemble);
     // also check the upstreams of affected_ensembles
     for (auto& upstream : affected_ensemble->upstreams_) {
-      RETURN_IF_ERROR(InTransit(upstream.first));
+      RETURN_ERROR_IF_IN_TRANSIT(upstream.first);
     }
   }
 
@@ -1666,30 +1677,18 @@ ModelRepositoryManager::CopyModelInfos(ModelInfoMap* new_infos) const
   }
 }
 
-Status
-ModelRepositoryManager::InTransit(const DependencyNode* dependency_node) const
-{
-  if (dependency_node->in_transition_) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "a related model '" + dependency_node->model_name_ +
-            "' to a load/unload request is currently loading or unloading");
-  }
-  return Status::Success;
-}
-
 void
 ModelRepositoryManager::UpdateTransition(
-    DependencyGraph& graph, const std::set<std::string>& names,
+    DependencyGraph* graph, const std::set<std::string>& names,
     bool transition) const
 {
   for (auto& name : names) {
-    auto it = graph.first.find(name);
-    if (it != graph.first.end()) {
+    auto it = graph->first.find(name);
+    if (it != graph->first.end()) {
       it->second->in_transition_ = transition;
     }
-    it = graph.second.find(name);
-    if (it != graph.second.end()) {
+    it = graph->second.find(name);
+    if (it != graph->second.end()) {
       it->second->in_transition_ = transition;
     }
   }

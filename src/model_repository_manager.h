@@ -207,7 +207,12 @@ class ModelRepositoryManager {
   using ModelInfoMap =
       std::unordered_map<std::string, std::unique_ptr<ModelInfo>>;
   // Dependency between models <present nodes, missing nodes>, where each of
-  // the two nodes maps model name -> DependencyNode
+  // the two nodes maps model name -> DependencyNode.
+  // Nodes from both present and missing nodes forms the complete dependency
+  // graph. Present nodes are models that are loaded or will be loaded. Missing
+  // nodes are models that need to be loaded, but are currently missing.
+  // Missing nodes can move into present nodes during graph operation as they
+  // are discovered.
   using DependencyGraph = std::pair<
       std::unordered_map<std::string, std::unique_ptr<DependencyNode>>,
       std::unordered_map<std::string, std::unique_ptr<DependencyNode>>>;
@@ -341,17 +346,12 @@ class ModelRepositoryManager {
   /// \param new_infos The new model infos to be cleared and copied into
   void CopyModelInfos(ModelInfoMap* new_infos) const;
 
-  /// Check if a dependency node (model) is currently loading/unloading
-  /// \param dependency_node The dependency node to check
-  /// \return OK if NOT in transit, INVALID_ARG if in transit
-  Status InTransit(const DependencyNode* dependency_node) const;
-
   /// Mark the nodes (model) in dependency graph to currently loading/unloading
   /// \param graph The dependency graph
   /// \param names The name of models to be in transition
   /// \param transition True for loading, False for unloading
   void UpdateTransition(
-      DependencyGraph& graph, const std::set<std::string>& names,
+      DependencyGraph* graph, const std::set<std::string>& names,
       bool transition) const;
 
   /// Write updated state into the main model infos and dependency graph
