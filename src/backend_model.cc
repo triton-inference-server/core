@@ -173,14 +173,22 @@ TritonModel::Create(
   // path to point to the backend directory in case the backend
   // library attempts to load additional shared libaries.
   if (backend->ModelInitFn() != nullptr) {
-    std::unique_ptr<SharedLibrary> slib;
-    RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
+    {
+      // FIXME: fix lock fight DLIS-4300
+      std::unique_ptr<SharedLibrary> slib;
+      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+      RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
+    }
 
     TRITONSERVER_Error* err = backend->ModelInitFn()(
         reinterpret_cast<TRITONBACKEND_Model*>(raw_local_model));
 
-    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+    {
+      // FIXME: fix lock fight DLIS-4300
+      std::unique_ptr<SharedLibrary> slib;
+      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+      RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+    }
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
 

@@ -242,7 +242,7 @@ ValidateTensorMapping(
 
 Status
 ValidateEnsembleConfig(
-    ModelRepositoryManager* model_repository_manager,
+    const ModelRepositoryManager* model_repository_manager,
     ModelRepositoryManager::DependencyNode* ensemble)
 {
   const auto& ensemble_config = ensemble->model_config_;
