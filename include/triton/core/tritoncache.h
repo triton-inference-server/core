@@ -121,8 +121,8 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
 
 // TODO
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
-    TRITONCACHE_Cache* cache, char* key, void** data, size_t* data_sizes,
-    size_t num_data);
+    TRITONCACHE_Cache* cache, char* key, void** entries, size_t** sizes,
+    size_t* num_entries);
 
 // TODO
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEvict(
