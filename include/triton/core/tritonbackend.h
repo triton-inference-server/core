@@ -1405,6 +1405,38 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
     const TRITONSERVER_InstanceGroupKind kind, const uint64_t count,
     const uint64_t* device_ids, const uint64_t id_count);
 
+/// TRITONBACKEND Batching
+///
+/// API to modify batching strategy associated with a backend.
+///
+
+/// Add a request to a model batch.
+/// \param model The backend model for which Triton is forming a batch.
+/// \param request The request to be added to the pending batch.
+/// \param userp The placeholder for backend to store and retrieve information
+/// about this pending batch. When the callback returns, this should reflect
+/// the latest batch information.
+/// \param should_include The pointer to be updated on whether the request was
+/// included in the batch.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatchIncludeRequest(
+    TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
+    bool* should_include);
+
+/// Callback to be invoked when Triton has begun the formation a batch.
+/// \param model The backend model for which Triton is forming a batch.
+/// \param userp The placeholder for backend to store and retrieve information
+/// about this pending batch.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
+    TRITONBACKEND_Model* model, void** userp);
+
+/// Callback to be invoked when Triton has completed the formation a batch.
+/// \param userp The placeholder for backend to store and retrieve information
+/// about this pending batch.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(void* userp);
+
 #ifdef __cplusplus
 }
 #endif
