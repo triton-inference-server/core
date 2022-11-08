@@ -55,6 +55,7 @@ extern "C" {
 #endif
 
 struct TRITONCACHE_Cache;
+struct TRITONCACHE_CacheEntry;
 
 ///
 /// TRITONCACHE API Version
@@ -98,6 +99,8 @@ struct TRITONCACHE_Cache;
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
+/* Cache Lifetime Management */
+
 /// Create a new cache object. The caller takes ownership of the
 /// TRITONCACHE_Cache object and must call
 /// TRITONCACHE_CacheDelete to release the object.
@@ -115,18 +118,62 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
     TRITONCACHE_Cache* cache);
 
-// TODO
+/* Cache Usage */
+
+// TODO: Add API descriptions
+
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
-    TRITONCACHE_Cache* cache);
+    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
-// TODO
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
-    TRITONCACHE_Cache* cache, const char* key, void** entries, size_t** sizes,
-    size_t* num_entries);
+    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry** entry);
 
-// TODO
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEvict(
     TRITONCACHE_Cache* cache);
+
+/* CacheEntry Lifetime Management */
+
+/* Cache Entry implementation example
+**
+** TODO: Move to tritoncache.cc or similar
+**
+** struct CacheEntry {
+**   void*  items;         // blobs of data to insert or retrieve with cache
+**   size_t* byte_sizes;   // size of each item in items
+**   size_t  num_items;    // number of items and byte_sizes
+**   char**  tags;         // (optional) tags to associate entry, groups, etc.
+**   size_t  num_tags;     // (optional) number of tags provided
+** }
+*/
+
+// TODO: Add API descriptions
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
+    TRITONCACHE_CacheEntry** entry);
+
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
+    TRITONCACHE_CacheEntry* entry);
+
+/* CacheEntry Field Management */
+
+// TODO: Add API descriptions
+
+// Sets items in entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetItems(
+    TRITONCACHE_CacheEntry* entry, void* items, size_t* byte_sizes,
+    size_t num_items);
+
+// Gets items from entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItems(
+    TRITONCACHE_CacheEntry* entry, void** items, size_t** byte_sizes,
+    size_t* num_items);
+
+// Sets tags in entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetTags(
+    TRITONCACHE_CacheEntry* entry, char** tags, size_t num_tags);
+
+// Gets tags from entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryTags(
+    TRITONCACHE_CacheEntry* entry, char*** tags, size_t* num_tags);
 
 #ifdef __cplusplus
 }
