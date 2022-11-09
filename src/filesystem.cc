@@ -205,9 +205,10 @@ LocalFileSystem::FileModificationTime(
 
 #ifdef _WIN32
   // In Windows, st_mtime is in time_t
-  *mtime_ns = st.st_mtime;
+  *mtime_ns = std::max(st.st_mtime, st.st_ctime);
 #else
-  *mtime_ns = TIMESPEC_TO_NANOS(st.st_mtim);
+  *mtime_ns =
+      std::max(TIMESPEC_TO_NANOS(st.st_mtim), TIMESPEC_TO_NANOS(st.st_ctim));
 #endif
   return Status::Success;
 }

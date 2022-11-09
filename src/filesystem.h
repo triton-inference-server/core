@@ -106,6 +106,8 @@ Status FileExists(const std::string& path, bool* exists);
 Status IsDirectory(const std::string& path, bool* is_dir);
 
 /// Get file modification time in nanoseconds.
+/// A file is considered modified in Triton when its binary content has changed
+/// including the action of replacing it with another file.
 /// \param path The path.
 /// \param mtime_ns Returns the file modification time. For some filesystems a
 /// file/folder may not have a modification time, in that case return 0.
