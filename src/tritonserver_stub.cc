@@ -958,6 +958,36 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheDelete()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheInsert()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheLookup()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEvict()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONCACHE_CacheEntryItemCount()
 {
 }

@@ -1,7 +1,6 @@
 #include <boost/core/span.hpp>
 #include <vector>
-#include "triton/core/tritoncache.h"
-#include "triton/core/tritonserver.h"
+#include "tritonserver_apis.h"
 
 namespace triton { namespace core {
 

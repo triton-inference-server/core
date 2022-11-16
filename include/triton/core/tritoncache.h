@@ -164,7 +164,8 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemCount(
 // Gets the index'th item from entry where 0 <= index < count where
 // 'count' is the value returned by TRITONCACHE_CacheEntryItemCount
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItem(
-    TRITONCACHE_CacheEntry* entry, size_t index, void** base, size_t* byte_size);
+    TRITONCACHE_CacheEntry* entry, size_t index, void** base,
+    size_t* byte_size);
 
 // Adds item to entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
@@ -185,5 +186,5 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryTags(
 */
 
 #ifdef __cplusplus
-}
+}  // extern C
 #endif

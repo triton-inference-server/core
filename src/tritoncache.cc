@@ -1,5 +1,16 @@
 #include "cache_entry.h"
-#include "tritonserver_apis.h"
+
+// For unknown reason, windows will not export the TRITONCACHE_*
+// functions declared with dllexport in tritoncache.h. To get
+// those functions exported it is (also?) necessary to mark the
+// definitions in this file with dllexport as well.
+#if defined(_MSC_VER)
+#define TRITONAPI_DECLSPEC __declspec(dllexport)
+#elif defined(__GNUC__)
+#define TRITONAPI_DECLSPEC __attribute__((__visibility__("default")))
+#else
+#define TRITONAPI_DECLSPEC
+#endif
 
 namespace triton { namespace core {
 
@@ -7,7 +18,7 @@ extern "C" {
 
 /* CacheEntry Field Management */
 
-TRITONCACHE_DECLSPEC TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 {
   if (entry == nullptr) {
@@ -23,7 +34,7 @@ TRITONCACHE_CacheEntryItemCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 }
 
 // Adds item to entry
-TRITONCACHE_DECLSPEC TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryAddItem(
     TRITONCACHE_CacheEntry* entry, const void* base, size_t byte_size)
 {
@@ -39,7 +50,7 @@ TRITONCACHE_CacheEntryAddItem(
 }
 
 // Gets item at index from entry
-TRITONCACHE_DECLSPEC TRITONSERVER_Error*
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItem(
     TRITONCACHE_CacheEntry* entry, size_t index, void** base, size_t* byte_size)
 {
