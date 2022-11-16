@@ -139,8 +139,8 @@ set(
   server.cc
   shared_library.cc
   status.cc
-  tritonserver.cc
   tritoncache.cc
+  tritonserver.cc
 )
 
 set(

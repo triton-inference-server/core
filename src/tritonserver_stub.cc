@@ -957,4 +957,19 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 {
 }
 
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemCount()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItem()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryAddItem()
+{
+}
+
 } /* extern "C" */
