@@ -26,7 +26,7 @@ TRITONCACHE_CacheEntryItemCount(
 // Adds item to entry
 TRITONSERVER_Error*
 TRITONCACHE_CacheEntryAddItem(
-    TRITONCACHE_CacheEntry* entry, void* base, size_t byte_size)
+    TRITONCACHE_CacheEntry* entry, const void* base, size_t byte_size)
 {
   if (entry == nullptr) {
     return TRITONSERVER_ErrorNew(
@@ -35,7 +35,7 @@ TRITONCACHE_CacheEntryAddItem(
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   // TODO: lock?
-  lentry->AddItem({reinterpret_cast<std::byte*>(base), byte_size});
+  lentry->AddItem({reinterpret_cast<const std::byte*>(base), byte_size});
   return nullptr;  // success
 }
 

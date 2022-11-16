@@ -22,7 +22,7 @@ class CacheEntry {
   public:
     std::vector<Buffer> Items() { return items_; }
     size_t Count() { return items_.size(); }
-    void AddItem(boost::span<std::byte> buffer);
+    void AddItem(boost::span<const std::byte> buffer);
   private:
     std::vector<Buffer> items_;
 };
