@@ -157,15 +157,22 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
 
 // TODO: Add API descriptions
 
-// Sets items in entry
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetItems(
-    TRITONCACHE_CacheEntry* entry, void* items, size_t* byte_sizes,
-    size_t num_items);
+// Get number of items in entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemCount(
+    TRITONCACHE_CacheEntry* entry, size_t* count);
 
-// Gets items from entry
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItems(
-    TRITONCACHE_CacheEntry* entry, void** items, size_t** byte_sizes,
-    size_t* num_items);
+// Gets the index'th item from entry where 0 <= index < count where
+// 'count' is the value returned by TRITONCACHE_CacheEntryItemCount
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItem(
+    TRITONCACHE_CacheEntry* entry, size_t index, void** item, size_t* byte_size);
+
+// Adds item to entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
+    TRITONCACHE_CacheEntry* entry, void* item, size_t byte_size);
+
+/* Not currently used, may be added in the future for grouping
+   cache entries for actions like evicting all entries associated
+   with certain model, tags, etc.
 
 // Sets tags in entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetTags(
@@ -174,6 +181,8 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetTags(
 // Gets tags from entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryTags(
     TRITONCACHE_CacheEntry* entry, char*** tags, size_t* num_tags);
+
+*/
 
 #ifdef __cplusplus
 }

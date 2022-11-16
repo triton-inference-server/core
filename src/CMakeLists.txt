@@ -62,7 +62,7 @@ endif() # TRITON_ENABLE_GPU
 #
 # Boost
 #
-find_package(Boost REQUIRED)
+find_package(Boost 1.78 REQUIRED)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -106,6 +106,7 @@ set(
   backend_model.cc
   backend_model_instance.cc
   buffer_attributes.cc
+  cache_entry.cc # TODO
   cache_manager.cc # TODO
   cuda_utils.cc
   dynamic_batch_scheduler.cc
@@ -139,6 +140,7 @@ set(
   shared_library.cc
   status.cc
   tritonserver.cc
+  tritoncache.cc
 )
 
 set(
@@ -149,6 +151,7 @@ set(
   backend_model.h
   backend_model_instance.h
   buffer_attributes.h
+  cache_entry.h # TODO
   cache_manager.h # TODO
   constants.h
   cuda_utils.h
@@ -225,7 +228,7 @@ add_library(
   TritonCore::triton-core ALIAS triton-core
 )
 
-target_compile_features(triton-core PRIVATE cxx_std_11)
+target_compile_features(triton-core PRIVATE cxx_std_17)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
