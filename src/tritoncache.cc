@@ -1,3 +1,4 @@
+#include <iostream>  // debug
 #include "cache_entry.h"
 
 // For unknown reason, windows will not export the TRITONCACHE_*
@@ -16,6 +17,37 @@ namespace triton { namespace core {
 
 extern "C" {
 
+/* CacheEntry Lifetime Management */
+
+// TODO: flesh out
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONCACHE_CacheEntryNew(TRITONCACHE_CacheEntry** entry)
+{
+  if (entry == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "entry was nullptr");
+  }
+
+  // TODO: remove
+  std::cout << "[DEBUG] [tritoncache.cc] Creating new cache entry" << std::endl;
+  *entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(new CacheEntry());
+  return nullptr;
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONCACHE_CacheEntryDelete(TRITONCACHE_CacheEntry* entry)
+{
+  if (entry == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "entry was nullptr");
+  }
+
+  // TODO: remove
+  std::cout << "[DEBUG] [tritoncache.cc] deleting cache entry" << std::endl;
+  delete reinterpret_cast<CacheEntry*>(entry);
+  return nullptr;
+}
+
 /* CacheEntry Field Management */
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -30,6 +62,8 @@ TRITONCACHE_CacheEntryItemCount(TRITONCACHE_CacheEntry* entry, size_t* count)
   // TODO: lock?
   const auto litems = lentry->Items();
   *count = litems.size();
+  std::cout << "[DEBUG] [tritoncache.cc] entry->Items().size(): " << *count
+            << std::endl;
   return nullptr;  // success
 }
 

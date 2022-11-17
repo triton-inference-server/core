@@ -611,7 +611,7 @@ DynamicBatchScheduler::DelegateResponse(
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
-          auto status = cache->Insert(*response, key);
+          auto status = cache->Insert(response.get(), std::to_string(key));
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {

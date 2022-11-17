@@ -81,6 +81,7 @@ TritonCache::ClearHandles()
   init_fn_ = nullptr;
   fini_fn_ = nullptr;
   lookup_fn_ = nullptr;
+  insert_fn_ = nullptr;
 }
 
 Status
@@ -90,6 +91,7 @@ TritonCache::LoadCacheLibrary()
   TritonCacheInitFn_t init_fn;
   TritonCacheFiniFn_t fini_fn;
   TritonCacheLookupFn_t lookup_fn;
+  TritonCacheInsertFn_t insert_fn;
 
   // Load the library and initialize all the entrypoints
   {
@@ -107,11 +109,15 @@ TritonCache::LoadCacheLibrary()
     RETURN_IF_ERROR(slib->GetEntrypoint(
         dlhandle_, "TRITONCACHE_CacheLookup", false /* optional */,
         reinterpret_cast<void**>(&lookup_fn)));
+    RETURN_IF_ERROR(slib->GetEntrypoint(
+        dlhandle_, "TRITONCACHE_CacheInsert", false /* optional */,
+        reinterpret_cast<void**>(&insert_fn)));
   }
 
   init_fn_ = init_fn;
   fini_fn_ = fini_fn;
   lookup_fn_ = lookup_fn;
+  insert_fn_ = insert_fn;
   return Status::Success;
 }
 
@@ -124,6 +130,12 @@ TritonCache::TestCacheImpl()
   // TODO: Remove
   auto status = Status::Success;
   InferenceResponse* response = nullptr;
+  std::cout << "=============== Insert ===============" << std::endl;
+  status = Insert(response, "test_key_123");
+  if (!status.IsOk()) {
+    return status;
+  }
+
   std::cout << "=============== Lookup ===============" << std::endl;
   status = Lookup(response, "test_key_123");
   if (!status.IsOk()) {
@@ -166,11 +178,35 @@ TritonCache::Hash(const InferenceRequest& request, uint64_t* key)
 }
 
 Status
-TritonCache::Insert(const InferenceResponse& response, uint64_t key)
+TritonCache::Insert(const InferenceResponse* response, const std::string& key)
 {
   LOG_VERBOSE(1) << "Inserting into cache";
-  // TODO: call cache_insert_fn_
-  return Status(Status::Code::INTERNAL, "Insert Not Implemented");
+  if (insert_fn_ == nullptr) {
+    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+  }
+
+  TRITONCACHE_CacheEntry* entry = nullptr;
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryNew(&entry));
+
+  // TODO: Build cache entry from response
+  // TODO: using fake data for testing
+  std::vector<int> buffer{1, 2, 3};
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryAddItem(
+      entry, buffer.data(), sizeof(int) * buffer.size()));
+
+  RETURN_IF_TRITONSERVER_ERROR(insert_fn_(cache_impl_, key.c_str(), entry));
+
+  // TODO: Remove
+  size_t count = 42;
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryItemCount(entry, &count));
+  LOG_VERBOSE(1) << "[INSERT] entry item count: " << count;
+  if (count != 1) {
+    return Status(
+        Status::Code::INTERNAL, "unexpected count from insert function");
+  }
+
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryDelete(entry));
+  return Status::Success;
 }
 
 Status
@@ -181,17 +217,23 @@ TritonCache::Lookup(InferenceResponse* response, const std::string& key)
     return Status(Status::Code::NOT_FOUND, "cache lookup function is nullptr");
   }
 
-  // Initialize cache implementation
-  LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheLookup from: '" << libpath_
-                 << "'";
-  void* entries = nullptr;
-  size_t* sizes = nullptr;
-  size_t num_entries = 42;  // TODO: should be reset
-  RETURN_IF_TRITONSERVER_ERROR(
-      lookup_fn_(cache_impl_, key.c_str(), &entries, &sizes, &num_entries));
+  TRITONCACHE_CacheEntry* entry = nullptr;
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryNew(&entry));
 
-  LOG_VERBOSE(1) << "Lookup: num_entries: " << num_entries;
+  RETURN_IF_TRITONSERVER_ERROR(lookup_fn_(cache_impl_, key.c_str(), entry));
+
+  // TODO: Remove
+  size_t count = 42;
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryItemCount(entry, &count));
+  LOG_VERBOSE(1) << "[LOOKUP] entry item count: " << count;
+  if (count != 1) {
+    return Status(
+        Status::Code::INTERNAL, "unexpected count from lookup function");
+  }
+
   // TODO: Build Inference Response
+
+  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryDelete(entry));
   return Status::Success;
 }
 

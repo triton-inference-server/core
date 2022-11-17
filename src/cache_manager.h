@@ -53,8 +53,8 @@ class TritonCache {
   const std::string& Name() const { return name_; }
   const std::string& Directory() const { return dir_; }
   const TritonServerMessage* CacheConfig() const { return cache_config_; }
-  // TODO
-  Status Insert(const InferenceResponse& response, uint64_t key);
+  // TODO: const ref?
+  Status Insert(const InferenceResponse* response, const std::string& key);
   Status Lookup(InferenceResponse* response, const std::string& key);
   Status Hash(const InferenceRequest& request, uint64_t* key);
   Status Evict();
@@ -98,10 +98,13 @@ class TritonCache {
   typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
   TritonCacheFiniFn_t fini_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheLookupFn_t)(
-      TRITONCACHE_Cache* cache, const char* key, void** entries, size_t** sizes,
-      size_t* num_entries);
+      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
   TritonCacheLookupFn_t lookup_fn_;
-  // TODO: Insert/Evict
+  typedef TRITONSERVER_Error* (*TritonCacheInsertFn_t)(
+      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+  TritonCacheInsertFn_t insert_fn_;
+
+  // TODO: Evict
 };
 
 //

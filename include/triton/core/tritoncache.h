@@ -108,43 +108,30 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
 /// \param cache Returns the new cache object.
 /// \param config The config options to initialize the cache with.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
     TRITONCACHE_Cache** cache, TRITONSERVER_Message* config);
 
 /// Delete a cache object.
 ///
 /// \param cache The cache object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
     TRITONCACHE_Cache* cache);
 
 /* Cache Usage */
 
 // TODO: Add API descriptions
 
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEvict(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheEvict(
     TRITONCACHE_Cache* cache);
 
 /* CacheEntry Lifetime Management */
-
-/* Cache Entry implementation example
-**
-** TODO: Move to tritoncache.cc or similar
-**
-** struct CacheEntry {
-**   void*  items;         // blobs of data to insert or retrieve with cache
-**   size_t* byte_sizes;   // size of each item in items
-**   size_t  num_items;    // number of items and byte_sizes
-**   char**  tags;         // (optional) tags to associate entry, groups, etc.
-**   size_t  num_tags;     // (optional) number of tags provided
-** }
-*/
 
 // TODO: Add API descriptions
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
