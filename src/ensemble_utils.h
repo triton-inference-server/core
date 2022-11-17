@@ -42,7 +42,7 @@ namespace triton { namespace core {
 /// \param ensemble The ensemble to be validated.
 /// \return The error status.
 Status ValidateEnsembleConfig(
-    ModelRepositoryManager* model_repository_manager,
+    const ModelRepositoryManager* model_repository_manager,
     ModelRepositoryManager::DependencyNode* ensemble);
 
 }}  // namespace triton::core
