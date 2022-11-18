@@ -25,6 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#ifdef _WIN32
+// Remove GetObject definition from windows.h, which prevents calls to
+// RapidJSON's GetObject.
+// https://github.com/Tencent/rapidjson/issues/1448
+#undef GetObject
+#endif  // _WIN32
+
 #include <string>
 #include "google/protobuf/message.h"
 #include "status.h"
