@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <boost/core/span.hpp>
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -36,6 +38,17 @@
 #include "status.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
+
+// If TRITONSERVER error is non-OK, return std::nullopt for failed optional.
+#define RETURN_NULLOPT_IF_TRITONSERVER_ERROR(E)      \
+  do {                                               \
+    TRITONSERVER_Error* err__ = (E);                 \
+    if (err__ != nullptr) {                          \
+      LOG_ERROR << TRITONSERVER_ErrorMessage(err__); \
+      TRITONSERVER_ErrorDelete(err__);               \
+      return std::nullopt;                           \
+    }                                                \
+  } while (false)
 
 namespace triton { namespace core {
 
@@ -55,7 +68,10 @@ class TritonCache {
   const TritonServerMessage* CacheConfig() const { return cache_config_; }
   // TODO: const ref?
   Status Insert(const InferenceResponse* response, const std::string& key);
+  Status Insert(boost::span<std::byte> byte_span, const std::string& key);
   Status Lookup(InferenceResponse* response, const std::string& key);
+  std::optional<std::vector<std::vector<std::byte>>> Lookup(
+      const std::string& key);
   Status Hash(const InferenceRequest& request, uint64_t* key);
   Status Evict();
 

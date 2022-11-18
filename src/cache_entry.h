@@ -16,6 +16,7 @@ using Buffer = std::vector<std::byte>;
 // A CacheEntry may have several Items associated with it
 // ex: 1 request has multiple responses
 //   using Item = std::vector<Buffer>;
+//   std::vector<Item> items_;
 
 class CacheEntry {
  public:
@@ -24,6 +25,7 @@ class CacheEntry {
   void AddItem(boost::span<const std::byte> buffer);
 
  private:
+  // TODO: Pointer to be more lightweight depending on usage?
   std::vector<Buffer> items_;
 };
 

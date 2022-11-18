@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cache_manager.h"
+#include "cache_entry.h"
 #include "server_message.h"
 #include "shared_library.h"
 #include "triton/common/logging.h"
@@ -130,14 +131,22 @@ TritonCache::TestCacheImpl()
   // TODO: Remove
   auto status = Status::Success;
   InferenceResponse* response = nullptr;
-  std::cout << "=============== Insert ===============" << std::endl;
-  status = Insert(response, "test_key_123");
+  std::cout << "=============== Insert Response ===============" << std::endl;
+  // TODO: need response implementation
+  status = Insert(response, "test_response_key");
   if (!status.IsOk()) {
     return status;
   }
 
+  std::cout << "=============== Insert Bytes ===============" << std::endl;
+  // TODO: Test multiple buffers
+  std::vector<int> buffer1{1, 2, 3};
+  auto buffer1_byte_size = sizeof(int) * buffer1.size();
+  auto base = reinterpret_cast<std::byte*>(buffer1.data());
+  status = Insert({base, buffer1_byte_size}, "test_bytes_123_key");
+
   std::cout << "=============== Lookup ===============" << std::endl;
-  status = Lookup(response, "test_key_123");
+  status = Lookup(response, "test_bytes_123_key");
   if (!status.IsOk()) {
     return status;
   }
@@ -178,6 +187,24 @@ TritonCache::Hash(const InferenceRequest& request, uint64_t* key)
 }
 
 Status
+TritonCache::Insert(boost::span<std::byte> byte_span, const std::string& key)
+{
+  LOG_VERBOSE(1) << "Inserting into cache";
+  if (insert_fn_ == nullptr) {
+    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+  }
+
+  // TODO: If key exists, exit? Check with cache first.
+
+  auto entry = std::make_unique<CacheEntry>();
+  entry->AddItem(byte_span);
+  auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
+  RETURN_IF_TRITONSERVER_ERROR(
+      insert_fn_(cache_impl_, key.c_str(), opaque_entry));
+  return Status::Success;
+}
+
+Status
 TritonCache::Insert(const InferenceResponse* response, const std::string& key)
 {
   LOG_VERBOSE(1) << "Inserting into cache";
@@ -185,55 +212,53 @@ TritonCache::Insert(const InferenceResponse* response, const std::string& key)
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
 
-  TRITONCACHE_CacheEntry* entry = nullptr;
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryNew(&entry));
+  // TODO: If key exists, exit? Check with cache first.
 
-  // TODO: Build cache entry from response
-  // TODO: using fake data for testing
-  std::vector<int> buffer{1, 2, 3};
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryAddItem(
-      entry, buffer.data(), sizeof(int) * buffer.size()));
+  // TODO: Build byte buffer from response?
+  // entry = CacheEntry();
+  // auto status = entry.FromInferenceResponse(response);
+  // if (!status.IsOk()) {
+  //  return status;
+  //}
+  // TODO: support multiple buffers?
+  // return Insert({base, buffer1_byte_size}, key);
+  return Status::Success;
+}
 
-  RETURN_IF_TRITONSERVER_ERROR(insert_fn_(cache_impl_, key.c_str(), entry));
 
-  // TODO: Remove
-  size_t count = 42;
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryItemCount(entry, &count));
-  LOG_VERBOSE(1) << "[INSERT] entry item count: " << count;
-  if (count != 1) {
-    return Status(
-        Status::Code::INTERNAL, "unexpected count from insert function");
+std::optional<std::vector<Buffer>>
+TritonCache::Lookup(const std::string& key)
+{
+  LOG_VERBOSE(1) << "Looking up bytes in cache";
+  if (lookup_fn_ == nullptr) {
+    LOG_ERROR << "cache lookup function is nullptr";
+    return std::nullopt;
   }
 
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryDelete(entry));
-  return Status::Success;
+  auto entry = std::make_unique<CacheEntry>();
+  auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
+  RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
+      lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
+  LOG_VERBOSE(1) << "[LOOKUP] CacheEntry->Items()->size(): "
+                 << entry->Items().size();
+  return entry->Items();
 }
 
 Status
 TritonCache::Lookup(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(1) << "Looking up in cache";
+  LOG_VERBOSE(1) << "Looking up response in cache";
   if (lookup_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache lookup function is nullptr");
   }
 
-  TRITONCACHE_CacheEntry* entry = nullptr;
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryNew(&entry));
-
-  RETURN_IF_TRITONSERVER_ERROR(lookup_fn_(cache_impl_, key.c_str(), entry));
-
-  // TODO: Remove
-  size_t count = 42;
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryItemCount(entry, &count));
-  LOG_VERBOSE(1) << "[LOOKUP] entry item count: " << count;
-  if (count != 1) {
-    return Status(
-        Status::Code::INTERNAL, "unexpected count from lookup function");
+  const auto responses = Lookup(key);
+  if (!responses.has_value()) {
+    return Status(Status::Code::INTERNAL, "Lookup failed");
   }
 
-  // TODO: Build Inference Response
+  // TODO: Build Inference Response from items
 
-  RETURN_IF_TRITONSERVER_ERROR(TRITONCACHE_CacheEntryDelete(entry));
   return Status::Success;
 }
 

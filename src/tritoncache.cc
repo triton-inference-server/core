@@ -108,6 +108,10 @@ TRITONCACHE_CacheEntryItem(
 
   *base = byte_base;
   *byte_size = buffer.size();
+  std::cout << "[DEBUG] [tritoncache.cc] CacheEntryGetItem addr: " << byte_base
+            << std::endl;
+  std::cout << "[DEBUG] [tritoncache.cc] CacheEntryGetItem size: "
+            << buffer.size() << std::endl;
   return nullptr;
 }
 

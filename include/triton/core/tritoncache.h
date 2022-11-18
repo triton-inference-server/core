@@ -158,6 +158,28 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItem(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
     TRITONCACHE_CacheEntry* entry, const void* base, size_t byte_size);
 
+/*
+
+// TODO : May benefit from another level of indirection, one less copy
+          by passing list of pointers rather than forming contiguous buffer
+
+// Get number of buffers in item
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
+    TRITONCACHE_CacheEntryItem* item, size_t* count);
+
+// Gets the index'th buffer from item where 0 <= index < count where
+// 'count' is the value returned by TRITONCACHE_CacheItemBufferCount
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBuffer(
+    TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
+    size_t* byte_size);
+
+// Adds item to entry
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemAddBuffer(
+    TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size);
+
+*/
+
+
 /* Not currently used, may be added in the future for grouping
    cache entries for actions like evicting all entries associated
    with certain model, tags, etc.
