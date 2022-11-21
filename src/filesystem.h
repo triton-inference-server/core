@@ -26,8 +26,8 @@
 #pragma once
 
 #ifdef _WIN32
-// Remove GetObject definition from windows.h, which prevents calls to
-// RapidJSON's GetObject.
+// Remove GetObject definition from windows.h, which can cause
+// a naming collision when GetObject is called.
 // https://github.com/Tencent/rapidjson/issues/1448
 #undef GetObject
 #endif  // _WIN32
