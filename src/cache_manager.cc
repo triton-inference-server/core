@@ -142,8 +142,11 @@ TritonCache::TestCacheImpl()
   // TODO: Test multiple buffers
   std::vector<int> buffer1{1, 2, 3};
   auto buffer1_byte_size = sizeof(int) * buffer1.size();
-  auto base = reinterpret_cast<std::byte*>(buffer1.data());
-  status = Insert({base, buffer1_byte_size}, "test_bytes_123_key");
+  auto base1 = reinterpret_cast<std::byte*>(buffer1.data());
+  std::vector<std::shared_ptr<CacheEntryItem>> items;
+  items.emplace_back(new CacheEntryItem());
+  items[0]->AddBuffer({base1, buffer1_byte_size});
+  status = Insert(items, "test_bytes_123_key");
 
   std::cout << "=============== Lookup ===============" << std::endl;
   status = Lookup(response, "test_bytes_123_key");
@@ -186,8 +189,11 @@ TritonCache::Hash(const InferenceRequest& request, uint64_t* key)
   return Status::Success;
 }
 
+/* TODO
+
 Status
-TritonCache::Insert(boost::span<std::byte> byte_span, const std::string& key)
+TritonCache::InsertBuffer(boost::span<std::byte> byte_span, const std::string&
+key)
 {
   LOG_VERBOSE(1) << "Inserting into cache";
   if (insert_fn_ == nullptr) {
@@ -197,13 +203,38 @@ TritonCache::Insert(boost::span<std::byte> byte_span, const std::string& key)
   // TODO: If key exists, exit? Check with cache first.
 
   auto entry = std::make_unique<CacheEntry>();
-  entry->AddItem(byte_span);
+  entry->AddBuffer(byte_span);
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_IF_TRITONSERVER_ERROR(
       insert_fn_(cache_impl_, key.c_str(), opaque_entry));
   return Status::Success;
 }
 
+*/
+
+Status
+TritonCache::Insert(
+    std::vector<std::shared_ptr<CacheEntryItem>> items, const std::string& key)
+{
+  LOG_VERBOSE(1) << "Inserting into cache";
+  if (insert_fn_ == nullptr) {
+    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+  }
+
+  // TODO: If key exists, exit? Check with cache first.
+
+  auto entry = std::make_shared<CacheEntry>();
+  for (const auto& item : items) {
+    // TODO
+    entry->AddItem(*item);
+  }
+  auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
+  RETURN_IF_TRITONSERVER_ERROR(
+      insert_fn_(cache_impl_, key.c_str(), opaque_entry));
+  return Status::Success;
+}
+
+// TODO: List of responses rather than single response
 Status
 TritonCache::Insert(const InferenceResponse* response, const std::string& key)
 {
@@ -226,7 +257,7 @@ TritonCache::Insert(const InferenceResponse* response, const std::string& key)
 }
 
 
-std::optional<std::vector<Buffer>>
+std::optional<std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
   LOG_VERBOSE(1) << "Looking up bytes in cache";
@@ -235,12 +266,11 @@ TritonCache::Lookup(const std::string& key)
     return std::nullopt;
   }
 
-  auto entry = std::make_unique<CacheEntry>();
+  auto entry = std::make_shared<CacheEntry>();
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
       lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
-  LOG_VERBOSE(1) << "[LOOKUP] CacheEntry->Items()->size(): "
-                 << entry->Items().size();
+  LOG_VERBOSE(1) << "[LOOKUP] CacheEntry->ItemCount()" << entry->ItemCount();
   return entry->Items();
 }
 

@@ -56,6 +56,7 @@ extern "C" {
 
 struct TRITONCACHE_Cache;
 struct TRITONCACHE_CacheEntry;
+struct TRITONCACHE_CacheEntryItem;
 
 ///
 /// TRITONCACHE API Version
@@ -150,35 +151,36 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemCount(
 
 // Gets the index'th item from entry where 0 <= index < count where
 // 'count' is the value returned by TRITONCACHE_CacheEntryItemCount
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItem(
-    TRITONCACHE_CacheEntry* entry, size_t index, void** base,
-    size_t* byte_size);
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetItem(
+    TRITONCACHE_CacheEntry* entry, size_t index,
+    TRITONCACHE_CacheEntryItem** item);
 
 // Adds item to entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
-    TRITONCACHE_CacheEntry* entry, const void* base, size_t byte_size);
+    TRITONCACHE_CacheEntry* entry, TRITONCACHE_CacheEntryItem* item);
 
-/*
+/* CacheEntryItem Lifetime Management */
 
-// TODO : May benefit from another level of indirection, one less copy
-          by passing list of pointers rather than forming contiguous buffer
+// TODO: flesh out
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemNew(
+    TRITONCACHE_CacheEntryItem** item);
 
-// Get number of buffers in item
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
+    TRITONCACHE_CacheEntryItem* item);
+
+/* CacheEntryItem Field Management */
+
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
     TRITONCACHE_CacheEntryItem* item, size_t* count);
 
-// Gets the index'th buffer from item where 0 <= index < count where
-// 'count' is the value returned by TRITONCACHE_CacheItemBufferCount
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBuffer(
-    TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
-    size_t* byte_size);
-
-// Adds item to entry
+// Adds buffer to item
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemAddBuffer(
     TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size);
 
-*/
-
+// Gets buffer at index from item
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
+    TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
+    size_t* byte_size);
 
 /* Not currently used, may be added in the future for grouping
    cache entries for actions like evicting all entries associated

@@ -31,6 +31,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include "cache_entry.h"
 #include "constants.h"
 #include "infer_request.h"
 #include "infer_response.h"
@@ -68,9 +69,14 @@ class TritonCache {
   const TritonServerMessage* CacheConfig() const { return cache_config_; }
   // TODO: const ref?
   Status Insert(const InferenceResponse* response, const std::string& key);
-  Status Insert(boost::span<std::byte> byte_span, const std::string& key);
+  // Status InsertBuffer(boost::span<std::byte> byte_span, const std::string&
+  // key);
+  // TODO: unique vs shared
+  Status Insert(
+      std::vector<std::shared_ptr<CacheEntryItem>> items,
+      const std::string& key);
   Status Lookup(InferenceResponse* response, const std::string& key);
-  std::optional<std::vector<std::vector<std::byte>>> Lookup(
+  std::optional<std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
       const std::string& key);
   Status Hash(const InferenceRequest& request, uint64_t* key);
   Status Evict();

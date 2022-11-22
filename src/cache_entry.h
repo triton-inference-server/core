@@ -1,4 +1,6 @@
+#pragma once
 #include <boost/core/span.hpp>
+#include <memory>
 #include <vector>
 #include "tritonserver_apis.h"
 
@@ -18,15 +20,27 @@ using Buffer = std::vector<std::byte>;
 //   using Item = std::vector<Buffer>;
 //   std::vector<Item> items_;
 
-class CacheEntry {
+class CacheEntryItem {
  public:
-  std::vector<Buffer> Items() { return items_; }
-  size_t Count() { return items_.size(); }
-  void AddItem(boost::span<const std::byte> buffer);
+  // TODO: immutable buffers?
+  std::vector<Buffer> Buffers();
+  size_t BufferCount();
+  void AddBuffer(boost::span<const std::byte> buffer);
 
  private:
   // TODO: Pointer to be more lightweight depending on usage?
-  std::vector<Buffer> items_;
+  std::vector<Buffer> buffers_;
+};
+
+class CacheEntry {
+ public:
+  std::vector<std::shared_ptr<CacheEntryItem>> Items();
+  size_t ItemCount();
+  void AddItem(const CacheEntryItem& item);
+
+ private:
+  // TODO: Pointer to be more lightweight depending on usage?
+  std::vector<std::shared_ptr<CacheEntryItem>> items_;
 };
 
 }}  // namespace triton::core
