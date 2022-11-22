@@ -24,12 +24,10 @@ void
 CacheEntry::AddItem(const CacheEntryItem& item)
 {
   // TODO: lock?
-  std::cout << "[DEBUG] [cache_entry.cc] items_.size() before: "
-            << items_.size() << std::endl;
-  // Move?
+  // std::move?
   items_.emplace_back(std::make_shared<CacheEntryItem>(item));
-  std::cout << "[DEBUG] [cache_entry.cc] items_.size() after: " << items_.size()
-            << std::endl;
+  std::cout << "[DEBUG] [cache_entry.cc] items_.size() after AddItem(): "
+            << items_.size() << std::endl;
 }
 
 /* CacheEntryItem */
@@ -52,11 +50,9 @@ void
 CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
 {
   // TODO: lock?
-  // Make a vector byte copy for cache to own
-  std::cout << "[DEBUG] [cache_entry.cc] buffers_.size() before: "
-            << buffers_.size() << std::endl;
+  // Make a copy for cache to own
   buffers_.emplace_back(byte_span.begin(), byte_span.end());
-  std::cout << "[DEBUG] [cache_entry.cc] buffers_.size() after: "
+  std::cout << "[DEBUG] [cache_entry.cc] buffers_.size() after AddBuffer(): "
             << buffers_.size() << std::endl;
 }
 

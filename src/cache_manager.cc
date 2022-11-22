@@ -139,13 +139,22 @@ TritonCache::TestCacheImpl()
   }
 
   std::cout << "=============== Insert Bytes ===============" << std::endl;
-  // TODO: Test multiple buffers
-  std::vector<int> buffer1{1, 2, 3};
-  auto buffer1_byte_size = sizeof(int) * buffer1.size();
-  auto base1 = reinterpret_cast<std::byte*>(buffer1.data());
+  // Setup byte buffers
+  std::vector<std::byte> buffer1{1, std::byte{0x01}};
+  std::vector<std::byte> buffer2{2, std::byte{0x02}};
+  std::vector<std::byte> buffer3{4, std::byte{0x03}};
+  std::vector<std::byte> buffer4{8, std::byte{0x04}};
+  std::vector<std::byte> buffer5{16, std::byte{0xFF}};
+  // Setup items
   std::vector<std::shared_ptr<CacheEntryItem>> items;
   items.emplace_back(new CacheEntryItem());
-  items[0]->AddBuffer({base1, buffer1_byte_size});
+  items.emplace_back(new CacheEntryItem());
+  // Add buffers to items
+  items[0]->AddBuffer(buffer1);
+  items[0]->AddBuffer(buffer2);
+  items[1]->AddBuffer(buffer3);
+  items[1]->AddBuffer(buffer4);
+  items[1]->AddBuffer(buffer5);
   status = Insert(items, "test_bytes_123_key");
 
   std::cout << "=============== Lookup ===============" << std::endl;
@@ -270,7 +279,8 @@ TritonCache::Lookup(const std::string& key)
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
       lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
-  LOG_VERBOSE(1) << "[LOOKUP] CacheEntry->ItemCount()" << entry->ItemCount();
+  std::cout << "[cache_manager.cc] [LOOKUP] CacheEntry->ItemCount(): "
+            << entry->ItemCount() << std::endl;
   return entry->Items();
 }
 
