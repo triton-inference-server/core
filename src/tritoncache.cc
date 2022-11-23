@@ -19,7 +19,6 @@ extern "C" {
 
 /* CacheEntry Lifetime Management */
 
-// TODO: flesh out
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryNew(TRITONCACHE_CacheEntry** entry)
 {
@@ -60,12 +59,13 @@ TRITONCACHE_CacheEntryItemCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   *count = lentry->ItemCount();
-  std::cout << "[DEBUG] [tritoncache.cc] entry->ItemCount()" << *count
+  std::cout << "[DEBUG] [tritoncache.cc] entry->ItemCount(): " << *count
             << std::endl;
   return nullptr;  // success
 }
 
-// Adds item to entry
+// Adds item to entry.
+// NOTE: Triton takes ownership of item, so the cache should not delete it.
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryAddItem(
     TRITONCACHE_CacheEntry* entry, TRITONCACHE_CacheEntryItem* item)
@@ -75,12 +75,12 @@ TRITONCACHE_CacheEntryAddItem(
         TRITONSERVER_ERROR_INVALID_ARG, "entry was nullptr");
   }
 
-  // TODO: lock?
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
-  const auto item_copy = new CacheEntryItem(*litem);
-  // TODO: Maintain pointer instead of making another copy
-  lentry->AddItem(*item_copy);
+
+  // Triton CacheEntry will explicitly take ownership of item
+  std::unique_ptr<CacheEntryItem> uitem(litem);
+  lentry->AddItem(std::move(uitem));
   return nullptr;  // success
 }
 
@@ -100,26 +100,24 @@ TRITONCACHE_CacheEntryGetItem(
   }
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
-  // TODO: lock? copy?
   const auto litems = lentry->Items();
   if (index >= litems.size()) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  const auto litem = litems[index].get();
+  const auto& litem = litems[index];
   if (litem == nullptr) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "item was nullptr");
   }
-  const auto item_copy = new CacheEntryItem(*litem);
-  *item = reinterpret_cast<TRITONCACHE_CacheEntryItem*>(item_copy);
+  // Passthrough item pointer, no copy needed here.
+  *item = reinterpret_cast<TRITONCACHE_CacheEntryItem*>(litem.get());
   return nullptr;  // success
 }
 
 /* CacheEntryItem Lifetime Management */
 
-// TODO: flesh out
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemNew(TRITONCACHE_CacheEntryItem** item)
 {

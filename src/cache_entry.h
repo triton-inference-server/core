@@ -1,6 +1,7 @@
 #pragma once
 #include <boost/core/span.hpp>
 #include <memory>
+#include <shared_mutex>
 #include <vector>
 #include "tritonserver_apis.h"
 
@@ -28,17 +29,21 @@ class CacheEntryItem {
   void AddBuffer(boost::span<const std::byte> buffer);
 
  private:
+  // Shared mutex to support read-only and read-write locks
+  std::shared_mutex buffer_mu_;
   // TODO: Pointer to be more lightweight depending on usage?
   std::vector<Buffer> buffers_;
 };
 
 class CacheEntry {
  public:
-  std::vector<std::shared_ptr<CacheEntryItem>> Items();
+  const std::vector<std::shared_ptr<CacheEntryItem>>& Items();
   size_t ItemCount();
-  void AddItem(const CacheEntryItem& item);
+  void AddItem(std::shared_ptr<CacheEntryItem> item);
 
  private:
+  // Shared mutex to support read-only and read-write locks
+  std::shared_mutex item_mu_;
   // TODO: Pointer to be more lightweight depending on usage?
   std::vector<std::shared_ptr<CacheEntryItem>> items_;
 };

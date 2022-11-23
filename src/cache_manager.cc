@@ -198,29 +198,6 @@ TritonCache::Hash(const InferenceRequest& request, uint64_t* key)
   return Status::Success;
 }
 
-/* TODO
-
-Status
-TritonCache::InsertBuffer(boost::span<std::byte> byte_span, const std::string&
-key)
-{
-  LOG_VERBOSE(1) << "Inserting into cache";
-  if (insert_fn_ == nullptr) {
-    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
-  }
-
-  // TODO: If key exists, exit? Check with cache first.
-
-  auto entry = std::make_unique<CacheEntry>();
-  entry->AddBuffer(byte_span);
-  auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
-  RETURN_IF_TRITONSERVER_ERROR(
-      insert_fn_(cache_impl_, key.c_str(), opaque_entry));
-  return Status::Success;
-}
-
-*/
-
 Status
 TritonCache::Insert(
     std::vector<std::shared_ptr<CacheEntryItem>> items, const std::string& key)
@@ -232,12 +209,12 @@ TritonCache::Insert(
 
   // TODO: If key exists, exit? Check with cache first.
 
-  auto entry = std::make_shared<CacheEntry>();
+  const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
-    // TODO
-    entry->AddItem(*item);
+    entry->AddItem(item);
   }
-  auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
+  const auto opaque_entry =
+      reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_IF_TRITONSERVER_ERROR(
       insert_fn_(cache_impl_, key.c_str(), opaque_entry));
   return Status::Success;
