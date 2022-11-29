@@ -603,7 +603,7 @@ DynamicBatchScheduler::DelegateResponse(
   auto queue_slot = &completion_queue_.back();
 
   // TODO
-  uint64_t key = request->CacheKey();
+  const auto key = request->CacheKey();
 
   request->SetResponseDelegator(
       [this, queue_slot, key](
@@ -612,7 +612,7 @@ DynamicBatchScheduler::DelegateResponse(
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
-          auto status = cache->Insert(response.get(), std::to_string(key));
+          auto status = cache->Insert(response.get(), key);
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
@@ -625,7 +625,7 @@ DynamicBatchScheduler::DelegateResponse(
         // raw_request_ptr->ReportStatisticsCacheMiss(reporter_.get());
 #endif  // TRITON_ENABLE_STATS
             if (!status.IsOk()) {
-              LOG_ERROR << "Failed to insert key [" << std::to_string(key)
+              LOG_ERROR << "Failed to insert key [" << key
                         << "] into response cache: " << status.Message();
             }
           }  // Otherwise do nothing; we update cache hit statistics on Lookup
@@ -653,7 +653,7 @@ DynamicBatchScheduler::CacheLookUp(
   // Lookup request in cache
   std::unique_ptr<InferenceResponse> local_response;
   request->ResponseFactory()->CreateResponse(&local_response);
-  uint64_t key = 0;  // TODO: Support generic hash type
+  std::string key = "";
   if (!request->CacheKeyIsSet()) {
     status = cache->Hash(*request, &key);  // TODO: Check error
     if (!status.IsOk()) {
@@ -663,8 +663,7 @@ DynamicBatchScheduler::CacheLookUp(
     request->SetCacheKey(key);
   }
   // TODO: cleanup key/hash logic
-  const auto strkey = std::to_string(request->CacheKey());
-  status = cache->Lookup(local_response.get(), strkey);
+  status = cache->Lookup(local_response.get(), key);
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
 #ifdef TRITON_ENABLE_STATS

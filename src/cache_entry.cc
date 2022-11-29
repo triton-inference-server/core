@@ -24,8 +24,6 @@ CacheEntry::Items()
 void
 CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
 {
-  // std::move?
-
   // Read-write, cannot be shared
   std::unique_lock lk(item_mu_);
   // CacheEntry will take ownership of item pointer
@@ -62,6 +60,77 @@ CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
   buffers_.emplace_back(byte_span.begin(), byte_span.end());
   std::cout << "[DEBUG] [cache_entry.cc] buffers_.size() after AddBuffer(): "
             << buffers_.size() << std::endl;
+}
+
+/* CacheResponseOutput */
+
+Status
+CacheEntryItem::FromResponse(const InferenceResponse* response)
+{
+  // TODO: pass const ref
+  if (!response) {
+    return Status(Status::Code::INTERNAL, "response was nullptr");
+  }
+
+  // Build cache entry item from response outputs
+  for (const auto& output : response->Outputs()) {
+    const auto buffer = ResponseOutputToBytes(output);
+    if (!buffer.has_value()) {
+      return Status(
+          Status::Code::INTERNAL, "failed to convert output to bytes");
+    }
+    AddBuffer(buffer.value());
+  }
+
+  return Status::Success;
+}
+
+std::optional<Buffer>
+CacheEntryItem::ResponseOutputToBytes(const InferenceResponse::Output& output)
+{
+  // Fetch output buffer details
+  const void* base = nullptr;
+  size_t byte_size = 0;
+  TRITONSERVER_MemoryType memory_type;
+  int64_t memory_type_id;
+  void* userp;
+  RETURN_NULLOPT_IF_STATUS_ERROR(output.DataBuffer(
+      &base, &byte_size, &memory_type, &memory_type_id, &userp));
+
+  if (memory_type != TRITONSERVER_MEMORY_CPU &&
+      memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+    LOG_ERROR
+        << "Only input buffers in CPU memory are allowed in cache currently";
+    return std::nullopt;
+  }
+
+  // Exit early if response buffer from output is invalid
+  if (!base) {
+    LOG_ERROR << "Response buffer from output was nullptr";
+    return std::nullopt;
+  }
+
+  // TODO: Aggregate metadata
+  // const auto name_ = output.Name();
+  // const auto dtype_ = output.DType();
+  // const auto shape_ = output.Shape();
+  // const auto buffer_size_ = static_cast<uint64_t>(byte_size);*/
+
+  // TODO: Use span to copy buffer data
+  // boost::span<std::byte> bs{reinterpret_cast<const std::byte*>(base),
+  // byte_size};
+
+  // TODO: unused variables
+  std::cout << "Unused vars: " << base << byte_size << memory_type_id << userp
+            << std::endl;
+
+  Buffer serial_bytes;
+  // TODO: Form output into byte buffer
+  // serial_bytes.insert(serial_bytes.end(), span.begin(), span.end());
+  // serial_bytes.insert(serial_bytes.end(), span.begin(), span.end());
+  // serial_bytes.insert(serial_bytes.end(), span.begin(), span.end());
+
+  return serial_bytes;
 }
 
 }}  // namespace triton::core

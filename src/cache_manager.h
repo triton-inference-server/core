@@ -40,17 +40,6 @@
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
-// If TRITONSERVER error is non-OK, return std::nullopt for failed optional.
-#define RETURN_NULLOPT_IF_TRITONSERVER_ERROR(E)      \
-  do {                                               \
-    TRITONSERVER_Error* err__ = (E);                 \
-    if (err__ != nullptr) {                          \
-      LOG_ERROR << TRITONSERVER_ErrorMessage(err__); \
-      TRITONSERVER_ErrorDelete(err__);               \
-      return std::nullopt;                           \
-    }                                                \
-  } while (false)
-
 namespace triton { namespace core {
 
 //
@@ -78,7 +67,7 @@ class TritonCache {
   Status Lookup(InferenceResponse* response, const std::string& key);
   std::optional<std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
       const std::string& key);
-  Status Hash(const InferenceRequest& request, uint64_t* key);
+  Status Hash(const InferenceRequest& request, std::string* key);
   Status Evict();
 
  private:

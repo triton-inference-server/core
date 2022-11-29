@@ -128,16 +128,11 @@ TritonCache::TestCacheImpl()
   std::cout << "======================================" << std::endl;
   std::cout << "==== Testing Cache Implementation ====" << std::endl;
   std::cout << "======================================" << std::endl;
-  // TODO: Remove
   auto status = Status::Success;
-  InferenceResponse* response = nullptr;
-  std::cout << "=============== Insert Response ===============" << std::endl;
-  // TODO: need response implementation
-  status = Insert(response, "test_response_key");
-  if (!status.IsOk()) {
-    return status;
-  }
-
+  // TODO: can't test here without creating genuine request/responses or mocking
+  // InferenceResponse* response = nullptr;
+  // std::cout << "=============== Insert Response ===============" <<
+  // std::endl; RETURN_IF_ERROR(Insert(response, "test_response_key"));
   std::cout << "=============== Insert Bytes ===============" << std::endl;
   // Setup byte buffers
   std::vector<std::byte> buffer1{1, std::byte{0x01}};
@@ -157,12 +152,13 @@ TritonCache::TestCacheImpl()
   items[1]->AddBuffer(buffer5);
   status = Insert(items, "test_bytes_123_key");
 
-  std::cout << "=============== Lookup ===============" << std::endl;
-  status = Lookup(response, "test_bytes_123_key");
-  if (!status.IsOk()) {
-    return status;
+  // std::cout << "=============== Lookup Response ===============" <<
+  // std::endl; RETURN_IF_ERROR(Lookup(response, "test_response_key"));
+  std::cout << "=============== Lookup Bytes ===============" << std::endl;
+  const auto responses = Lookup("test_bytes_123_key");
+  if (!responses.has_value()) {
+    return Status(Status::Code::INTERNAL, "Lookup failed");
   }
-
   std::cout << "======================================" << std::endl;
   std::cout << "============ Done Testing ============" << std::endl;
   std::cout << "======================================" << std::endl;
@@ -172,8 +168,6 @@ TritonCache::TestCacheImpl()
 Status
 TritonCache::InitializeCacheImpl()
 {
-  // TODO: Shouldn't be needed since SharedLibrary should error
-  //       if non-optional function not found / nullptr
   if (init_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache init function is nullptr");
   }
@@ -190,11 +184,11 @@ TritonCache::InitializeCacheImpl()
 }
 
 Status
-TritonCache::Hash(const InferenceRequest& request, uint64_t* key)
+TritonCache::Hash(const InferenceRequest& request, std::string* key)
 {
   LOG_VERBOSE(1) << "Hashing into cache";
-  // TODO: call cache_hash_fn__
-  *key = 42;
+  // TODO: call hash function
+  *key = "test_bytes_123_key";
   return Status::Success;
 }
 
@@ -232,6 +226,11 @@ TritonCache::Insert(const InferenceResponse* response, const std::string& key)
   // TODO: If key exists, exit? Check with cache first.
 
   // TODO: Build byte buffer from response?
+  auto entry = CacheEntry();
+  // TODO: clean up, no need for smart ptrs here, etc.
+  auto item = std::make_shared<CacheEntryItem>();
+  RETURN_IF_ERROR(item->FromResponse(response));
+  entry.AddItem(item);
   // entry = CacheEntry();
   // auto status = entry.FromInferenceResponse(response);
   // if (!status.IsOk()) {
