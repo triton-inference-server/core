@@ -56,19 +56,18 @@ class TritonCache {
   const std::string& Name() const { return name_; }
   const std::string& Directory() const { return dir_; }
   const TritonServerMessage* CacheConfig() const { return cache_config_; }
-  // TODO: const ref?
-  Status Insert(const InferenceResponse* response, const std::string& key);
-  // Status InsertBuffer(boost::span<std::byte> byte_span, const std::string&
-  // key);
-  // TODO: unique vs shared
+  Status Insert(
+      boost::span<InferenceResponse*> responses, const std::string& key);
+  Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
       std::vector<std::shared_ptr<CacheEntryItem>> items,
       const std::string& key);
+  Status Lookup(
+      boost::span<InferenceResponse*> responses, const std::string& key);
   Status Lookup(InferenceResponse* response, const std::string& key);
   std::optional<std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
       const std::string& key);
   Status Hash(const InferenceRequest& request, std::string* key);
-  Status Evict();
 
  private:
   TritonCache(
@@ -97,13 +96,11 @@ class TritonCache {
 
 
   // Cache Implementation
-  TRITONCACHE_Cache* cache_impl_;  // TODO: Smart pointer / custom deleter?
+  TRITONCACHE_Cache* cache_impl_;
 
   // dlopen / dlsym handles
   void* dlhandle_;
   // TODO: std::function doesn't work here?
-  // using TritonCacheInitFn_t =
-  // std::function<TRITONSERVER_Error*(TRITONCACHE_Cache**)>;
   typedef TRITONSERVER_Error* (*TritonCacheInitFn_t)(TRITONCACHE_Cache** cache);
   TritonCacheInitFn_t init_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
@@ -114,8 +111,6 @@ class TritonCache {
   typedef TRITONSERVER_Error* (*TritonCacheInsertFn_t)(
       TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
   TritonCacheInsertFn_t insert_fn_;
-
-  // TODO: Evict
 };
 
 //

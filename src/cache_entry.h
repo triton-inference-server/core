@@ -29,6 +29,13 @@
 
 namespace triton { namespace core {
 
+struct CacheOutput {
+  std::string name_;
+  inference::DataType dtype_;
+  std::vector<int64_t> shape_;
+  std::vector<std::byte> buffer_;
+};
+
 // A Buffer is an arbitrary data blob, whose type need not be known
 // by the cache for storage and retrieval.
 using Buffer = std::vector<std::byte>;
@@ -38,13 +45,17 @@ using Buffer = std::vector<std::byte>;
 class CacheEntryItem {
  public:
   Status FromResponse(const InferenceResponse* response);
+  Status ToResponse(InferenceResponse* response);
   std::vector<Buffer> Buffers();
   size_t BufferCount();
   void AddBuffer(boost::span<const std::byte> buffer);
 
  private:
-  std::optional<Buffer> ResponseOutputToBytes(
-      const InferenceResponse::Output& output);
+  std::optional<Buffer> ToBytes(const InferenceResponse::Output& output);
+  std::optional<CacheOutput> FromBytes(
+      boost::span<const std::byte> packed_bytes);
+
+
   // NOTE: performance gain may be possible by removing this mutex and
   //   guaranteeing that no two threads will access/modify an item
   //   in parallel. This may be guaranteed by documenting that a cache
@@ -60,7 +71,7 @@ class CacheEntryItem {
 //   ex: one request may have multiple responses
 class CacheEntry {
  public:
-  const std::vector<std::shared_ptr<CacheEntryItem>>& Items();
+  std::vector<std::shared_ptr<CacheEntryItem>> Items();
   size_t ItemCount();
   void AddItem(std::shared_ptr<CacheEntryItem> item);
 

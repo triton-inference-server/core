@@ -64,7 +64,7 @@ TritonCache::~TritonCache()
 {
   LOG_VERBOSE(1) << "unloading cache '" << name_ << "'";
   if (fini_fn_ != nullptr) {
-    LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheDelete from: '" << libpath_
+    LOG_VERBOSE(2) << "Calling TRITONCACHE_CacheDelete from: '" << libpath_
                    << "'";
     LOG_TRITONSERVER_ERROR(fini_fn_(cache_impl_), "failed finalizing cache");
   } else {
@@ -186,9 +186,9 @@ TritonCache::InitializeCacheImpl()
 Status
 TritonCache::Hash(const InferenceRequest& request, std::string* key)
 {
-  LOG_VERBOSE(1) << "Hashing into cache";
+  LOG_VERBOSE(2) << "Hashing into cache";
   // TODO: call hash function
-  *key = "test_bytes_123_key";
+  *key = "test_response_123_key";
   return Status::Success;
 }
 
@@ -196,7 +196,7 @@ Status
 TritonCache::Insert(
     std::vector<std::shared_ptr<CacheEntryItem>> items, const std::string& key)
 {
-  LOG_VERBOSE(1) << "Inserting into cache";
+  LOG_VERBOSE(2) << "Inserting into cache";
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
@@ -214,38 +214,40 @@ TritonCache::Insert(
   return Status::Success;
 }
 
-// TODO: List of responses rather than single response
 Status
-TritonCache::Insert(const InferenceResponse* response, const std::string& key)
+TritonCache::Insert(
+    boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(1) << "Inserting into cache";
+  LOG_VERBOSE(2) << "Inserting list of responses into cache";
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
 
-  // TODO: If key exists, exit? Check with cache first.
-
-  // TODO: Build byte buffer from response?
   auto entry = CacheEntry();
-  // TODO: clean up, no need for smart ptrs here, etc.
-  auto item = std::make_shared<CacheEntryItem>();
-  RETURN_IF_ERROR(item->FromResponse(response));
-  entry.AddItem(item);
-  // entry = CacheEntry();
-  // auto status = entry.FromInferenceResponse(response);
-  // if (!status.IsOk()) {
-  //  return status;
-  //}
-  // TODO: support multiple buffers?
-  // return Insert({base, buffer1_byte_size}, key);
-  return Status::Success;
+  for (const auto& response : responses) {
+    auto item = std::make_shared<CacheEntryItem>();
+    RETURN_IF_ERROR(item->FromResponse(response));
+    entry.AddItem(item);
+  }
+  return Insert(entry.Items(), key);
+}
+
+Status
+TritonCache::Insert(InferenceResponse* response, const std::string& key)
+{
+  LOG_VERBOSE(2) << "Inserting single response into cache";
+  if (insert_fn_ == nullptr) {
+    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+  }
+
+  return Insert({&response, 1}, key);
 }
 
 
 std::optional<std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
-  LOG_VERBOSE(1) << "Looking up bytes in cache";
+  LOG_VERBOSE(2) << "Looking up bytes in cache";
   if (lookup_fn_ == nullptr) {
     LOG_ERROR << "cache lookup function is nullptr";
     return std::nullopt;
@@ -255,35 +257,46 @@ TritonCache::Lookup(const std::string& key)
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
       lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
-  std::cout << "[cache_manager.cc] [LOOKUP] CacheEntry->ItemCount(): "
-            << entry->ItemCount() << std::endl;
+  LOG_VERBOSE(2) << "[LOOKUP] CacheEntry->ItemCount(): " << entry->ItemCount();
   return entry->Items();
 }
 
 Status
-TritonCache::Lookup(InferenceResponse* response, const std::string& key)
+TritonCache::Lookup(
+    boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(1) << "Looking up response in cache";
+  LOG_VERBOSE(2) << "Looking up multiple responses in cache";
+
   if (lookup_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache lookup function is nullptr");
   }
 
-  const auto responses = Lookup(key);
-  if (!responses.has_value()) {
+  const auto opt_items = Lookup(key);
+  if (!opt_items.has_value()) {
     return Status(Status::Code::INTERNAL, "Lookup failed");
   }
+  const auto& items = opt_items.value();
 
-  // TODO: Build Inference Response from items
+  if (items.size() != responses.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of responses in cache does not match. Expected: " +
+            std::to_string(responses.size()) +
+            ", received: " + std::to_string(items.size()));
+  }
+
+  for (size_t i = 0; i < items.size(); i++) {
+    items[i]->ToResponse(responses[i]);
+  }
 
   return Status::Success;
 }
 
 Status
-TritonCache::Evict()
+TritonCache::Lookup(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(1) << "Evicting from cache";
-  // TODO: call cache_evict_fn_
-  return Status(Status::Code::INTERNAL, "Evict Not Implemented");
+  LOG_VERBOSE(2) << "Looking up response in cache";
+  return Lookup({&response, 1}, key);
 }
 
 //

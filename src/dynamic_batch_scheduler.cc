@@ -663,6 +663,7 @@ DynamicBatchScheduler::CacheLookUp(
     request->SetCacheKey(key);
   }
   // TODO: cleanup key/hash logic
+  LOG_VERBOSE(1) << "Looking up in cache for key: " << key;
   status = cache->Lookup(local_response.get(), key);
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
