@@ -17,8 +17,9 @@ namespace triton { namespace core {
 
 extern "C" {
 
-/* CacheEntry Lifetime Management */
-
+//
+// CacheEntry Lifetime Management
+//
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryNew(TRITONCACHE_CacheEntry** entry)
 {
@@ -27,8 +28,6 @@ TRITONCACHE_CacheEntryNew(TRITONCACHE_CacheEntry** entry)
         TRITONSERVER_ERROR_INVALID_ARG, "entry was nullptr");
   }
 
-  // TODO: remove
-  std::cout << "[DEBUG] [tritoncache.cc] Creating new cache entry" << std::endl;
   *entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(new CacheEntry());
   return nullptr;
 }
@@ -41,14 +40,13 @@ TRITONCACHE_CacheEntryDelete(TRITONCACHE_CacheEntry* entry)
         TRITONSERVER_ERROR_INVALID_ARG, "entry was nullptr");
   }
 
-  // TODO: remove
-  std::cout << "[DEBUG] [tritoncache.cc] deleting cache entry" << std::endl;
   delete reinterpret_cast<CacheEntry*>(entry);
   return nullptr;
 }
 
-/* CacheEntry Field Management */
-
+//
+// CacheEntry Field Management
+//
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 {
@@ -59,8 +57,6 @@ TRITONCACHE_CacheEntryItemCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   *count = lentry->ItemCount();
-  std::cout << "[DEBUG] [tritoncache.cc] entry->ItemCount(): " << *count
-            << std::endl;
   return nullptr;  // success
 }
 
@@ -116,8 +112,9 @@ TRITONCACHE_CacheEntryGetItem(
   return nullptr;  // success
 }
 
-/* CacheEntryItem Lifetime Management */
-
+//
+// CacheEntryItem Lifetime Management
+//
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemNew(TRITONCACHE_CacheEntryItem** item)
 {
@@ -126,9 +123,6 @@ TRITONCACHE_CacheEntryItemNew(TRITONCACHE_CacheEntryItem** item)
         TRITONSERVER_ERROR_INVALID_ARG, "item was nullptr");
   }
 
-  // TODO: remove
-  std::cout << "[DEBUG] [tritoncache.cc] Creating new cache entry item"
-            << std::endl;
   *item = reinterpret_cast<TRITONCACHE_CacheEntryItem*>(new CacheEntryItem());
   return nullptr;
 }
@@ -141,15 +135,13 @@ TRITONCACHE_CacheEntryItemDelete(TRITONCACHE_CacheEntryItem* item)
         TRITONSERVER_ERROR_INVALID_ARG, "item was nullptr");
   }
 
-  // TODO: remove
-  std::cout << "[DEBUG] [tritoncache.cc] deleting cache entry item"
-            << std::endl;
   delete reinterpret_cast<CacheEntryItem*>(item);
   return nullptr;
 }
 
-/* CacheEntryItem Field Management */
-
+//
+// CacheEntryItem Field Management
+//
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemBufferCount(
     TRITONCACHE_CacheEntryItem* item, size_t* count)
@@ -161,8 +153,6 @@ TRITONCACHE_CacheEntryItemBufferCount(
 
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
   *count = litem->BufferCount();
-  std::cout << "[DEBUG] [tritoncache.cc] item->BufferCount()" << *count
-            << std::endl;
   return nullptr;  // success
 }
 
@@ -206,10 +196,6 @@ TRITONCACHE_CacheEntryItemGetBuffer(
 
   *base = byte_base;
   *byte_size = buffer.size();
-  std::cout << "[DEBUG] [tritoncache.cc] CacheEntryGetItemBuffer addr: "
-            << byte_base << std::endl;
-  std::cout << "[DEBUG] [tritoncache.cc] CacheEntryGetItemBuffer size: "
-            << buffer.size() << std::endl;
   return nullptr;  // success
 }
 
