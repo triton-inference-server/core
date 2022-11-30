@@ -192,15 +192,10 @@ class InferenceServer {
     pinned_memory_pool_size_ = std::max((int64_t)0, s);
   }
 
-  // Get / set the response cache byte size.
-  uint64_t ResponseCacheByteSize() const { return response_cache_byte_size_; }
-  void SetResponseCacheByteSize(uint64_t s)
-  {
-    response_cache_byte_size_ = s;
-    response_cache_enabled_ = (s > 0) ? true : false;
-  }
-
+  // Get / set whether response cache will be enabled server-wide.
+  // NOTE: Models still need caching enabled in individual model configs.
   bool ResponseCacheEnabled() const { return response_cache_enabled_; }
+  void SetResponseCacheEnabled(bool e) { response_cache_enabled_ = e; }
 
   // Get / set CUDA memory pool size
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
@@ -297,8 +292,6 @@ class InferenceServer {
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;
   uint64_t pinned_memory_pool_size_;
-  // TODO: remove or extract?
-  uint64_t response_cache_byte_size_;
   bool response_cache_enabled_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_supported_compute_capability_;
@@ -307,7 +300,6 @@ class InferenceServer {
   std::string repoagent_dir_;
   RateLimitMode rate_limit_mode_;
   RateLimiter::ResourceMap rate_limit_resource_map_;
-
 
   // Current state of the inference server.
   ServerReadyState ready_state_;

@@ -233,9 +233,6 @@ class TritonServerOptions {
   uint64_t PinnedMemoryPoolByteSize() const { return pinned_memory_pool_size_; }
   void SetPinnedMemoryPoolByteSize(uint64_t s) { pinned_memory_pool_size_ = s; }
 
-  uint64_t ResponseCacheByteSize() const { return response_cache_byte_size_; }
-  void SetResponseCacheByteSize(uint64_t s) { response_cache_byte_size_ = s; }
-
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
   {
     return cuda_memory_pool_size_;
@@ -327,7 +324,7 @@ class TritonServerOptions {
   uint64_t metrics_interval_;
   unsigned int exit_timeout_;
   uint64_t pinned_memory_pool_size_;
-  uint64_t response_cache_byte_size_;
+  bool response_cache_enabled_;
   unsigned int buffer_manager_thread_count_;
   unsigned int model_load_thread_count_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
@@ -346,7 +343,7 @@ TritonServerOptions::TritonServerOptions()
       rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
       gpu_metrics_(true), cpu_metrics_(true), metrics_interval_(2000),
       exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
-      response_cache_byte_size_(0), buffer_manager_thread_count_(0),
+      response_cache_enabled_(true), buffer_manager_thread_count_(0),
       model_load_thread_count_(
           std::max(2u, 2 * std::thread::hardware_concurrency())),
 #ifdef TRITON_ENABLE_GPU
@@ -1166,14 +1163,15 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
   return nullptr;  // Success
 }
 
+// Deprecated.
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
-  TritonServerOptions* loptions =
-      reinterpret_cast<TritonServerOptions*>(options);
-  loptions->SetResponseCacheByteSize(size);
-  return nullptr;  // Success
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "This API has been deprecated. See TRITONCACHE_CacheNew to specify cache "
+      "specific fields through 'config'.");
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -2108,8 +2106,9 @@ TRITONSERVER_ServerNew(
   lserver->SetRateLimiterMode(loptions->RateLimiterMode());
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
-  lserver->SetResponseCacheByteSize(loptions->ResponseCacheByteSize());
   lserver->SetCudaMemoryPoolByteSize(loptions->CudaMemoryPoolByteSize());
+  // TODO: expose server option for this?
+  lserver->SetResponseCacheEnabled(true);
   double min_compute_capability = loptions->MinSupportedComputeCapability();
   lserver->SetMinSupportedComputeCapability(min_compute_capability);
   lserver->SetStrictReadinessEnabled(loptions->StrictReadiness());
@@ -2247,9 +2246,6 @@ TRITONSERVER_ServerNew(
             "}",
         std::to_string(cuda_memory_pool.second)});
   }
-  options_table.InsertRow(std::vector<std::string>{
-      "response_cache_byte_size",
-      std::to_string(lserver->ResponseCacheByteSize())});
 
   std::stringstream compute_capability_ss;
   compute_capability_ss.setf(std::ios::fixed);
@@ -2261,6 +2257,8 @@ TRITONSERVER_ServerNew(
       "strict_readiness", std::to_string(lserver->StrictReadinessEnabled())});
   options_table.InsertRow(std::vector<std::string>{
       "exit_timeout", std::to_string(lserver->ExitTimeoutSeconds())});
+  options_table.InsertRow(std::vector<std::string>{
+      "caching", std::to_string(lserver->ResponseCacheEnabled())});
 
   std::string options_table_string = options_table.PrintTable();
   LOG_INFO << options_table_string;

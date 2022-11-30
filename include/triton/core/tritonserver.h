@@ -1692,13 +1692,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
 
-/// Set the total response cache byte size that the server can allocate in CPU
-/// memory. The response cache will be shared across all inference requests and
-/// across all models.
-///
-/// \param options The server options object.
-/// \param size The total response cache byte size.
-/// \return a TRITONSERVER_Error indicating success or failure.
+// Deprecated. Use "config" parameter in TRITONCACHE_CacheNew to configure cache
+// implementation specific fields.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size);

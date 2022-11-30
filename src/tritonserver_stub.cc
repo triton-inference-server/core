@@ -357,6 +357,8 @@ TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize()
 {
 }
+// Deprecated. Use "config" field in TRITONCACHE_CacheNew to configure cache
+// implementation specific fields.
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize()
 {
