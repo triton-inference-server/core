@@ -129,9 +129,6 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheEvict(
-    TRITONCACHE_Cache* cache);
-
 /* CacheEntry Lifetime Management */
 
 // TODO: Add API descriptions
