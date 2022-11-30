@@ -39,6 +39,14 @@
 
 namespace triton { namespace core {
 
+uint64_t
+CaptureTimeNs()
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 bool
 IsStaleState(Payload::State payload_state)
 {
@@ -612,17 +620,22 @@ DynamicBatchScheduler::DelegateResponse(
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
+          auto insert_start_ns = CaptureTimeNs();
           auto status = cache->Insert(response.get(), key);
+          auto insert_end_ns = CaptureTimeNs();
+
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
 #ifdef TRITON_ENABLE_STATS
-        // TODO: Use model_ directly or alternative instead of request
-        // because request can be released before we get to this callback
-
-        // Update cache miss statistics even on failure to insert
-        // as we still spend time on lookup and attempting to insert
-        // raw_request_ptr->ReportStatisticsCacheMiss(reporter_.get());
+            // Use model_ to update stats directly because request object can be
+            // released by the backend before getting to this callback.
+            const auto insert_ns = insert_end_ns - insert_start_ns;
+            // FIXME (DLIS-4372): Consolidate to single cache_miss_duration.
+            //   Lookup is negligible on cache miss or can be separated.
+            const auto lookup_ns = 0;
+            model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
+                reporter_.get(), lookup_ns, insert_ns);
 #endif  // TRITON_ENABLE_STATS
             if (!status.IsOk()) {
               LOG_ERROR << "Failed to insert key [" << key
@@ -662,9 +675,15 @@ DynamicBatchScheduler::CacheLookUp(
     }
     request->SetCacheKey(key);
   }
+
   // TODO: cleanup key/hash logic
-  LOG_VERBOSE(1) << "Looking up in cache for key: " << key;
-  status = cache->Lookup(local_response.get(), key);
+  {
+    LOG_VERBOSE(1) << "Looking up in cache for key: " << key;
+    request->CaptureCacheLookupStartNs();
+    status = cache->Lookup(local_response.get(), key);
+    request->CaptureCacheLookupEndNs();
+  }
+
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
 #ifdef TRITON_ENABLE_STATS
