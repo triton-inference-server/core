@@ -1410,14 +1410,14 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 /// API to modify batching strategy associated with a backend.
 ///
 
-/// Add a request to a model batch.
+/// Check whether a request should be added to the pending model batch.
 /// \param model The backend model for which Triton is forming a batch.
 /// \param request The request to be added to the pending batch.
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch. When the callback returns, this should reflect
 /// the latest batch information.
-/// \param should_include The pointer to be updated on whether the request was
-/// included in the batch.
+/// \param should_include The pointer to be updated on whether the request
+/// should be included in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchIncludeRequest(
     TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
