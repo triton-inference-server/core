@@ -103,6 +103,19 @@ class TritonModel : public Model {
   Status Initialize();
   Status WarmUp();
 
+  typedef TRITONSERVER_Error* (*TritonModelBatchInclFn_t)(
+      TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
+      bool* should_include);
+  typedef TRITONSERVER_Error* (*TritonModelBatchInitFn_t)(
+      TRITONBACKEND_Model* model, void** userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatchFiniFn_t)(void* userp);
+
+  // Custom batching function getters.
+  TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
+  TritonModelBatchInitFn_t ModelBatchInitFn() const { return batch_init_fn_; }
+  TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
+
+
   // The server object that owns this model. The model holds this as a
   // raw pointer because the lifetime of the server is guaranteed to
   // be longer than the lifetime of a model owned by the server.
@@ -128,6 +141,12 @@ class TritonModel : public Model {
 
   // Opaque state associated with this model.
   void* state_;
+
+  // Custom batching shared object handle and function pointers.
+  void* batching_dlhandle_;
+  TritonModelBatchInclFn_t batch_incl_fn_;
+  TritonModelBatchInitFn_t batch_init_fn_;
+  TritonModelBatchFiniFn_t batch_fini_fn_;
 };
 
 }}  // namespace triton::core
