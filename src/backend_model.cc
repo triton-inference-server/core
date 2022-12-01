@@ -55,15 +55,14 @@
 
 namespace triton { namespace core {
 
-//TODO: Remove model_name? No longer used.
+// TODO: Remove model_name. No longer used.
 Status
 TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const std::string& model_name, const int64_t version,
-    inference::ModelConfig model_config, const bool is_config_provided,
-    std::unique_ptr<TritonModel>* model)
+    const int64_t version, inference::ModelConfig model_config,
+    const bool is_config_provided, std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -459,8 +458,7 @@ TritonModel::SetBatchingStrategy()
   std::unique_ptr<SharedLibrary> slib;
   RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
-  RETURN_IF_ERROR(
-      slib->OpenLibraryHandle(batch_lib_path, &batching_dlhandle_));
+  RETURN_IF_ERROR(slib->OpenLibraryHandle(batch_lib_path, &batching_dlhandle_));
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batching_dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
       true /* optional */, reinterpret_cast<void**>(&batch_incl_fn_)));
@@ -470,18 +468,18 @@ TritonModel::SetBatchingStrategy()
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batching_dlhandle_, "TRITONBACKEND_ModelBatchFinalize",
       true /* optional */, reinterpret_cast<void**>(&batch_fini_fn_)));
-      
+
   // If one function is defined, they all must be.
   if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_) &&
       !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_)) {
     batch_incl_fn_ = nullptr;
     batch_init_fn_ = nullptr;
     batch_fini_fn_ = nullptr;
-    //TODO: Add model name to fil status below.
+    // TODO: Add model name to fil status below.
     return Status(
-        Status::Code::INVALID_ARG,
-        batch_lib_path + " does not define all "
-        "required custom batching functions");
+        Status::Code::INVALID_ARG, batch_lib_path +
+                                       " does not define all "
+                                       "required custom batching functions");
   }
   return Status::Success;
 }
