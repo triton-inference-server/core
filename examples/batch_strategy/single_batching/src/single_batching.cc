@@ -26,6 +26,18 @@
 
 #include "triton/core/tritonbackend.h"
 
+namespace triton { namespace core { namespace single_batching {
+
+//
+// Minimal custom  batching strategy that demonstrates the
+// TRITONBACKEND_ModelBatch API. This custom batching strategy dynamically
+// creates batches up to 1 request.
+//
+
+/////////////
+
+extern "C" {
+
 /// Check whether a request should be added to the pending model batch.
 /// \param model The backend model for which Triton is forming a batch.
 /// \param request The request to be added to the pending batch.
@@ -49,6 +61,8 @@ TRITONBACKEND_ModelBatchIncludeRequest(
   } else {
     *should_include = false;
   }
+
+  return nullptr;  // success
 }
 
 /// Callback to be invoked when Triton has begun the formation a batch.
@@ -61,6 +75,8 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
 {
   // Userp will point to a boolean indicating whether the batch is empty.
   *userp = new bool(true);
+
+  return nullptr;  // success
 }
 
 /// Callback to be invoked when Triton has completed the formation a batch.
@@ -71,4 +87,10 @@ TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchFinalize(void* userp)
 {
   delete static_cast<bool*>(userp);
+
+  return nullptr;  // success
 }
+
+}  // extern "C"
+
+}}}  // namespace triton::core::single_batching
