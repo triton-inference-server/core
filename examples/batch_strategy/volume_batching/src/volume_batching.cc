@@ -47,6 +47,8 @@ TRITONBACKEND_ModelBatchIncludeRequest(
   // TODO: Get request's volume.
   // TODO: See if pending_volume + request_volume <= max_volume
   // If so, should_include = true. Else, false.
+
+  return nullptr;  // success
 }
 
 /// Callback to be invoked when Triton has begun the formation a batch.
@@ -57,8 +59,10 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
 {
-  // Userp will point to a boolean indicating whether the batch is empty.
-  *userp = new int(0);
+  // Userp will point to an integer representing the current batch volume.
+  *userp = new unsigned int(0);
+
+  return nullptr;  // success
 }
 
 /// Callback to be invoked when Triton has completed the formation a batch.
@@ -69,4 +73,6 @@ TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchFinalize(void* userp)
 {
   delete static_cast<int*>(userp);
+
+  return nullptr;  // success
 }
