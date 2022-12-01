@@ -55,7 +55,6 @@
 
 namespace triton { namespace core {
 
-// TODO: Remove model_name. No longer used.
 Status
 TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
@@ -75,7 +74,7 @@ TritonModel::Create(
   }
 
   // Localize the content of the model repository corresponding to
-  // 'model_name'. This model holds a handle to the localized content
+  // 'model_path'. This model holds a handle to the localized content
   // so that it persists as long as the model is loaded.
   std::shared_ptr<LocalizedPath> localized_model_dir;
   RETURN_IF_ERROR(LocalizePath(model_path, &localized_model_dir));
