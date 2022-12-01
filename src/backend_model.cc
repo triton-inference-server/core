@@ -55,6 +55,7 @@
 
 namespace triton { namespace core {
 
+//TODO: Remove model_name? No longer used.
 Status
 TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
@@ -445,40 +446,44 @@ TritonModel::SetConfiguredScheduler()
 Status
 TritonModel::SetBatchingStrategy()
 {
-  // Search for custom batching strategy if dynamic batcher is used.
-  {
-    // TODO: Get path... check for parameter
-    // Else, look up in this order: version dir, model dir, backend dir
-    std::string batch_lib_path = "batchstrategy.so";
-    if (!batch_lib_path.empty()) {
-      std::unique_ptr<SharedLibrary> slib;
-      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+  // TODO: Get path... check for parameter
+  // Else, look up in this order: version dir, model dir, backend dir
+  std::string batch_lib_path = "batchstrategy.so";
 
-      RETURN_IF_ERROR(
-          slib->OpenLibraryHandle(batch_lib_path, &lagent->dlhandle_));
-      RETURN_IF_ERROR(slib->GetEntrypoint(
-          lagent->dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
-          true /* optional */, reinterpret_cast<void**>(&batch_incl_fn_)));
-      RETURN_IF_ERROR(slib->GetEntrypoint(
-          lagent->dlhandle_, "TRITONBACKEND_ModelBatchInitialize",
-          true /* optional */, reinterpret_cast<void**>(&batch_init_fn_)));
-      RETURN_IF_ERROR(slib->GetEntrypoint(
-          lagent->dlhandle_, "TRITONBACKEND_ModelBatchFinalize",
-          true /* optional */, reinterpret_cast<void**>(&batch_fini_fn_)));
-    }
-    // If one function is defined, they all must be.
-    if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_) &&
-        !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_)) {
-      batch_incl_fn_ = nullptr;
-      batch_init_fn_ = nullptr;
-      batch_fini_fn_ = nullptr;
-      return Status(
-          Status::Code::INVALID_ARG,
-          "custom batching shared library provided does not define all "
-          "required functions for '" +
-              model_config.name() + "'");
-    }
+  // If no batching library path provided, return.
+  if (batch_lib_path.empty()) {
+    return Status::Success;
   }
+
+  // If batching library path provided, load library and functions.
+  std::unique_ptr<SharedLibrary> slib;
+  RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+
+  RETURN_IF_ERROR(
+      slib->OpenLibraryHandle(batch_lib_path, &batching_dlhandle_));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batching_dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
+      true /* optional */, reinterpret_cast<void**>(&batch_incl_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batching_dlhandle_, "TRITONBACKEND_ModelBatchInitialize",
+      true /* optional */, reinterpret_cast<void**>(&batch_init_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batching_dlhandle_, "TRITONBACKEND_ModelBatchFinalize",
+      true /* optional */, reinterpret_cast<void**>(&batch_fini_fn_)));
+      
+  // If one function is defined, they all must be.
+  if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_) &&
+      !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_)) {
+    batch_incl_fn_ = nullptr;
+    batch_init_fn_ = nullptr;
+    batch_fini_fn_ = nullptr;
+    //TODO: Add model name to fil status below.
+    return Status(
+        Status::Code::INVALID_ARG,
+        batch_lib_path + " does not define all "
+        "required custom batching functions");
+  }
+  return Status::Success;
 }
 
 Status
