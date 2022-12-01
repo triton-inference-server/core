@@ -55,7 +55,6 @@ CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
   // CacheEntry will take ownership of item pointer
   // Items will be cleaned up when CacheEntry is cleaned up
   items_.push_back(std::move(item));
-  LOG_VERBOSE(2) << "[DEBUG] items_.size() after AddItem(): " << items_.size();
 }
 
 /* CacheEntryItem */
@@ -83,8 +82,6 @@ CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
   std::unique_lock lk(buffer_mu_);
   // Make a copy of buffer for Triton to own
   buffers_.emplace_back(byte_span.begin(), byte_span.end());
-  LOG_VERBOSE(2) << "[DEBUG] buffers_.size() after AddBuffer(): "
-                 << buffers_.size();
 }
 
 /* CacheResponseOutput */

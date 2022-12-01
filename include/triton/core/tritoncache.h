@@ -100,7 +100,9 @@ struct TRITONCACHE_CacheEntryItem;
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
-/* Cache Lifetime Management */
+///
+/// Cache Lifetime Management
+///
 
 /// Create a new cache object. The caller takes ownership of the
 /// TRITONCACHE_Cache object and must call
@@ -119,7 +121,9 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
     TRITONCACHE_Cache* cache);
 
-/* Cache Usage */
+///
+/// Cache Usage
+///
 
 // TODO: Add API descriptions
 
@@ -129,18 +133,19 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
-/* CacheEntry Lifetime Management */
+///
+/// CacheEntry Lifetime Management
+///
 
-// TODO: Add API descriptions
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
     TRITONCACHE_CacheEntry** entry);
 
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
     TRITONCACHE_CacheEntry* entry);
 
-/* CacheEntry Field Management */
-
-// TODO: Add API descriptions
+///
+/// CacheEntry Field Management
+///
 
 // Get number of items in entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemCount(
@@ -156,16 +161,19 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetItem(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
     TRITONCACHE_CacheEntry* entry, TRITONCACHE_CacheEntryItem* item);
 
-/* CacheEntryItem Lifetime Management */
+///
+/// CacheEntryItem Lifetime Management
+///
 
-// TODO: flesh out
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemNew(
     TRITONCACHE_CacheEntryItem** item);
 
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
     TRITONCACHE_CacheEntryItem* item);
 
-/* CacheEntryItem Field Management */
+///
+/// CacheEntryItem Field Management
+///
 
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
     TRITONCACHE_CacheEntryItem* item, size_t* count);
@@ -179,7 +187,8 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
     size_t* byte_size);
 
-/* Not currently used, may be added in the future for grouping
+/*
+   Not currently used, may be added in the future for grouping
    cache entries for actions like evicting all entries associated
    with certain model, tags, etc.
 
@@ -190,7 +199,6 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetTags(
 // Gets tags from entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryTags(
     TRITONCACHE_CacheEntry* entry, char*** tags, size_t* num_tags);
-
 */
 
 #ifdef __cplusplus

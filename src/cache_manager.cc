@@ -159,6 +159,32 @@ TritonCache::TestCacheImpl()
   if (!responses.has_value()) {
     return Status(Status::Code::INTERNAL, "Lookup failed");
   }
+  const auto lookup_items = responses.value();
+  if (lookup_items.size() != items.size()) {
+    return Status(
+        Status::Code::INTERNAL, "Expected " + std::to_string(items.size()) +
+                                    " got " +
+                                    std::to_string(lookup_items.size()));
+  }
+
+  for (size_t i = 0; i < items.size(); i++) {
+    auto expected_buffers = items[i]->Buffers();
+    auto lookup_buffers = lookup_items[i]->Buffers();
+    if (lookup_buffers.size() != expected_buffers.size()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Expected " + std::to_string(expected_buffers.size()) + " got " +
+              std::to_string(lookup_buffers.size()));
+    }
+
+
+    for (size_t b = 0; b < expected_buffers.size(); b++) {
+      if (lookup_buffers[b] != expected_buffers[b]) {
+        return Status(
+            Status::Code::INTERNAL, "Buffer bytes didn't match for test input");
+      }
+    }
+  }
   std::cout << "======================================" << std::endl;
   std::cout << "============ Done Testing ============" << std::endl;
   std::cout << "======================================" << std::endl;
