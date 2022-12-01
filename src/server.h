@@ -196,6 +196,8 @@ class InferenceServer {
   // NOTE: Models still need caching enabled in individual model configs.
   bool ResponseCacheEnabled() const { return response_cache_enabled_; }
   void SetResponseCacheEnabled(bool e) { response_cache_enabled_ = e; }
+  std::string CacheConfig() const { return cache_config_; }
+  void SetCacheConfig(std::string config_json) { cache_config_ = config_json; }
 
   // Get / set CUDA memory pool size
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
@@ -293,6 +295,7 @@ class InferenceServer {
   uint32_t model_load_thread_count_;
   uint64_t pinned_memory_pool_size_;
   bool response_cache_enabled_;
+  std::string cache_config_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_supported_compute_capability_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;

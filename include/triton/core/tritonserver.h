@@ -1692,11 +1692,21 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
 
-// Deprecated. Use "config" parameter in TRITONCACHE_CacheNew to configure cache
-// implementation specific fields.
+// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size);
+
+/// Set the cache config that will be used to initialize the TritonCache
+/// and corresponding cache implementation.
+///
+/// \param options The server options object.
+/// \param base The base of the serialized JSON.
+/// \param byte_size The size, in bytes, of the serialized JSON.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCacheConfig(
+    TRITONSERVER_ServerOptions* options, const char* base, size_t byte_size);
 
 /// Set the minimum support CUDA compute capability in a server
 /// options.
