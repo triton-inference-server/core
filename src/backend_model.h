@@ -88,6 +88,9 @@ class TritonModel : public Model {
   // can only be set once for a backend.
   Status SetConfiguredScheduler();
 
+  // Set the batching strategy based on the model configuration.
+  Status SetBatchingStrategy();
+
   // Merges the global backend configs with the specific
   // backend configs.
   static Status ResolveBackendConfigs(
