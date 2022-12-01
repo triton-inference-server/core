@@ -18,6 +18,17 @@ namespace triton { namespace core {
 extern "C" {
 
 //
+// TRITONCACHE API Version
+//
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONCACHE_ApiVersion(uint32_t* major, uint32_t* minor)
+{
+  *major = TRITONCACHE_API_VERSION_MAJOR;
+  *minor = TRITONCACHE_API_VERSION_MINOR;
+  return nullptr;  // success
+}
+
+//
 // CacheEntry Lifetime Management
 //
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -189,11 +200,10 @@ TRITONCACHE_CacheEntryItemGetBuffer(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  // Make a copy for Triton to own
-  const std::vector<std::byte> buffer = lbuffers[index];
+  const auto buffer = lbuffers[index];
+  // TODO: Probably shouldn't copy here. Caller should copy if needed.
   auto byte_base = reinterpret_cast<std::byte*>(malloc(buffer.size()));
   std::copy(buffer.begin(), buffer.end(), byte_base);
-
   *base = byte_base;
   *byte_size = buffer.size();
   return nullptr;  // success
