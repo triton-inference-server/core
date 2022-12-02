@@ -24,7 +24,21 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include "triton/common/logging.h"
+#include "triton/common/triton_json.h"
 #include "triton/core/tritonbackend.h"
+
+namespace triton { namespace core { namespace volume_batching {
+
+//
+// Minimal custom  batching strategy that demonstrates the
+// TRITONBACKEND_ModelBatch API. This custom batching strategy dynamically
+// creates batches up to 1 request.
+//
+
+/////////////
+
+extern "C" {
 
 /// Check whether a request should be added to the pending model batch.
 /// \param model The backend model for which Triton is forming a batch.
@@ -40,13 +54,45 @@ TRITONBACKEND_ModelBatchIncludeRequest(
     TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
     bool* should_include)
 {
-  // Get current batch volume.
-  unsigned int* pending_volume = static_cast<unsigned int*>(userp);
+  // Default should_include to false in case function returns error.
+  *should_include = false;
 
-  // TODO: Get maximum volume parameter passed via model's model config.
-  // TODO: Get request's volume.
-  // TODO: See if pending_volume + request_volume <= max_volume
-  // If so, should_include = true. Else, false.
+  // Get current remaining batch volume.
+  unsigned int* remaining_volume = static_cast<unsigned int*>(userp);
+
+  // Get request's volume in bytes.
+  unsigned int pending_volume = 0;
+
+  uint32_t input_count;
+  auto TRITONBACKEND_RequestInputCount(request, &input_count));
+
+  TRITONBACKEND_Input* input;
+  size_t data_byte_size;
+
+  for (size_t count = 0; count < input_count; count++) {
+    auto err =
+        TRITONBACKEND_RequestInputByIndex(request, count /* index */, &input);
+    if (err) {
+      LOG_ERROR << err;
+      return err;
+    }
+    err = TRITONBACKEND_InputProperties(
+        input, nullptr, nullptr, nullptr, nullptr, &data_byte_size, nullptr);
+    if (err) {
+      LOG_ERROR << err;
+      return err;
+    }
+    pending_volume += static_cast<unsigned int>(data_byte_size);
+  }
+
+  // Check if there is enough remaining volume for this request.
+  // If so, include this request. Otherwise, do not.
+  if (pending_volume <= *remaining_volume) {
+    *should_include = true;
+    *remaining_volume = *remaining_volume - pending_volume;
+  } else {
+    *should_include = false;
+  }
 
   return nullptr;  // success
 }
@@ -59,8 +105,39 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
 {
-  // Userp will point to an integer representing the current batch volume.
-  *userp = new unsigned int(0);
+  // Userp will point to an unsigned integer representing the remaining volume
+  // in bytes for this batch.
+
+  // Read the user-specified bytes from the model config.
+
+  TRITONSERVER_Message* config_message;
+  TRITONBACKEND_ModelConfig(model, 1 /* config_version */, &config_message);
+
+  const char* buffer;
+  size_t byte_size;
+
+  auto err =
+      TRITONSERVER_MessageSerializeToJson(config_message, &buffer, &byte_size);
+  if (err) {
+    LOG_ERROR << err;
+    return err;
+  }
+
+  triton::common::TritonJson::Value model_config;
+
+  err = model_config.Parse(buffer, byte_size);
+  if (TRITONSERVER_MessageDelete(config_message) != nullptr) {
+    LOG_ERROR << "Failed to delete config message";
+  }
+
+  uint64_t max_volume_bytes = 0;
+  err = model_config.MemberAsUInt("max_batch_volume", &max_volume_bytes);
+  if (err) {
+    LOG_ERROR << err;
+    return err;
+  }
+
+  *userp = new unsigned int(max_volume_bytes);
 
   return nullptr;  // success
 }
@@ -76,3 +153,7 @@ TRITONBACKEND_ModelBatchFinalize(void* userp)
 
   return nullptr;  // success
 }
+
+}  // extern "C"
+
+}}}  // namespace triton::core::volume_batching
