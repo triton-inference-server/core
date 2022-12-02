@@ -25,8 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "triton/common/logging.h"
-#include "triton/common/triton_json.h"
 #include "triton/core/tritonbackend.h"
+
+#define TRITONJSON_STATUSTYPE TRITONSERVER_Error*
+#define TRITONJSON_STATUSRETURN(M) \
+  return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, (M).c_str())
+#define TRITONJSON_STATUSSUCCESS nullptr
+#include "triton/common/triton_json.h"
 
 namespace triton { namespace core { namespace volume_batching {
 
@@ -64,7 +69,11 @@ TRITONBACKEND_ModelBatchIncludeRequest(
   unsigned int pending_volume = 0;
 
   uint32_t input_count;
-  auto TRITONBACKEND_RequestInputCount(request, &input_count));
+  auto err = TRITONBACKEND_RequestInputCount(request, &input_count);
+  if (err) {
+    LOG_ERROR << err;
+    return err;
+  }
 
   TRITONBACKEND_Input* input;
   size_t data_byte_size;
