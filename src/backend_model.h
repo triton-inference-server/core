@@ -46,6 +46,13 @@ class TritonModelInstance;
 //
 class TritonModel : public Model {
  public:
+  typedef TRITONSERVER_Error* (*TritonModelBatchInclFn_t)(
+      TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
+      bool* should_include);
+  typedef TRITONSERVER_Error* (*TritonModelBatchInitFn_t)(
+      TRITONBACKEND_Model* model, void** userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatchFiniFn_t)(void* userp);
+
   static Status Create(
       InferenceServer* server, const std::string& model_path,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
@@ -72,6 +79,11 @@ class TritonModel : public Model {
   void SetState(void* state) { state_ = state; }
   Status AddInstance(
       std::unique_ptr<TritonModelInstance>&& instance, const bool passive);
+
+  // Custom batching function getters.
+  TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
+  TritonModelBatchInitFn_t ModelBatchInitFn() const { return batch_init_fn_; }
+  TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonModel);
@@ -106,18 +118,8 @@ class TritonModel : public Model {
   Status Initialize();
   Status WarmUp();
 
-  typedef TRITONSERVER_Error* (*TritonModelBatchInclFn_t)(
-      TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
-      bool* should_include);
-  typedef TRITONSERVER_Error* (*TritonModelBatchInitFn_t)(
-      TRITONBACKEND_Model* model, void** userp);
-  typedef TRITONSERVER_Error* (*TritonModelBatchFiniFn_t)(void* userp);
-
-  // Custom batching function getters.
-  TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
-  TritonModelBatchInitFn_t ModelBatchInitFn() const { return batch_init_fn_; }
-  TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
-
+  // Clear library handles.
+  void ClearHandles();
 
   // The server object that owns this model. The model holds this as a
   // raw pointer because the lifetime of the server is guaranteed to
@@ -146,7 +148,7 @@ class TritonModel : public Model {
   void* state_;
 
   // Custom batching shared object handle and function pointers.
-  void* batching_dlhandle_;
+  void* batch_dlhandle_;
   TritonModelBatchInclFn_t batch_incl_fn_;
   TritonModelBatchInitFn_t batch_init_fn_;
   TritonModelBatchFiniFn_t batch_fini_fn_;
