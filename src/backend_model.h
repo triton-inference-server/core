@@ -87,8 +87,9 @@ class TritonModel : public Model {
   // can only be set once for a backend.
   Status SetConfiguredScheduler();
 
-  // Set the batching strategy based on the model configuration.
-  Status SetBatchingStrategy();
+  // Set the batching strategy, if custom functions provided by user.
+  // This function should only be called with the dynamic batcher.
+  Status SetBatchingStrategy(const std::string& batch_libpath);
 
   // Merges the global backend configs with the specific
   // backend configs.
