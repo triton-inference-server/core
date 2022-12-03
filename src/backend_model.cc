@@ -198,6 +198,53 @@ TritonModel::Create(
     }
   }
 
+  // Initalize the custom batching library for the model, if provided.
+  if (model_config.has_sequence_batching()) {
+    if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
+      LOG_ERROR << "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
+                   "sequence batcher, using default batching strategy";
+    }
+  } else {
+    std::string batch_libpath;
+    if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
+      batch_libpath = model_config.parameters()
+                          .at("TRITON_BATCH_STRATEGY_PATH")
+                          .string_value();
+      bool exists = false;
+      RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
+      if (exists) {
+        Status status = local_model->SetBatchingStrategy(batch_libpath);
+        if (!status.IsOk()) {
+          LOG_ERROR << status.Message().c_str()
+                    << ", using default batching strategy";
+        }
+      } else {
+        LOG_ERROR << "Batching library path " << batch_libpath
+                  << " provided for model " << model_config.name()
+                  << "does not exist, using default batching strategy";
+      }
+    } else {
+      const std::string batch_libname = "batchstrategy.so";
+      for (const auto& path : search_paths) {
+        const auto full_path = JoinPath({path, batch_libname});
+        bool exists = false;
+        RETURN_IF_ERROR(FileExists(full_path, &exists));
+        if (exists) {
+          batch_libpath = full_path;
+          break;
+        }
+      }
+    }
+
+    if (!batch_libpath.empty()) {
+      Status status = local_model->SetBatchingStrategy(batch_libpath);
+      if (!status.IsOk()) {
+        LOG_ERROR << status.Message().c_str()
+                  << ", using default batching strategy";
+      }
+    }
+  }
+
   // Create and initialize the model instances for this model.
   RETURN_IF_ERROR(TritonModelInstance::CreateInstances(
       raw_local_model, backend_cmdline_config_map, host_policy_map,
@@ -380,13 +427,6 @@ TritonModel::UpdateModelConfig(
 Status
 TritonModel::SetConfiguredScheduler()
 {
-  // TODO: Move elsewhere.
-  // TODO: Return error if batching strategy provided with sequence batcher.
-  // Parse custom batching strategy, if provided by user.
-  // Only valid for dynamic batcher.
-  if (!config_.has_sequence_batching()) {
-    SetBatchingStrategy();
-  }
   std::unique_ptr<Scheduler> scheduler;
 
   // Need to enforce equal shape batches (i.e. non-ragged batches) if
@@ -410,8 +450,10 @@ TritonModel::SetConfiguredScheduler()
   // otherwise use the default DynamicBatchScheduler.
   if (config_.has_sequence_batching()) {
     // Sequence batcher
-    // TODO: If custom batching TRITON_BATCH_STRATEGY_PATH specified in
-    // parameters, return error.
+    if (config_.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
+      LOG_ERROR << "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
+                   "sequence batcher, ignoring custom batching strategy";
+    }
     RETURN_IF_ERROR(SequenceBatchScheduler::Create(
         this, enforce_equal_shape_tensors, &scheduler));
   } else if (config_.has_dynamic_batching()) {
@@ -439,25 +481,14 @@ TritonModel::SetConfiguredScheduler()
   return SetScheduler(std::move(scheduler));
 }
 
-// TODO: Find right place for this function.
-// Add function to header.
 Status
-TritonModel::SetBatchingStrategy()
+TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
 {
-  // TODO: Get path... check for parameter
-  // Else, look up in this order: version dir, model dir, backend dir
-  std::string batch_lib_path = "batchstrategy.so";
-
-  // If no batching library path provided, return.
-  if (batch_lib_path.empty()) {
-    return Status::Success;
-  }
-
-  // If batching library path provided, load library and functions.
+  // Load library and functions.
   std::unique_ptr<SharedLibrary> slib;
   RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
-  RETURN_IF_ERROR(slib->OpenLibraryHandle(batch_lib_path, &batching_dlhandle_));
+  RETURN_IF_ERROR(slib->OpenLibraryHandle(batch_libpath, &batching_dlhandle_));
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batching_dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
       true /* optional */, reinterpret_cast<void**>(&batch_incl_fn_)));
@@ -474,11 +505,12 @@ TritonModel::SetBatchingStrategy()
     batch_incl_fn_ = nullptr;
     batch_init_fn_ = nullptr;
     batch_fini_fn_ = nullptr;
-    // TODO: Add model name to fil status below.
     return Status(
-        Status::Code::INVALID_ARG, batch_lib_path +
-                                       " does not define all "
-                                       "required custom batching functions");
+        Status::Code::INVALID_ARG,
+        batch_libpath +
+            " does not define all "
+            "required custom batching functions for model" +
+            config_.name());
   }
   return Status::Success;
 }
