@@ -488,20 +488,21 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
   std::unique_ptr<SharedLibrary> slib;
   RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
-  RETURN_IF_ERROR(slib->OpenLibraryHandle(batch_libpath, &batching_dlhandle_));
+  RETURN_IF_ERROR(slib->OpenLibraryHandle(batch_libpath, &batch_dlhandle_));
   RETURN_IF_ERROR(slib->GetEntrypoint(
-      batching_dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
       true /* optional */, reinterpret_cast<void**>(&batch_incl_fn_)));
   RETURN_IF_ERROR(slib->GetEntrypoint(
-      batching_dlhandle_, "TRITONBACKEND_ModelBatchInitialize",
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchInitialize",
       true /* optional */, reinterpret_cast<void**>(&batch_init_fn_)));
   RETURN_IF_ERROR(slib->GetEntrypoint(
-      batching_dlhandle_, "TRITONBACKEND_ModelBatchFinalize",
-      true /* optional */, reinterpret_cast<void**>(&batch_fini_fn_)));
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchFinalize", true /* optional */,
+      reinterpret_cast<void**>(&batch_fini_fn_)));
 
   // If one function is defined, they all must be.
   if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_) &&
       !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_)) {
+    batch_dlhandle_ = nullptr;
     batch_incl_fn_ = nullptr;
     batch_init_fn_ = nullptr;
     batch_fini_fn_ = nullptr;
@@ -548,10 +549,14 @@ TritonModel::TritonModel(
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {
+  ClearHandles();
 }
 
 TritonModel::~TritonModel()
 {
+  // Clear library handles.
+  ClearHandles();
+
   // Explicitly delete/finalize all model instances before finalizing
   // the model itself.
   instances_.clear();
@@ -570,6 +575,15 @@ TritonModel::~TritonModel()
         backend_->ModelFiniFn()(reinterpret_cast<TRITONBACKEND_Model*>(this)),
         "failed finalizing model");
   }
+}
+
+void
+TritonModel::ClearHandles()
+{
+  batch_dlhandle_ = nullptr;
+  batch_incl_fn_ = nullptr;
+  batch_init_fn_ = nullptr;
+  batch_fini_fn_ = nullptr;
 }
 
 extern "C" {

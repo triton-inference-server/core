@@ -362,6 +362,17 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           // Extract batch only if there is pending batch
           auto pending_batch_queue_cnt = queue_.PendingBatchCount();
           if ((wait_microseconds == 0) && (pending_batch_queue_cnt != 0)) {
+            // If custom batching strategy used, finalize the batch.
+            if (model_->ModelBatchFiniFn() != nullptr) {
+              TRITONSERVER_Error* err =
+                  model_->ModelBatchFiniFn()(*(curr_payload_->UserPointer()));
+              if (err) {
+                LOG_ERROR
+                    << "Custom batching finalization function failed for model "
+                    << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+              }
+            }
+
             curr_payload_->ReserveRequests(pending_batch_queue_cnt);
             for (size_t idx = 0; idx < pending_batch_queue_cnt; ++idx) {
               std::unique_ptr<InferenceRequest> request;
@@ -450,12 +461,27 @@ DynamicBatchScheduler::GetDynamicBatch()
   const bool check_input =
       !enforce_equal_shape_tensors_.empty() || has_optional_input_;
   auto payload_batch_size = curr_payload_->BatchSize();
+  bool use_custom_batching = (model_->ModelBatchInitFn() != nullptr);
   while (!queue_.CursorEnd()) {
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
 
     // If there is no pending batch, then this request is starting a
     // new batch.
     if ((payload_batch_size + queue_.PendingBatchCount()) == 0) {
+      // If there is a custom batching strategy, use its initialization
+      // function.
+      if (use_custom_batching) {
+        TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
+            reinterpret_cast<TRITONBACKEND_Model*>(model_),
+            curr_payload_->UserPointer());
+        if (err) {
+          LOG_ERROR
+              << "Custom batching initialization function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+          break;
+        }
+      }
+
       // Get the shape of the new batch that is being started...
       if (check_input) {
         if (!curr_payload_->MutableRequiredEqualInputs()
@@ -468,31 +494,50 @@ DynamicBatchScheduler::GetDynamicBatch()
         }
       }
     } else {
-      // There is a pending batch and adding this request would make
-      // the batch size larger than all of the preferred batch sizes,
-      // so mark the cursor at this point. Not sending the pending batch so
-      // that we can examine the queue delay of requests that fits in a batch.
-      if (((payload_batch_size + pending_batch_size_ + batch_size) >
-           max_preferred_batch_size_) &&
-          (best_preferred_batch_size == 0)) {
-        best_preferred_batch_size = pending_batch_size_;
-        queue_.MarkCursor();
-        payload_saturated_ = true;
-      }
-      if ((payload_batch_size + pending_batch_size_ + batch_size) >
-          max_batch_size_) {
-        send_now = true;
-        break;
-      }
+      // If there is a custom batching strategy, use its batching function to
+      // determine whether to include this request.
+      if (use_custom_batching) {
+        bool should_include = false;
+        TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
+            reinterpret_cast<TRITONBACKEND_Model*>(model_),
+            reinterpret_cast<TRITONBACKEND_Request*>(
+                queue_.RequestAtCursor().get()),
+            *(curr_payload_->UserPointer()), &should_include);
+        if (err) {
+          LOG_ERROR << "Custom batching include function failed for model "
+                    << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+        }
+        if (!should_include) {
+          send_now = true;
+          break;
+        }
+      } else {
+        // There is a pending batch and adding this request would make
+        // the batch size larger than all of the preferred batch sizes,
+        // so mark the cursor at this point. Not sending the pending batch so
+        // that we can examine the queue delay of requests that fits in a batch.
+        if (((payload_batch_size + pending_batch_size_ + batch_size) >
+             max_preferred_batch_size_) &&
+            (best_preferred_batch_size == 0)) {
+          best_preferred_batch_size = pending_batch_size_;
+          queue_.MarkCursor();
+          payload_saturated_ = true;
+        }
+        if ((payload_batch_size + pending_batch_size_ + batch_size) >
+            max_batch_size_) {
+          send_now = true;
+          break;
+        }
 
-      // There is a pending batch and it has a different shape then
-      // this request, so send the pending batch as it is.
-      if (check_input &&
-          !curr_payload_->MutableRequiredEqualInputs()->HasEqualInputs(
-              queue_.RequestAtCursor())) {
-        curr_payload_->MarkSaturated();
-        send_now = true;
-        break;
+        // There is a pending batch and it has a different shape then
+        // this request, so send the pending batch as it is.
+        if (check_input &&
+            !curr_payload_->MutableRequiredEqualInputs()->HasEqualInputs(
+                queue_.RequestAtCursor())) {
+          curr_payload_->MarkSaturated();
+          send_now = true;
+          break;
+        }
       }
     }
 
