@@ -1716,11 +1716,11 @@ TRITONSERVER_ServerOptionsSetCacheConfig(
 
 /// Set the directory containing cache shared libraries. This
 /// directory is searched when looking for cache implementations.
-/// If the cache is named 'local', the directory
-/// searched is 'cache_dir'/local/libtritoncache_local.so.
+/// Currently, it is expected that this directory contains a file
+/// specifically named "libtritoncache.so"/"tritoncache.dll".
 ///
 /// \param options The server options object.
-/// \param repoagent_dir The full path of the cache directory.
+/// \param cache_dir The full path of the cache directory.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCacheDirectory(
