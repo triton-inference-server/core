@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cache_manager.h"
+#include <boost/functional/hash.hpp>
 #include "cache_entry.h"
 #include "filesystem.h"
 #include "server_message.h"
@@ -218,11 +219,68 @@ TritonCache::InitializeCacheImpl()
 }
 
 Status
+TritonCache::HashInputBuffers(
+    const InferenceRequest::Input* input, size_t* seed)
+{
+  // Iterate over each data buffer in input in case of non-contiguous memory
+  for (size_t idx = 0; idx < input->DataBufferCount(); ++idx) {
+    const void* src_buffer;
+    size_t src_byte_size;
+    TRITONSERVER_MemoryType src_memory_type;
+    int64_t src_memory_type_id;
+
+    RETURN_IF_ERROR(input->DataBuffer(
+        idx, &src_buffer, &src_byte_size, &src_memory_type,
+        &src_memory_type_id));
+
+    if (src_memory_type != TRITONSERVER_MEMORY_CPU &&
+        src_memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Only input buffers in CPU memory are allowed in cache currently");
+    }
+
+    // Add each byte of input buffer chunk to hash
+    const unsigned char* tmp = static_cast<const unsigned char*>(src_buffer);
+    for (uint64_t byte = 0; byte < src_byte_size; byte++) {
+      boost::hash_combine(*seed, tmp[byte]);
+    }
+  }
+
+  return Status::Success;
+}
+
+
+Status
+TritonCache::HashInputs(const InferenceRequest& request, size_t* seed)
+{
+  const auto& inputs = request.ImmutableInputs();
+  // Convert inputs to ordered map for consistency in hashing
+  // inputs sorted by key (input) name
+  std::map<std::string, InferenceRequest::Input*> ordered_inputs(
+      inputs.begin(), inputs.end());
+  for (const auto& input : ordered_inputs) {
+    // Add input name to hash
+    boost::hash_combine(*seed, input.second->Name());
+    // Fetch input buffer for hashing raw data
+    RETURN_IF_ERROR(HashInputBuffers(input.second, seed));
+  }
+
+  return Status::Success;
+}
+
+
+Status
 TritonCache::Hash(const InferenceRequest& request, std::string* key)
 {
-  LOG_VERBOSE(2) << "Hashing into cache";
-  // TODO: call hash function
-  *key = "test_response_123_key";
+  std::size_t seed = 0;
+  // Add request model name to hash
+  boost::hash_combine(seed, request.ModelName());
+  // Add request model version to hash
+  boost::hash_combine(seed, request.ActualModelVersion());
+  RETURN_IF_ERROR(HashInputs(request, &seed));
+  // NOTE: Could prepend model name/version in key for readability/debugging
+  *key = std::to_string(seed);
   return Status::Success;
 }
 

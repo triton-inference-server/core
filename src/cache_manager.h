@@ -65,6 +65,7 @@ class TritonCache {
   Status Lookup(InferenceResponse* response, const std::string& key);
   std::optional<std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
       const std::string& key);
+  // Hashes fields of request and stores it in "key"
   Status Hash(const InferenceRequest& request, std::string* key);
 
  private:
@@ -76,6 +77,10 @@ class TritonCache {
   Status LoadCacheLibrary();
   Status InitializeCacheImpl();
   Status TestCacheImpl();  // TODO: Remove
+  // Helper function to hash data buffers used by "input"
+  Status HashInputBuffers(const InferenceRequest::Input* input, size_t* seed);
+  // Helper function to hash each input in "request"
+  Status HashInputs(const InferenceRequest& request, size_t* seed);
 
   // The name of the cache.
   const std::string name_;
