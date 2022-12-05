@@ -609,8 +609,6 @@ DynamicBatchScheduler::DelegateResponse(
   std::lock_guard<std::mutex> lock(completion_queue_mtx_);
   completion_queue_.emplace_back();
   auto queue_slot = &completion_queue_.back();
-
-  // TODO
   const auto key = request->CacheKey();
 
   request->SetResponseDelegator(
@@ -663,9 +661,9 @@ DynamicBatchScheduler::CacheLookUp(
 {
   Status status;
   auto cache = model_->Server()->CacheManager()->Cache();
-  // Lookup request in cache
   std::unique_ptr<InferenceResponse> local_response;
   request->ResponseFactory()->CreateResponse(&local_response);
+  // Hash request into cache key
   std::string key = "";
   if (!request->CacheKeyIsSet()) {
     status = cache->Hash(*request, &key);  // TODO: Check error
@@ -674,9 +672,11 @@ DynamicBatchScheduler::CacheLookUp(
       return;
     }
     request->SetCacheKey(key);
+  } else {
+    key = request->CacheKey();
   }
 
-  // TODO: cleanup key/hash logic
+  // Lookup and capture timestamps
   {
     LOG_VERBOSE(1) << "Looking up in cache for key: " << key;
     request->CaptureCacheLookupStartNs();
