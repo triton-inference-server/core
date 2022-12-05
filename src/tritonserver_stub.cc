@@ -367,6 +367,10 @@ TRITONSERVER_ServerOptionsSetCacheConfig()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCacheDirectory()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability()
 {
 }
