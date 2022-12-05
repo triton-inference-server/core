@@ -26,23 +26,37 @@
 
 #include "cache_manager.h"
 #include "cache_entry.h"
+#include "filesystem.h"
 #include "server_message.h"
 #include "shared_library.h"
 #include "triton/common/logging.h"
 
 namespace triton { namespace core {
 
+
+std::string
+TritonCacheLibraryName()
+{
+#ifdef _WIN32
+  return std::string("tritoncache.dll");
+#else
+  return std::string("libtritoncache.so");
+#endif
+}
+
 //
 // TritonCache
 //
 Status
 TritonCache::Create(
-    const std::string& name, const std::string& dir, const std::string& libpath,
-    const TritonServerMessage* cache_config,
-    std::shared_ptr<TritonCache>* cache)
+    const std::string& name, const std::string& libpath,
+    const std::string& cache_config, std::shared_ptr<TritonCache>* cache)
 {
+  LOG_INFO << "Creating TritonCache with name: '" << name << "', libpath: '"
+           << libpath << "', cache_config: '" << cache_config << "'";
+
   auto lcache = std::shared_ptr<TritonCache>(
-      new TritonCache(name, dir, libpath, cache_config));
+      new TritonCache(name, libpath, cache_config));
 
   RETURN_IF_ERROR(lcache->LoadCacheLibrary());
   RETURN_IF_ERROR(lcache->InitializeCacheImpl());
@@ -53,9 +67,9 @@ TritonCache::Create(
 }
 
 TritonCache::TritonCache(
-    const std::string& name, const std::string& dir, const std::string& libpath,
-    const TritonServerMessage* cache_config)
-    : name_(name), dir_(dir), libpath_(libpath), cache_config_(cache_config)
+    const std::string& name, const std::string& libpath,
+    const std::string& cache_config)
+    : name_(name), libpath_(libpath), cache_config_(cache_config)
 {
   ClearHandles();
 }
@@ -122,6 +136,7 @@ TritonCache::LoadCacheLibrary()
   return Status::Success;
 }
 
+// TODO: Move to unit test
 Status
 TritonCache::TestCacheImpl()
 {
@@ -129,10 +144,6 @@ TritonCache::TestCacheImpl()
   std::cout << "==== Testing Cache Implementation ====" << std::endl;
   std::cout << "======================================" << std::endl;
   auto status = Status::Success;
-  // TODO: can't test here without creating genuine request/responses or mocking
-  // InferenceResponse* response = nullptr;
-  // std::cout << "=============== Insert Response ===============" <<
-  // std::endl; RETURN_IF_ERROR(Insert(response, "test_response_key"));
   std::cout << "=============== Insert Bytes ===============" << std::endl;
   // Setup byte buffers
   std::vector<std::byte> buffer1{1, std::byte{0x01}};
@@ -151,9 +162,6 @@ TritonCache::TestCacheImpl()
   items[1]->AddBuffer(buffer4);
   items[1]->AddBuffer(buffer5);
   status = Insert(items, "test_bytes_123_key");
-
-  // std::cout << "=============== Lookup Response ===============" <<
-  // std::endl; RETURN_IF_ERROR(Lookup(response, "test_response_key"));
   std::cout << "=============== Lookup Bytes ===============" << std::endl;
   const auto responses = Lookup("test_bytes_123_key");
   if (!responses.has_value()) {
@@ -334,7 +342,8 @@ static std::weak_ptr<TritonCacheManager> cache_manager_;
 static std::mutex mu_;
 
 Status
-TritonCacheManager::Create(std::shared_ptr<TritonCacheManager>* manager)
+TritonCacheManager::Create(
+    std::shared_ptr<TritonCacheManager>* manager, std::string cache_dir)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -344,7 +353,13 @@ TritonCacheManager::Create(std::shared_ptr<TritonCacheManager>* manager)
     return Status::Success;
   }
 
-  manager->reset(new TritonCacheManager());
+  if (cache_dir.empty()) {
+    return Status(
+        Status::Code::INVALID_ARG, "cache directory can not be empty");
+  }
+
+  LOG_VERBOSE(1) << "Create CacheManager with cache_dir: '" << cache_dir << "'";
+  manager->reset(new TritonCacheManager(cache_dir));
   cache_manager_ = *manager;
 
   return Status::Success;
@@ -352,21 +367,41 @@ TritonCacheManager::Create(std::shared_ptr<TritonCacheManager>* manager)
 
 Status
 TritonCacheManager::CreateCache(
-    const std::string& name, const std::string& dir, const std::string& libpath,
-    const TritonServerMessage* cache_config,
+    const std::string& name, const std::string& cache_config,
     std::shared_ptr<TritonCache>* cache)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
-  // TODO: Do we want to maintain a map, or only manage a single cache?
   if (cache_ != nullptr) {
     return Status(
         Status::Code::ALREADY_EXISTS,
         "TritonCacheManager already holds a cache");
   }
 
-  RETURN_IF_ERROR(
-      TritonCache::Create(name, dir, libpath, cache_config, &cache_));
+  // Get the path to the cache shared library. Search path is global
+  // cache directory.
+  const std::vector<std::string> search_paths = {cache_dir_};
+  // Triton will only use a single cache library path for now,
+  // regardless of implementation.
+  std::string cache_libname = TritonCacheLibraryName();
+  std::string libpath = "";
+  for (const auto& path : search_paths) {
+    const auto full_path = JoinPath({path, cache_libname});
+    bool exists = false;
+    RETURN_IF_ERROR(FileExists(full_path, &exists));
+    if (exists) {
+      libpath = full_path;
+      break;
+    }
+  }
+
+  if (libpath.empty()) {
+    return Status(
+        Status::Code::INVALID_ARG, "unable to find '" + cache_libname +
+                                       "' for cache. Searched: " + cache_dir_);
+  }
+
+  RETURN_IF_ERROR(TritonCache::Create(name, libpath, cache_config, &cache_));
   *cache = cache_;
   return Status::Success;
 }

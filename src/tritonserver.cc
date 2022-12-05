@@ -242,9 +242,6 @@ class TritonServerOptions {
     cuda_memory_pool_size_[id] = s;
   }
 
-  const std::string CacheConfig() const { return cache_config_; }
-  void SetCacheConfig(std::string config_json) { cache_config_ = config_json; }
-
   double MinSupportedComputeCapability() const
   {
     return min_compute_capability_;
@@ -310,6 +307,12 @@ class TritonServerOptions {
   {
     return host_policy_map_;
   }
+
+  const std::string& CacheConfig() const { return cache_config_; }
+  void SetCacheConfig(const std::string& cfg) { cache_config_ = cfg; }
+
+  const std::string& CacheDir() const { return cache_dir_; }
+  void SetCacheDir(const std::string& dir) { cache_dir_ = dir; }
 
  private:
   std::string server_id_;
@@ -1183,12 +1186,24 @@ TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCacheConfig(
-    TRITONSERVER_ServerOptions* options, const char* base, size_t byte_size)
+    TRITONSERVER_ServerOptions* options, const char* cache_name,
+    const char* config_json)
 {
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
-  loptions->SetCacheConfig({base, byte_size});
+  // NOTE: cache_name included for future extensibility, but not currently used.
+  loptions->SetCacheConfig(config_json);
   return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCacheDirectory(
+    TRITONSERVER_ServerOptions* options, const char* cache_dir)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetCacheDir(cache_dir);
+  return nullptr;  // Success
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -2127,6 +2142,7 @@ TRITONSERVER_ServerNew(
   // TODO: expose server option for this?
   lserver->SetResponseCacheEnabled(true);
   lserver->SetCacheConfig(loptions->CacheConfig());
+  lserver->SetCacheDir(loptions->CacheDir());
   double min_compute_capability = loptions->MinSupportedComputeCapability();
   lserver->SetMinSupportedComputeCapability(min_compute_capability);
   lserver->SetStrictReadinessEnabled(loptions->StrictReadiness());

@@ -129,6 +129,7 @@ InferenceServer::Init()
         Status::Code::INVALID_ARG, "--model-repository must be specified");
   }
 
+  // RepoAgentManager
   if (repoagent_dir_.empty()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return Status(
@@ -141,11 +142,28 @@ InferenceServer::Init()
     return status;
   }
 
+  // BackendManager
   status = TritonBackendManager::Create(&backend_manager_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
+
+  // CacheManager
+  status = TritonCacheManager::Create(&cache_manager_, cache_dir_);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
+
+  std::shared_ptr<TritonCache> cache;
+  status = cache_manager_->CreateCache(
+      "response_cache" /* name */, cache_config_, &cache);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
+
 
   if (buffer_manager_thread_count_ > 0) {
     status = CommonErrorToStatus(triton::common::AsyncWorkQueue::Initialize(
@@ -176,25 +194,6 @@ InferenceServer::Init()
     return status;
   }
 
-  status = TritonCacheManager::Create(&cache_manager_);
-  if (!status.IsOk()) {
-    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-    return status;
-  }
-
-  std::shared_ptr<TritonCache> cache;
-  // TODO: parse cache config into message somewhere
-  const TritonServerMessage* cache_config = nullptr;
-  // TODO: propogate args correctly
-  status = cache_manager_->CreateCache(
-      "local_cache" /* name */, "/opt/tritonserver/caches" /* dir */,
-      "/opt/tritonserver/caches/local/libtritoncache_local.so" /* libpath */
-      ,                                                        // TODO
-      cache_config, &cache);
-  if (!status.IsOk()) {
-    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-    return status;
-  }
 
 #ifdef TRITON_ENABLE_GPU
   // Set the default CUDA memory pool size for GPUs where it is not

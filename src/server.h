@@ -198,6 +198,8 @@ class InferenceServer {
   void SetResponseCacheEnabled(bool e) { response_cache_enabled_ = e; }
   std::string CacheConfig() const { return cache_config_; }
   void SetCacheConfig(std::string config_json) { cache_config_ = config_json; }
+  std::string CacheDir() const { return cache_dir_; }
+  void SetCacheDir(std::string dir) { cache_dir_ = dir; }
 
   // Get / set CUDA memory pool size
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
@@ -296,6 +298,7 @@ class InferenceServer {
   uint64_t pinned_memory_pool_size_;
   bool response_cache_enabled_;
   std::string cache_config_;
+  std::string cache_dir_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_supported_compute_capability_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;

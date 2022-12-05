@@ -48,14 +48,12 @@ namespace triton { namespace core {
 class TritonCache {
  public:
   static Status Create(
-      const std::string& name, const std::string& dir,
-      const std::string& libpath, const TritonServerMessage* cache_config,
-      std::shared_ptr<TritonCache>* cache);
+      const std::string& name, const std::string& libpath,
+      const std::string& cache_config, std::shared_ptr<TritonCache>* cache);
   ~TritonCache();
 
   const std::string& Name() const { return name_; }
-  const std::string& Directory() const { return dir_; }
-  const TritonServerMessage* CacheConfig() const { return cache_config_; }
+  const std::string& CacheConfig() const { return cache_config_; }
   Status Insert(
       boost::span<InferenceResponse*> responses, const std::string& key);
   Status Insert(InferenceResponse* response, const std::string& key);
@@ -71,36 +69,28 @@ class TritonCache {
 
  private:
   TritonCache(
-      const std::string& name, const std::string& dir,
-      const std::string& libpath, const TritonServerMessage* cache_config);
+      const std::string& name, const std::string& libpath,
+      const std::string& cache_config);
 
   void ClearHandles();
   Status LoadCacheLibrary();
   Status InitializeCacheImpl();
   Status TestCacheImpl();  // TODO: Remove
 
-  // TODO: needed?
   // The name of the cache.
   const std::string name_;
-
-  // Full path to the directory holding cache shared library and
-  // other artifacts.
-  const std::string dir_;
 
   // Full path to the cache shared library.
   const std::string libpath_;
 
-  // Cache configuration as JSON
-  // TODO: const ref over ptr
-  const TritonServerMessage* cache_config_;
-
+  // Cache configuration as JSON string
+  const std::string cache_config_;
 
   // Cache Implementation
   TRITONCACHE_Cache* cache_impl_;
 
   // dlopen / dlsym handles
   void* dlhandle_;
-  // TODO: std::function doesn't work here?
   typedef TRITONSERVER_Error* (*TritonCacheInitFn_t)(TRITONCACHE_Cache** cache);
   TritonCacheInitFn_t init_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
@@ -118,18 +108,21 @@ class TritonCache {
 //
 class TritonCacheManager {
  public:
-  static Status Create(std::shared_ptr<TritonCacheManager>* manager);
+  static Status Create(
+      std::shared_ptr<TritonCacheManager>* manager, std::string cache_dir);
 
   Status CreateCache(
-      const std::string& name, const std::string& dir,
-      const std::string& libpath, const TritonServerMessage* cache_config,
+      const std::string& name, const std::string& cache_config,
       std::shared_ptr<TritonCache>* cache);
 
   std::shared_ptr<TritonCache> Cache() { return cache_; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonCacheManager);
-  TritonCacheManager() = default;
+  TritonCacheManager(std::string cache_dir) : cache_dir_(cache_dir) {}
+  // Global search path for cache libraries
+  std::string cache_dir_;
+  // This may be a map of caches in the future
   std::shared_ptr<TritonCache> cache_;
 };
 
