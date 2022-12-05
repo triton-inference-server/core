@@ -2293,8 +2293,6 @@ TRITONSERVER_ServerNew(
       "exit_timeout", std::to_string(lserver->ExitTimeoutSeconds())});
   options_table.InsertRow(std::vector<std::string>{
       "cache_enabled", std::to_string(lserver->ResponseCacheEnabled())});
-  options_table.InsertRow(
-      std::vector<std::string>{"cache_config", lserver->CacheConfig()});
 
   std::string options_table_string = options_table.PrintTable();
   LOG_INFO << options_table_string;
