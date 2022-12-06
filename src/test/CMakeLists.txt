@@ -82,9 +82,8 @@ set(
   ../memory.h
 )
 
-# FIXME: Compile cache test after reorganizing cache code
 #
-# Unit test for RequestResponseCache
+# Unit test for TritonCache
 #
 if(${TRITON_ENABLE_GPU})
   add_executable(

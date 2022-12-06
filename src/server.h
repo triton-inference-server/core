@@ -273,14 +273,14 @@ class InferenceServer {
     return backend_manager_;
   }
 
+  // Return the pointer to RateLimiter object.
+  std::shared_ptr<RateLimiter> GetRateLimiter() { return rate_limiter_; }
+
   // Get the Cache Manager
   const std::shared_ptr<TritonCacheManager>& CacheManager()
   {
     return cache_manager_;
   }
-
-  // Return the pointer to RateLimiter object.
-  std::shared_ptr<RateLimiter> GetRateLimiter() { return rate_limiter_; }
 
  private:
   const std::string version_;

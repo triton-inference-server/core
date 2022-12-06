@@ -330,7 +330,6 @@ class TritonServerOptions {
   uint64_t metrics_interval_;
   unsigned int exit_timeout_;
   uint64_t pinned_memory_pool_size_;
-  bool response_cache_enabled_;
   unsigned int buffer_manager_thread_count_;
   unsigned int model_load_thread_count_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
@@ -351,7 +350,7 @@ TritonServerOptions::TritonServerOptions()
       rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
       gpu_metrics_(true), cpu_metrics_(true), metrics_interval_(2000),
       exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
-      response_cache_enabled_(true), buffer_manager_thread_count_(0),
+      buffer_manager_thread_count_(0),
       model_load_thread_count_(
           std::max(2u, 2 * std::thread::hardware_concurrency())),
 #ifdef TRITON_ENABLE_GPU
@@ -1176,12 +1175,10 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
-  // TODO: For easier dev, replace with error after
-  return nullptr;  // success
-  // return TRITONSERVER_ErrorNew(
-  //    TRITONSERVER_ERROR_UNSUPPORTED,
-  //    "This API has been deprecated. See TRITONCACHE_CacheNew to specify cache
-  //    " "specific fields through 'config'.");
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "This API has been deprecated. See TRITONCACHE_CacheNew to specify cache "
+      "specific fields through 'config'.");
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*

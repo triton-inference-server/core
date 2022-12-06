@@ -111,8 +111,8 @@ set(
   backend_model.cc
   backend_model_instance.cc
   buffer_attributes.cc
-  cache_entry.cc # TODO
-  cache_manager.cc # TODO
+  cache_entry.cc
+  cache_manager.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
   ensemble_scheduler.cc
@@ -156,8 +156,8 @@ set(
   backend_model.h
   backend_model_instance.h
   buffer_attributes.h
-  cache_entry.h # TODO
-  cache_manager.h # TODO
+  cache_entry.h
+  cache_manager.h
   constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h
