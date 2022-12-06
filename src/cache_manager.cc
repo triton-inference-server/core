@@ -61,7 +61,6 @@ TritonCache::Create(
 
   RETURN_IF_ERROR(lcache->LoadCacheLibrary());
   RETURN_IF_ERROR(lcache->InitializeCacheImpl());
-  RETURN_IF_ERROR(lcache->TestCacheImpl());  // TODO: Remove
 
   *cache = std::move(lcache);
   return Status::Success;
@@ -134,69 +133,6 @@ TritonCache::LoadCacheLibrary()
   fini_fn_ = fini_fn;
   lookup_fn_ = lookup_fn;
   insert_fn_ = insert_fn;
-  return Status::Success;
-}
-
-// TODO: Move to unit test
-Status
-TritonCache::TestCacheImpl()
-{
-  std::cout << "======================================" << std::endl;
-  std::cout << "==== Testing Cache Implementation ====" << std::endl;
-  std::cout << "======================================" << std::endl;
-  auto status = Status::Success;
-  std::cout << "=============== Insert Bytes ===============" << std::endl;
-  // Setup byte buffers
-  std::vector<std::byte> buffer1{1, std::byte{0x01}};
-  std::vector<std::byte> buffer2{2, std::byte{0x02}};
-  std::vector<std::byte> buffer3{4, std::byte{0x03}};
-  std::vector<std::byte> buffer4{8, std::byte{0x04}};
-  std::vector<std::byte> buffer5{16, std::byte{0xFF}};
-  // Setup items
-  std::vector<std::shared_ptr<CacheEntryItem>> items;
-  items.emplace_back(new CacheEntryItem());
-  items.emplace_back(new CacheEntryItem());
-  // Add buffers to items
-  items[0]->AddBuffer(buffer1);
-  items[0]->AddBuffer(buffer2);
-  items[1]->AddBuffer(buffer3);
-  items[1]->AddBuffer(buffer4);
-  items[1]->AddBuffer(buffer5);
-  status = Insert(items, "test_bytes_123_key");
-  std::cout << "=============== Lookup Bytes ===============" << std::endl;
-  const auto responses = Lookup("test_bytes_123_key");
-  if (!responses.has_value()) {
-    return Status(Status::Code::INTERNAL, "Lookup failed");
-  }
-  const auto lookup_items = responses.value();
-  if (lookup_items.size() != items.size()) {
-    return Status(
-        Status::Code::INTERNAL, "Expected " + std::to_string(items.size()) +
-                                    " got " +
-                                    std::to_string(lookup_items.size()));
-  }
-
-  for (size_t i = 0; i < items.size(); i++) {
-    auto expected_buffers = items[i]->Buffers();
-    auto lookup_buffers = lookup_items[i]->Buffers();
-    if (lookup_buffers.size() != expected_buffers.size()) {
-      return Status(
-          Status::Code::INTERNAL,
-          "Expected " + std::to_string(expected_buffers.size()) + " got " +
-              std::to_string(lookup_buffers.size()));
-    }
-
-
-    for (size_t b = 0; b < expected_buffers.size(); b++) {
-      if (lookup_buffers[b] != expected_buffers[b]) {
-        return Status(
-            Status::Code::INTERNAL, "Buffer bytes didn't match for test input");
-      }
-    }
-  }
-  std::cout << "======================================" << std::endl;
-  std::cout << "============ Done Testing ============" << std::endl;
-  std::cout << "======================================" << std::endl;
   return Status::Success;
 }
 

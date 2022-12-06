@@ -76,7 +76,6 @@ class TritonCache {
   void ClearHandles();
   Status LoadCacheLibrary();
   Status InitializeCacheImpl();
-  Status TestCacheImpl();  // TODO: Remove
   // Helper function to hash data buffers used by "input"
   Status HashInputBuffers(const InferenceRequest::Input* input, size_t* seed);
   // Helper function to hash each input in "request"
