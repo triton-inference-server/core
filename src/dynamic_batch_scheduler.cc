@@ -80,7 +80,10 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   // Both the server and model config should specify
   // caching enabled for model to utilize response cache.
   response_cache_enabled_ =
-      (model_->Server()->ResponseCacheEnabled() && response_cache_enable);
+      (response_cache_enable &&
+       model_->Server()->ResponseCacheEnabled() && 
+       model_->Server()->CacheManager() != nullptr &&
+       model_->Server()->CacheManager()->Cache() != nullptr);
 #ifdef TRITON_ENABLE_METRICS
   // Initialize metric reporter for cache statistics if cache enabled
   if (response_cache_enabled_) {
