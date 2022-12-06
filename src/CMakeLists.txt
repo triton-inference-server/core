@@ -27,8 +27,8 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(libtritonserver LANGUAGES C CXX)
-set (CMAKE_CXX_STANDARD 17) # TODO: better way?
-set(CMAKE_CXX_STANDARD_REQUIRED ON) # TODO: better way?
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
