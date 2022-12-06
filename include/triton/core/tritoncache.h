@@ -108,6 +108,9 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
 /// TRITONCACHE_Cache object and must call
 /// TRITONCACHE_CacheDelete to release the object.
 ///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
 /// \param cache Returns the new cache object.
 /// \param config The config options to initialize the cache with.
 /// \return a TRITONSERVER_Error indicating success or failure.
@@ -115,6 +118,9 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
     TRITONCACHE_Cache** cache, TRITONSERVER_Message* config);
 
 /// Delete a cache object.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
 ///
 /// \param cache The cache object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
@@ -125,11 +131,47 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
 /// Cache Usage
 ///
 
-// TODO: Add API descriptions
-
+/// Inserts entry into cache at specified key, unless key already exists.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
+/// \param cache The object that is used to communicate with the cache
+///              implementation through a shared library.
+/// \param entry The entry to be inserted into the cache.
+/// \return a TRITONSERVER_Error indicating success or failure.
+///         Specific errors will be up the cache implementation, but general
+///         error best practices that should be followed are as follows:
+///         - TRITONSERVER_ERROR_INVALID_ARG
+///           - bad argument passed, nullptr, etc.
+///         - TRITONSERVER_ERROR_ALREADY_EXISTS
+///           - key already exists and will not be inserted again
+///         - TRITONSERVER_ERROR_INTERNAL
+///           - internal errors
+///         - nullptr
+///           - success
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
+/// Retrieves entry from cache at specified key, if key exists.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
+/// \param cache The object that is used to communicate with the cache
+///              implementation through a shared library.
+/// \param entry The entry to be retrieved from the cache.
+/// \return a TRITONSERVER_Error indicating success or failure.
+///         Specific errors will be up the cache implementation, but general
+///         error best practices that should be followed are as follows:
+///         - TRITONSERVER_ERROR_INVALID_ARG
+///           - bad argument passed, nullptr, etc.
+///         - TRITONSERVER_ERROR_NOT_FOUND
+///           - key not found in cache
+///         - TRITONSERVER_ERROR_INTERNAL
+///           - other internal errors
+///         - nullptr
+///           - success
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
@@ -137,9 +179,19 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
 /// CacheEntry Lifetime Management
 ///
 
+/// Create a new cache entry object. The caller takes ownership of the
+/// TRITONCACHE_CacheEntry object and must call
+/// TRITONCACHE_CacheEntryDelete to release the object.
+///
+/// \param entry Returns the new cache entry object.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
     TRITONCACHE_CacheEntry** entry);
 
+/// Delete a cache entry object.
+///
+/// \param entry The cache entry object to delete.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
     TRITONCACHE_CacheEntry* entry);
 
@@ -147,27 +199,40 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
 /// CacheEntry Field Management
 ///
 
+// TODO: Proper API descriptions, lifetimes, copies, etc.
+
 // Get number of items in entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemCount(
     TRITONCACHE_CacheEntry* entry, size_t* count);
-
-// Gets the index'th item from entry where 0 <= index < count where
-// 'count' is the value returned by TRITONCACHE_CacheEntryItemCount
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetItem(
-    TRITONCACHE_CacheEntry* entry, size_t index,
-    TRITONCACHE_CacheEntryItem** item);
 
 // Adds item to entry
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
     TRITONCACHE_CacheEntry* entry, TRITONCACHE_CacheEntryItem* item);
 
+// Gets item at index from entry where 0 <= index < count and
+// 'count' is the value returned by TRITONCACHE_CacheEntryItemCount
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetItem(
+    TRITONCACHE_CacheEntry* entry, size_t index,
+    TRITONCACHE_CacheEntryItem** item);
+
+
 ///
 /// CacheEntryItem Lifetime Management
 ///
 
+/// Create a new cache entry item object. The caller takes ownership of the
+/// TRITONCACHE_CacheEntryItem object and must call
+/// TRITONCACHE_CacheEntryItemDelete to release the object.
+///
+/// \param item Returns the new cache entry item object.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemNew(
     TRITONCACHE_CacheEntryItem** item);
 
+/// Delete a cache entry item object.
+///
+/// \param item The cache entry item object to delete.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
     TRITONCACHE_CacheEntryItem* item);
 
@@ -175,6 +240,9 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
 /// CacheEntryItem Field Management
 ///
 
+// TODO: Proper API descriptions, lifetimes, copies, etc.
+
+// Returns number of buffers held by item
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
     TRITONCACHE_CacheEntryItem* item, size_t* count);
 
@@ -182,24 +250,11 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemAddBuffer(
     TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size);
 
-// Gets buffer at index from item
+// Gets buffer at index from item where 0 <= index < count and
+// 'count' is the value returned by TRITONCACHE_CacheEntryItemBufferCount
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
     size_t* byte_size);
-
-/*
-   Not currently used, may be added in the future for grouping
-   cache entries for actions like evicting all entries associated
-   with certain model, tags, etc.
-
-// Sets tags in entry
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetTags(
-    TRITONCACHE_CacheEntry* entry, char** tags, size_t num_tags);
-
-// Gets tags from entry
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryTags(
-    TRITONCACHE_CacheEntry* entry, char*** tags, size_t* num_tags);
-*/
 
 #ifdef __cplusplus
 }  // extern C
