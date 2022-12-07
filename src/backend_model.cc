@@ -214,14 +214,13 @@ TritonModel::Create(
       RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
       if (exists) {
         Status status = local_model->SetBatchingStrategy(batch_libpath);
+        LOG_INFO << "Loading custom batching strategy library " << batch_libpath << for model << model_config.name();
         if (!status.IsOk()) {
           LOG_ERROR << status.Message().c_str()
                     << ", using default batching strategy";
         }
       } else {
-        LOG_ERROR << "Batching library path " << batch_libpath
-                  << " provided for model " << model_config.name()
-                  << "does not exist, using default batching strategy";
+        LOG_ERROR << "Batching library path does not exist, using default batching strategy";
       }
     } else {
       const std::string batch_libname = "batchstrategy.so";
