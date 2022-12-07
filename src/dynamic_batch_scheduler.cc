@@ -363,6 +363,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           auto pending_batch_queue_cnt = queue_.PendingBatchCount();
           if ((wait_microseconds == 0) && (pending_batch_queue_cnt != 0)) {
             // If custom batching strategy used, finalize the batch.
+            LOG_INFO << "Running fini function";
             if (model_->ModelBatchFiniFn() != nullptr) {
               TRITONSERVER_Error* err =
                   model_->ModelBatchFiniFn()(*(curr_payload_->UserPointer()));
@@ -463,14 +464,17 @@ DynamicBatchScheduler::GetDynamicBatch()
   auto payload_batch_size = curr_payload_->BatchSize();
   bool use_custom_batching = (model_->ModelBatchInitFn() != nullptr);
   while (!queue_.CursorEnd()) {
+    LOG_INFO << "While statement";
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
 
     // If there is no pending batch, then this request is starting a
     // new batch.
+    LOG_INFO << "Use custom batching: " << use_custom_batching;
     if ((payload_batch_size + queue_.PendingBatchCount()) == 0) {
       // If there is a custom batching strategy, use its initialization
       // function.
       if (use_custom_batching) {
+        LOG_INFO << "Running init function: " << use_custom_batching;
         TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
             reinterpret_cast<TRITONBACKEND_Model*>(model_),
             curr_payload_->UserPointer());
@@ -498,6 +502,7 @@ DynamicBatchScheduler::GetDynamicBatch()
       // determine whether to include this request.
       if (use_custom_batching) {
         bool should_include = false;
+        LOG_INFO << "Running incl function: " << use_custom_batching;
         TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
             reinterpret_cast<TRITONBACKEND_Model*>(model_),
             reinterpret_cast<TRITONBACKEND_Request*>(
