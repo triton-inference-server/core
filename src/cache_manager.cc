@@ -142,21 +142,9 @@ TritonCache::InitializeCacheImpl()
   if (init_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache init function is nullptr");
   }
-
-  // TODO: TRITONSERVER_Message doesn't seem to do any validation on the
-  //       string to assert valid JSON. Not sure why passing
-  //       'TritonServerMessage' would be better than just passing 'const char*'
-  // Convert JSON string config into TRITONSERVER_Message
-  TRITONSERVER_Message* config_msg = nullptr;
-  RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_MessageNewFromSerializedJson(
-      &config_msg, cache_config_.c_str(), cache_config_.size()));
-
   // Initialize cache implementation
   LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheNew from: '" << libpath_ << "'";
-  RETURN_IF_TRITONSERVER_ERROR(init_fn_(&cache_impl_, config_msg));
-  // TODO: Cache implementation will either have to copy config or they will
-  //       have to be responsible for deleting it if we don't delete here.
-  RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_MessageDelete(config_msg));
+  RETURN_IF_TRITONSERVER_ERROR(init_fn_(&cache_impl_, cache_config_.c_str()));
   if (cache_impl_ == nullptr) {
     return Status(
         Status::Code::INTERNAL, "Failed to initialize cache implementation");

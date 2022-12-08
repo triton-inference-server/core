@@ -96,7 +96,7 @@ class TritonCache {
   // dlopen / dlsym handles
   void* dlhandle_;
   typedef TRITONSERVER_Error* (*TritonCacheInitFn_t)(
-      TRITONCACHE_Cache** cache, TRITONSERVER_Message* config);
+      TRITONCACHE_Cache** cache, const char* config);
   TritonCacheInitFn_t init_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
   TritonCacheFiniFn_t fini_fn_;
