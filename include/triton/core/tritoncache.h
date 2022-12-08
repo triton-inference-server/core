@@ -101,81 +101,6 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
 ///
-/// Cache Lifetime Management
-///
-
-/// Create a new cache object. The caller takes ownership of the
-/// TRITONCACHE_Cache object and must call
-/// TRITONCACHE_CacheDelete to release the object.
-///
-/// This API is implemented by the user-provided cache implementation,
-/// so specific details will be found within the cache implementation.
-///
-/// \param cache Returns the new cache object.
-/// \param config The config options to initialize the cache with.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
-    TRITONCACHE_Cache** cache, TRITONSERVER_Message* config);
-
-/// Delete a cache object.
-///
-/// This API is implemented by the user-provided cache implementation,
-/// so specific details will be found within the cache implementation.
-///
-/// \param cache The cache object to delete.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
-    TRITONCACHE_Cache* cache);
-
-///
-/// Cache Usage
-///
-
-/// Inserts entry into cache at specified key, unless key already exists.
-///
-/// This API is implemented by the user-provided cache implementation,
-/// so specific details will be found within the cache implementation.
-///
-/// \param cache The object that is used to communicate with the cache
-///              implementation through a shared library.
-/// \param entry The entry to be inserted into the cache.
-/// \return a TRITONSERVER_Error indicating success or failure.
-///         Specific errors will be up the cache implementation, but general
-///         error best practices that should be followed are as follows:
-///         - TRITONSERVER_ERROR_INVALID_ARG
-///           - bad argument passed, nullptr, etc.
-///         - TRITONSERVER_ERROR_ALREADY_EXISTS
-///           - key already exists and will not be inserted again
-///         - TRITONSERVER_ERROR_INTERNAL
-///           - internal errors
-///         - nullptr
-///           - success
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
-    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
-
-/// Retrieves entry from cache at specified key, if key exists.
-///
-/// This API is implemented by the user-provided cache implementation,
-/// so specific details will be found within the cache implementation.
-///
-/// \param cache The object that is used to communicate with the cache
-///              implementation through a shared library.
-/// \param entry The entry to be retrieved from the cache.
-/// \return a TRITONSERVER_Error indicating success or failure.
-///         Specific errors will be up the cache implementation, but general
-///         error best practices that should be followed are as follows:
-///         - TRITONSERVER_ERROR_INVALID_ARG
-///           - bad argument passed, nullptr, etc.
-///         - TRITONSERVER_ERROR_NOT_FOUND
-///           - key not found in cache
-///         - TRITONSERVER_ERROR_INTERNAL
-///           - other internal errors
-///         - nullptr
-///           - success
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
-    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
-
-///
 /// CacheEntry Lifetime Management
 ///
 
@@ -255,6 +180,95 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemAddBuffer(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
     size_t* byte_size);
+
+///
+/// The following functions can be implemented by a cache. Functions
+/// indicated as required must be implemented or the cache will fail
+/// to load.
+///
+
+/// Create a new cache object.
+///
+/// This function is required to be implemented by the cache.
+///
+/// The caller takes ownership of the
+/// TRITONCACHE_Cache object and must call
+/// TRITONCACHE_CacheDelete to release the object.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
+/// \param cache Returns the new cache object.
+/// \param config The config options to initialize the cache with.
+///               This will be passed as-is to the cache implementation, so
+///               the expected format and parsing is up to the cache as well.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
+    TRITONCACHE_Cache** cache, const char* config);
+
+/// Delete a cache object.
+///
+/// This function is required to be implemented by the cache.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
+/// \param cache The cache object to delete.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
+    TRITONCACHE_Cache* cache);
+
+/// Inserts entry into cache at specified key, unless key already exists.
+///
+/// This function is required to be implemented by the cache.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
+/// \param cache The object that is used to communicate with the cache
+///              implementation through a shared library.
+/// \param key The key used to access the cache. Generally, this is some
+///            unique value or hash representing the entry to avoid collisions.
+/// \param entry The entry to be inserted into the cache.
+/// \return a TRITONSERVER_Error indicating success or failure.
+///         Specific errors will be up the cache implementation, but general
+///         error best practices that should be followed are as follows:
+///         - TRITONSERVER_ERROR_INVALID_ARG
+///           - bad argument passed, nullptr, etc.
+///         - TRITONSERVER_ERROR_ALREADY_EXISTS
+///           - key already exists and will not be inserted again
+///         - TRITONSERVER_ERROR_INTERNAL
+///           - internal errors
+///         - nullptr
+///           - success
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
+    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+
+/// Retrieves entry from cache at specified key, if key exists.
+///
+/// This function is required to be implemented by the cache.
+///
+/// This API is implemented by the user-provided cache implementation,
+/// so specific details will be found within the cache implementation.
+///
+/// \param cache The object that is used to communicate with the cache
+///              implementation through a shared library.
+/// \param key The key used to access the cache. Generally, this is some
+///            unique value or hash representing the entry to avoid collisions.
+/// \param entry The entry to be retrieved from the cache.
+/// \return a TRITONSERVER_Error indicating success or failure.
+///         Specific errors will be up the cache implementation, but general
+///         error best practices that should be followed are as follows:
+///         - TRITONSERVER_ERROR_INVALID_ARG
+///           - bad argument passed, nullptr, etc.
+///         - TRITONSERVER_ERROR_NOT_FOUND
+///           - key not found in cache
+///         - TRITONSERVER_ERROR_INTERNAL
+///           - other internal errors
+///         - nullptr
+///           - success
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
+    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
 
 #ifdef __cplusplus
 }  // extern C
