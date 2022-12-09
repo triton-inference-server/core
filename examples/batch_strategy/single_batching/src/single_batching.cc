@@ -24,6 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <iostream>
 #include "triton/core/tritonbackend.h"
 
 namespace triton { namespace core { namespace single_batching {
@@ -74,8 +75,7 @@ TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
 {
   // Userp will point to a boolean indicating whether the batch is empty.
-  *userp = new bool(true);
-
+  *userp = static_cast<void*>(new bool(true));
   return nullptr;  // success
 }
 

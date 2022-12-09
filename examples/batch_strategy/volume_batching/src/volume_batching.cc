@@ -24,7 +24,6 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "triton/common/logging.h"
 #include "triton/core/tritonbackend.h"
 
 #define TRITONJSON_STATUSTYPE TRITONSERVER_Error*
@@ -70,10 +69,8 @@ TRITONBACKEND_ModelBatchIncludeRequest(
 
   uint32_t input_count;
   auto err = TRITONBACKEND_RequestInputCount(request, &input_count);
-  if (err) {
-    LOG_ERROR << err;
+  if (err)
     return err;
-  }
 
   TRITONBACKEND_Input* input;
   size_t data_byte_size;
@@ -81,16 +78,12 @@ TRITONBACKEND_ModelBatchIncludeRequest(
   for (size_t count = 0; count < input_count; count++) {
     auto err =
         TRITONBACKEND_RequestInputByIndex(request, count /* index */, &input);
-    if (err) {
-      LOG_ERROR << err;
+    if (err)
       return err;
-    }
     err = TRITONBACKEND_InputProperties(
         input, nullptr, nullptr, nullptr, nullptr, &data_byte_size, nullptr);
-    if (err) {
-      LOG_ERROR << err;
+    if (err)
       return err;
-    }
     pending_volume += static_cast<unsigned int>(data_byte_size);
   }
 
@@ -125,25 +118,44 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
   const char* buffer;
   size_t byte_size;
 
+  uint64_t max_volume_bytes = 0;
+  std::string max_volume_bytes_str;
+
   auto err =
       TRITONSERVER_MessageSerializeToJson(config_message, &buffer, &byte_size);
-  if (err) {
-    LOG_ERROR << err;
+  if (err)
     return err;
-  }
 
-  triton::common::TritonJson::Value model_config;
-
+  triton::common::TritonJson::Value model_config, params, volume_param;
   err = model_config.Parse(buffer, byte_size);
-  if (TRITONSERVER_MessageDelete(config_message) != nullptr) {
-    LOG_ERROR << "Failed to delete config message";
+  TRITONSERVER_MessageDelete(config_message);
+
+  if (!model_config.Find("parameters", &params)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_NOT_FOUND,
+        "Unable to find parameters in model config");
   }
 
-  uint64_t max_volume_bytes = 0;
-  err = model_config.MemberAsUInt("max_batch_volume", &max_volume_bytes);
-  if (err) {
-    LOG_ERROR << err;
+  std::vector<std::string> param_keys;
+
+  if (!params.Find("max_batch_volume_bytes", &volume_param)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_NOT_FOUND,
+        "Unable to find max_batch_volume_bytes parameter in model config");
+  }
+  err = volume_param.MemberAsString("string_value", &max_volume_bytes_str);
+  if (err)
     return err;
+
+  try {
+    max_volume_bytes = static_cast<uint64_t>(std::stoul(max_volume_bytes_str));
+  }
+  catch (const std::invalid_argument& ia) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("failed to convert '") + max_volume_bytes_str +
+         "' to unsigned int64")
+            .c_str());
   }
 
   *userp = new unsigned int(max_volume_bytes);
