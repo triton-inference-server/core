@@ -536,7 +536,7 @@ DynamicBatchScheduler::GetDynamicBatch()
     queue_.AdvanceCursor();
     queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
 
-    if (preferred_batch_sizes_.find(pending_batch_size_ + payload_batch_size) !=
+    if (!use_custom_batching && preferred_batch_sizes_.find(pending_batch_size_ + payload_batch_size) !=
         preferred_batch_sizes_.end()) {
       best_preferred_batch_size = pending_batch_size_;
       queue_.MarkCursor();
