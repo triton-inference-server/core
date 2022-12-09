@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "triton/core/tritonbackend.h"
+#include <iostream>
 
 #define TRITONJSON_STATUSTYPE TRITONSERVER_Error*
 #define TRITONJSON_STATUSRETURN(M) \
@@ -58,6 +59,7 @@ TRITONBACKEND_ModelBatchIncludeRequest(
     TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
     bool* should_include)
 {
+  TritonModel* tm = reinterpret_cast<TritonModel*>(model);
   // Default should_include to false in case function returns error.
   *should_include = false;
 
@@ -87,6 +89,8 @@ TRITONBACKEND_ModelBatchIncludeRequest(
     pending_volume += static_cast<unsigned int>(data_byte_size);
   }
 
+  std::cout << "Pending volume : " << pending_volume << std::endl;
+  std::cout << "Remaining volume : " << *remaining_volume << std::endl;
   // Check if there is enough remaining volume for this request.
   // If so, include this request. Otherwise, do not.
   if (pending_volume <= *remaining_volume) {
@@ -159,6 +163,7 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
   }
 
   *userp = new unsigned int(max_volume_bytes);
+  std::cout << "Max volume bytes: " << *(static_cast<unsigned int*>(*userp)) << std::endl;
 
   return nullptr;  // success
 }
@@ -170,7 +175,7 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
 TRITONSERVER_Error*
 TRITONBACKEND_ModelBatchFinalize(void* userp)
 {
-  delete static_cast<int*>(userp);
+  delete static_cast<unsigned int*>(userp);
 
   return nullptr;  // success
 }
