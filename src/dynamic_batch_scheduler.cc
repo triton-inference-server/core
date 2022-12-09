@@ -537,6 +537,7 @@ DynamicBatchScheduler::GetDynamicBatch()
 
     // If there is a custom batching strategy, use its batching function to
     // determine whether to include this request.
+    // TODO: Have Triton control timing for ease. E.g. use request timeouts and max_batch_delay
     if (use_custom_batching) {
       bool should_include = false;
       LOG_INFO << "Running incl function: ";
@@ -576,19 +577,9 @@ DynamicBatchScheduler::GetDynamicBatch()
   bool delay_is_exceeded =
       (pending_batch_delay_ns_ != 0) && (delay_ns >= pending_batch_delay_ns_);
 
-  // If custom batching strategy used, use its logic to determine
-  // whether to send.
-  if (model_->ModelBatchInitFn() != nullptr) {
-    if(send_now){
-      return 0;
-    } else {
-      return (pending_batch_delay_ns_ - delay_ns) / 1000;
-    }
-  }
-
-  // If we found a preferred batch size and the queue delay hasn't been
-  // exceeded, then execute that.
-  if ((best_preferred_batch_size != 0) && !delay_is_exceeded) {
+  // For default batching: If we found a preferred batch size and the queue delay hasn't
+  // been exceeded, then execute that.
+  if (!use_custom_batching && (best_preferred_batch_size != 0) && !delay_is_exceeded) {
     if (pending_batch_delay_ns_ == 0) {
       payload_saturated_ = true;
     }
@@ -616,18 +607,20 @@ DynamicBatchScheduler::GetDynamicBatch()
   }
 
   // Set the next preferred batch size given the pending batch size
-  auto next_preferred_batch_size_it = preferred_batch_sizes_.upper_bound(
+  if(!use_custom_batching){
+    auto next_preferred_batch_size_it = preferred_batch_sizes_.upper_bound(
       pending_batch_size_ + payload_batch_size);
-  if (next_preferred_batch_size_it != preferred_batch_sizes_.end()) {
-    next_preferred_batch_size_ = *next_preferred_batch_size_it;
-  } else {
-    next_preferred_batch_size_ =
-        preferred_batch_sizes_.empty() ? 0 : *preferred_batch_sizes_.begin();
-  }
-  if (next_preferred_batch_size_ != 0) {
-    next_preferred_batch_size_ -= payload_batch_size;
-  }
+    if (next_preferred_batch_size_it != preferred_batch_sizes_.end()) {
+      next_preferred_batch_size_ = *next_preferred_batch_size_it;
+    } else {
+      next_preferred_batch_size_ =
+          preferred_batch_sizes_.empty() ? 0 : *preferred_batch_sizes_.begin();
+    }
+    if (next_preferred_batch_size_ != 0) {
+      next_preferred_batch_size_ -= payload_batch_size;
+    }
 
+  }
   // By this point, we have not seen the pending batch that should be executed
   // immediately. However, if we have scheduled a payload that can be grown and
   // not yet in preferred batch size, we should move the pending batch over to
