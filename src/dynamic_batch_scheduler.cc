@@ -366,7 +366,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
             LOG_INFO << "Running fini function";
             if (model_->ModelBatchFiniFn() != nullptr) {
               TRITONSERVER_Error* err =
-                  model_->ModelBatchFiniFn()(*(curr_payload_->UserPointer()));
+                  model_->ModelBatchFiniFn()(curr_payload_->UserPointer());
               if (err) {
                 LOG_ERROR
                     << "Custom batching finalization function failed for model "
@@ -464,7 +464,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   auto payload_batch_size = curr_payload_->BatchSize();
   bool use_custom_batching = (model_->ModelBatchInitFn() != nullptr);
   while (!queue_.CursorEnd()) {
-    LOG_INFO << "While statement";
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
 
     // If there is no pending batch, then this request is starting a
@@ -474,10 +473,10 @@ DynamicBatchScheduler::GetDynamicBatch()
       // If there is a custom batching strategy, use its initialization
       // function.
       if (use_custom_batching) {
+        void* userp = curr_payload_->UserPointer();
         LOG_INFO << "Running init function: " << use_custom_batching;
         TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
-            reinterpret_cast<TRITONBACKEND_Model*>(model_),
-            curr_payload_->UserPointer());
+            reinterpret_cast<TRITONBACKEND_Model*>(model_), &userp);
         if (err) {
           LOG_ERROR
               << "Custom batching initialization function failed for model "
@@ -501,13 +500,14 @@ DynamicBatchScheduler::GetDynamicBatch()
       // If there is a custom batching strategy, use its batching function to
       // determine whether to include this request.
       if (use_custom_batching) {
+        void* userp = curr_payload_->UserPointer();
         bool should_include = false;
         LOG_INFO << "Running incl function: " << use_custom_batching;
         TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
             reinterpret_cast<TRITONBACKEND_Model*>(model_),
             reinterpret_cast<TRITONBACKEND_Request*>(
                 queue_.RequestAtCursor().get()),
-            *(curr_payload_->UserPointer()), &should_include);
+            &userp, &should_include);
         if (err) {
           LOG_ERROR << "Custom batching include function failed for model "
                     << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);

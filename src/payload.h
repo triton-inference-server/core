@@ -77,7 +77,7 @@ class Payload {
   {
     return &required_equal_inputs_;
   }
-  void** UserPointer() { return user_pointer_; }
+  void* UserPointer() { return user_pointer_; }
 
   State GetState() { return state_; }
   void SetState(State state);
@@ -97,7 +97,7 @@ class Payload {
   uint64_t batcher_start_ns_;
   RequiredEqualInputs required_equal_inputs_;
   // User pointer for use with custom batching strategy.
-  void** user_pointer_;
+  void* user_pointer_ = nullptr;
 
   bool saturated_;
 };
