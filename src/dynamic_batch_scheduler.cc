@@ -227,6 +227,18 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     auto payload = model_->Server()->GetRateLimiter()->GetPayload(
         Payload::Operation::INFER_RUN, nullptr /* TritonModelInstance*/);
     payload->AddRequest(std::move(request));
+    // If custom batching strategy used, use its user-defined
+    // finalization function.
+    if (model_->ModelBatchInitFn() != nullptr) {
+      LOG_INFO << "Running fini function: ";
+      TRITONSERVER_Error* err =
+        model_->ModelBatchFiniFn()(user_pointer_);
+      if (err) {
+        LOG_ERROR
+            << "Custom batching finalization function failed for model "
+            << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+      }
+    }
     RETURN_IF_ERROR(
         model_->Server()->GetRateLimiter()->EnqueuePayload(model_, payload));
 
@@ -273,6 +285,18 @@ DynamicBatchScheduler::NewPayload()
   curr_payload_ = model_->Server()->GetRateLimiter()->GetPayload(
       Payload::Operation::INFER_RUN, model_instance_);
   payload_saturated_ = false;
+
+  // If there is a custom batching strategy, initialize it.
+  if (model_->ModelBatchInitFn() != nullptr) {
+    LOG_INFO << "Running init function: ";
+    TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
+        reinterpret_cast<TRITONBACKEND_Model*>(model_), &user_pointer_);
+    if (err) {
+      LOG_ERROR
+          << "Custom batching initialization function failed for model "
+          << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    }
+  }
 }
 
 void
@@ -406,6 +430,19 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     if (curr_payload_->GetState() == Payload::State::READY) {
       auto callback = [this]() { cv_.notify_one(); };
       curr_payload_->SetCallback(callback);
+
+      // If custom batching strategy used, use its user-defined
+      // finalization function.
+      if (model_->ModelBatchInitFn() != nullptr) {
+        LOG_INFO << "Running fini function: ";
+        TRITONSERVER_Error* err =
+          model_->ModelBatchFiniFn()(user_pointer_);
+        if (err) {
+          LOG_ERROR
+              << "Custom batching finalization function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+        }
+      }
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
     }
 
@@ -450,28 +487,14 @@ DynamicBatchScheduler::GetDynamicBatch()
   const bool check_input =
       !enforce_equal_shape_tensors_.empty() || has_optional_input_;
   auto payload_batch_size = curr_payload_->BatchSize();
-  bool use_custom_batching = (model_->ModelBatchInitFn() != nullptr);
+  auto use_custom_batching = model_->ModelBatchInitFn() != nullptr;
+  
   while (!queue_.CursorEnd()) {
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
 
     // If there is no pending batch, then this request is starting a
     // new batch.
-    LOG_INFO << "Use custom batching: " << use_custom_batching;
     if ((payload_batch_size + queue_.PendingBatchCount()) == 0) {
-      // If there is a custom batching strategy, use its initialization
-      // function.
-      if (use_custom_batching) {
-        LOG_INFO << "Running init function: " << use_custom_batching;
-        TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
-            reinterpret_cast<TRITONBACKEND_Model*>(model_), &user_pointer_);
-        if (err) {
-          LOG_ERROR
-              << "Custom batching initialization function failed for model "
-              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-          break;
-        }
-      }
-
       // Get the shape of the new batch that is being started...
       if (check_input) {
         if (!curr_payload_->MutableRequiredEqualInputs()
@@ -483,52 +506,53 @@ DynamicBatchScheduler::GetDynamicBatch()
           break;
         }
       }
-    } else {
-      // If there is a custom batching strategy, use its batching function to
-      // determine whether to include this request.
-      if (use_custom_batching) {
-        bool should_include = false;
-        LOG_INFO << "Running incl function: " << use_custom_batching;
-        TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
-            reinterpret_cast<TRITONBACKEND_Model*>(model_),
-            reinterpret_cast<TRITONBACKEND_Request*>(
-                queue_.RequestAtCursor().get()),
-            user_pointer_, &should_include);
-        if (err) {
-          LOG_ERROR << "Custom batching include function failed for model "
-                    << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-        }
-        if (!should_include) {
-          send_now = true;
-          break;
-        }
-      } else {
-        // There is a pending batch and adding this request would make
-        // the batch size larger than all of the preferred batch sizes,
-        // so mark the cursor at this point. Not sending the pending batch so
-        // that we can examine the queue delay of requests that fits in a batch.
-        if (((payload_batch_size + pending_batch_size_ + batch_size) >
-             max_preferred_batch_size_) &&
-            (best_preferred_batch_size == 0)) {
-          best_preferred_batch_size = pending_batch_size_;
-          queue_.MarkCursor();
-          payload_saturated_ = true;
-        }
-        if ((payload_batch_size + pending_batch_size_ + batch_size) >
-            max_batch_size_) {
-          send_now = true;
-          break;
-        }
+    } else if(!use_custom_batching){
+      // There is a pending batch and adding this request would make
+      // the batch size larger than all of the preferred batch sizes,
+      // so mark the cursor at this point. Not sending the pending batch so
+      // that we can examine the queue delay of requests that fits in a batch.
+      if (((payload_batch_size + pending_batch_size_ + batch_size) >
+            max_preferred_batch_size_) &&
+          (best_preferred_batch_size == 0)) {
+        best_preferred_batch_size = pending_batch_size_;
+        queue_.MarkCursor();
+        payload_saturated_ = true;
+      }
+      if ((payload_batch_size + pending_batch_size_ + batch_size) >
+          max_batch_size_) {
+        send_now = true;
+        break;
+      }
 
-        // There is a pending batch and it has a different shape then
-        // this request, so send the pending batch as it is.
-        if (check_input &&
-            !curr_payload_->MutableRequiredEqualInputs()->HasEqualInputs(
-                queue_.RequestAtCursor())) {
-          curr_payload_->MarkSaturated();
-          send_now = true;
-          break;
-        }
+      // There is a pending batch and it has a different shape then
+      // this request, so send the pending batch as it is.
+      if (check_input &&
+          !curr_payload_->MutableRequiredEqualInputs()->HasEqualInputs(
+              queue_.RequestAtCursor())) {
+        curr_payload_->MarkSaturated();
+        send_now = true;
+        break;
+      }
+    }
+
+    // If there is a custom batching strategy, use its batching function to
+    // determine whether to include this request.
+    if (use_custom_batching) {
+      bool should_include = false;
+      LOG_INFO << "Running incl function: ";
+      TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
+          reinterpret_cast<TRITONBACKEND_Model*>(model_),
+          reinterpret_cast<TRITONBACKEND_Request*>(
+              queue_.RequestAtCursor().get()),
+          user_pointer_, &should_include);
+      if (err) {
+        LOG_ERROR << "Custom batching include function failed for model "
+                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+      }
+      if (!should_include) {
+        curr_payload_->MarkSaturated();
+        send_now = true;
+        break;
       }
     }
 
@@ -553,22 +577,13 @@ DynamicBatchScheduler::GetDynamicBatch()
       (pending_batch_delay_ns_ != 0) && (delay_ns >= pending_batch_delay_ns_);
 
   // If custom batching strategy used, use its logic to determine
-  // whether to send and call user-defined finalization function.
+  // whether to send.
   if (model_->ModelBatchInitFn() != nullptr) {
     if(send_now){
-      LOG_INFO << "Running fini function: " << use_custom_batching;
-      TRITONSERVER_Error* err =
-        model_->ModelBatchFiniFn()(user_pointer_);
-      if (err) {
-        LOG_ERROR
-            << "Custom batching finalization function failed for model "
-            << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
       return 0;
     } else {
       return (pending_batch_delay_ns_ - delay_ns) / 1000;
     }
-    
   }
 
   // If we found a preferred batch size and the queue delay hasn't been
