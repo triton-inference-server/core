@@ -238,6 +238,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
 		  "to corresponding value.")
+  # WAR for target_compile_features not applying correctly to MSVC.
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
   target_compile_options(
     triton-core
     PRIVATE

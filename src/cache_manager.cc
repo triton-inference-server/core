@@ -77,10 +77,14 @@ TritonCache::TritonCache(
 TritonCache::~TritonCache()
 {
   LOG_VERBOSE(1) << "unloading cache '" << name_ << "'";
-  if (fini_fn_ != nullptr) {
-    LOG_VERBOSE(2) << "Calling TRITONCACHE_CacheDelete from: '" << libpath_
-                   << "'";
-    LOG_TRITONSERVER_ERROR(fini_fn_(cache_impl_), "failed finalizing cache");
+  if (fini_fn_) {
+    if (cache_impl_) {
+      LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheDelete from: '" << libpath_
+                     << "'";
+      LOG_TRITONSERVER_ERROR(fini_fn_(cache_impl_), "failed finalizing cache");
+    } else {
+      LOG_ERROR << "cache implementation handle is nullptr";
+    }
   } else {
     LOG_ERROR << "cache finalize function is nullptr";
   }
