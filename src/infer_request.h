@@ -311,10 +311,10 @@ class InferenceRequest {
   uint64_t TimeoutMicroseconds() const { return timeout_us_; }
   void SetTimeoutMicroseconds(uint64_t t) { timeout_us_ = t; }
 
-  std::string CacheKey() const { return cache_key_; }
+  const std::string& CacheKey() const { return cache_key_; }
   // It is up to the user to update the cache_key_ if modifying any hashable
   // fields of the request after cache_key_is_set_ has been set to true.
-  void SetCacheKey(std::string key)
+  void SetCacheKey(const std::string& key)
   {
     cache_key_ = key;
     cache_key_is_set_ = true;
