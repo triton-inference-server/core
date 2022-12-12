@@ -149,7 +149,7 @@ TritonCache::InitializeCacheImpl()
   // Initialize cache implementation
   LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheNew from: '" << libpath_ << "'";
   RETURN_IF_TRITONSERVER_ERROR(init_fn_(&cache_impl_, cache_config_.c_str()));
-  if (cache_impl_ == nullptr) {
+  if (!cache_impl_) {
     return Status(
         Status::Code::INTERNAL, "Failed to initialize cache implementation");
   }
