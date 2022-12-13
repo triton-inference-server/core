@@ -227,18 +227,6 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     auto payload = model_->Server()->GetRateLimiter()->GetPayload(
         Payload::Operation::INFER_RUN, nullptr /* TritonModelInstance*/);
     payload->AddRequest(std::move(request));
-    // If custom batching strategy used, use its user-defined
-    // finalization function.
-    if (model_->ModelBatchInitFn() != nullptr) {
-      LOG_INFO << "Running fini function: ";
-      TRITONSERVER_Error* err =
-        model_->ModelBatchFiniFn()(user_pointer_);
-      if (err) {
-        LOG_ERROR
-            << "Custom batching finalization function failed for model "
-            << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
-    }
     RETURN_IF_ERROR(
         model_->Server()->GetRateLimiter()->EnqueuePayload(model_, payload));
 
@@ -385,6 +373,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
           // Extract batch only if there is pending batch
           auto pending_batch_queue_cnt = queue_.PendingBatchCount();
+          LOG_INFO << "Pending batch count: " << queue_.PendingBatchCount() << "\nWait ms: " << wait_microseconds;
           if ((wait_microseconds == 0) && (pending_batch_queue_cnt != 0)) {
             curr_payload_->ReserveRequests(pending_batch_queue_cnt);
             for (size_t idx = 0; idx < pending_batch_queue_cnt; ++idx) {
@@ -537,7 +526,6 @@ DynamicBatchScheduler::GetDynamicBatch()
 
     // If there is a custom batching strategy, use its batching function to
     // determine whether to include this request.
-    // TODO: Have Triton control timing for ease. E.g. use request timeouts and max_batch_delay
     if (use_custom_batching) {
       bool should_include = false;
       LOG_INFO << "Running incl function: ";
@@ -567,6 +555,7 @@ DynamicBatchScheduler::GetDynamicBatch()
       queue_.MarkCursor();
     }
   }
+  LOG_INFO << "Broke out of loop";
   
   // Obtain the age of the oldest pending request to compare with the maximum
   // batch queuing delay
@@ -588,23 +577,34 @@ DynamicBatchScheduler::GetDynamicBatch()
     return 0;
   }
 
+  LOG_INFO << "Pending batch?";
+
   // No request in pending batch happens when all queued requests have expired
   // timeout and the policies are REJECT
   if (queue_.PendingBatchCount() == 0) {
+    LOG_INFO << "No.";
     return 0;
   }
+
+  LOG_INFO << "Yes.";
 
   // If the delay has been exceeded, or if the current batch can't grow
   // any larger then just immediately execute whatever is pending.
+  LOG_INFO << "Sending now?";
   if (send_now || ((payload_batch_size + pending_batch_size_) >=
                    max_preferred_batch_size_)) {
     payload_saturated_ = true;
+    LOG_INFO << "Yes.";
+    return 0;
+  }
+  LOG_INFO << "Was delay exceeded?";
+
+  if (delay_is_exceeded || (pending_batch_delay_ns_ == 0)) {
+    LOG_INFO << "Yes.";
     return 0;
   }
 
-  if (delay_is_exceeded || (pending_batch_delay_ns_ == 0)) {
-    return 0;
-  }
+  LOG_INFO << "No.";
 
   // Set the next preferred batch size given the pending batch size
   if(!use_custom_batching){
@@ -637,6 +637,7 @@ DynamicBatchScheduler::GetDynamicBatch()
   // pending batch as soon as it is invalidated. But the cost is that in edge
   // case where the timeout will be expired one by one, the thread will be
   // waken frequently.
+  LOG_INFO << "Closest timeout section";
   if (queue_.ClosestTimeout() != 0) {
     if (now_ns <= queue_.ClosestTimeout()) {
       wait_ns = std::min(queue_.ClosestTimeout() - now_ns, wait_ns);
@@ -654,6 +655,7 @@ DynamicBatchScheduler::GetDynamicBatch()
   // request comes in then this thread will wake and revisit the pending batch
   // (and at that time will then see the delay has been exceeded and will send
   // the batch).
+  LOG_INFO << "End";
   return wait_ns / 1000;
 }
 
