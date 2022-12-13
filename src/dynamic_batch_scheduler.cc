@@ -476,7 +476,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   const bool check_input =
       !enforce_equal_shape_tensors_.empty() || has_optional_input_;
   auto payload_batch_size = curr_payload_->BatchSize();
-  auto use_custom_batching = model_->ModelBatchInitFn() != nullptr;
   
   while (!queue_.CursorEnd()) {
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
@@ -495,7 +494,7 @@ DynamicBatchScheduler::GetDynamicBatch()
           break;
         }
       }
-    } else if(!use_custom_batching){
+    } else {
       // There is a pending batch and adding this request would make
       // the batch size larger than all of the preferred batch sizes,
       // so mark the cursor at this point. Not sending the pending batch so
@@ -526,7 +525,7 @@ DynamicBatchScheduler::GetDynamicBatch()
 
     // If there is a custom batching strategy, use its batching function to
     // determine whether to include this request.
-    if (use_custom_batching) {
+    if (model_->ModelBatchInitFn() != nullptr) {
       bool should_include = false;
       LOG_INFO << "Running incl function: ";
       TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
@@ -549,7 +548,7 @@ DynamicBatchScheduler::GetDynamicBatch()
     queue_.AdvanceCursor();
     queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
 
-    if (!use_custom_batching && preferred_batch_sizes_.find(pending_batch_size_ + payload_batch_size) !=
+    if (preferred_batch_sizes_.find(pending_batch_size_ + payload_batch_size) !=
         preferred_batch_sizes_.end()) {
       best_preferred_batch_size = pending_batch_size_;
       queue_.MarkCursor();
@@ -566,9 +565,9 @@ DynamicBatchScheduler::GetDynamicBatch()
   bool delay_is_exceeded =
       (pending_batch_delay_ns_ != 0) && (delay_ns >= pending_batch_delay_ns_);
 
-  // For default batching: If we found a preferred batch size and the queue delay hasn't
+  // If we found a preferred batch size and the queue delay hasn't
   // been exceeded, then execute that.
-  if (!use_custom_batching && (best_preferred_batch_size != 0) && !delay_is_exceeded) {
+  if ((best_preferred_batch_size != 0) && !delay_is_exceeded) {
     if (pending_batch_delay_ns_ == 0) {
       payload_saturated_ = true;
     }
@@ -607,20 +606,18 @@ DynamicBatchScheduler::GetDynamicBatch()
   LOG_INFO << "No.";
 
   // Set the next preferred batch size given the pending batch size
-  if(!use_custom_batching){
-    auto next_preferred_batch_size_it = preferred_batch_sizes_.upper_bound(
-      pending_batch_size_ + payload_batch_size);
-    if (next_preferred_batch_size_it != preferred_batch_sizes_.end()) {
-      next_preferred_batch_size_ = *next_preferred_batch_size_it;
-    } else {
-      next_preferred_batch_size_ =
-          preferred_batch_sizes_.empty() ? 0 : *preferred_batch_sizes_.begin();
-    }
-    if (next_preferred_batch_size_ != 0) {
-      next_preferred_batch_size_ -= payload_batch_size;
-    }
-
+  auto next_preferred_batch_size_it = preferred_batch_sizes_.upper_bound(
+    pending_batch_size_ + payload_batch_size);
+  if (next_preferred_batch_size_it != preferred_batch_sizes_.end()) {
+    next_preferred_batch_size_ = *next_preferred_batch_size_it;
+  } else {
+    next_preferred_batch_size_ =
+        preferred_batch_sizes_.empty() ? 0 : *preferred_batch_sizes_.begin();
   }
+  if (next_preferred_batch_size_ != 0) {
+    next_preferred_batch_size_ -= payload_batch_size;
+  }
+
   // By this point, we have not seen the pending batch that should be executed
   // immediately. However, if we have scheduled a payload that can be grown and
   // not yet in preferred batch size, we should move the pending batch over to
