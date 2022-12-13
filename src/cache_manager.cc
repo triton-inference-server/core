@@ -229,7 +229,7 @@ Status
 TritonCache::Insert(
     std::vector<std::shared_ptr<CacheEntryItem>> items, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting into cache";
+  LOG_VERBOSE(2) << "Inserting items at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
@@ -251,7 +251,7 @@ Status
 TritonCache::Insert(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting list of responses into cache";
+  LOG_VERBOSE(2) << "Inserting list of responses at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
@@ -271,7 +271,7 @@ TritonCache::Insert(
 Status
 TritonCache::Insert(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting single response into cache";
+  LOG_VERBOSE(2) << "Inserting single response at cache key: " << key;
   if (!response) {
     return Status(Status::Code::INVALID_ARG, "response is nullptr");
   }
@@ -283,7 +283,7 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
 std::optional<std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
-  LOG_VERBOSE(2) << "Looking up bytes in cache";
+  LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
   if (lookup_fn_ == nullptr) {
     LOG_ERROR << "cache lookup function is nullptr";
     return std::nullopt;
@@ -293,16 +293,15 @@ TritonCache::Lookup(const std::string& key)
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
       lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
-  LOG_VERBOSE(2) << "[LOOKUP] CacheEntry->ItemCount(): " << entry->ItemCount();
   return entry->Items();
 }
 
+// NOTE: Multiple responses won't be expected until supporting decoupled
+// or sequence models.
 Status
 TritonCache::Lookup(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Looking up multiple responses in cache";
-
   if (lookup_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache lookup function is nullptr");
   }
