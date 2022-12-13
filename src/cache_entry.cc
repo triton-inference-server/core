@@ -75,6 +75,7 @@ CacheEntryItem::Buffers()
   return buffers_;
 }
 
+// TODO: DLIS-4401 - Cleanup, add memory type awareness
 void
 CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
 {
@@ -86,6 +87,25 @@ CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
   buffers_.emplace_back(std::make_pair(new_base, byte_size));
 }
 
+void
+CacheEntryItem::AddBuffer(void* base, size_t byte_size, bool copy)
+{
+  // Read-write, cannot be shared
+  std::unique_lock lk(buffer_mu_);
+  if (copy) {
+    void* new_base = malloc(byte_size);
+    memcpy(new_base, base, byte_size);
+    buffers_.emplace_back(std::make_pair(new_base, byte_size));
+  } else {
+    buffers_.emplace_back(std::make_pair(base, byte_size));
+  }
+}
+
+void
+CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair, bool copy)
+{
+  AddBuffer(buffer_pair.first, buffer_pair.second, copy);
+}
 
 void
 CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair)
@@ -100,6 +120,12 @@ CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
   AddBuffer(base, byte_span.size());
 }
 
+CacheEntryItem::~CacheEntryItem()
+{
+  for (auto& [buffer, byte_size] : buffers_) {
+    free(buffer);
+  }
+}
 
 /* CacheResponseOutput */
 
@@ -117,7 +143,8 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
       return Status(
           Status::Code::INTERNAL, "failed to convert output to bytes");
     }
-    AddBuffer(buffer.value());
+    bool copy = false;  // ToBytes will allocate new memory
+    AddBuffer(buffer.value(), copy);
   }
 
   return Status::Success;

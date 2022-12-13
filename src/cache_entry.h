@@ -56,6 +56,12 @@
 namespace triton { namespace core {
 
 struct CacheOutput {
+  ~CacheOutput()
+  {
+    if (buffer_) {
+      free(buffer_);
+    }
+  }
   std::string name_;
   inference::DataType dtype_;
   std::vector<int64_t> shape_;
@@ -72,6 +78,7 @@ using Buffer = std::pair<void*, size_t>;
 //   ex: one response may have multiple output buffers
 class CacheEntryItem {
  public:
+  ~CacheEntryItem();
   Status FromResponse(const InferenceResponse* response);
   Status ToResponse(InferenceResponse* response);
   std::vector<Buffer> Buffers();
@@ -79,6 +86,8 @@ class CacheEntryItem {
   void AddBuffer(boost::span<const std::byte> buffer);
   void AddBuffer(const void* base, size_t byte_size);
   void AddBuffer(std::pair<void*, size_t> buffer_pair);
+  void AddBuffer(std::pair<void*, size_t> buffer_pair, bool copy);
+  void AddBuffer(void* base, size_t byte_size, bool copy);
 
  private:
   std::optional<Buffer> ToBytes(const InferenceResponse::Output& output);
