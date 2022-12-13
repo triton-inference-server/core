@@ -62,12 +62,14 @@ struct CacheOutput {
   std::string name_;
   inference::DataType dtype_;
   std::vector<int64_t> shape_;
-  std::vector<std::byte> buffer_;
+  void* buffer_;
+  uint64_t byte_size_;
 };
 
 // A Buffer is an arbitrary data blob, whose type need not be known
 // by the cache for storage and retrieval.
-using Buffer = std::vector<std::byte>;
+// using Buffer = std::vector<std::byte>;
+using Buffer = std::pair<void*, size_t>;
 
 // A CacheEntryItem may have several Buffers associated with it
 //   ex: one response may have multiple output buffers
@@ -78,12 +80,13 @@ class CacheEntryItem {
   std::vector<Buffer> Buffers();
   size_t BufferCount();
   void AddBuffer(boost::span<const std::byte> buffer);
+  void AddBuffer(const void* base, size_t byte_size);
+  void AddBuffer(std::pair<void*, size_t> buffer_pair);
 
  private:
   std::optional<Buffer> ToBytes(const InferenceResponse::Output& output);
   std::optional<CacheOutput> FromBytes(
       boost::span<const std::byte> packed_bytes);
-
 
   // NOTE: performance gain may be possible by removing this mutex and
   //   guaranteeing that no two threads will access/modify an item
