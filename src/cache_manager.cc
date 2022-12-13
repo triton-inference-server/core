@@ -35,6 +35,7 @@
 namespace triton { namespace core {
 
 
+// TODO: per-cache name
 std::string
 TritonCacheLibraryName()
 {
@@ -149,6 +150,7 @@ TritonCache::InitializeCacheImpl()
   // Initialize cache implementation
   LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheNew from: '" << libpath_ << "'";
   RETURN_IF_TRITONSERVER_ERROR(init_fn_(&cache_impl_, cache_config_.c_str()));
+
   if (!cache_impl_) {
     return Status(
         Status::Code::INTERNAL, "Failed to initialize cache implementation");
@@ -227,12 +229,12 @@ Status
 TritonCache::Insert(
     std::vector<std::shared_ptr<CacheEntryItem>> items, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting into cache";
+  LOG_VERBOSE(2) << "Inserting items at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
 
-  // TODO: If key exists, exit? Check with cache first.
+  // TODO Optimization: Check if key exists first before forming Cache Entry
 
   const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
@@ -249,13 +251,16 @@ Status
 TritonCache::Insert(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting list of responses into cache";
+  LOG_VERBOSE(2) << "Inserting list of responses at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
 
   auto entry = CacheEntry();
   for (const auto& response : responses) {
+    if (!response) {
+      return Status(Status::Code::INVALID_ARG, "response is nullptr");
+    }
     auto item = std::make_shared<CacheEntryItem>();
     RETURN_IF_ERROR(item->FromResponse(response));
     entry.AddItem(item);
@@ -266,9 +271,9 @@ TritonCache::Insert(
 Status
 TritonCache::Insert(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting single response into cache";
-  if (insert_fn_ == nullptr) {
-    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+  LOG_VERBOSE(2) << "Inserting single response at cache key: " << key;
+  if (!response) {
+    return Status(Status::Code::INVALID_ARG, "response is nullptr");
   }
 
   return Insert({&response, 1}, key);
@@ -278,7 +283,7 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
 std::optional<std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
-  LOG_VERBOSE(2) << "Looking up bytes in cache";
+  LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
   if (lookup_fn_ == nullptr) {
     LOG_ERROR << "cache lookup function is nullptr";
     return std::nullopt;
@@ -288,16 +293,15 @@ TritonCache::Lookup(const std::string& key)
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
       lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
-  LOG_VERBOSE(2) << "[LOOKUP] CacheEntry->ItemCount(): " << entry->ItemCount();
   return entry->Items();
 }
 
+// NOTE: Multiple responses won't be expected until supporting decoupled
+// or sequence models.
 Status
 TritonCache::Lookup(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Looking up multiple responses in cache";
-
   if (lookup_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache lookup function is nullptr");
   }

@@ -29,32 +29,6 @@
 
 namespace triton { namespace core {
 
-// For debugging
-void
-printBytes(boost::span<const std::byte> buffer)
-{
-  // Capture blank std::cout state
-  std::ios oldState(nullptr);
-  oldState.copyfmt(std::cout);
-
-  std::cout << "[DEBUG] [cache_entry.cc] [LOOKUP] Buffer bytes: ";
-  for (const auto& byte : buffer) {
-    std::cout << std::hex << "0x" << std::to_integer<int>(byte) << " ";
-  }
-  std::cout << std::endl;
-
-  // Reset std::cout state
-  std::cout.copyfmt(oldState);
-}
-
-/* Helpers */
-
-void
-AppendBytes(Buffer& dst, boost::span<const std::byte> src)
-{
-  dst.insert(dst.end(), src.begin(), src.end());
-}
-
 /* CacheEntry */
 
 size_t
@@ -78,9 +52,9 @@ CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
 {
   // Read-write, cannot be shared
   std::unique_lock lk(item_mu_);
-  // CacheEntry will take ownership of item pointer
-  // Items will be cleaned up when CacheEntry is cleaned up
-  items_.push_back(std::move(item));
+  // TODO: Look at this flow, ownership, etc. - Currently, cache needs to not
+  // delete/invalidate the item.
+  items_.push_back(item);
 }
 
 /* CacheEntryItem */
@@ -102,20 +76,36 @@ CacheEntryItem::Buffers()
 }
 
 void
-CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
+CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
 {
   // Read-write, cannot be shared
   std::unique_lock lk(buffer_mu_);
-  // Make a copy of buffer for Triton to own
-  buffers_.emplace_back(byte_span.begin(), byte_span.end());
+  // COPY: Make a copy of buffer for Triton to own
+  void* new_base = malloc(byte_size);
+  memcpy(new_base, base, byte_size);
+  buffers_.emplace_back(std::make_pair(new_base, byte_size));
 }
+
+
+void
+CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair)
+{
+  AddBuffer(buffer_pair.first, buffer_pair.second);
+}
+
+void
+CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
+{
+  const void* base = static_cast<const void*>(byte_span.data());
+  AddBuffer(base, byte_span.size());
+}
+
 
 /* CacheResponseOutput */
 
 Status
 CacheEntryItem::FromResponse(const InferenceResponse* response)
 {
-  // TODO: pass const ref?
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
@@ -141,8 +131,9 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
   }
 
   const auto buffers = Buffers();
-  for (const auto& buffer : buffers) {
-    auto opt_cache_output = FromBytes(buffer);
+  for (const auto& [base, byte_size] : buffers) {
+    auto opt_cache_output =
+        FromBytes({static_cast<std::byte*>(base), byte_size});
     if (!opt_cache_output.has_value()) {
       return Status(
           Status::Code::INTERNAL, "failed to convert bytes to response output");
@@ -166,7 +157,7 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
     // Allocate buffer for inference response
     void* output_buffer;
     RETURN_IF_ERROR(response_output->AllocateDataBuffer(
-        &output_buffer, cache_output.buffer_.size(), &memory_type,
+        &output_buffer, cache_output.byte_size_, &memory_type,
         &memory_type_id));
 
     if (memory_type != TRITONSERVER_MEMORY_CPU &&
@@ -181,10 +172,8 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
           Status::Code::INTERNAL,
           "failed to allocate buffer for output '" + cache_output.name_ + "'");
     }
-    // Copy cached output buffer to allocated response output buffer
-    std::memcpy(
-        output_buffer, cache_output.buffer_.data(),
-        cache_output.buffer_.size());
+    // COPY: cached output buffer to allocated response output buffer
+    memcpy(output_buffer, cache_output.buffer_, cache_output.byte_size_);
   }
 
   return Status::Success;
@@ -215,61 +204,60 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
     return std::nullopt;
   }
 
-  // TODO: Magic number at start to indicate this is actually a response
-  //       packed into bytes and not some other data?
-  Buffer packed_bytes;
+  size_t total_byte_size = 0;
 
   // Name
   std::string name = output.Name();
   uint32_t name_byte_size = name.size();
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(&name_byte_size), sizeof(uint32_t)});
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(name.data()), name_byte_size});
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += name_byte_size;
 
   // Dtype
   std::string dtype = triton::common::DataTypeToProtocolString(output.DType());
   uint32_t dtype_byte_size = dtype.size();
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(&dtype_byte_size), sizeof(uint32_t)});
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(dtype.data()), dtype_byte_size});
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += dtype_byte_size;
 
   // Shape
   std::vector<int64_t> shape = output.Shape();
   uint32_t shape_byte_size = shape.size() * sizeof(int64_t);
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(&shape_byte_size), sizeof(uint32_t)});
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(shape.data()), shape_byte_size});
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += shape_byte_size;
+
+  // Output Buffer: Convert size_t to uint64_t for a fixed-size guarantee
+  uint64_t u64_output_byte_size = static_cast<uint64_t>(output_byte_size);
+  total_byte_size += sizeof(uint64_t);
+  total_byte_size += u64_output_byte_size;
+
+  // Allocate full buffer and pack everything into it
+  std::byte* packed_bytes = static_cast<std::byte*>(malloc(total_byte_size));
+  uint64_t position = 0;
+
+  // Name
+  memcpy(packed_bytes + position, &name_byte_size, sizeof(uint32_t));
+  position += sizeof(uint32_t);
+  memcpy(packed_bytes + position, name.c_str(), name_byte_size);
+  position += name_byte_size;
+
+  // Dtype
+  memcpy(packed_bytes + position, &dtype_byte_size, sizeof(uint32_t));
+  position += sizeof(uint32_t);
+  memcpy(packed_bytes + position, dtype.c_str(), dtype_byte_size);
+  position += dtype_byte_size;
+
+  // Shape
+  memcpy(packed_bytes + position, &shape_byte_size, sizeof(uint32_t));
+  position += sizeof(uint32_t);
+  memcpy(packed_bytes + position, shape.data(), shape_byte_size);
+  position += shape_byte_size;
 
   // Output Buffer
-  // Convert size_t to uint64_t for a fixed-size guarantee
-  uint64_t u64_output_byte_size = static_cast<uint64_t>(output_byte_size);
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<std::byte*>(&u64_output_byte_size), sizeof(uint64_t)});
-  AppendBytes(
-      packed_bytes,
-      {reinterpret_cast<const std::byte*>(output_base), u64_output_byte_size});
+  memcpy(packed_bytes + position, &u64_output_byte_size, sizeof(uint64_t));
+  position += sizeof(uint64_t);
+  memcpy(packed_bytes + position, output_base, u64_output_byte_size);
+  position += u64_output_byte_size;
 
-  // TODO: Remove
-  LOG_VERBOSE(2) << "[ENCODE] name_byte_size=" << name_byte_size;
-  LOG_VERBOSE(2) << "[ENCODE] name=" << name;
-  LOG_VERBOSE(2) << "[ENCODE] dtype_byte_size=" << dtype_byte_size;
-  LOG_VERBOSE(2) << "[ENCODE] dtype=" << dtype;
-  LOG_VERBOSE(2) << "[ENCODE] shape_byte_size=" << shape_byte_size;
-  LOG_VERBOSE(2) << "[ENCODE] u64_output_byte_size=" << u64_output_byte_size;
-  LOG_VERBOSE(2) << "[ENCODE] output=";
-  printBytes(
-      {reinterpret_cast<const std::byte*>(output_base), u64_output_byte_size});
-  return packed_bytes;
+  return std::make_pair(packed_bytes, total_byte_size);
 }
 
 std::optional<CacheOutput>
@@ -308,9 +296,8 @@ CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
   memcpy(&output_byte_size, packed_bytes.begin() + position, sizeof(uint64_t));
   position += sizeof(uint64_t);
 
-  Buffer output_buffer(output_byte_size);
-  memcpy(
-      output_buffer.data(), packed_bytes.begin() + position, output_byte_size);
+  std::byte* output_buffer = static_cast<std::byte*>(malloc(output_byte_size));
+  memcpy(output_buffer, packed_bytes.begin() + position, output_byte_size);
   position += output_byte_size;
 
   if (packed_bytes.begin() + position != packed_bytes.end()) {
@@ -319,25 +306,12 @@ CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
     return std::nullopt;
   }
 
-  // TODO: Remove
-  LOG_VERBOSE(2) << "[DECODE] name_byte_size=" << name_byte_size;
-  LOG_VERBOSE(2) << "[DECODE] name=" << name;
-  LOG_VERBOSE(2) << "[DECODE] dtype_byte_size=" << dtype_byte_size;
-  LOG_VERBOSE(2) << "[DECODE] dtype=" << dtype;
-  LOG_VERBOSE(2) << "[DECODE] shape_byte_size=" << shape_byte_size;
-  LOG_VERBOSE(2) << "[DECODE] shape=";
-  for (const auto& dim : shape) {
-    LOG_VERBOSE(2) << dim << " ";
-  }
-  LOG_VERBOSE(2) << "[DECODE] output_byte_size=" << output_byte_size;
-  LOG_VERBOSE(2) << "[DECODE] output=";
-  printBytes(output_buffer);
-
   auto output = CacheOutput();
   output.name_ = name;
   output.dtype_ = triton::common::ProtocolStringToDataType(dtype);
   output.shape_ = shape;
   output.buffer_ = output_buffer;
+  output.byte_size_ = output_byte_size;
   return output;
 }
 

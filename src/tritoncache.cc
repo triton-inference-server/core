@@ -111,8 +111,9 @@ TRITONCACHE_CacheEntryAddItem(
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
 
   // Triton CacheEntry will explicitly take ownership of item
-  std::unique_ptr<CacheEntryItem> uitem(litem);
-  lentry->AddItem(std::move(uitem));
+  // TODO: Copy, cleanup?
+  std::shared_ptr<CacheEntryItem> sitem(litem);
+  lentry->AddItem(sitem);
   return nullptr;  // success
 }
 
@@ -203,7 +204,7 @@ TRITONCACHE_CacheEntryItemAddBuffer(
   }
 
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
-  litem->AddBuffer({reinterpret_cast<const std::byte*>(base), byte_size});
+  litem->AddBuffer(base, byte_size);
   return nullptr;  // success
 }
 
@@ -225,12 +226,10 @@ TRITONCACHE_CacheEntryItemGetBuffer(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  const auto buffer = lbuffers[index];
-  // TODO: Probably shouldn't copy here.
-  auto byte_base = reinterpret_cast<std::byte*>(malloc(buffer.size()));
-  std::copy(buffer.begin(), buffer.end(), byte_base);
-  *base = byte_base;
-  *byte_size = buffer.size();
+  const auto [buffer, buffer_size] = lbuffers[index];
+  // No copy
+  *base = buffer;
+  *byte_size = buffer_size;
   return nullptr;  // success
 }
 
