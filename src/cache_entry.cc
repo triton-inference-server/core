@@ -29,24 +29,6 @@
 
 namespace triton { namespace core {
 
-// For debugging
-void
-printBytes(boost::span<const std::byte> buffer)
-{
-  // Capture blank std::cout state
-  std::ios oldState(nullptr);
-  oldState.copyfmt(std::cout);
-
-  std::cout << "[DEBUG] [cache_entry.cc] [LOOKUP] Buffer bytes: ";
-  for (const auto& byte : buffer) {
-    std::cout << std::hex << "0x" << std::to_integer<int>(byte) << " ";
-  }
-  std::cout << std::endl;
-
-  // Reset std::cout state
-  std::cout.copyfmt(oldState);
-}
-
 /* CacheEntry */
 
 size_t
@@ -158,7 +140,6 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
     }
     const auto& cache_output = opt_cache_output.value();
 
-    printf("Adding output to response addr: %p\n", response);
     InferenceResponse::Output* response_output = nullptr;
     RETURN_IF_ERROR(response->AddOutput(
         cache_output.name_, cache_output.dtype_, cache_output.shape_,

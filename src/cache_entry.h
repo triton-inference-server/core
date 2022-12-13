@@ -55,9 +55,6 @@
 
 namespace triton { namespace core {
 
-// For debugging
-void printBytes(boost::span<const std::byte> buffer);
-
 struct CacheOutput {
   std::string name_;
   inference::DataType dtype_;
