@@ -59,7 +59,6 @@ TRITONBACKEND_ModelBatchIncludeRequest(
     TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
     bool* should_include)
 {
-  TritonModel* tm = reinterpret_cast<TritonModel*>(model);
   // Default should_include to false in case function returns error.
   *should_include = false;
 
