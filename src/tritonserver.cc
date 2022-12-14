@@ -1175,10 +1175,10 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED,
-      "This API has been deprecated. See TRITONCACHE_CacheNew to specify cache "
-      "specific fields through 'config'.");
+  // For backwards compatibility, forward this API call to new CacheConfig API.
+  std::string config_json = R"({"size": )" + std::to_string(size) + "}";
+  return TRITONSERVER_ServerOptionsSetCacheConfig(
+      options, "", config_json.c_str());
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
