@@ -55,6 +55,10 @@
 
 namespace triton { namespace core {
 
+// FIXME: remove when no longer needed DLIS-4415
+std::map<std::string, std::mutex> TritonModel::non_concurrent_backends_;
+std::mutex TritonModel::non_concurrent_backends_mu_;
+
 Status
 TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
@@ -173,6 +177,16 @@ TritonModel::Create(
   // path to point to the backend directory in case the backend
   // library attempts to load additional shared libaries.
   if (backend->ModelInitFn() != nullptr) {
+    // FIXME: remove when no longer needed DLIS-4415
+    // Serialize models from backend(s) that do not support concurrent loading
+    std::unique_ptr<std::lock_guard<std::mutex>> lock;
+    const auto& lock_itr = non_concurrent_backends_.find(backend_libname);
+    if (lock_itr != non_concurrent_backends_.end()) {
+      lock.reset(new std::lock_guard<std::mutex>(lock_itr->second));
+      LOG_VERBOSE(1) << "Serializing " << backend_libname << " load for "
+                     << model_config.name();
+    }
+
     {
       // FIXME: fix lock fight DLIS-4300
       std::unique_ptr<SharedLibrary> slib;
@@ -472,6 +486,16 @@ TritonModel::TritonModel(
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {
+  // FIXME: remove when no longer needed DLIS-4415
+  // Initialize non_concurrent_backends_ to known backend(s) that may not have
+  // its models loaded concurrently.
+  std::lock_guard<std::mutex> lock(non_concurrent_backends_mu_);
+  if (non_concurrent_backends_.empty()) {
+    // Construct mutex in place for each backend
+    non_concurrent_backends_["libtriton_python.so"];
+    non_concurrent_backends_["libtriton_tensorflow1.so"];
+    non_concurrent_backends_["libtriton_tensorflow2.so"];
+  }
 }
 
 TritonModel::~TritonModel()

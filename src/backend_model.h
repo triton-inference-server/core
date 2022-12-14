@@ -77,6 +77,13 @@ class TritonModel : public Model {
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonModel);
 
+  // FIXME: remove when no longer needed DLIS-4415
+  // Map of backend library name(s) that the models of the backend may not be
+  // loaded concurrently
+  // The lock on the map is to block concurrent loading of the backend
+  static std::map<std::string, std::mutex> non_concurrent_backends_;
+  static std::mutex non_concurrent_backends_mu_;  // protect init
+
   TritonModel(
       InferenceServer* server,
       const std::shared_ptr<LocalizedPath>& localized_model_dir,
