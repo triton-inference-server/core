@@ -27,30 +27,30 @@
 #pragma once
 #include <boost/core/span.hpp>
 #include <memory>
-#include <shared_mutex>
+#include <mutex>
 #include <vector>
 #include "infer_response.h"
 #include "triton/common/logging.h"
 #include "tritonserver_apis.h"
 
 // If TRITONSERVER error is non-OK, return std::nullopt for failed optional.
-#define RETURN_NULLOPT_IF_TRITONSERVER_ERROR(E)      \
-  do {                                               \
-    TRITONSERVER_Error* err__ = (E);                 \
-    if (err__ != nullptr) {                          \
-      LOG_ERROR << TRITONSERVER_ErrorMessage(err__); \
-      TRITONSERVER_ErrorDelete(err__);               \
-      return std::nullopt;                           \
-    }                                                \
+#define RETURN_NULLOPT_IF_TRITONSERVER_ERROR(E)           \
+  do {                                                    \
+    TRITONSERVER_Error* err__ = (E);                      \
+    if (err__ != nullptr) {                               \
+      LOG_VERBOSE(1) << TRITONSERVER_ErrorMessage(err__); \
+      TRITONSERVER_ErrorDelete(err__);                    \
+      return std::nullopt;                                \
+    }                                                     \
   } while (false)
 
-#define RETURN_NULLOPT_IF_STATUS_ERROR(S) \
-  do {                                    \
-    const Status& status__ = (S);         \
-    if (!status__.IsOk()) {               \
-      LOG_ERROR << status__.Message();    \
-      return std::nullopt;                \
-    }                                     \
+#define RETURN_NULLOPT_IF_STATUS_ERROR(S)   \
+  do {                                      \
+    const Status& status__ = (S);           \
+    if (!status__.IsOk()) {                 \
+      LOG_VERBOSE(1) << status__.Message(); \
+      return std::nullopt;                  \
+    }                                       \
   } while (false)
 
 namespace triton { namespace core {
@@ -101,7 +101,7 @@ class CacheEntryItem {
   //   TRITONCACHE_CacheEntryItemBuffer on the same item in parallel.
   //   This will remain for simplicity until further profiling is done.
   // Shared mutex to support read-only and read-write locks
-  std::shared_mutex buffer_mu_;
+  std::mutex buffer_mu_;
   std::vector<Buffer> buffers_;
 };
 
@@ -120,8 +120,7 @@ class CacheEntry {
   //   implementation should not call TRITONCACHE_CacheEntryAddItem or
   //   TRITONCACHE_CacheEntryItem on the same entry in parallel.
   //   This will remain for simplicity until further profiling is done.
-  // Shared mutex to support read-only and read-write locks
-  std::shared_mutex item_mu_;
+  std::mutex item_mu_;
   std::vector<std::shared_ptr<CacheEntryItem>> items_;
 };
 

@@ -34,23 +34,20 @@ namespace triton { namespace core {
 size_t
 CacheEntry::ItemCount()
 {
-  // Read-only, can be shared
-  std::shared_lock lk(item_mu_);
+  std::unique_lock lk(item_mu_);
   return items_.size();
 }
 
 std::vector<std::shared_ptr<CacheEntryItem>>
 CacheEntry::Items()
 {
-  // Read-only, can be shared
-  std::shared_lock lk(item_mu_);
+  std::unique_lock lk(item_mu_);
   return items_;
 }
 
 void
 CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
 {
-  // Read-write, cannot be shared
   std::unique_lock lk(item_mu_);
   // TODO: Look at this flow, ownership, etc. - Currently, cache needs to not
   // delete/invalidate the item.
@@ -62,16 +59,14 @@ CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
 size_t
 CacheEntryItem::BufferCount()
 {
-  // Read-only, can be shared
-  std::shared_lock lk(buffer_mu_);
+  std::unique_lock lk(buffer_mu_);
   return buffers_.size();
 }
 
 std::vector<Buffer>
 CacheEntryItem::Buffers()
 {
-  // Read-only, can be shared
-  std::shared_lock lk(buffer_mu_);
+  std::unique_lock lk(buffer_mu_);
   return buffers_;
 }
 
@@ -79,7 +74,6 @@ CacheEntryItem::Buffers()
 void
 CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
 {
-  // Read-write, cannot be shared
   std::unique_lock lk(buffer_mu_);
   // COPY: Make a copy of buffer for Triton to own
   void* new_base = malloc(byte_size);
