@@ -668,9 +668,9 @@ DynamicBatchScheduler::CacheLookUp(
   // Hash request into cache key
   std::string key = "";
   if (!request->CacheKeyIsSet()) {
-    status = cache->Hash(*request, &key);  // TODO: Check error
+    status = cache->Hash(*request, &key);
     if (!status.IsOk()) {
-      LOG_ERROR << "Failed to hash request";
+      LOG_ERROR << "Failed to hash request: " << status.Message();
       return;
     }
     request->SetCacheKey(key);
