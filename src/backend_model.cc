@@ -180,10 +180,10 @@ TritonModel::Create(
     // FIXME: remove when no longer needed DLIS-4415
     // Serialize models from backend(s) that do not support concurrent loading
     std::unique_ptr<std::lock_guard<std::mutex>> lock;
-    const auto& lock_itr = non_concurrent_backends_.find(backend_libname);
+    const auto& lock_itr = non_concurrent_backends_.find(backend->Name());
     if (lock_itr != non_concurrent_backends_.end()) {
       lock.reset(new std::lock_guard<std::mutex>(lock_itr->second));
-      LOG_VERBOSE(1) << "Serializing " << backend_libname << " load for "
+      LOG_VERBOSE(1) << "Serializing " << backend->Name() << " load for "
                      << model_config.name();
     }
 
@@ -488,13 +488,14 @@ TritonModel::TritonModel(
 {
   // FIXME: remove when no longer needed DLIS-4415
   // Initialize non_concurrent_backends_ to known backend(s) that may not have
-  // its models loaded concurrently.
-  std::lock_guard<std::mutex> lock(non_concurrent_backends_mu_);
-  if (non_concurrent_backends_.empty()) {
-    // Construct mutex in place for each backend
-    non_concurrent_backends_["libtriton_python.so"];
-    non_concurrent_backends_["libtriton_tensorflow1.so"];
-    non_concurrent_backends_["libtriton_tensorflow2.so"];
+  // its models loaded concurrently
+  {
+    std::lock_guard<std::mutex> lock(non_concurrent_backends_mu_);
+    if (non_concurrent_backends_.empty()) {
+      // Construct mutex in place for each backend
+      non_concurrent_backends_["python"];
+      non_concurrent_backends_["tensorflow"];
+    }
   }
 }
 
@@ -514,6 +515,16 @@ TritonModel::~TritonModel()
   // Model finalization is optional... The TRITONBACKEND_Model
   // object is this TritonModel object.
   if (backend_->ModelFiniFn() != nullptr) {
+    // FIXME: remove when no longer needed DLIS-4415
+    // Serialize models from backend(s) that do not support concurrent unload
+    std::unique_ptr<std::lock_guard<std::mutex>> lock;
+    const auto& lock_itr = non_concurrent_backends_.find(backend_->Name());
+    if (lock_itr != non_concurrent_backends_.end()) {
+      lock.reset(new std::lock_guard<std::mutex>(lock_itr->second));
+      LOG_VERBOSE(1) << "Serializing " << backend_->Name() << " unload for "
+                     << Name();
+    }
+
     LOG_TRITONSERVER_ERROR(
         backend_->ModelFiniFn()(reinterpret_cast<TRITONBACKEND_Model*>(this)),
         "failed finalizing model");
