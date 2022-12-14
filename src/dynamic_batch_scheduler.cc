@@ -466,20 +466,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   if (!queue_.IsCursorValid()) {
     queue_.ResetCursor();
     pending_batch_size_ = 0;
-    // If there is a custom batching function, reset it to batching start.
-    if (model_->ModelBatchInitFn()) {
-      TRITONSERVER_Error* err = model_->ModelBatchFiniFn()(user_pointer_);
-      if (err) {
-        LOG_ERROR << "Custom batching finalization function failed for model "
-                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
-      err = model_->ModelBatchInitFn()(
-          reinterpret_cast<TRITONBACKEND_Model*>(model_), &user_pointer_);
-      if (err) {
-        LOG_ERROR << "Custom batching initialization function failed for model "
-                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
-    }
   }
   size_t best_preferred_batch_size = 0;
   queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
