@@ -70,7 +70,6 @@ CacheEntryItem::Buffers()
   return buffers_;
 }
 
-// TODO: DLIS-4401 - Cleanup, add memory type awareness
 void
 CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
 {

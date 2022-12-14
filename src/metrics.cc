@@ -273,8 +273,7 @@ Metrics::EnableMetrics()
 }
 
 void
-Metrics::EnableCacheMetrics(
-    std::shared_ptr<TritonCache> response_cache)
+Metrics::EnableCacheMetrics(std::shared_ptr<TritonCache> response_cache)
 {
   auto singleton = GetSingleton();
   // Ensure thread-safe enabling of Cache Metrics
@@ -345,8 +344,7 @@ Metrics::StartPollingThreadSingleton(
 }
 
 bool
-Metrics::StartPollingThread(
-    std::shared_ptr<TritonCache> response_cache)
+Metrics::StartPollingThread(std::shared_ptr<TritonCache> response_cache)
 {
   // Nothing to poll if no polling metrics enabled, don't spawn a thread
   if (!cache_metrics_enabled_ && !gpu_metrics_enabled_ &&
@@ -705,8 +703,7 @@ Metrics::PollDcgmMetrics()
 }
 
 bool
-Metrics::InitializeCacheMetrics(
-    std::shared_ptr<TritonCache> response_cache)
+Metrics::InitializeCacheMetrics(std::shared_ptr<TritonCache> response_cache)
 {
   if (response_cache == nullptr) {
     LOG_WARNING

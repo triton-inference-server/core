@@ -34,8 +34,6 @@
 
 namespace triton { namespace core {
 
-
-// TODO: per-cache name
 std::string
 TritonCacheLibraryName()
 {
@@ -107,7 +105,8 @@ TritonCache::ClearHandles()
 Status
 TritonCache::LoadCacheLibrary()
 {
-  LOG_VERBOSE(1) << "Loading cache library: '" << name_ << "'";
+  LOG_VERBOSE(1) << "Loading cache library: '" << name_ << "' from: '"
+                 << libpath_ << "'";
   TritonCacheInitFn_t init_fn;
   TritonCacheFiniFn_t fini_fn;
   TritonCacheLookupFn_t lookup_fn;
@@ -148,7 +147,6 @@ TritonCache::InitializeCacheImpl()
     return Status(Status::Code::NOT_FOUND, "cache init function is nullptr");
   }
   // Initialize cache implementation
-  LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheNew from: '" << libpath_ << "'";
   RETURN_IF_TRITONSERVER_ERROR(init_fn_(&cache_impl_, cache_config_.c_str()));
 
   if (!cache_impl_) {
@@ -227,14 +225,15 @@ TritonCache::Hash(const InferenceRequest& request, std::string* key)
 
 Status
 TritonCache::Insert(
-    std::vector<std::shared_ptr<CacheEntryItem>> items, const std::string& key)
+    const std::vector<std::shared_ptr<CacheEntryItem>>& items,
+    const std::string& key)
 {
   LOG_VERBOSE(2) << "Inserting items at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
 
-  // TODO Optimization: Check if key exists first before forming Cache Entry
+  // TODO: Optimization - Check if key exists first before forming Cache Entry
 
   const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
@@ -256,16 +255,16 @@ TritonCache::Insert(
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
 
-  auto entry = CacheEntry();
+  std::vector<std::shared_ptr<CacheEntryItem>> items;
   for (const auto& response : responses) {
     if (!response) {
       return Status(Status::Code::INVALID_ARG, "response is nullptr");
     }
     auto item = std::make_shared<CacheEntryItem>();
     RETURN_IF_ERROR(item->FromResponse(response));
-    entry.AddItem(item);
+    items.push_back(item);
   }
-  return Insert(entry.Items(), key);
+  return Insert(items, key);
 }
 
 Status
@@ -302,9 +301,7 @@ Status
 TritonCache::Lookup(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  if (lookup_fn_ == nullptr) {
-    return Status(Status::Code::NOT_FOUND, "cache lookup function is nullptr");
-  }
+  LOG_VERBOSE(2) << "Looking up responses at cache key: " << key;
 
   const auto opt_items = Lookup(key);
   if (!opt_items.has_value()) {
@@ -330,7 +327,9 @@ TritonCache::Lookup(
 Status
 TritonCache::Lookup(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Looking up response in cache";
+  if (!response) {
+    return Status(Status::Code::INVALID_ARG, "response is nullptr");
+  }
   return Lookup({&response, 1}, key);
 }
 
@@ -338,7 +337,6 @@ TritonCache::Lookup(InferenceResponse* response, const std::string& key)
 // TritonCacheManager
 //
 
-// TODO: Weak Ptr (Backends) vs Singleton (Repo Agent) ?
 static std::weak_ptr<TritonCacheManager> cache_manager_;
 static std::mutex mu_;
 

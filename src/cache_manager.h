@@ -58,7 +58,7 @@ class TritonCache {
       boost::span<InferenceResponse*> responses, const std::string& key);
   Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
-      std::vector<std::shared_ptr<CacheEntryItem>> items,
+      const std::vector<std::shared_ptr<CacheEntryItem>>& items,
       const std::string& key);
   Status Lookup(
       boost::span<InferenceResponse*> responses, const std::string& key);

@@ -110,8 +110,9 @@ TRITONCACHE_CacheEntryAddItem(
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
 
-  // Triton CacheEntry will explicitly take ownership of item
-  // TODO: Copy, cleanup?
+  // Triton CacheEntry will take ownership of item, caller should not
+  // invalidate it.
+  // TODO: Copy, signal/callback, cleanup?
   std::shared_ptr<CacheEntryItem> sitem(litem);
   lentry->AddItem(sitem);
   return nullptr;  // success

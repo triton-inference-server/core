@@ -80,10 +80,9 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   // Both the server and model config should specify
   // caching enabled for model to utilize response cache.
   response_cache_enabled_ =
-      (response_cache_enable &&
-       model_->Server()->ResponseCacheEnabled() && 
-       model_->Server()->CacheManager() != nullptr &&
-       model_->Server()->CacheManager()->Cache() != nullptr);
+      (response_cache_enable && model_->Server()->ResponseCacheEnabled() &&
+       model_->Server()->CacheManager() &&
+       model_->Server()->CacheManager()->Cache());
 #ifdef TRITON_ENABLE_METRICS
   // Initialize metric reporter for cache statistics if cache enabled
   if (response_cache_enabled_) {
@@ -681,7 +680,6 @@ DynamicBatchScheduler::CacheLookUp(
 
   // Lookup and capture timestamps
   {
-    LOG_VERBOSE(1) << "Looking up in cache for key: " << key;
     request->CaptureCacheLookupStartNs();
     status = cache->Lookup(local_response.get(), key);
     request->CaptureCacheLookupEndNs();
