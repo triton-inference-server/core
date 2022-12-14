@@ -24,8 +24,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "triton/core/tritonbackend.h"
 #include <iostream>
+#include "triton/core/tritonbackend.h"
 
 #define TRITONJSON_STATUSTYPE TRITONSERVER_Error*
 #define TRITONJSON_STATUSRETURN(M) \
@@ -88,8 +88,10 @@ TRITONBACKEND_ModelBatchIncludeRequest(
     pending_volume += static_cast<unsigned int>(data_byte_size);
   }
 
+  // Print remaining volume for debugging purposes.
   std::cout << "Pending volume : " << pending_volume << std::endl;
   std::cout << "Remaining volume : " << *remaining_volume << std::endl;
+
   // Check if there is enough remaining volume for this request.
   // If so, include this request. Otherwise, do not.
   if (pending_volume <= *remaining_volume) {
@@ -114,7 +116,6 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
   // in bytes for this batch.
 
   // Read the user-specified bytes from the model config.
-
   TRITONSERVER_Message* config_message;
   TRITONBACKEND_ModelConfig(model, 1 /* config_version */, &config_message);
 
@@ -141,10 +142,10 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
 
   std::vector<std::string> param_keys;
 
-  if (!params.Find("max_batch_volume_bytes", &volume_param)) {
+  if (!params.Find("MAX_BATCH_VOLUME_BYTES", &volume_param)) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_NOT_FOUND,
-        "Unable to find max_batch_volume_bytes parameter in model config");
+        "Unable to find MAX_BATCH_VOLUME_BYTES parameter in model config");
   }
   err = volume_param.MemberAsString("string_value", &max_volume_bytes_str);
   if (err)
@@ -162,7 +163,6 @@ TRITONBACKEND_ModelBatchInitialize(TRITONBACKEND_Model* model, void** userp)
   }
 
   *userp = new unsigned int(max_volume_bytes);
-  std::cout << "Max volume bytes: " << *(static_cast<unsigned int*>(*userp)) << std::endl;
 
   return nullptr;  // success
 }
