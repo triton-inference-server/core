@@ -56,22 +56,22 @@
 namespace triton { namespace core {
 
 struct CacheOutput {
-  ~CacheOutput()
-  {
-    if (buffer_) {
-      free(buffer_);
-    }
-  }
+  // Inference Response output name
   std::string name_;
+  // Inference Response output datatype
   inference::DataType dtype_;
+  // Inference Response output shape
   std::vector<int64_t> shape_;
+  // Inference Response output buffer
+  // NOTE: Cache Output will only temporarily store pointer, it will managed by
+  //       CacheEntryItem, and will be copied into InferenceResponse object
   void* buffer_;
+  // Inference Response output buffer size
   uint64_t byte_size_;
 };
 
-// A Buffer is an arbitrary data blob, whose type need not be known
+// A Buffer is an arbitrary data blob whose type need not be known
 // by the cache for storage and retrieval.
-// using Buffer = std::vector<std::byte>;
 using Buffer = std::pair<void*, size_t>;
 
 // A CacheEntryItem may have several Buffers associated with it

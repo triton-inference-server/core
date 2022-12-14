@@ -110,7 +110,7 @@ CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair, bool copy)
 void
 CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair)
 {
-  AddBuffer(buffer_pair.first, buffer_pair.second);
+  AddBuffer(buffer_pair.first, buffer_pair.second, true /* copy */);
 }
 
 void
@@ -123,7 +123,9 @@ CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
 CacheEntryItem::~CacheEntryItem()
 {
   for (auto& [buffer, byte_size] : buffers_) {
-    free(buffer);
+    if (buffer) {
+      free(buffer);
+    }
   }
 }
 
@@ -143,7 +145,7 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
       return Status(
           Status::Code::INTERNAL, "failed to convert output to bytes");
     }
-    bool copy = false;  // ToBytes will allocate new memory
+    bool copy = false;  // ToBytes allocated new memory, we pass it through
     AddBuffer(buffer.value(), copy);
   }
 
@@ -159,6 +161,9 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
 
   const auto buffers = Buffers();
   for (const auto& [base, byte_size] : buffers) {
+    if (!base) {
+      return Status(Status::Code::INTERNAL, "buffer was nullptr");
+    }
     auto opt_cache_output =
         FromBytes({static_cast<std::byte*>(base), byte_size});
     if (!opt_cache_output.has_value()) {
@@ -172,7 +177,7 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
         cache_output.name_, cache_output.dtype_, cache_output.shape_,
         &response_output));
 
-    if (response_output == nullptr) {
+    if (!response_output) {
       return Status(
           Status::Code::INTERNAL,
           "InferenceResponse::Output pointer as nullptr");
@@ -323,10 +328,15 @@ CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
   memcpy(&output_byte_size, packed_bytes.begin() + position, sizeof(uint64_t));
   position += sizeof(uint64_t);
 
-  std::byte* output_buffer = static_cast<std::byte*>(malloc(output_byte_size));
-  memcpy(output_buffer, packed_bytes.begin() + position, output_byte_size);
+  // NOTE: Reference buffer section of packed bytes directly, DO NOT copy here.
+  // We will copy this buffer into the response object in ToResponse, so the
+  // buffer must remain valid until then. They should remain valid until the
+  // CacheEntryItem is destructed.
+  const void* output_buffer =
+      static_cast<const void*>(packed_bytes.data() + position);
   position += output_byte_size;
 
+  // Verify packed bytes matched expected size before allocating output_buffer
   if (packed_bytes.begin() + position != packed_bytes.end()) {
     LOG_ERROR << "Unexpected number of bytes. Received " << packed_bytes.size()
               << ", expected: " << position;
@@ -337,8 +347,8 @@ CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
   output.name_ = name;
   output.dtype_ = triton::common::ProtocolStringToDataType(dtype);
   output.shape_ = shape;
-  output.buffer_ = output_buffer;
   output.byte_size_ = output_byte_size;
+  output.buffer_ = const_cast<void*>(output_buffer);
   return output;
 }
 
