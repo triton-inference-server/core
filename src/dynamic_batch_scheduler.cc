@@ -437,7 +437,8 @@ DynamicBatchScheduler::BatcherThread(const int nice)
         {
           std::lock_guard<std::mutex> exec_lock(
               *(curr_payload_->GetExecMutex()));
-          err = model_->ModelBatchFiniFn()(curr_payload_.get()->UserPointer());
+          err = model_->ModelBatchFiniFn()(
+              *curr_payload_.get()->UserPointerAddr());
         }
         if (err) {
           LOG_ERROR << "Custom batching finalization function failed for model "
@@ -483,7 +484,7 @@ DynamicBatchScheduler::GetDynamicBatch()
     // If custom batching enabled, reinitalize batching function.
     if (model_->ModelBatchInitFn()) {
       TRITONSERVER_Error* err =
-          model_->ModelBatchFiniFn()(curr_payload_.get()->UserPointer());
+          model_->ModelBatchFiniFn()(*curr_payload_.get()->UserPointerAddr());
       if (err) {
         LOG_ERROR << "Custom batching finalization function failed for model "
                   << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
@@ -562,7 +563,7 @@ DynamicBatchScheduler::GetDynamicBatch()
           reinterpret_cast<TRITONBACKEND_Model*>(model_),
           reinterpret_cast<TRITONBACKEND_Request*>(
               queue_.RequestAtCursor().get()),
-          curr_payload_.get()->UserPointer(), &should_include);
+          *curr_payload_.get()->UserPointerAddr(), &should_include);
       if (err) {
         LOG_ERROR << "Custom batching include function failed for model "
                   << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
