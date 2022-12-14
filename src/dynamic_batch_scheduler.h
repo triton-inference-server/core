@@ -177,9 +177,6 @@ class DynamicBatchScheduler : public Scheduler {
 
   // Reporter for metrics, or nullptr if no metrics should be reported
   std::shared_ptr<MetricModelReporter> reporter_;
-
-  // Pointer for use with user-supplied batching strategy.
-  void* user_pointer_ = nullptr;
 };
 
 }}  // namespace triton::core
