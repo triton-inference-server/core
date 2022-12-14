@@ -211,12 +211,13 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
   // Fetch output buffer details
   const void* output_base = nullptr;
   size_t output_byte_size = 0;
-  TRITONSERVER_MemoryType memory_type;
-  int64_t memory_type_id;
-  void* userp;
+  TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+  int64_t memory_type_id = 0;
+  void* userp = nullptr;
   RETURN_NULLOPT_IF_STATUS_ERROR(output.DataBuffer(
       &output_base, &output_byte_size, &memory_type, &memory_type_id, &userp));
 
+  // DLIS-2673: Add better memory_type support
   if (memory_type != TRITONSERVER_MEMORY_CPU &&
       memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
     LOG_ERROR
