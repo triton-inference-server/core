@@ -77,7 +77,6 @@ class Payload {
   {
     return &required_equal_inputs_;
   }
-  void* UserPointer() { return user_pointer_; }
   void** UserPointerAddr() { return &user_pointer_; }
 
   State GetState() { return state_; }
