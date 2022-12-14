@@ -77,6 +77,8 @@ class Payload {
   {
     return &required_equal_inputs_;
   }
+  void* UserPointer() { return user_pointer_; }
+  void** UserPointerAddr() { return &user_pointer_; }
 
   State GetState() { return state_; }
   void SetState(State state);
@@ -97,6 +99,9 @@ class Payload {
   RequiredEqualInputs required_equal_inputs_;
 
   bool saturated_;
+
+  // Pointer for use with user-supplied batching strategy.
+  void* user_pointer_ = nullptr;
 };
 
 }}  // namespace triton::core
