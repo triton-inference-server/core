@@ -653,6 +653,7 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
 {
   constexpr uint64_t cache_size = 4 * 1024 * 1024;  // 4 MB, arbitrary
   auto cache = helpers::CreateCache(cache_size);
+  ASSERT_NE(cache, nullptr);
 
   // Setup byte buffer larger than cache size
   std::vector<std::byte> large_data(cache_size + 1);
@@ -676,6 +677,7 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)
 {
   constexpr uint64_t cache_size = 4 * 1024 * 1024;  // 4 MB, arbitrary
   auto cache = helpers::CreateCache(cache_size);
+  ASSERT_NE(cache, nullptr);
 
   // Set output data to be larger than cache size
   // NOTE: This is not 1 byte larger than cache_size, the cache_size + 1 is to
@@ -700,6 +702,7 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
 {
   // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
   auto cache = helpers::CreateCache(1200);
+  ASSERT_NE(cache, nullptr);
   // Insert 2 responses, expecting both to fit in cache
   helpers::check_status(cache->Insert(response_400bytes.get(), "request0"));
   helpers::check_status(cache->Insert(response_400bytes.get(), "request1"));
@@ -724,6 +727,7 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
 TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
 {
   auto cache = helpers::CreateCache(1024);
+  ASSERT_NE(cache, nullptr);
   // Setup byte buffers
   std::vector<std::byte> buffer1{1, std::byte{0x01}};
   std::vector<std::byte> buffer2{2, std::byte{0x02}};
@@ -751,6 +755,7 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
 TEST_F(RequestResponseCacheTest, TestHashingRequests)
 {
   auto cache = helpers::CreateCache(1024);
+  ASSERT_NE(cache, nullptr);
   std::string hash0, hash1, hash2, hash3, hash4;
   helpers::check_status(cache->Hash(*request0, &hash0));
   helpers::check_status(cache->Hash(*request1, &hash1));
@@ -770,6 +775,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
 {
   // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
   auto cache = helpers::CreateCache(1200);
+  ASSERT_NE(cache, nullptr);
   constexpr size_t expected_cache_hits = 2;
 
   // Create threads
@@ -807,6 +813,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
 {
   // Set size large enough to hold all responses
   auto cache = helpers::CreateCache(1024);
+  ASSERT_NE(cache, nullptr);
   const size_t expected_cache_hits = thread_count;
   constexpr size_t expected_cache_misses = 0;
 
@@ -892,6 +899,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
 TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
 {
   auto cache = helpers::CreateCache(8 * 1024 * 1024);
+  ASSERT_NE(cache, nullptr);
 
   std::string key = "";
   helpers::check_status(cache->Hash(*request0, &key));
