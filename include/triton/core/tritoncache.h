@@ -171,15 +171,19 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
     TRITONCACHE_CacheEntryItem* item, size_t* count);
 
-// Adds buffer to item
+// Adds buffer of specified memory_type/id to item. Only CPU memory supported
+// currently.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemAddBuffer(
-    TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size);
+    TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id);
 
 // Gets buffer at index from item where 0 <= index < count and
 // 'count' is the value returned by TRITONCACHE_CacheEntryItemBufferCount
+// and returns the memory_type info of the buffer
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
-    size_t* byte_size);
+    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+    int64_t* memory_type_id);
 
 ///
 /// The following functions can be implemented by a cache. Functions

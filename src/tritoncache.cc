@@ -196,13 +196,21 @@ TRITONCACHE_CacheEntryItemBufferCount(
 // Adds buffer to item
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemAddBuffer(
-    TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size)
+    TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id)
 {
   if (item == nullptr) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "item was nullptr");
   }
 
+  // DLIS-2673: Add better memory_type support
+  if (memory_type != TRITONSERVER_MEMORY_CPU &&
+      memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "Only buffers in CPU memory are allowed in cache currently");
+  }
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
   litem->AddBuffer(base, byte_size);
   return nullptr;  // success
@@ -212,7 +220,8 @@ TRITONCACHE_CacheEntryItemAddBuffer(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
-    size_t* byte_size)
+    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+    int64_t* memory_type_id)
 {
   if (item == nullptr) {
     return TRITONSERVER_ErrorNew(
@@ -230,6 +239,9 @@ TRITONCACHE_CacheEntryItemGetBuffer(
   // No copy
   *base = buffer;
   *byte_size = buffer_size;
+  // DLIS-2673: Add better memory_type support
+  *memory_type = TRITONSERVER_MEMORY_CPU;
+  *memory_type_id = 0;
   return nullptr;  // success
 }
 
