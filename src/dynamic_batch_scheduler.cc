@@ -275,14 +275,12 @@ DynamicBatchScheduler::NewPayload()
   payload_saturated_ = false;
 
   // If there is a custom batching strategy, initialize it.
-  if (model_->ModelBatchInitFn() != nullptr) {
-    LOG_INFO << "Running init function: ";
+  if (model_->ModelBatchInitFn()) {
     TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
         reinterpret_cast<TRITONBACKEND_Model*>(model_), &user_pointer_);
     if (err) {
-      LOG_ERROR
-          << "Custom batching initialization function failed for model "
-          << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+      LOG_ERROR << "Custom batching initialization function failed for model "
+                << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
     }
   }
 }
@@ -333,7 +331,12 @@ DynamicBatchScheduler::BatcherThread(const int nice)
       {
         std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
         auto payload_state = curr_payload_->GetState();
-        if (payload_saturated_ || IsStaleState(payload_state)) {
+        // If the payload is saturated or executing, get a new payload.
+        // If custom batching is used and the payload is scheduled, get a new
+        // payload.
+        if (payload_saturated_ || IsStaleState(payload_state) ||
+            (model_->ModelBatchInitFn() &&
+             payload_state == Payload::State::SCHEDULED)) {
           NewPayload();
           next_preferred_batch_size_ = 0;
         }
@@ -373,7 +376,6 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
           // Extract batch only if there is pending batch
           auto pending_batch_queue_cnt = queue_.PendingBatchCount();
-          LOG_INFO << "Pending batch count: " << queue_.PendingBatchCount() << "\nWait ms: " << wait_microseconds;
           if ((wait_microseconds == 0) && (pending_batch_queue_cnt != 0)) {
             curr_payload_->ReserveRequests(pending_batch_queue_cnt);
             for (size_t idx = 0; idx < pending_batch_queue_cnt; ++idx) {
@@ -422,14 +424,11 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
       // If custom batching strategy used, use its user-defined
       // finalization function.
-      if (model_->ModelBatchInitFn() != nullptr) {
-        LOG_INFO << "Running fini function: ";
-        TRITONSERVER_Error* err =
-          model_->ModelBatchFiniFn()(user_pointer_);
+      if (model_->ModelBatchInitFn()) {
+        TRITONSERVER_Error* err = model_->ModelBatchFiniFn()(user_pointer_);
         if (err) {
-          LOG_ERROR
-              << "Custom batching finalization function failed for model "
-              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+          LOG_ERROR << "Custom batching finalization function failed for model "
+                    << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
         }
       }
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
@@ -467,6 +466,20 @@ DynamicBatchScheduler::GetDynamicBatch()
   if (!queue_.IsCursorValid()) {
     queue_.ResetCursor();
     pending_batch_size_ = 0;
+    // If there is a custom batching function, reset it to batching start.
+    if (model_->ModelBatchInitFn()) {
+      TRITONSERVER_Error* err = model_->ModelBatchFiniFn()(user_pointer_);
+      if (err) {
+        LOG_ERROR << "Custom batching finalization function failed for model "
+                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+      }
+      err = model_->ModelBatchInitFn()(
+          reinterpret_cast<TRITONBACKEND_Model*>(model_), &user_pointer_);
+      if (err) {
+        LOG_ERROR << "Custom batching initialization function failed for model "
+                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+      }
+    }
   }
   size_t best_preferred_batch_size = 0;
   queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
@@ -476,7 +489,7 @@ DynamicBatchScheduler::GetDynamicBatch()
   const bool check_input =
       !enforce_equal_shape_tensors_.empty() || has_optional_input_;
   auto payload_batch_size = curr_payload_->BatchSize();
-  
+
   while (!queue_.CursorEnd()) {
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
 
@@ -500,7 +513,7 @@ DynamicBatchScheduler::GetDynamicBatch()
       // so mark the cursor at this point. Not sending the pending batch so
       // that we can examine the queue delay of requests that fits in a batch.
       if (((payload_batch_size + pending_batch_size_ + batch_size) >
-            max_preferred_batch_size_) &&
+           max_preferred_batch_size_) &&
           (best_preferred_batch_size == 0)) {
         best_preferred_batch_size = pending_batch_size_;
         queue_.MarkCursor();
@@ -525,9 +538,8 @@ DynamicBatchScheduler::GetDynamicBatch()
 
     // If there is a custom batching strategy, use its batching function to
     // determine whether to include this request.
-    if (model_->ModelBatchInitFn() != nullptr) {
+    if (model_->ModelBatchInitFn()) {
       bool should_include = false;
-      LOG_INFO << "Running incl function: ";
       TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
           reinterpret_cast<TRITONBACKEND_Model*>(model_),
           reinterpret_cast<TRITONBACKEND_Request*>(
@@ -554,8 +566,7 @@ DynamicBatchScheduler::GetDynamicBatch()
       queue_.MarkCursor();
     }
   }
-  LOG_INFO << "Broke out of loop";
-  
+
   // Obtain the age of the oldest pending request to compare with the maximum
   // batch queuing delay
   uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -576,38 +587,30 @@ DynamicBatchScheduler::GetDynamicBatch()
     return 0;
   }
 
-  LOG_INFO << "Pending batch?";
 
   // No request in pending batch happens when all queued requests have expired
   // timeout and the policies are REJECT
   if (queue_.PendingBatchCount() == 0) {
-    LOG_INFO << "No.";
     return 0;
   }
 
-  LOG_INFO << "Yes.";
 
   // If the delay has been exceeded, or if the current batch can't grow
   // any larger then just immediately execute whatever is pending.
-  LOG_INFO << "Sending now?";
   if (send_now || ((payload_batch_size + pending_batch_size_) >=
                    max_preferred_batch_size_)) {
     payload_saturated_ = true;
-    LOG_INFO << "Yes.";
     return 0;
   }
-  LOG_INFO << "Was delay exceeded?";
 
   if (delay_is_exceeded || (pending_batch_delay_ns_ == 0)) {
-    LOG_INFO << "Yes.";
     return 0;
   }
 
-  LOG_INFO << "No.";
 
   // Set the next preferred batch size given the pending batch size
   auto next_preferred_batch_size_it = preferred_batch_sizes_.upper_bound(
-    pending_batch_size_ + payload_batch_size);
+      pending_batch_size_ + payload_batch_size);
   if (next_preferred_batch_size_it != preferred_batch_sizes_.end()) {
     next_preferred_batch_size_ = *next_preferred_batch_size_it;
   } else {
@@ -634,7 +637,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   // pending batch as soon as it is invalidated. But the cost is that in edge
   // case where the timeout will be expired one by one, the thread will be
   // waken frequently.
-  LOG_INFO << "Closest timeout section";
   if (queue_.ClosestTimeout() != 0) {
     if (now_ns <= queue_.ClosestTimeout()) {
       wait_ns = std::min(queue_.ClosestTimeout() - now_ns, wait_ns);
@@ -652,7 +654,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   // request comes in then this thread will wake and revisit the pending batch
   // (and at that time will then see the delay has been exceeded and will send
   // the batch).
-  LOG_INFO << "End";
   return wait_ns / 1000;
 }
 
