@@ -275,8 +275,6 @@ DynamicBatchScheduler::NewPayload()
   payload_saturated_ = false;
 
   // If there is a custom batching strategy, initialize it.
-  LOG_INFO << "Batching init function";
-
   if (model_->ModelBatchInitFn()) {
     TRITONSERVER_Error* err = nullptr;
     {
@@ -341,9 +339,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
         // If the payload is saturated or executing, get a new payload.
         // If custom batching is used and the payload is scheduled, get a new
         // payload.
-        if (payload_saturated_ || IsStaleState(payload_state) ||
-            (model_->ModelBatchInitFn() &&
-             payload_state == Payload::State::SCHEDULED)) {
+        if (payload_saturated_ || IsStaleState(payload_state)) {
           NewPayload();
           next_preferred_batch_size_ = 0;
         }
@@ -432,7 +428,6 @@ DynamicBatchScheduler::BatcherThread(const int nice)
       // If custom batching strategy used, use its user-defined
       // finalization function.
       if (model_->ModelBatchInitFn()) {
-        LOG_INFO << "Batching fini function";
         TRITONSERVER_Error* err = nullptr;
         {
           std::lock_guard<std::mutex> exec_lock(
@@ -477,11 +472,14 @@ DynamicBatchScheduler::GetDynamicBatch()
   // batch size would be exceeded or if the shape of the next request
   // does not match the shape of the pending batch.
   bool send_now = false;
+
+  // If the previous payload was not executed, reset the cursor to the start
+  // of the queue to re-iterate over it and find the ideal batch.
   if (!queue_.IsCursorValid()) {
-    LOG_INFO << "Cursor is no longer valid!";
     queue_.ResetCursor();
     pending_batch_size_ = 0;
-    // If custom batching enabled, reinitalize batching function.
+
+    // If custom batching enabled, re-initalize batching function.
     if (model_->ModelBatchInitFn()) {
       TRITONSERVER_Error* err =
           model_->ModelBatchFiniFn()(*curr_payload_.get()->UserPointerAddr());
@@ -558,7 +556,6 @@ DynamicBatchScheduler::GetDynamicBatch()
     // determine whether to include this request.
     if (model_->ModelBatchInitFn()) {
       bool should_include = false;
-      LOG_INFO << "Batching incl function";
       TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
           reinterpret_cast<TRITONBACKEND_Model*>(model_),
           reinterpret_cast<TRITONBACKEND_Request*>(
