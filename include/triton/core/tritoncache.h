@@ -104,12 +104,21 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
 /// CacheEntry Lifetime Management
 ///
 
+// TODO: Currently not using EntryNew/EntryDelete APIs at all. Instead
+//       we are creating an Entry in TritonCacheManager and passing an opaque
+//       pointer to it for cache to add Items/Buffers to over C APIs. See
+//       TritonCache::Lookup as an example. This ownership flow should be
+//       clarified/cleaned up.
+
 /// Create a new cache entry object. The caller takes ownership of the
 /// TRITONCACHE_CacheEntry object and must call
 /// TRITONCACHE_CacheEntryDelete to release the object.
 ///
 /// \param entry Returns the new cache entry object.
 /// \return a TRITONSERVER_Error indicating success or failure.
+
+// TODO: Not currently using this API. See TritonCache Lookup/Insert
+// for explanation. Should clean up / clarify the expected ownerships here.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
     TRITONCACHE_CacheEntry** entry);
 
@@ -117,6 +126,9 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
 ///
 /// \param entry The cache entry object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
+
+// TODO: Not currently using this API. See TritonCache Lookup/Insert
+// for explanation. Should clean up / clarify the expected ownerships here.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
     TRITONCACHE_CacheEntry* entry);
 
@@ -158,6 +170,9 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemNew(
 ///
 /// \param item The cache entry item object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
+
+// TODO: Not currently using this API. See TritonCache Lookup/Insert
+// for explanation. Should clean up / clarify the expected ownerships here.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
     TRITONCACHE_CacheEntryItem* item);
 
