@@ -84,25 +84,22 @@ class MetricModelReporter {
   {
     return *metric_inf_compute_output_duration_us_;
   }
+  // Per-model cache stats
   prometheus::Counter& MetricCacheHitCount() const
   {
     return *metric_cache_hit_count_;
   }
-  prometheus::Counter& MetricCacheHitLookupDuration() const
+  prometheus::Counter& MetricCacheHitDuration() const
   {
-    return *metric_cache_hit_lookup_duration_us_;
+    return *metric_cache_hit_duration_us_;
   }
   prometheus::Counter& MetricCacheMissCount() const
   {
     return *metric_cache_miss_count_;
   }
-  prometheus::Counter& MetricCacheMissLookupDuration() const
+  prometheus::Counter& MetricCacheMissDuration() const
   {
-    return *metric_cache_miss_lookup_duration_us_;
-  }
-  prometheus::Counter& MetricCacheMissInsertionDuration() const
-  {
-    return *metric_cache_miss_insertion_duration_us_;
+    return *metric_cache_miss_duration_us_;
   }
 
  private:
@@ -128,10 +125,9 @@ class MetricModelReporter {
   prometheus::Counter* metric_inf_compute_infer_duration_us_;
   prometheus::Counter* metric_inf_compute_output_duration_us_;
   prometheus::Counter* metric_cache_hit_count_;
-  prometheus::Counter* metric_cache_hit_lookup_duration_us_;
+  prometheus::Counter* metric_cache_hit_duration_us_;
   prometheus::Counter* metric_cache_miss_count_;
-  prometheus::Counter* metric_cache_miss_lookup_duration_us_;
-  prometheus::Counter* metric_cache_miss_insertion_duration_us_;
+  prometheus::Counter* metric_cache_miss_duration_us_;
 #endif  // TRITON_ENABLE_METRICS
 };
 

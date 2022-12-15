@@ -2167,11 +2167,7 @@ TRITONSERVER_ServerNew(
   tc::Status status = lserver->Init();
 
 #ifdef TRITON_ENABLE_METRICS
-  if (loptions->Metrics() && lserver->ResponseCacheEnabled()) {
-    // NOTE: Cache metrics must be enabled after cache initialized in
-    // server->Init()
-    tc::Metrics::EnableCacheMetrics(lserver->CacheManager()->Cache());
-  }
+
 #ifdef TRITON_ENABLE_METRICS_GPU
   if (loptions->Metrics() && loptions->GpuMetrics()) {
     tc::Metrics::EnableGPUMetrics();
@@ -2184,12 +2180,10 @@ TRITONSERVER_ServerNew(
   }
 #endif  // TRITON_ENABLE_METRICS_CPU
 
-  const bool poll_metrics =
-      (lserver->ResponseCacheEnabled() || loptions->GpuMetrics() ||
-       loptions->CpuMetrics());
+  const bool poll_metrics = (loptions->GpuMetrics() || loptions->CpuMetrics());
   if (loptions->Metrics() && poll_metrics) {
     // Start thread to poll enabled metrics periodically
-    tc::Metrics::StartPollingThreadSingleton(lserver->CacheManager()->Cache());
+    tc::Metrics::StartPollingThreadSingleton();
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -2696,13 +2690,11 @@ TRITONSERVER_ServerModelStatistics(
           infer_stats.compute_output_duration_ns_);
       SetDurationStat(
           metadata, inference_stats, "cache_hit", infer_stats.cache_hit_count_,
-          infer_stats.cache_hit_lookup_duration_ns_);
+          infer_stats.cache_hit_duration_ns_);
       // NOTE: cache_miss_count_ should equal compute_count if non-zero
       SetDurationStat(
           metadata, inference_stats, "cache_miss",
-          infer_stats.cache_miss_count_,
-          infer_stats.cache_miss_lookup_duration_ns_ +
-              infer_stats.cache_miss_insertion_duration_ns_);
+          infer_stats.cache_miss_count_, infer_stats.cache_miss_duration_ns_);
 
       triton::common::TritonJson::Value batch_stats(
           metadata, triton::common::TritonJson::ValueType::ARRAY);
