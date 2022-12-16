@@ -171,6 +171,13 @@ TritonModel::Create(
   // object is this TritonModel object. We must set set shared library
   // path to point to the backend directory in case the backend
   // library attempts to load additional shared libaries.
+  if (backend->ModelInitFn()) {
+    {
+      // FIXME: fix lock fight DLIS-4300
+      std::unique_ptr<SharedLibrary> slib;
+      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+      RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
+    }
   if (backend->ModelInitFn() != nullptr) {
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
@@ -212,17 +219,11 @@ TritonModel::Create(
                           .string_value();
       bool exists = false;
       RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
-      if (exists) {
-        Status status = local_model->SetBatchingStrategy(batch_libpath);
-        LOG_INFO << "Loading custom batching strategy library " << batch_libpath
-                 << " for model " << model_config.name();
-        if (!status.IsOk()) {
-          LOG_ERROR << status.Message().c_str()
-                    << ", using default batching strategy";
-        }
-      } else {
-        LOG_ERROR << "Batching library path does not exist, using default "
-                     "batching strategy";
+      if (!exists){
+        return Status(
+        triton::common::Error::Code::NOT_FOUND,
+        ("Batching library path not found: " + batch_libpath)
+            .c_str());
       }
     } else {
       const std::string batch_libname = "batchstrategy.so";
@@ -238,11 +239,9 @@ TritonModel::Create(
     }
 
     if (!batch_libpath.empty()) {
-      Status status = local_model->SetBatchingStrategy(batch_libpath);
-      if (!status.IsOk()) {
-        LOG_ERROR << status.Message().c_str()
-                  << ", using default batching strategy";
-      }
+      LOG_INFO << "Loading custom batching strategy library " << batch_libpath
+                 << " for model " << model_config.name();
+      RETURN_IF_ERROR(local_model->SetBatchingStrategy(batch_libpath));
     }
   }
 
