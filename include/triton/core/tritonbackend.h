@@ -1407,7 +1407,7 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 
 /// TRITONBACKEND Batching
 ///
-/// API to modify batching strategy associated with a backend.
+/// API to add custom batching strategy
 ///
 
 /// Check whether a request should be added to the pending model batch.
