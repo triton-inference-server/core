@@ -336,9 +336,6 @@ DynamicBatchScheduler::BatcherThread(const int nice)
       {
         std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
         auto payload_state = curr_payload_->GetState();
-        // If the payload is saturated or executing, get a new payload.
-        // If custom batching is used and the payload is scheduled, get a new
-        // payload.
         if (payload_saturated_ || IsStaleState(payload_state)) {
           NewPayload();
           next_preferred_batch_size_ = 0;
@@ -434,6 +431,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
               *(curr_payload_->GetExecMutex()));
           err = model_->ModelBatchFiniFn()(
               *curr_payload_.get()->UserPointerAddr());
+          *curr_payload_.get()->UserPointerAddr() = nullptr;
         }
         if (err) {
           LOG_ERROR << "Custom batching finalization function failed for model "
@@ -480,7 +478,7 @@ DynamicBatchScheduler::GetDynamicBatch()
     pending_batch_size_ = 0;
 
     // If custom batching enabled, re-initalize batching function.
-    if (model_->ModelBatchInitFn()) {
+    if (model_->ModelBatchInitFn() && (*curr_payload_.get()->UserPointerAddr())){
       TRITONSERVER_Error* err =
           model_->ModelBatchFiniFn()(*curr_payload_.get()->UserPointerAddr());
       if (err) {
