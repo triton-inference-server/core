@@ -39,6 +39,7 @@
 
 namespace triton { namespace core {
 
+
 bool
 IsStaleState(Payload::State payload_state)
 {
@@ -274,20 +275,7 @@ DynamicBatchScheduler::NewPayload()
       Payload::Operation::INFER_RUN, model_instance_);
   payload_saturated_ = false;
 
-  // If there is a custom batching strategy, initialize it.
-  if (model_->ModelBatchInitFn()) {
-    TRITONSERVER_Error* err = nullptr;
-    {
-      std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
-      err = model_->ModelBatchInitFn()(
-          reinterpret_cast<TRITONBACKEND_Model*>(model_),
-          curr_payload_.get()->UserPointerAddr());
-    }
-    if (err) {
-      LOG_ERROR << "Custom batching initialization function failed for model "
-                << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-    }
-  }
+  CustomBatchInit();
 }
 
 void
@@ -421,22 +409,10 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     if (curr_payload_->GetState() == Payload::State::READY) {
       auto callback = [this]() { cv_.notify_one(); };
       curr_payload_->SetCallback(callback);
-
-      // If custom batching strategy used, use its user-defined
-      // finalization function.
-      if (model_->ModelBatchInitFn()) {
-        TRITONSERVER_Error* err = nullptr;
-        {
-          std::lock_guard<std::mutex> exec_lock(
-              *(curr_payload_->GetExecMutex()));
-          err = model_->ModelBatchFiniFn()(
-              *curr_payload_.get()->UserPointerAddr());
-          *curr_payload_.get()->UserPointerAddr() = nullptr;
-        }
-        if (err) {
-          LOG_ERROR << "Custom batching finalization function failed for model "
-                    << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-        }
+      LOG_INFO << "Enqueueing payload";
+      {
+        std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
+        CustomBatchFini();
       }
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
     }
@@ -461,6 +437,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 uint64_t
 DynamicBatchScheduler::GetDynamicBatch()
 {
+  LOG_INFO << "Getting dynamic batch";
   // 'mu_' mutex must be held when this function is called. queue_
   // must not be empty.
 
@@ -474,24 +451,19 @@ DynamicBatchScheduler::GetDynamicBatch()
   // If the previous payload was not executed, reset the cursor to the start
   // of the queue to re-iterate over it and find the ideal batch.
   if (!queue_.IsCursorValid()) {
+    LOG_INFO << "Cursor is not valid";
     queue_.ResetCursor();
     pending_batch_size_ = 0;
 
-    // If custom batching enabled, re-initalize batching function.
-    if (model_->ModelBatchInitFn() && (*curr_payload_.get()->UserPointerAddr())){
-      TRITONSERVER_Error* err =
-          model_->ModelBatchFiniFn()(*curr_payload_.get()->UserPointerAddr());
-      if (err) {
-        LOG_ERROR << "Custom batching finalization function failed for model "
-                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
-      err = model_->ModelBatchInitFn()(
-          reinterpret_cast<TRITONBACKEND_Model*>(model_),
-          curr_payload_.get()->UserPointerAddr());
-      if (err) {
-        LOG_ERROR << "Custom batching initialization function failed for model "
-                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
+    // Reset custom batching function.
+    if (CustomBatchEnabled() && (*curr_payload_.get()->UserPointerAddr())) {
+      LOG_INFO << "Current pointer not null: "
+               << *curr_payload_.get()->UserPointerAddr();
+      LOG_INFO << "Resetting custom batch";
+      CustomBatchFini();
+      LOG_INFO << "Finalize complete";
+      CustomBatchInit();
+      LOG_INFO << "Init complete";
     }
   }
   size_t best_preferred_batch_size = 0;
@@ -548,19 +520,9 @@ DynamicBatchScheduler::GetDynamicBatch()
       }
     }
 
-    // If there is a custom batching strategy, use its batching function to
-    // determine whether to include this request.
-    if (model_->ModelBatchInitFn()) {
+    if (CustomBatchEnabled()) {
       bool should_include = false;
-      TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
-          reinterpret_cast<TRITONBACKEND_Model*>(model_),
-          reinterpret_cast<TRITONBACKEND_Request*>(
-              queue_.RequestAtCursor().get()),
-          *curr_payload_.get()->UserPointerAddr(), &should_include);
-      if (err) {
-        LOG_ERROR << "Custom batching include function failed for model "
-                  << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
-      }
+      CustomBatchIncl(queue_.RequestAtCursor().get(), &should_include);
       if (!should_include) {
         curr_payload_->MarkSaturated();
         send_now = true;
@@ -767,4 +729,63 @@ DynamicBatchScheduler::FinalizeResponses()
     InferenceResponse::Send(std::move(response.first), response.second);
   }
 }
+
+bool
+DynamicBatchScheduler::CustomBatchEnabled() const
+{
+  return model_->ModelBatchInitFn();
+}
+
+void
+DynamicBatchScheduler::CustomBatchIncl(
+    InferenceRequest* request, bool* should_include)
+{
+  LOG_INFO << "Including custom batch";
+  if (!CustomBatchEnabled())
+    return;
+  TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
+      reinterpret_cast<TRITONBACKEND_Model*>(model_),
+      reinterpret_cast<TRITONBACKEND_Request*>(request),
+      curr_payload_.get()->UserPointerAddr(), should_include);
+  if (err) {
+    LOG_ERROR << "Custom batching include function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    TRITONSERVER_ErrorDelete(err);
+  }
+}
+
+void
+DynamicBatchScheduler::CustomBatchInit()
+{
+  LOG_INFO << "Initializing custom batch";
+  if (!CustomBatchEnabled())
+    return;
+  TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
+      reinterpret_cast<TRITONBACKEND_Model*>(model_),
+      curr_payload_.get()->UserPointerAddr());
+  if (err != nullptr) {
+    LOG_ERROR << "Custom batching initialization function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    TRITONSERVER_ErrorDelete(err);
+  }
+}
+
+void
+DynamicBatchScheduler::CustomBatchFini()
+{
+  LOG_INFO << "Finalizing custom batch";
+  if (!CustomBatchEnabled())
+    return;
+  TRITONSERVER_Error* err =
+      model_->ModelBatchFiniFn()(*curr_payload_.get()->UserPointerAddr());
+  *curr_payload_.get()->UserPointerAddr() = nullptr;
+  LOG_INFO << "Current pointer: " << *curr_payload_.get()->UserPointerAddr();
+
+  if (err != nullptr) {
+    LOG_ERROR << "Custom batching finalization function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    TRITONSERVER_ErrorDelete(err);
+  }
+}
+
 }}  // namespace triton::core
