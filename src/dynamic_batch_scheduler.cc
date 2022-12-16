@@ -494,7 +494,6 @@ DynamicBatchScheduler::GetDynamicBatch()
       }
     }
   }
-
   size_t best_preferred_batch_size = 0;
   queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
 
@@ -503,7 +502,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   const bool check_input =
       !enforce_equal_shape_tensors_.empty() || has_optional_input_;
   auto payload_batch_size = curr_payload_->BatchSize();
-
   while (!queue_.CursorEnd()) {
     const auto batch_size = std::max(1U, queue_.RequestAtCursor()->BatchSize());
 
@@ -601,13 +599,11 @@ DynamicBatchScheduler::GetDynamicBatch()
     return 0;
   }
 
-
   // No request in pending batch happens when all queued requests have expired
   // timeout and the policies are REJECT
   if (queue_.PendingBatchCount() == 0) {
     return 0;
   }
-
 
   // If the delay has been exceeded, or if the current batch can't grow
   // any larger then just immediately execute whatever is pending.
@@ -620,7 +616,6 @@ DynamicBatchScheduler::GetDynamicBatch()
   if (delay_is_exceeded || (pending_batch_delay_ns_ == 0)) {
     return 0;
   }
-
 
   // Set the next preferred batch size given the pending batch size
   auto next_preferred_batch_size_it = preferred_batch_sizes_.upper_bound(
