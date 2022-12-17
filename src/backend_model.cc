@@ -208,8 +208,10 @@ TritonModel::Create(
   // Initalize the custom batching library for the model, if provided.
   if (model_config.has_sequence_batching()) {
     if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
-      LOG_ERROR << "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
-                   "sequence batcher, using default batching strategy";
+      return Status(
+          triton::common::Error::Code::INVALID_ARG,
+          "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
+          "sequence batcher, using default batching strategy");
     }
   } else {
     std::string batch_libpath;
