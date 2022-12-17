@@ -171,13 +171,6 @@ TritonModel::Create(
   // object is this TritonModel object. We must set set shared library
   // path to point to the backend directory in case the backend
   // library attempts to load additional shared libaries.
-  if (backend->ModelInitFn()) {
-    {
-      // FIXME: fix lock fight DLIS-4300
-      std::unique_ptr<SharedLibrary> slib;
-      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-      RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
-    }
   if (backend->ModelInitFn() != nullptr) {
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
