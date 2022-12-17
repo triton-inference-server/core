@@ -1394,4 +1394,5 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 }
 
 }  // extern C
+
 }}  // namespace triton::core
