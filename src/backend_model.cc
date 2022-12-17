@@ -219,11 +219,10 @@ TritonModel::Create(
                           .string_value();
       bool exists = false;
       RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
-      if (!exists){
+      if (!exists) {
         return Status(
-        triton::common::Error::Code::NOT_FOUND,
-        ("Batching library path not found: " + batch_libpath)
-            .c_str());
+            triton::common::Error::Code::NOT_FOUND,
+            ("Batching library path not found: " + batch_libpath).c_str());
       }
     } else {
       const std::string batch_libname = "batchstrategy.so";
@@ -240,7 +239,7 @@ TritonModel::Create(
 
     if (!batch_libpath.empty()) {
       LOG_INFO << "Loading custom batching strategy library " << batch_libpath
-                 << " for model " << model_config.name();
+               << " for model " << model_config.name();
       RETURN_IF_ERROR(local_model->SetBatchingStrategy(batch_libpath));
     }
   }
