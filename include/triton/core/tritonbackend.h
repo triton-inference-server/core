@@ -1416,12 +1416,14 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch. When the callback returns, this should reflect
 /// the latest batch information.
+/// \param cache_userp The read-only placeholder for backend to retrieve
+// information about the batching strategy for this model.
 /// \param should_include The pointer to be updated on whether the request
 /// should be included in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchIncludeRequest(
     TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
-    bool* should_include);
+    const void* cache_userp, bool* should_include);
 
 /// Callback to be invoked when Triton has begun forming a batch.
 /// \param model The backend model for which Triton is forming a batch.
@@ -1436,6 +1438,21 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
 /// about this pending batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(void* userp);
+
+/// Callback to be invoked when Triton loads model.
+/// This will hold a cached user pointer that can be read during custom
+/// batching. \param model The backend model for which Triton is forming a
+/// batch. \param cache_userp The placeholder for backend to store and retrieve
+/// information about the batching strategy for this model. \return a
+/// TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatchCacheInitialize(
+    TRITONBACKEND_Model* model, void** cache_userp);
+
+/// Callback to be invoked when Triton unloads model.
+/// \param cache_userp The placeholder for backend to store and retrieve
+/// information about the batching strategy for this model. \return a
+/// TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatchCacheFinalize(void* cache_userp);
 
 #ifdef __cplusplus
 }

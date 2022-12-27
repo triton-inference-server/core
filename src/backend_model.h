@@ -52,6 +52,10 @@ class TritonModel : public Model {
   typedef TRITONSERVER_Error* (*TritonModelBatchInitFn_t)(
       TRITONBACKEND_Model* model, void** userp);
   typedef TRITONSERVER_Error* (*TritonModelBatchFiniFn_t)(void* userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatchCacheInitFn_t)(
+      TRITONBACKEND_Model* model, void** cache_userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatchCacheFiniFn_t)(
+      void* cache_userp);
 
   static Status Create(
       InferenceServer* server, const std::string& model_path,
@@ -84,6 +88,7 @@ class TritonModel : public Model {
   TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
   TritonModelBatchInitFn_t ModelBatchInitFn() const { return batch_init_fn_; }
   TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
+  void** CacheUserPointerAddr() { return &cache_user_pointer_; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonModel);
@@ -147,11 +152,13 @@ class TritonModel : public Model {
   // Opaque state associated with this model.
   void* state_;
 
-  // Custom batching shared object handle and function pointers.
+  // Custom batching shared object handle, function pointers, and user pointer.
   void* batch_dlhandle_;
   TritonModelBatchInclFn_t batch_incl_fn_;
   TritonModelBatchInitFn_t batch_init_fn_;
   TritonModelBatchFiniFn_t batch_fini_fn_;
+  TritonModelBatchCacheFiniFn_t batch_cache_fini_fn_;
+  void* cache_user_pointer_ = nullptr;
 };
 
 }}  // namespace triton::core

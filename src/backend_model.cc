@@ -492,21 +492,51 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batch_dlhandle_, "TRITONBACKEND_ModelBatchFinalize", true /* optional */,
       reinterpret_cast<void**>(&batch_fini_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchCacheFinalize",
+      true /* optional */, reinterpret_cast<void**>(&batch_cache_fini_fn_)));
+  TritonModelBatchCacheInitFn_t batch_cache_init_fn;
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchCacheInitialize",
+      true /* optional */, reinterpret_cast<void**>(&batch_cache_init_fn)));
 
-  // If one function is defined, they all must be.
+  Status failure;
+  // If one custom batching function is defined, all non-cache batching
+  // functions must be.
   if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_) &&
       !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_)) {
-    batch_dlhandle_ = nullptr;
-    batch_incl_fn_ = nullptr;
-    batch_init_fn_ = nullptr;
-    batch_fini_fn_ = nullptr;
+    ClearHandles();
+    batch_cache_init_fn = nullptr;
     return Status(
         Status::Code::INVALID_ARG,
         batch_libpath +
             " does not define all "
-            "required custom batching functions for model" +
+            "required custom batching functions for model " +
             config_.name());
   }
+  // If a cache batching function is defined, both must be.
+  if ((batch_cache_init_fn || batch_cache_fini_fn_) &&
+      !(batch_cache_init_fn && batch_cache_fini_fn_)) {
+    ClearHandles();
+    batch_cache_init_fn = nullptr;
+    return Status(
+        Status::Code::INVALID_ARG,
+        batch_libpath +
+            " defines one cache custom batching function but needs to define "
+            "both for model " +
+            config_.name());
+  }
+  // If a cache batching function is provided, initialize it.
+  if (batch_cache_init_fn) {
+    TRITONSERVER_Error* err = batch_cache_init_fn(
+        reinterpret_cast<TRITONBACKEND_Model*>(this), CacheUserPointerAddr());
+    if (err) {
+      auto err_message = TRITONSERVER_ErrorMessage(err);
+      TRITONSERVER_ErrorDelete(err);
+      return Status(Status::Code::INVALID_ARG, err_message);
+    }
+  }
+
   return Status::Success;
 }
 
@@ -548,6 +578,17 @@ TritonModel::TritonModel(
 
 TritonModel::~TritonModel()
 {
+  // If there is a custom batching cache function, finalize it.
+  if (batch_cache_fini_fn_) {
+    TRITONSERVER_Error* err = batch_cache_fini_fn_(*CacheUserPointerAddr());
+    *CacheUserPointerAddr() = nullptr;
+    if (err) {
+      LOG_ERROR << "Custom batching cache finalization failed for model "
+                << config_.name() << ": " << TRITONSERVER_ErrorMessage(err);
+      TRITONSERVER_ErrorDelete(err);
+    }
+  }
+
   // Clear library handles.
   ClearHandles();
 
@@ -578,6 +619,7 @@ TritonModel::ClearHandles()
   batch_incl_fn_ = nullptr;
   batch_init_fn_ = nullptr;
   batch_fini_fn_ = nullptr;
+  batch_cache_fini_fn_ = nullptr;
 }
 
 extern "C" {
