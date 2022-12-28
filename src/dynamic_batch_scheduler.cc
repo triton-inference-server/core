@@ -748,7 +748,7 @@ DynamicBatchScheduler::CustomBatchInit()
     return;
   TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
       reinterpret_cast<TRITONBACKEND_Model*>(model_),
-      curr_payload_.get()->UserPointerAddr());
+      curr_payload_.get()->UserPointerAddr(), *model_->CacheUserPointerAddr());
   if (err != nullptr) {
     LOG_ERROR << "Custom batching initialization function failed for model "
               << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
