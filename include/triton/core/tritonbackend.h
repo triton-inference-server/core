@@ -1431,7 +1431,7 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchIncludeRequest(
 // information about the batching strategy for this model.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
-    TRITONBACKEND_Model* model, void** userp, const void** cache_userp);
+    TRITONBACKEND_Model* model, void** userp, const void* cache_userp);
 
 /// Callback to be invoked when Triton has finishing forming a batch.
 /// \param userp The placeholder for backend to store and retrieve information
