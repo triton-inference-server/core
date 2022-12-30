@@ -258,6 +258,27 @@ SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support)
   return Status::Success;
 }
 
+
+Status
+CreateCudaStream(cudaStream_t* stream, const double min_compute_capability)
+{
+  *stream = nullptr;
+
+  std::set<int> supported_gpus;
+  GetSupportedGPUs(&supported_gpus, min_compute_capability);
+  if (supported_gpus.size() > 0) {
+    cudaError_t cuerr = cudaStreamCreate(stream);
+    if (cuerr != cudaSuccess) {
+      *stream = nullptr;
+      return Status(
+          Status::Code::INTERNAL,
+          std::string("unable to create stream: ") + cudaGetErrorString(cuerr));
+    }
+  }
+
+  return Status::Success;
+}
+
 #endif
 
 }}  // namespace triton::core

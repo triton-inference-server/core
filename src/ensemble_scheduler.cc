@@ -29,6 +29,7 @@
 #include "ensemble_scheduler.h"
 
 #include <mutex>
+
 #include "cuda_utils.h"
 #include "metrics.h"
 #include "model.h"
@@ -1269,7 +1270,13 @@ EnsembleScheduler::Create(
     InferenceServer* const server, const inference::ModelConfig& config,
     std::unique_ptr<Scheduler>* scheduler)
 {
-  scheduler->reset(new EnsembleScheduler(stats_aggregator, server, config));
+  cudaStream_t stream = nullptr;
+#ifdef TRITON_ENABLE_GPU
+  RETURN_IF_ERROR(
+      CreateCudaStream(&stream, server->MinSupportedComputeCapability()));
+#endif  // TRITON_ENABLE_GPU
+  scheduler->reset(
+      new EnsembleScheduler(stats_aggregator, server, config, stream));
   return Status::Success;
 }
 
@@ -1299,20 +1306,11 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
 EnsembleScheduler::EnsembleScheduler(
     InferenceStatsAggregator* const stats_aggregator,
-    InferenceServer* const server, const inference::ModelConfig& config)
-    : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr),
+    InferenceServer* const server, const inference::ModelConfig& config,
+    cudaStream_t stream)
+    : stats_aggregator_(stats_aggregator), is_(server), stream_(stream),
       inflight_count_(0)
 {
-#ifdef TRITON_ENABLE_GPU
-  // create CUDA stream
-  auto cuerr = cudaStreamCreate(&stream_);
-  if (cuerr != cudaSuccess) {
-    stream_ = nullptr;
-    LOG_ERROR << "unable to create stream for " << config.name() << ": "
-              << cudaGetErrorString(cuerr);
-  }
-#endif  // TRITON_ENABLE_GPU
-
 #ifdef TRITON_ENABLE_METRICS
   if (Metrics::Enabled()) {
     MetricModelReporter::Create(

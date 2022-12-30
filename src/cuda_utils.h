@@ -26,6 +26,7 @@
 #pragma once
 
 #include <set>
+
 #include "status.h"
 #include "triton/common/sync_queue.h"
 
@@ -110,6 +111,16 @@ Status CheckGPUCompatibility(
 /// errors encountered while querying GPU devices.
 Status GetSupportedGPUs(
     std::set<int>* supported_gpus, const double min_compute_capability);
+
+/// Create a CUDA stream. The caller takes ownership of
+/// the stream. 'stream' returns nullptr if GPU support is disabled.
+///
+/// \param min_compute_capability The minimum support CUDA compute
+/// capability.
+/// \param stream Returns the created stream.
+/// \return a TRITONSERVER_Error indicating success or failure.
+Status CreateCudaStream(
+    cudaStream_t* stream, const double min_compute_capability);
 
 /// Checks if the GPU specified is an integrated GPU and supports Zero-copy.
 /// \param gpu_id The index of the target GPU.
