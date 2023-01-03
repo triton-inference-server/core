@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -253,27 +253,6 @@ SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support)
     *zero_copy_support = true;
   } else {
     *zero_copy_support = false;
-  }
-
-  return Status::Success;
-}
-
-
-Status
-CreateCudaStream(cudaStream_t* stream, const double min_compute_capability)
-{
-  *stream = nullptr;
-
-  std::set<int> supported_gpus;
-  GetSupportedGPUs(&supported_gpus, min_compute_capability);
-  if (supported_gpus.size() > 0) {
-    cudaError_t cuerr = cudaStreamCreate(stream);
-    if (cuerr != cudaSuccess) {
-      *stream = nullptr;
-      return Status(
-          Status::Code::INTERNAL,
-          std::string("unable to create stream: ") + cudaGetErrorString(cuerr));
-    }
   }
 
   return Status::Success;

@@ -103,8 +103,7 @@ class EnsembleScheduler : public Scheduler {
  private:
   EnsembleScheduler(
       InferenceStatsAggregator* const stats_aggregator,
-      InferenceServer* const server, const inference::ModelConfig& config,
-      cudaStream_t stream);
+      InferenceServer* const server, const inference::ModelConfig& config);
 
   std::shared_ptr<MetricModelReporter> metric_reporter_;
   InferenceStatsAggregator* const stats_aggregator_;
