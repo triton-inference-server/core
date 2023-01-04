@@ -1581,6 +1581,7 @@ ModelRepositoryManager::CheckNode(
                                              upstream.first->model_name_ +
                                              "' which has no loaded version.");
         } else {
+          // [FIXME] See https://jirasw.nvidia.com/browse/DLIS-4459
           node->status_ = Status(
               Status::Code::INVALID_ARG,
               "ensemble '" + node->model_name_ + "' depends on '" +
