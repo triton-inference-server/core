@@ -1446,7 +1446,7 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(void* userp);
 /// return a TRITONSERVER_Error indicating success or failure.
 /// \param model The backend model for which Triton is forming a batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error* TRITONBACKEND_BatcherInitialize(
+TRITONSERVER_Error* TRITONBACKEND_ModelBatcherInitialize(
     TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model);
 
 /// Free memory associated with batcher. This is called during model unloading.
@@ -1454,7 +1454,7 @@ TRITONSERVER_Error* TRITONBACKEND_BatcherInitialize(
 /// \param batcher User-defined placeholder for backend to store and
 /// retrieve information about the batching strategy for this model.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_Error* TRITONBACKEND_BatcherFinalize(
+TRITONSERVER_Error* TRITONBACKEND_ModelBatcherFinalize(
     TRITONBACKEND_Batcher* batcher);
 
 #ifdef __cplusplus
