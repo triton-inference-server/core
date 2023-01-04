@@ -151,7 +151,7 @@ class TritonModel : public Model {
   // Opaque state associated with this model.
   void* state_;
 
-  // Custom batching shared object handle, function pointers, and user pointer.
+  // Custom batching shared object handle, function pointers, and batcher pointer.
   void* batch_dlhandle_;
   TritonModelBatchInclFn_t batch_incl_fn_;
   TritonModelBatchInitFn_t batch_init_fn_;
