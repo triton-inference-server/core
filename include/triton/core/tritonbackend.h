@@ -1441,10 +1441,10 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(void* userp);
 /// model loading. The batcher will point to a user-defined data structure that
 /// holds read-only data used for custom batching.
 ///
-/// \param model The backend model for which Triton is forming a batch.
 /// \param batcher User-defined placeholder for backend to store and
 /// retrieve information about the batching strategy for this model.
 /// return a TRITONSERVER_Error indicating success or failure.
+/// \param model The backend model for which Triton is forming a batch.
 TRITONSERVER_Error* TRITONBACKEND_BatcherInitialize(
     TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model);
 
