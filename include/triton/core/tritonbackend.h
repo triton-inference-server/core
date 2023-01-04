@@ -1445,6 +1445,7 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(void* userp);
 /// retrieve information about the batching strategy for this model.
 /// return a TRITONSERVER_Error indicating success or failure.
 /// \param model The backend model for which Triton is forming a batch.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_BatcherInitialize(
     TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model);
 
