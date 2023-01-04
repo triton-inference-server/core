@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -32,14 +32,13 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
+#include "backend_model.h"
 #include "constants.h"
 #include "ensemble_utils.h"
 #include "filesystem.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "triton/common/logging.h"
-
-#include "backend_model.h"
 #ifdef TRITON_ENABLE_ENSEMBLE
 #include "ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
@@ -477,14 +476,14 @@ ModelRepositoryManager::LoadModelByDependency()
     std::promise<void> ready_;
   };
   NodeSet loaded_models;
-  auto set_pair = ModelsToLoadUnload(loaded_models);
+  auto set_pair = ModelsToLoadUnload(loaded_models, res);
   // Loop until all model are loaded / unloaded
   while ((!set_pair.first.empty()) || (!set_pair.second.empty())) {
     loaded_models.clear();
     // Unload invalid models first
     for (auto& invalid_model : set_pair.second) {
       model_life_cycle_->AsyncUnload(invalid_model->model_name_);
-      LOG_ERROR << invalid_model->status_.AsString();
+      res[invalid_model->model_name_] = invalid_model->status_;
       invalid_model->loaded_versions_ = std::set<int64_t>();
       loaded_models.emplace(invalid_model);
     }
@@ -528,7 +527,7 @@ ModelRepositoryManager::LoadModelByDependency()
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
-    set_pair = ModelsToLoadUnload(loaded_models);
+    set_pair = ModelsToLoadUnload(loaded_models, res);
   }
   // Clear temporary stored agent model list after all loads are triggerred
   for (auto& info : infos_) {
@@ -644,7 +643,8 @@ ModelRepositoryManager::LoadUnloadModels(
 #ifdef TRITON_ENABLE_ENSEMBLE
         for (const auto& model : current_models) {
           auto it = new_infos.find(model.first);
-          // Some models may be marked as deleted and not in 'new_infos'
+          // Some models may be marked as deleted and will not exist in
+          // 'new_infos'
           if (it != new_infos.end()) {
             it->second->explicitly_load_ = first_iteration;
             const auto& config = it->second->model_config_;
@@ -696,6 +696,7 @@ ModelRepositoryManager::LoadUnloadModels(
   const auto& load_status = LoadModelByDependency();
   if (status.IsOk() && (type == ActionType::LOAD)) {
     std::string load_error_message = "";
+
     for (const auto& model : models) {
       auto it = load_status.find(model.first);
       // If 'model.first' not in load status, it means the (re-)load is not
@@ -1502,7 +1503,9 @@ ModelRepositoryManager::GetModelInfo(
 }
 
 std::pair<ModelRepositoryManager::NodeSet, ModelRepositoryManager::NodeSet>
-ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
+ModelRepositoryManager::ModelsToLoadUnload(
+    const NodeSet& loaded_models,
+    const std::map<std::string, Status>& model_load_status)
 {
   // <valid model set, invalid model set>
   std::pair<NodeSet, NodeSet> res;
@@ -1512,7 +1515,7 @@ ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
       auto node = pair.second.get();
       // only care about nodes that are affected by the update
       if (!node->checked_) {
-        if (CheckNode(node)) {
+        if (CheckNode(node, model_load_status)) {
           if (node->status_.IsOk()) {
             res.first.emplace(node);
           } else {
@@ -1526,7 +1529,7 @@ ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
       for (auto node : model->downstreams_) {
         // only care about nodes that are affected by the update
         if (!node->checked_) {
-          if (CheckNode(node)) {
+          if (CheckNode(node, model_load_status)) {
             if (node->status_.IsOk()) {
               res.first.emplace(node);
             } else {
@@ -1547,7 +1550,9 @@ ModelRepositoryManager::ModelsToLoadUnload(const NodeSet& loaded_models)
 }
 
 bool
-ModelRepositoryManager::CheckNode(DependencyNode* node)
+ModelRepositoryManager::CheckNode(
+    DependencyNode* node,
+    const std::map<std::string, Status>& model_load_status)
 {
   bool node_ready = true;
   // if the node is in invalid status, mark as ready as we know
@@ -1562,12 +1567,30 @@ ModelRepositoryManager::CheckNode(DependencyNode* node)
         node->status_ = Status(
             Status::Code::INVALID_ARG,
             "ensemble '" + node->model_name_ + "' depends on '" +
-                upstream.first->model_name_ + "' which is not valid");
+                upstream.first->model_name_ + "' which is not valid. Model '" +
+                upstream.first->model_name_ +
+                "' failed with error: " + upstream.first->status_.Message());
       } else if (upstream.first->loaded_versions_.empty()) {
-        node->status_ = Status(
-            Status::Code::INVALID_ARG,
-            "ensemble '" + node->model_name_ + "' depends on '" +
-                upstream.first->model_name_ + "' which has no loaded version");
+        auto model_load_stat =
+            model_load_status.find(upstream.first->model_name_);
+        if ((model_load_stat != model_load_status.end()) &&
+            model_load_stat->second.IsOk()) {
+          node->status_ = Status(
+              Status::Code::INVALID_ARG, "ensemble '" + node->model_name_ +
+                                             "' depends on '" +
+                                             upstream.first->model_name_ +
+                                             "' which has no loaded version.");
+        } else {
+          // [FIXME] See https://jirasw.nvidia.com/browse/DLIS-4459
+          node->status_ = Status(
+              Status::Code::INVALID_ARG,
+              "ensemble '" + node->model_name_ + "' depends on '" +
+                  upstream.first->model_name_ +
+                  "' which has no loaded version. Model '" +
+                  upstream.first->model_name_ +
+                  "' loading failed with error: " +
+                  model_load_stat->second.Message());
+        }
       } else {
         for (const auto& required_version : upstream.second) {
           if (required_version == -1) {
@@ -1580,7 +1603,7 @@ ModelRepositoryManager::CheckNode(DependencyNode* node)
                 Status::Code::INVALID_ARG,
                 "ensemble '" + node->model_name_ + "' depends on '" +
                     upstream.first->model_name_ + "' whose required version " +
-                    std::to_string(required_version) + " is not loaded");
+                    std::to_string(required_version) + " is not loaded.");
           }
         }
       }

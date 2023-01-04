@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -305,14 +305,18 @@ class ModelRepositoryManager {
   /// Unloaded models will be represented as models with no loaded versions.
   /// \return A pair of node set containing models to be loaded and models to be
   /// unloaded for the next iteration.
-  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(const NodeSet& loaded_models);
+  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(
+      const NodeSet& loaded_models,
+      const std::map<std::string, Status>& model_load_status);
 
   /// Check if the node is ready for the next iteration. A node is ready if the
   /// node is invalid (containing invalid model config or its depdencies failed
   /// to load) or all of its dependencies are satisfied.
   /// \param node The node to be checked.
   /// \return True if the node is ready. False otherwise.
-  bool CheckNode(DependencyNode* node);
+  bool CheckNode(
+      DependencyNode* node,
+      const std::map<std::string, Status>& model_load_status);
 
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);
