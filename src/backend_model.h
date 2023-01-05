@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -55,6 +55,7 @@ class TritonModel : public Model {
       std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
+  using TritonInstanceGroup = std::vector<std::unique_ptr<TritonModelInstance>>;
   const std::string& LocalizedModelPath() const
   {
     return localized_model_dir_->Path();
@@ -65,9 +66,9 @@ class TritonModel : public Model {
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  const std::vector<std::unique_ptr<TritonModelInstance>>& Instances() const
+  const std::map<std::string, TritonInstanceGroup>& InstanceGroups() const
   {
-    return instances_;
+    return instance_group_map_;
   }
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
@@ -123,8 +124,8 @@ class TritonModel : public Model {
   std::shared_ptr<TritonBackend> backend_;
 
   // The model instances for this model.
-  std::vector<std::unique_ptr<TritonModelInstance>> instances_;
-  std::vector<std::unique_ptr<TritonModelInstance>> passive_instances_;
+  std::map<std::string, TritonInstanceGroup> instance_group_map_;
+  std::map<std::string, TritonInstanceGroup> passive_instance_group_map_;
 
   // Opaque state associated with this model.
   void* state_;

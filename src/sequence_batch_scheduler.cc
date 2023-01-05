@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -57,7 +57,11 @@ SequenceBatchScheduler::Create(
              << " backlog queued requests...";
   }
 
-  auto instance_count = model->Instances().size();
+  uint64_t instance_count = 0;
+  for (const auto& pair : model->InstanceGroups()) {
+    instance_count += pair.second.size();
+  }
+  // auto instance_count = model->Instances().size();
   sched->queue_request_cnts_.resize(instance_count, 0);
 
   auto& config = model->Config();
@@ -124,36 +128,39 @@ SequenceBatchScheduler::Create(
   // Create one SequenceBatch object for each requested runner. The
   // SequenceBatch object has a thread that manages the batch of
   // requests.
-  const auto& instances = model->Instances();
+  const auto& instance_groups = model->InstanceGroups();
   uint32_t index = 0;
-  for (const auto& instance : instances) {
-    bool init_state;
-    std::unique_ptr<SequenceBatch> sb;
+  for (const auto& pair : instance_groups) {
+    const auto& instances = pair.second;
+    for (const auto& instance : instances) {
+      bool init_state;
+      std::unique_ptr<SequenceBatch> sb;
 
-    // Create the SequenceBatch derivative that handles the requested
-    // scheduling strategy.
-    if (config.sequence_batching().has_oldest()) {
-      sb.reset(new OldestSequenceBatch(
-          sched.get(), index, seq_slot_cnt, instance.get(),
-          enforce_equal_shape_tensors, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
-    } else {
-      sb.reset(new DirectSequenceBatch(
-          sched.get(), index, seq_slot_cnt, instance.get(),
-          enforce_equal_shape_tensors, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
-    }
-
-    if (init_state) {
-      sched->batchers_.push_back(std::move(sb));
-      // All sequence slots in the batcher are initially ready for a
-      // new sequence.
-      for (size_t b = 0; b < seq_slot_cnt; ++b) {
-        sched->ready_batcher_seq_slots_.push(
-            SequenceBatchScheduler::BatcherSequenceSlot(index, b));
+      // Create the SequenceBatch derivative that handles the requested
+      // scheduling strategy.
+      if (config.sequence_batching().has_oldest()) {
+        sb.reset(new OldestSequenceBatch(
+            sched.get(), index, seq_slot_cnt, instance.get(),
+            enforce_equal_shape_tensors, has_optional_input, start, end, startend,
+            cont, notready, &init_state));
+      } else {
+        sb.reset(new DirectSequenceBatch(
+            sched.get(), index, seq_slot_cnt, instance.get(),
+            enforce_equal_shape_tensors, has_optional_input, start, end, startend,
+            cont, notready, &init_state));
       }
+
+      if (init_state) {
+        sched->batchers_.push_back(std::move(sb));
+        // All sequence slots in the batcher are initially ready for a
+        // new sequence.
+        for (size_t b = 0; b < seq_slot_cnt; ++b) {
+          sched->ready_batcher_seq_slots_.push(
+              SequenceBatchScheduler::BatcherSequenceSlot(index, b));
+        }
+      }
+      ++index;
     }
-    ++index;
   }
   if (sched->batchers_.empty()) {
     return Status(
