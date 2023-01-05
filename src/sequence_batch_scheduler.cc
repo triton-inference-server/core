@@ -61,7 +61,6 @@ SequenceBatchScheduler::Create(
   for (const auto& pair : model->InstanceGroups()) {
     instance_count += pair.second.size();
   }
-  // auto instance_count = model->Instances().size();
   sched->queue_request_cnts_.resize(instance_count, 0);
 
   auto& config = model->Config();
