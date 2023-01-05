@@ -123,7 +123,10 @@ class TritonModel : public Model {
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;
 
-  // The model instances for this model.
+  // The model instances for this model stored by the
+  // instance groups defined in the model configuration.
+  // Passive instance groups are those instances which are 
+  // loaded but not added to the scheduler.
   std::map<std::string, TritonInstanceGroup> instance_group_map_;
   std::map<std::string, TritonInstanceGroup> passive_instance_group_map_;
 
