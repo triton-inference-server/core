@@ -436,11 +436,11 @@ InsertLookupCompare(
   std::cout << "=============== Insert ===============" << std::endl;
   helpers::check_status(cache->Insert(items, key));
   std::cout << "=============== Lookup ===============" << std::endl;
-  const auto responses = cache->Lookup(key);
-  if (!responses.has_value()) {
+  const auto& [status, responses] = cache->Lookup(key);
+  if (!status.IsOk()) {
     return tc::Status(tc::Status::Code::INTERNAL, "Lookup failed");
   }
-  const auto lookup_items = responses.value();
+  const auto lookup_items = responses;
   // Compare cached items to inserted items
   if (lookup_items.size() != items.size()) {
     return tc::Status(
@@ -707,21 +707,21 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
   helpers::check_status(cache->Insert(response_400bytes.get(), "request0"));
   helpers::check_status(cache->Insert(response_400bytes.get(), "request1"));
   // Validate both responses fit in cache by looking them up
-  ASSERT_TRUE(cache->Lookup("request0").has_value());
-  ASSERT_TRUE(cache->Lookup("request1").has_value());
+  ASSERT_TRUE(cache->Lookup("request0").first.IsOk());
+  ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
   // Insert a 3rd response, expecting the 1st response to be evicted
   // in LRU order
   helpers::check_status(cache->Insert(response_400bytes.get(), "request2"));
-  ASSERT_TRUE(cache->Lookup("request2").has_value());
-  ASSERT_FALSE(cache->Lookup("request0").has_value());
+  ASSERT_TRUE(cache->Lookup("request2").first.IsOk());
+  ASSERT_FALSE(cache->Lookup("request0").first.IsOk());
   // Lookup 2nd request to bump its LRU order over 3rd
-  ASSERT_TRUE(cache->Lookup("request1").has_value());
+  ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
   // Insert a 4th response, expecting the 3rd to get evicted by LRU order
   // after looking up the 2nd
   helpers::check_status(cache->Insert(response_400bytes.get(), "request3"));
-  ASSERT_TRUE(cache->Lookup("request3").has_value());
-  ASSERT_TRUE(cache->Lookup("request1").has_value());
-  ASSERT_FALSE(cache->Lookup("request2").has_value());
+  ASSERT_TRUE(cache->Lookup("request3").first.IsOk());
+  ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
+  ASSERT_FALSE(cache->Lookup("request2").first.IsOk());
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
@@ -799,7 +799,8 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
   size_t cache_misses = 0;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    if (cache->Lookup(key).has_value()) {
+    const auto& [status, items] = cache->Lookup(key);
+    if (status.IsOk()) {
       cache_hits++;
     } else {
       cache_misses++;
@@ -838,7 +839,8 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   size_t cache_misses = 0;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    if (cache->Lookup(key).has_value()) {
+    const auto& [status, items] = cache->Lookup(key);
+    if (status.IsOk()) {
       cache_hits++;
     } else {
       cache_misses++;

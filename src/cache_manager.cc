@@ -255,7 +255,6 @@ Status
 TritonCache::Insert(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting list of responses at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
@@ -275,7 +274,6 @@ TritonCache::Insert(
 Status
 TritonCache::Insert(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting single response at cache key: " << key;
   if (!response) {
     return Status(Status::Code::INVALID_ARG, "response is nullptr");
   }
@@ -284,13 +282,15 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
 }
 
 
-std::optional<std::vector<std::shared_ptr<CacheEntryItem>>>
+std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
   LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
+  std::vector<std::shared_ptr<CacheEntryItem>> empty_items = {};
   if (lookup_fn_ == nullptr) {
-    LOG_ERROR << "cache lookup function is nullptr";
-    return std::nullopt;
+    return std::make_pair(
+        Status(Status::Code::INTERNAL, "cache lookup function is nullptr"),
+        empty_items);
   }
 
   // TODO: Currently not using TRITONCACHE_CacheEntryNew/Delete APIs at all.
@@ -299,8 +299,15 @@ TritonCache::Lookup(const std::string& key)
   // is necessary.
   auto entry = std::make_unique<CacheEntry>();
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
-  RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
-      lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
+  auto err = lookup_fn_(cache_impl_, key.c_str(), opaque_entry);
+  if (err) {
+    return std::make_pair(
+        Status(
+            TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
+            TRITONSERVER_ErrorMessage(err)),
+        empty_items);
+  }
+
   // NOTE: Copies entry's vector of item pointers, entry pointer will be
   // cleaned up.
   // TODO: Item pointers are currently created on cache impl side by
@@ -309,7 +316,7 @@ TritonCache::Lookup(const std::string& key)
   // Similarly, we are currently letting Triton clean up the CacheEntryItems
   // when they go out of scope, so CacheEntryItemDelete API is not being used.
   // TODO: could probably do better here.
-  return entry->Items();
+  return std::make_pair(Status::Success, entry->Items());
 }
 
 // NOTE: Multiple responses won't be expected until supporting decoupled
@@ -320,11 +327,10 @@ TritonCache::Lookup(
 {
   LOG_VERBOSE(2) << "Looking up responses at cache key: " << key;
 
-  const auto opt_items = Lookup(key);
-  if (!opt_items.has_value()) {
-    return Status(Status::Code::INTERNAL, "Lookup failed");
+  const auto& [status, items] = Lookup(key);
+  if (!status.IsOk()) {
+    return status;
   }
-  const auto& items = opt_items.value();
 
   if (items.size() != responses.size()) {
     return Status(
