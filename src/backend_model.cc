@@ -319,9 +319,9 @@ TritonModel::AddInstance(
     std::unique_ptr<TritonModelInstance>&& instance, const bool passive)
 {
   if (passive) {
-    passive_instance_group_map_[instance->Name()].emplace_back(std::move(instance));
+    passive_instance_group_map_[instance->GroupName()].emplace_back(std::move(instance));
   } else {
-    instance_group_map_[instance->Name()].emplace_back(std::move(instance));
+    instance_group_map_[instance->GroupName()].emplace_back(std::move(instance));
   }
 
   return Status::Success;
