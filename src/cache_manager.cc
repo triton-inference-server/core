@@ -286,37 +286,29 @@ std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
   LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
-  std::vector<std::shared_ptr<CacheEntryItem>> empty_items = {};
   if (lookup_fn_ == nullptr) {
-    return std::make_pair(
-        Status(Status::Code::INTERNAL, "cache lookup function is nullptr"),
-        empty_items);
+    auto fail = Status(Status::Code::INTERNAL, "lookup function is nullptr");
+    return {fail, {}};
   }
 
-  // TODO: Currently not using TRITONCACHE_CacheEntryNew/Delete APIs at all.
-  // Currently we create a new cache entry on Triton side, pass it to cache,
-  // and cache adds the items/buffers through C API. Not sure if New/Delete API
-  // is necessary.
   auto entry = std::make_unique<CacheEntry>();
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   auto err = lookup_fn_(cache_impl_, key.c_str(), opaque_entry);
   if (err) {
-    return std::make_pair(
-        Status(
-            TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
-            TRITONSERVER_ErrorMessage(err)),
-        empty_items);
+    auto fail = Status(
+        TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
+        TRITONSERVER_ErrorMessage(err));
+    return {fail, {}};
   }
 
   // NOTE: Copies entry's vector of item pointers, entry pointer will be
   // cleaned up.
-  // TODO: Item pointers are currently created on cache impl side by
+  // Item pointers are currently created on cache impl side by
   // TRITONCACHE_CacheEntryItemNew and we need to make sure the cache doesn't
   // call TRITONCACHE_CacheEntryItemDelete before Triton is done with them.
-  // Similarly, we are currently letting Triton clean up the CacheEntryItems
-  // when they go out of scope, so CacheEntryItemDelete API is not being used.
-  // TODO: could probably do better here.
-  return std::make_pair(Status::Success, entry->Items());
+  // Currently, we are letting Triton clean up the CacheEntryItems when they go
+  // out of scope, so CacheEntryItemDelete API is not needed in cache impl.
+  return {Status::Success, entry->Items()};
 }
 
 // NOTE: Multiple responses won't be expected until supporting decoupled

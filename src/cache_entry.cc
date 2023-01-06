@@ -214,25 +214,23 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
   auto status = output.DataBuffer(
       &output_base, &output_byte_size, &memory_type, &memory_type_id, &userp);
   if (!status.IsOk()) {
-    return std::make_pair(status, empty_buffer);
+    return {status, empty_buffer};
   }
 
   // DLIS-2673: Add better memory_type support
   if (memory_type != TRITONSERVER_MEMORY_CPU &&
       memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
-    return std::make_pair(
-        Status(
-            Status::Code::INVALID_ARG,
-            "Only input buffers in CPU memory are allowed in cache currently"),
-        empty_buffer);
+    auto status = Status(
+        Status::Code::INVALID_ARG,
+        "Only input buffers in CPU memory are allowed in cache currently");
+    return {status, empty_buffer};
   }
 
   // Exit early if response buffer from output is invalid
   if (!output_base) {
-    return std::make_pair(
-        Status(
-            Status::Code::INTERNAL, "Response buffer from output was nullptr"),
-        empty_buffer);
+    auto status = Status(
+        Status::Code::INTERNAL, "Response buffer from output was nullptr");
+    return {status, empty_buffer};
   }
 
   size_t total_byte_size = 0;
@@ -288,7 +286,7 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
   memcpy(packed_bytes + position, output_base, u64_output_byte_size);
   position += u64_output_byte_size;
 
-  return std::make_pair(Status::Success, Buffer(packed_bytes, total_byte_size));
+  return {Status::Success, Buffer(packed_bytes, total_byte_size)};
 }
 
 std::pair<Status, CacheOutput>
@@ -336,24 +334,21 @@ CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
   position += output_byte_size;
 
   // Verify packed bytes matched expected size before allocating output_buffer
+  auto output = CacheOutput();
   if (packed_bytes.begin() + position != packed_bytes.end()) {
-    auto empty_output = CacheOutput();
-    return std::make_pair(
-        Status(
-            Status::Code::INTERNAL,
-            "Unexpected number of bytes received: " +
-                std::to_string(packed_bytes.size()) +
-                ", expected: " + std::to_string(position)),
-        empty_output);
+    auto fail = Status(
+        Status::Code::INTERNAL, "Unexpected number of bytes received: " +
+                                    std::to_string(packed_bytes.size()) +
+                                    ", expected: " + std::to_string(position));
+    return {fail, output};
   }
 
-  auto output = CacheOutput();
   output.name_ = name;
   output.dtype_ = triton::common::ProtocolStringToDataType(dtype);
   output.shape_ = shape;
   output.byte_size_ = output_byte_size;
   output.buffer_ = const_cast<void*>(output_buffer);
-  return std::make_pair(Status::Success, output);
+  return {Status::Success, output};
 }
 
 }}  // namespace triton::core
