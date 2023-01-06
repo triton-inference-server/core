@@ -206,7 +206,7 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
 ///               This will be passed as-is to the cache implementation, so
 ///               the expected format and parsing is up to the cache as well.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInitialize(
     TRITONCACHE_Cache** cache, const char* config);
 
 /// Delete a cache object.
@@ -218,7 +218,7 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheNew(
 ///
 /// \param cache The cache object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheDelete(
+TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheFinalize(
     TRITONCACHE_Cache* cache);
 
 /// Inserts entry into cache at specified key, unless key already exists.

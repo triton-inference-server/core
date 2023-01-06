@@ -78,7 +78,7 @@ TritonCache::~TritonCache()
   LOG_VERBOSE(1) << "unloading cache '" << name_ << "'";
   if (fini_fn_) {
     if (cache_impl_) {
-      LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheDelete from: '" << libpath_
+      LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheFinalize from: '" << libpath_
                      << "'";
       LOG_TRITONSERVER_ERROR(fini_fn_(cache_impl_), "failed finalizing cache");
     } else {
@@ -120,10 +120,10 @@ TritonCache::LoadCacheLibrary()
 
     // Cache initialize and finalize functions, required
     RETURN_IF_ERROR(slib->GetEntrypoint(
-        dlhandle_, "TRITONCACHE_CacheNew", false /* optional */,
+        dlhandle_, "TRITONCACHE_CacheInitialize", false /* optional */,
         reinterpret_cast<void**>(&init_fn)));
     RETURN_IF_ERROR(slib->GetEntrypoint(
-        dlhandle_, "TRITONCACHE_CacheDelete", false /* optional */,
+        dlhandle_, "TRITONCACHE_CacheFinalize", false /* optional */,
         reinterpret_cast<void**>(&fini_fn)));
     RETURN_IF_ERROR(slib->GetEntrypoint(
         dlhandle_, "TRITONCACHE_CacheLookup", false /* optional */,

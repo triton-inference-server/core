@@ -967,12 +967,57 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 }
 
 TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheNew()
+TRITONCACHE_ApiVersion()
 {
 }
 
 TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheDelete()
+TRITONCACHE_CacheEntryItemCount()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryAddItem()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryGetItem()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemDelete()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemBufferCount()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemAddBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemGetBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheInitialize()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheFinalize()
 {
 }
 
@@ -983,31 +1028,6 @@ TRITONCACHE_CacheInsert()
 
 TRITONAPI_DECLSPEC void
 TRITONCACHE_CacheLookup()
-{
-}
-
-TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheEvict()
-{
-}
-
-TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheEntryNew()
-{
-}
-
-TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheEntryItemCount()
-{
-}
-
-TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheEntryItem()
-{
-}
-
-TRITONAPI_DECLSPEC void
-TRITONCACHE_CacheEntryAddItem()
 {
 }
 
