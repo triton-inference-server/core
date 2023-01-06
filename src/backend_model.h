@@ -47,11 +47,14 @@ class TritonModelInstance;
 class TritonModel : public Model {
  public:
   typedef TRITONSERVER_Error* (*TritonModelBatchInclFn_t)(
-      TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
-      bool* should_include);
+      TRITONBACKEND_Request* request, void* userp, bool* should_include);
   typedef TRITONSERVER_Error* (*TritonModelBatchInitFn_t)(
-      TRITONBACKEND_Model* model, void** userp);
+      TRITONBACKEND_Batcher* batcher, void** userp);
   typedef TRITONSERVER_Error* (*TritonModelBatchFiniFn_t)(void* userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatcherInitFn_t)(
+      TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model);
+  typedef TRITONSERVER_Error* (*TritonModelBatcherFiniFn_t)(
+      TRITONBACKEND_Batcher* batcher);
 
   static Status Create(
       InferenceServer* server, const std::string& model_path,
@@ -84,6 +87,7 @@ class TritonModel : public Model {
   TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
   TritonModelBatchInitFn_t ModelBatchInitFn() const { return batch_init_fn_; }
   TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
+  TRITONBACKEND_Batcher** Batcher() { return &batcher_; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonModel);
@@ -147,11 +151,13 @@ class TritonModel : public Model {
   // Opaque state associated with this model.
   void* state_;
 
-  // Custom batching shared object handle and function pointers.
+  // Custom batching shared object handle, function pointers, and batcher pointer.
   void* batch_dlhandle_;
   TritonModelBatchInclFn_t batch_incl_fn_;
   TritonModelBatchInitFn_t batch_init_fn_;
   TritonModelBatchFiniFn_t batch_fini_fn_;
+  TritonModelBatcherFiniFn_t batcher_fini_fn_;
+  TRITONBACKEND_Batcher* batcher_ = nullptr;
 };
 
 }}  // namespace triton::core

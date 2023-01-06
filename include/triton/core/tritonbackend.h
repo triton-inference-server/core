@@ -65,6 +65,7 @@ struct TRITONBACKEND_Backend;
 struct TRITONBACKEND_Model;
 struct TRITONBACKEND_ModelInstance;
 struct TRITONBACKEND_BackendAttribute;
+struct TRITONBACKEND_Batcher;
 
 ///
 /// TRITONBACKEND API Version
@@ -1411,7 +1412,6 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 ///
 
 /// Check whether a request should be added to the pending model batch.
-/// \param model The backend model for which Triton is forming a batch.
 /// \param request The request to be added to the pending batch.
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch. When the callback returns, this should reflect
@@ -1420,22 +1420,42 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 /// should be included in the batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchIncludeRequest(
-    TRITONBACKEND_Model* model, TRITONBACKEND_Request* request, void* userp,
-    bool* should_include);
+    TRITONBACKEND_Request* request, void* userp, bool* should_include);
 
 /// Callback to be invoked when Triton has begun forming a batch.
-/// \param model The backend model for which Triton is forming a batch.
+/// \param batcher The read-only placeholder for backend to retrieve
+// information about the batching strategy for this model.
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
-    TRITONBACKEND_Model* model, void** userp);
+    const TRITONBACKEND_Batcher* batcher, void** userp);
 
 /// Callback to be invoked when Triton has finishing forming a batch.
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(void* userp);
+
+/// Create a new batcher for use with custom batching. This is called during
+/// model loading. The batcher will point to a user-defined data structure that
+/// holds read-only data used for custom batching.
+///
+/// \param batcher User-defined placeholder for backend to store and
+/// retrieve information about the batching strategy for this model.
+/// return a TRITONSERVER_Error indicating success or failure.
+/// \param model The backend model for which Triton is forming a batch.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatcherInitialize(
+    TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model);
+
+/// Free memory associated with batcher. This is called during model unloading.
+///
+/// \param batcher User-defined placeholder for backend to store and
+/// retrieve information about the batching strategy for this model.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_Error* TRITONBACKEND_ModelBatcherFinalize(
+    TRITONBACKEND_Batcher* batcher);
 
 #ifdef __cplusplus
 }

@@ -492,21 +492,40 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batch_dlhandle_, "TRITONBACKEND_ModelBatchFinalize", true /* optional */,
       reinterpret_cast<void**>(&batch_fini_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatcherFinalize",
+      true /* optional */, reinterpret_cast<void**>(&batcher_fini_fn_)));
+  TritonModelBatcherInitFn_t batcher_init_fn;
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatcherInitialize",
+      true /* optional */, reinterpret_cast<void**>(&batcher_init_fn)));
 
-  // If one function is defined, they all must be.
-  if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_) &&
-      !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_)) {
-    batch_dlhandle_ = nullptr;
-    batch_incl_fn_ = nullptr;
-    batch_init_fn_ = nullptr;
-    batch_fini_fn_ = nullptr;
+  Status failure;
+  // If one custom batching function is defined, all must be.
+  if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_ || batcher_init_fn ||
+       batcher_fini_fn_) &&
+      !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_ && batcher_init_fn &&
+        batcher_fini_fn_)) {
+    ClearHandles();
+    batcher_init_fn = nullptr;
     return Status(
         Status::Code::INVALID_ARG,
         batch_libpath +
             " does not define all "
-            "required custom batching functions for model" +
+            "required custom batching functions for model " +
             config_.name());
   }
+  // If a custom batcher is provided, initialize it.
+  if (batcher_init_fn) {
+    TRITONSERVER_Error* err = batcher_init_fn(
+        Batcher(), reinterpret_cast<TRITONBACKEND_Model*>(this));
+    if (err) {
+      auto err_message = TRITONSERVER_ErrorMessage(err);
+      TRITONSERVER_ErrorDelete(err);
+      return Status(Status::Code::INVALID_ARG, err_message);
+    }
+  }
+
   return Status::Success;
 }
 
@@ -548,6 +567,17 @@ TritonModel::TritonModel(
 
 TritonModel::~TritonModel()
 {
+  // If there is a custom batcher, finalize it.
+  if (batcher_fini_fn_) {
+    TRITONSERVER_Error* err = batcher_fini_fn_(*Batcher());
+    *Batcher() = nullptr;
+    if (err) {
+      LOG_ERROR << "Custom batcher finalization failed for model "
+                << config_.name() << ": " << TRITONSERVER_ErrorMessage(err);
+      TRITONSERVER_ErrorDelete(err);
+    }
+  }
+
   // Clear library handles.
   ClearHandles();
 
@@ -578,6 +608,7 @@ TritonModel::ClearHandles()
   batch_incl_fn_ = nullptr;
   batch_init_fn_ = nullptr;
   batch_fini_fn_ = nullptr;
+  batcher_fini_fn_ = nullptr;
 }
 
 extern "C" {
