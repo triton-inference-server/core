@@ -446,7 +446,7 @@ TritonModel::SetConfiguredScheduler()
     // Sequence batcher
     if (config_.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
       LOG_ERROR << "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
-                   "sequence batcher, ignoring custom batching strategy";
+                   "sequence batcher, using default batching strategy";
     }
     RETURN_IF_ERROR(SequenceBatchScheduler::Create(
         this, enforce_equal_shape_tensors, &scheduler));
@@ -500,7 +500,6 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
       batch_dlhandle_, "TRITONBACKEND_ModelBatcherInitialize",
       true /* optional */, reinterpret_cast<void**>(&batcher_init_fn)));
 
-  Status failure;
   // If one custom batching function is defined, all must be.
   if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_ || batcher_init_fn ||
        batcher_fini_fn_) &&
