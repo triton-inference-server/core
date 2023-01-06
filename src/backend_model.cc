@@ -202,7 +202,7 @@ TritonModel::Create(
   if (model_config.has_sequence_batching()) {
     if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
       return Status(
-          triton::common::Error::Code::INVALID_ARG,
+          Status::Code::INVALID_ARG,
           "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
           "sequence batcher, using default batching strategy");
     }
@@ -501,10 +501,12 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
       true /* optional */, reinterpret_cast<void**>(&batcher_init_fn)));
 
   // If one custom batching function is defined, all must be.
-  if ((batch_incl_fn_ || batch_init_fn_ || batch_fini_fn_ || batcher_init_fn ||
-       batcher_fini_fn_) &&
-      !(batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_ && batcher_init_fn &&
-        batcher_fini_fn_)) {
+  const bool defined_some = batch_incl_fn_ || batch_init_fn_ ||
+                            batch_fini_fn_ || batcher_init_fn ||
+                            batcher_fini_fn_;
+  const bool defined_all = batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_ &&
+                           batcher_init_fn && batcher_fini_fn_;
+  if (defined_some && !defined_all) {
     ClearHandles();
     batcher_init_fn = nullptr;
     return Status(
@@ -603,6 +605,14 @@ TritonModel::~TritonModel()
 void
 TritonModel::ClearHandles()
 {
+  {
+    std::unique_ptr<SharedLibrary> slib;
+    LOG_STATUS_ERROR(
+        SharedLibrary::Acquire(&slib), "~TritonModel::ClearHandles");
+    LOG_STATUS_ERROR(
+        slib->CloseLibraryHandle(batch_dlhandle_), "TritonModel::ClearHandles");
+  }
+
   batch_dlhandle_ = nullptr;
   batch_incl_fn_ = nullptr;
   batch_init_fn_ = nullptr;
