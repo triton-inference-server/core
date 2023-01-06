@@ -137,14 +137,15 @@ WarmupRequestComplete(
 }  // namespace
 
 TritonModelInstance::TritonModelInstance(
-    TritonModel* model, const std::string& name, const std::string& group_name, const size_t index,
-    const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-    const std::vector<std::string>& profile_names, const bool passive,
+    TritonModel* model, const std::string& name, const std::string& group_name,
+    const size_t index, const TRITONSERVER_InstanceGroupKind kind,
+    const int32_t device_id, const std::vector<std::string>& profile_names,
+    const bool passive,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const TritonServerMessage& host_policy_message,
     const std::vector<SecondaryDevice>& secondary_devices)
-    : model_(model), name_(name), group_name_(group_name), index_(index), kind_(kind),
-      device_id_(device_id), host_policy_(host_policy),
+    : model_(model), name_(name), group_name_(group_name), index_(index),
+      kind_(kind), device_id_(device_id), host_policy_(host_policy),
       host_policy_message_(host_policy_message), profile_names_(profile_names),
       passive_(passive), secondary_devices_(secondary_devices), state_(nullptr)
 {
@@ -251,9 +252,9 @@ TritonModelInstance::CreateInstances(
         }
         RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         auto err = CreateInstance(
-            model, instance_name, group.name(), c, kind, id, profile_names, passive,
-            policy_name, *host_policy, *(std::get<3>(is)), device_blocking,
-            &device_to_thread_map, secondary_devices);
+            model, instance_name, group.name(), c, kind, id, profile_names,
+            passive, policy_name, *host_policy, *(std::get<3>(is)),
+            device_blocking, &device_to_thread_map, secondary_devices);
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
         RETURN_IF_ERROR(err);
 
@@ -290,10 +291,10 @@ TritonModelInstance::CreateInstances(
 
 Status
 TritonModelInstance::CreateInstance(
-    TritonModel* model, const std::string& name, const std::string& group_name, const size_t index,
-    const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-    const std::vector<std::string>& profile_names, const bool passive,
-    const std::string& host_policy_name,
+    TritonModel* model, const std::string& name, const std::string& group_name,
+    const size_t index, const TRITONSERVER_InstanceGroupKind kind,
+    const int32_t device_id, const std::vector<std::string>& profile_names,
+    const bool passive, const std::string& host_policy_name,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const inference::ModelRateLimiter& rate_limiter_config,
     const bool device_blocking,
@@ -315,8 +316,8 @@ TritonModelInstance::CreateInstance(
   TritonServerMessage host_policy_message(host_policy_json);
 
   std::unique_ptr<TritonModelInstance> local_instance(new TritonModelInstance(
-      model, name, group_name, index, kind, device_id, profile_names, passive, host_policy,
-      host_policy_message, secondary_devices));
+      model, name, group_name, index, kind, device_id, profile_names, passive,
+      host_policy, host_policy_message, secondary_devices));
 
   TRITONBACKEND_ModelInstance* triton_instance =
       reinterpret_cast<TRITONBACKEND_ModelInstance*>(local_instance.get());

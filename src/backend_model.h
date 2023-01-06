@@ -125,7 +125,7 @@ class TritonModel : public Model {
 
   // The model instances for this model stored by the
   // instance groups defined in the model configuration.
-  // Passive instance groups are those instances which are 
+  // Passive instance groups are those instances which are
   // loaded but not added to the scheduler.
   std::map<std::string, TritonInstanceGroup> instance_group_map_;
   std::map<std::string, TritonInstanceGroup> passive_instance_group_map_;
