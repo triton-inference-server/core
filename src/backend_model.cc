@@ -495,20 +495,18 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batch_dlhandle_, "TRITONBACKEND_ModelBatcherFinalize",
       true /* optional */, reinterpret_cast<void**>(&batcher_fini_fn_)));
-  TritonModelBatcherInitFn_t batcher_init_fn;
   RETURN_IF_ERROR(slib->GetEntrypoint(
       batch_dlhandle_, "TRITONBACKEND_ModelBatcherInitialize",
-      true /* optional */, reinterpret_cast<void**>(&batcher_init_fn)));
+      true /* optional */, reinterpret_cast<void**>(&batcher_init_fn_)));
 
   // If one custom batching function is defined, all must be.
   const bool defined_some = batch_incl_fn_ || batch_init_fn_ ||
-                            batch_fini_fn_ || batcher_init_fn ||
+                            batch_fini_fn_ || batcher_init_fn_ ||
                             batcher_fini_fn_;
   const bool defined_all = batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_ &&
-                           batcher_init_fn && batcher_fini_fn_;
+                           batcher_init_fn_ && batcher_fini_fn_;
   if (defined_some && !defined_all) {
     ClearHandles();
-    batcher_init_fn = nullptr;
     return Status(
         Status::Code::INVALID_ARG,
         batch_libpath +
@@ -517,8 +515,8 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
             config_.name());
   }
   // If a custom batcher is provided, initialize it.
-  if (batcher_init_fn) {
-    TRITONSERVER_Error* err = batcher_init_fn(
+  if (batcher_init_fn_) {
+    TRITONSERVER_Error* err = batcher_init_fn_(
         Batcher(), reinterpret_cast<TRITONBACKEND_Model*>(this));
     if (err) {
       auto err_message = TRITONSERVER_ErrorMessage(err);
@@ -617,6 +615,7 @@ TritonModel::ClearHandles()
   batch_incl_fn_ = nullptr;
   batch_init_fn_ = nullptr;
   batch_fini_fn_ = nullptr;
+  batcher_init_fn_ = nullptr;
   batcher_fini_fn_ = nullptr;
 }
 
