@@ -484,6 +484,7 @@ ModelRepositoryManager::LoadModelByDependency()
     for (auto& invalid_model : set_pair.second) {
       model_life_cycle_->AsyncUnload(invalid_model->model_name_);
       res[invalid_model->model_name_] = invalid_model->status_;
+      LOG_ERROR << invalid_model->status_.AsString();
       invalid_model->loaded_versions_ = std::set<int64_t>();
       loaded_models.emplace(invalid_model);
     }
