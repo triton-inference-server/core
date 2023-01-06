@@ -101,57 +101,40 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
 ///
-/// CacheEntry Lifetime Management
-///
-
-// TODO: Currently not using EntryNew/EntryDelete APIs at all. Instead
-//       we are creating an Entry in TritonCacheManager and passing an opaque
-//       pointer to it for cache to add Items/Buffers to over C APIs. See
-//       TritonCache::Lookup as an example. This ownership flow should be
-//       clarified/cleaned up.
-
-/// Create a new cache entry object. The caller takes ownership of the
-/// TRITONCACHE_CacheEntry object and must call
-/// TRITONCACHE_CacheEntryDelete to release the object.
-///
-/// \param entry Returns the new cache entry object.
-/// \return a TRITONSERVER_Error indicating success or failure.
-
-// TODO: Not currently using this API. See TritonCache Lookup/Insert
-// for explanation. Should clean up / clarify the expected ownerships here.
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryNew(
-    TRITONCACHE_CacheEntry** entry);
-
-/// Delete a cache entry object.
-///
-/// \param entry The cache entry object to delete.
-/// \return a TRITONSERVER_Error indicating success or failure.
-
-// TODO: Not currently using this API. See TritonCache Lookup/Insert
-// for explanation. Should clean up / clarify the expected ownerships here.
-TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryDelete(
-    TRITONCACHE_CacheEntry* entry);
-
-///
 /// CacheEntry Field Management
 ///
 
-// TODO: Proper API descriptions, lifetimes, copies, etc.
-
-// Get number of items in entry
+/// Get the number of items available in the entry.
+///
+/// \param entry The CacheEntry object to query.
+/// \param count Returns the number of items in entry.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemCount(
     TRITONCACHE_CacheEntry* entry, size_t* count);
 
-// Adds item to entry
+/// Adds item to the entry.
+///
+/// TODO: ownership/lifetime
+///
+/// \param entry The CacheEntry object to add item to.
+/// \param item The CacheEntryItem being added to entry.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddItem(
     TRITONCACHE_CacheEntry* entry, TRITONCACHE_CacheEntryItem* item);
 
-// Gets item at index from entry where 0 <= index < count and
-// 'count' is the value returned by TRITONCACHE_CacheEntryItemCount
+/// Gets the item at index from entry.
+///
+/// The caller does not own the returned item and must not modify or delete it.
+/// The lifetime of the item extends until 'entry' or 'item' is deleted.
+///
+/// \param entry The CacheEntry object.
+/// \param index The index of the item, must be 0 <= index < count, where
+/// 'count' is the value returned by TRITONCACHE_CacheEntryItemCount.
+/// \param item The item at index that is returned.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetItem(
     TRITONCACHE_CacheEntry* entry, size_t index,
     TRITONCACHE_CacheEntryItem** item);
-
 
 ///
 /// CacheEntryItem Lifetime Management
@@ -173,6 +156,8 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemNew(
 
 // TODO: Not currently using this API. See TritonCache Lookup/Insert
 // for explanation. Should clean up / clarify the expected ownerships here.
+// However, should keep this API in case someone creates an item without
+// adding it to a entry / transferring ownership, to allow manual cleanup.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemDelete(
     TRITONCACHE_CacheEntryItem* item);
 
@@ -189,16 +174,15 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemBufferCount(
 // Adds buffer of specified memory_type/id to item. Only CPU memory supported
 // currently.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemAddBuffer(
-    TRITONCACHE_CacheEntryItem* item, const void* base, size_t byte_size,
-    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id);
+    TRITONCACHE_CacheEntryItem* item, const void* base,
+    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 // Gets buffer at index from item where 0 <= index < count and
 // 'count' is the value returned by TRITONCACHE_CacheEntryItemBufferCount
 // and returns the memory_type info of the buffer
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
-    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id);
+    TRITONSERVER_BufferAttributes* buffer_attributes);
 
 ///
 /// The following functions can be implemented by a cache. Functions
