@@ -1412,6 +1412,7 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 ///
 
 /// Check whether a request should be added to the pending model batch.
+///
 /// \param request The request to be added to the pending batch.
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch. When the callback returns, this should reflect
@@ -1423,6 +1424,7 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchIncludeRequest(
     TRITONBACKEND_Request* request, void* userp, bool* should_include);
 
 /// Callback to be invoked when Triton has begun forming a batch.
+///
 /// \param batcher The read-only placeholder for backend to retrieve
 // information about the batching strategy for this model.
 /// \param userp The placeholder for backend to store and retrieve information
@@ -1432,6 +1434,7 @@ TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
     const TRITONBACKEND_Batcher* batcher, void** userp);
 
 /// Callback to be invoked when Triton has finishing forming a batch.
+///
 /// \param userp The placeholder for backend to store and retrieve information
 /// about this pending batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
