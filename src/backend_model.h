@@ -66,7 +66,7 @@ class TritonModel : public Model {
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  const std::map<std::string, TritonInstanceGroup>& InstanceGroups() const
+  const std::unordered_map<std::string, TritonInstanceGroup>& InstanceGroups() const
   {
     return instance_group_map_;
   }
@@ -127,8 +127,8 @@ class TritonModel : public Model {
   // instance groups defined in the model configuration.
   // Passive instance groups are those instances which are
   // loaded but not added to the scheduler.
-  std::map<std::string, TritonInstanceGroup> instance_group_map_;
-  std::map<std::string, TritonInstanceGroup> passive_instance_group_map_;
+  std::unordered_map<std::string, TritonInstanceGroup> instance_group_map_;
+  std::unordered_map<std::string, TritonInstanceGroup> passive_instance_group_map_;
 
   // Opaque state associated with this model.
   void* state_;
