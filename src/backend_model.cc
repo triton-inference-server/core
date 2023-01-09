@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -319,9 +319,11 @@ TritonModel::AddInstance(
     std::unique_ptr<TritonModelInstance>&& instance, const bool passive)
 {
   if (passive) {
-    passive_instances_.emplace_back(std::move(instance));
+    passive_instance_group_map_[instance->GroupName()].emplace_back(
+        std::move(instance));
   } else {
-    instances_.emplace_back(std::move(instance));
+    instance_group_map_[instance->GroupName()].emplace_back(
+        std::move(instance));
   }
 
   return Status::Success;
@@ -434,8 +436,10 @@ TritonModel::SetConfiguredScheduler()
 Status
 TritonModel::Initialize()
 {
-  for (const auto& instance : instances_) {
-    RETURN_IF_ERROR(instance->Initialize());
+  for (const auto& pair : instance_group_map_) {
+    for (const auto& instance : pair.second) {
+      RETURN_IF_ERROR(instance->Initialize());
+    }
   }
 
   return Status::Success;
@@ -444,8 +448,10 @@ TritonModel::Initialize()
 Status
 TritonModel::WarmUp()
 {
-  for (const auto& instance : instances_) {
-    RETURN_IF_ERROR(instance->WarmUp());
+  for (const auto& pair : instance_group_map_) {
+    for (const auto& instance : pair.second) {
+      RETURN_IF_ERROR(instance->WarmUp());
+    }
   }
 
   return Status::Success;
@@ -470,8 +476,8 @@ TritonModel::~TritonModel()
 {
   // Explicitly delete/finalize all model instances before finalizing
   // the model itself.
-  instances_.clear();
-  passive_instances_.clear();
+  instance_group_map_.clear();
+  passive_instance_group_map_.clear();
 
   // Unregister itself from the rate limiter. Note this should happen
   // after all instances are destructed. Destrucing instances ensures
