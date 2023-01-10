@@ -160,11 +160,11 @@ class TritonModel : public Model {
   // Custom batching shared object handle, function pointers, and batcher
   // pointer.
   void* batch_dlhandle_ = nullptr;
-  TritonModelBatchInclFn_t batch_incl_fn_;
-  TritonModelBatchInitFn_t batch_init_fn_;
-  TritonModelBatchFiniFn_t batch_fini_fn_;
-  TritonModelBatcherInitFn_t batcher_init_fn_;
-  TritonModelBatcherFiniFn_t batcher_fini_fn_;
+  TritonModelBatchInclFn_t batch_incl_fn_ = nullptr;
+  TritonModelBatchInitFn_t batch_init_fn_ = nullptr;
+  TritonModelBatchFiniFn_t batch_fini_fn_ = nullptr;
+  TritonModelBatcherInitFn_t batcher_init_fn_ = nullptr;
+  TritonModelBatcherFiniFn_t batcher_fini_fn_ = nullptr;
   TRITONBACKEND_Batcher* batcher_ = nullptr;
 };
 

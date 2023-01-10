@@ -567,7 +567,6 @@ TritonModel::TritonModel(
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {
-  ClearHandles();
 }
 
 TritonModel::~TritonModel()
