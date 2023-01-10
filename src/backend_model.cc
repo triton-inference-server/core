@@ -609,7 +609,7 @@ TritonModel::~TritonModel()
 void
 TritonModel::ClearHandles()
 {
-  {
+  if (batch_dlhandle_ != nullptr) {
     std::unique_ptr<SharedLibrary> slib;
     LOG_STATUS_ERROR(
         SharedLibrary::Acquire(&slib), "~TritonModel::ClearHandles");
