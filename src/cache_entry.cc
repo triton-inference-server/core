@@ -83,7 +83,6 @@ CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
 void
 CacheEntryItem::AddBuffer(void* base, size_t byte_size, bool copy)
 {
-  // Read-write, cannot be shared
   std::unique_lock lk(buffer_mu_);
   if (copy) {
     void* new_base = malloc(byte_size);
@@ -133,10 +132,8 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
 
   // Build cache entry item from response outputs
   for (const auto& output : response->Outputs()) {
-    auto [status, buffer] = ToBytes(output);
-    if (!status.IsOk()) {
-      return status;
-    }
+    auto buffer = Buffer(nullptr, 0);
+    RETURN_IF_ERROR(ToBytes(output, &buffer));
     bool copy = false;  // ToBytes allocated new memory, we pass it through
     AddBuffer(buffer, copy);
   }
@@ -156,11 +153,9 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
     if (!base) {
       return Status(Status::Code::INTERNAL, "buffer was nullptr");
     }
-    const auto& [status, cache_output] =
-        FromBytes({static_cast<std::byte*>(base), byte_size});
-    if (!status.IsOk()) {
-      return status;
-    }
+    auto cache_output = CacheOutput();
+    RETURN_IF_ERROR(
+        FromBytes({static_cast<std::byte*>(base), byte_size}, &cache_output));
 
     InferenceResponse::Output* response_output = nullptr;
     RETURN_IF_ERROR(response->AddOutput(
@@ -201,10 +196,13 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
   return Status::Success;
 }
 
-std::pair<Status, Buffer>
-CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
+Status
+CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
 {
-  Buffer empty_buffer(nullptr, 0);
+  if (!buffer) {
+    return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
+  }
+
   // Fetch output buffer details
   const void* output_base = nullptr;
   size_t output_byte_size = 0;
@@ -214,23 +212,21 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
   auto status = output.DataBuffer(
       &output_base, &output_byte_size, &memory_type, &memory_type_id, &userp);
   if (!status.IsOk()) {
-    return {status, empty_buffer};
+    return status;
   }
 
   // DLIS-2673: Add better memory_type support
   if (memory_type != TRITONSERVER_MEMORY_CPU &&
       memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
-    auto status = Status(
+    return Status(
         Status::Code::INVALID_ARG,
         "Only input buffers in CPU memory are allowed in cache currently");
-    return {status, empty_buffer};
   }
 
   // Exit early if response buffer from output is invalid
   if (!output_base) {
-    auto status = Status(
+    return Status(
         Status::Code::INTERNAL, "Response buffer from output was nullptr");
-    return {status, empty_buffer};
   }
 
   size_t total_byte_size = 0;
@@ -286,12 +282,18 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output)
   memcpy(packed_bytes + position, output_base, u64_output_byte_size);
   position += u64_output_byte_size;
 
-  return {Status::Success, Buffer(packed_bytes, total_byte_size)};
+  *buffer = Buffer(packed_bytes, total_byte_size);
+  return Status::Success;
 }
 
-std::pair<Status, CacheOutput>
-CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
+Status
+CacheEntryItem::FromBytes(
+    boost::span<const std::byte> packed_bytes, CacheOutput* output)
 {
+  if (!output) {
+    return Status(Status::Code::INVALID_ARG, "output arg was nullptr");
+  }
+
   // Name
   size_t position = 0;
   uint32_t name_byte_size = 0;
@@ -334,21 +336,19 @@ CacheEntryItem::FromBytes(boost::span<const std::byte> packed_bytes)
   position += output_byte_size;
 
   // Verify packed bytes matched expected size before allocating output_buffer
-  auto output = CacheOutput();
   if (packed_bytes.begin() + position != packed_bytes.end()) {
-    auto fail = Status(
+    return Status(
         Status::Code::INTERNAL, "Unexpected number of bytes received: " +
                                     std::to_string(packed_bytes.size()) +
                                     ", expected: " + std::to_string(position));
-    return {fail, output};
   }
 
-  output.name_ = name;
-  output.dtype_ = triton::common::ProtocolStringToDataType(dtype);
-  output.shape_ = shape;
-  output.byte_size_ = output_byte_size;
-  output.buffer_ = const_cast<void*>(output_buffer);
-  return {Status::Success, output};
+  output->name_ = name;
+  output->dtype_ = triton::common::ProtocolStringToDataType(dtype);
+  output->shape_ = shape;
+  output->byte_size_ = output_byte_size;
+  output->buffer_ = const_cast<void*>(output_buffer);
+  return Status::Success;
 }
 
 }}  // namespace triton::core

@@ -90,9 +90,11 @@ class CacheEntryItem {
   void AddBuffer(void* base, size_t byte_size, bool copy);
 
  private:
-  std::pair<Status, Buffer> ToBytes(const InferenceResponse::Output& output);
-  std::pair<Status, CacheOutput> FromBytes(
-      boost::span<const std::byte> packed_bytes);
+  // Returns bytes buffer in buffer arg
+  Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
+  // Returns cache output in output arg
+  Status FromBytes(
+      boost::span<const std::byte> packed_bytes, CacheOutput* output);
 
   // NOTE: performance gain may be possible by removing this mutex and
   //   guaranteeing that no two threads will access/modify an item
