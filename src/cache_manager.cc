@@ -232,14 +232,13 @@ TritonCache::Insert(
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
+  // NOTE: Possible optimization - Check if key exists first before forming
+  // Cache Entry
 
-  // TODO: Optimization - Check if key exists first before forming Cache Entry
-
-  // TODO: Similar to Lookup, we are currently creating CacheEntry on Triton
-  // side, and letting cache retrieve the Items/Buffers via C APIs. So
-  // CacheEntryNew/Delete C APIs aren't being used at all.
-  // Cache impl will have to copy the buffers since Triton may invalidate them
-  // shortly after the insert_fn call.
+  // NOTE: Similar to Lookup, we are currently creating CacheEntry on Triton
+  // side, and letting cache retrieve the Items/Buffers via C APIs. The cache
+  // implementation will have to copy the buffers since Triton may invalidate
+  // them shortly after the insert_fn call.
   const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
     entry->AddItem(item);

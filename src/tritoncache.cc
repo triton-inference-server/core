@@ -112,7 +112,6 @@ TRITONCACHE_CacheEntryAddItem(
 
   // Triton CacheEntry will take ownership of item, caller should not
   // invalidate it.
-  // TODO: Copy, signal/callback, cleanup?
   std::shared_ptr<CacheEntryItem> sitem(litem);
   lentry->AddItem(sitem);
   return nullptr;  // success
@@ -224,6 +223,7 @@ TRITONCACHE_CacheEntryItemAddBuffer(
         "Only buffers in CPU memory are allowed in cache currently");
   }
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
+  // COPY: This will add a copy of the buffer to the item.
   litem->AddBuffer(base, byte_size);
   return nullptr;  // success
 }
