@@ -1,4 +1,4 @@
-// Copyright 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -57,7 +57,7 @@ namespace triton { namespace core {
 
 struct CacheOutput {
   // Inference Response output name
-  std::string name_;
+  std::string name_ = "";
   // Inference Response output datatype
   inference::DataType dtype_;
   // Inference Response output shape
@@ -65,9 +65,9 @@ struct CacheOutput {
   // Inference Response output buffer
   // NOTE: Cache Output will only temporarily store pointer, it will managed by
   //       CacheEntryItem, and will be copied into InferenceResponse object
-  void* buffer_;
+  void* buffer_ = nullptr;
   // Inference Response output buffer size
-  uint64_t byte_size_;
+  uint64_t byte_size_ = 0;
 };
 
 // A Buffer is an arbitrary data blob whose type need not be known
@@ -90,9 +90,11 @@ class CacheEntryItem {
   void AddBuffer(void* base, size_t byte_size, bool copy);
 
  private:
-  std::optional<Buffer> ToBytes(const InferenceResponse::Output& output);
-  std::optional<CacheOutput> FromBytes(
-      boost::span<const std::byte> packed_bytes);
+  // Returns bytes buffer in buffer arg
+  Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
+  // Returns cache output in output arg
+  Status FromBytes(
+      boost::span<const std::byte> packed_bytes, CacheOutput* output);
 
   // NOTE: performance gain may be possible by removing this mutex and
   //   guaranteeing that no two threads will access/modify an item

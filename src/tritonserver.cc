@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1178,7 +1178,7 @@ TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
   // For backwards compatibility, forward this API call to new CacheConfig API.
   std::string config_json = R"({"size": )" + std::to_string(size) + "}";
   return TRITONSERVER_ServerOptionsSetCacheConfig(
-      options, "", config_json.c_str());
+      options, "" /* cache_name */, config_json.c_str());
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*

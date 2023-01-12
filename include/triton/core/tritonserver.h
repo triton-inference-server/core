@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1692,7 +1692,15 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
 
-// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
+/// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
+///
+/// Set the total response cache byte size that the server can allocate in CPU
+/// memory. The response cache will be shared across all inference requests and
+/// across all models.
+///
+/// \param options The server options object.
+/// \param size The total response cache byte size.
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size);
@@ -1705,7 +1713,7 @@ TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
 ///   std::string config_json = "{\"size\": 1048576}"
 ///
 /// \param options The server options object.
-/// FIXME: Included for future extensibility, but not currently used.
+/// FIXME: cache_name included for future extensibility, but not currently used.
 /// \param cache_name The name of the cache.
 /// \param config_json The string representation of config JSON.
 /// \return a TRITONSERVER_Error indicating success or failure.

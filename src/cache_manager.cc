@@ -1,4 +1,4 @@
-// Copyright 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -78,7 +78,7 @@ TritonCache::~TritonCache()
   LOG_VERBOSE(1) << "unloading cache '" << name_ << "'";
   if (fini_fn_) {
     if (cache_impl_) {
-      LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheDelete from: '" << libpath_
+      LOG_VERBOSE(1) << "Calling TRITONCACHE_CacheFinalize from: '" << libpath_
                      << "'";
       LOG_TRITONSERVER_ERROR(fini_fn_(cache_impl_), "failed finalizing cache");
     } else {
@@ -120,10 +120,10 @@ TritonCache::LoadCacheLibrary()
 
     // Cache initialize and finalize functions, required
     RETURN_IF_ERROR(slib->GetEntrypoint(
-        dlhandle_, "TRITONCACHE_CacheNew", false /* optional */,
+        dlhandle_, "TRITONCACHE_CacheInitialize", false /* optional */,
         reinterpret_cast<void**>(&init_fn)));
     RETURN_IF_ERROR(slib->GetEntrypoint(
-        dlhandle_, "TRITONCACHE_CacheDelete", false /* optional */,
+        dlhandle_, "TRITONCACHE_CacheFinalize", false /* optional */,
         reinterpret_cast<void**>(&fini_fn)));
     RETURN_IF_ERROR(slib->GetEntrypoint(
         dlhandle_, "TRITONCACHE_CacheLookup", false /* optional */,
@@ -232,9 +232,13 @@ TritonCache::Insert(
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
+  // NOTE: Possible optimization - Check if key exists first before forming
+  // Cache Entry
 
-  // TODO: Optimization - Check if key exists first before forming Cache Entry
-
+  // NOTE: Similar to Lookup, we are currently creating CacheEntry on Triton
+  // side, and letting cache retrieve the Items/Buffers via C APIs. The cache
+  // implementation will have to copy the buffers since Triton may invalidate
+  // them shortly after the insert_fn call.
   const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
     entry->AddItem(item);
@@ -250,7 +254,6 @@ Status
 TritonCache::Insert(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting list of responses at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
   }
@@ -270,7 +273,6 @@ TritonCache::Insert(
 Status
 TritonCache::Insert(InferenceResponse* response, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Inserting single response at cache key: " << key;
   if (!response) {
     return Status(Status::Code::INVALID_ARG, "response is nullptr");
   }
@@ -279,20 +281,33 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
 }
 
 
-std::optional<std::vector<std::shared_ptr<CacheEntryItem>>>
+std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
   LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
   if (lookup_fn_ == nullptr) {
-    LOG_ERROR << "cache lookup function is nullptr";
-    return std::nullopt;
+    auto fail = Status(Status::Code::INTERNAL, "lookup function is nullptr");
+    return {fail, {}};
   }
 
-  auto entry = std::make_shared<CacheEntry>();
+  auto entry = std::make_unique<CacheEntry>();
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
-  RETURN_NULLOPT_IF_TRITONSERVER_ERROR(
-      lookup_fn_(cache_impl_, key.c_str(), opaque_entry));
-  return entry->Items();
+  auto err = lookup_fn_(cache_impl_, key.c_str(), opaque_entry);
+  if (err) {
+    auto fail = Status(
+        TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
+        TRITONSERVER_ErrorMessage(err));
+    return {fail, {}};
+  }
+
+  // NOTE: Copies entry's vector of item pointers, entry pointer will be
+  // cleaned up.
+  // Item pointers are currently created on cache impl side by
+  // TRITONCACHE_CacheEntryItemNew and we need to make sure the cache doesn't
+  // call TRITONCACHE_CacheEntryItemDelete before Triton is done with them.
+  // Currently, we are letting Triton clean up the CacheEntryItems when they go
+  // out of scope, so CacheEntryItemDelete API is not needed in cache impl.
+  return {Status::Success, entry->Items()};
 }
 
 // NOTE: Multiple responses won't be expected until supporting decoupled
@@ -303,11 +318,10 @@ TritonCache::Lookup(
 {
   LOG_VERBOSE(2) << "Looking up responses at cache key: " << key;
 
-  const auto opt_items = Lookup(key);
-  if (!opt_items.has_value()) {
-    return Status(Status::Code::INTERNAL, "Lookup failed");
+  const auto& [status, items] = Lookup(key);
+  if (!status.IsOk()) {
+    return status;
   }
-  const auto& items = opt_items.value();
 
   if (items.size() != responses.size()) {
     return Status(
