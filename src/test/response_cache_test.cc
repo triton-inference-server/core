@@ -660,7 +660,7 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // Setup items
   std::shared_ptr<tc::CacheEntryItem> large_item(new tc::CacheEntryItem());
   // Add buffers to items
-  large_item->AddBuffer(large_data);
+  large_item->AddBufferCopy(large_data);
 
   std::cout << "Create large_response (larger than cache) of size: "
             << large_data.size() << std::endl;
@@ -738,11 +738,11 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
   std::shared_ptr<tc::CacheEntryItem> item1(new tc::CacheEntryItem());
   std::shared_ptr<tc::CacheEntryItem> item2(new tc::CacheEntryItem());
   // Add buffers to items
-  item1->AddBuffer(buffer1);
-  item1->AddBuffer(buffer2);
-  item2->AddBuffer(buffer3);
-  item2->AddBuffer(buffer4);
-  item2->AddBuffer(buffer5);
+  item1->AddBufferCopy(buffer1);
+  item1->AddBufferCopy(buffer2);
+  item2->AddBufferCopy(buffer3);
+  item2->AddBufferCopy(buffer4);
+  item2->AddBufferCopy(buffer5);
 
   helpers::check_status(
       helpers::InsertLookupCompare(cache, {item1}, "TestCacheSingleItemBytes"));
