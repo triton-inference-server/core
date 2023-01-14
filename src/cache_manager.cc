@@ -88,6 +88,12 @@ TritonCache::~TritonCache()
     LOG_ERROR << "cache finalize function is nullptr";
   }
 
+  if (dlhandle_) {
+    std::unique_ptr<SharedLibrary> slib;
+    LOG_STATUS_ERROR(SharedLibrary::Acquire(&slib), "~TritonCache");
+    LOG_STATUS_ERROR(slib->CloseLibraryHandle(dlhandle_), "~TritonCache");
+  }
+
   ClearHandles();
 }
 
