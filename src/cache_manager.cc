@@ -35,12 +35,12 @@
 namespace triton { namespace core {
 
 std::string
-TritonCacheLibraryName()
+TritonCacheLibraryName(const std::string& cache_name)
 {
 #ifdef _WIN32
-  return std::string("tritoncache.dll");
+  return std::string("tritoncache_") + cache_name + ".dll";
 #else
-  return std::string("libtritoncache.so");
+  return std::string("libtritoncache_") + cache_name + ".so";
 #endif
 }
 
@@ -399,10 +399,11 @@ TritonCacheManager::CreateCache(
 
   // Get the path to the cache shared library. Search path is global
   // cache directory.
-  const std::vector<std::string> search_paths = {cache_dir_};
+  const std::vector<std::string> search_paths = {JoinPath({cache_dir_, name})};
+
   // Triton will only use a single cache library path for now,
   // regardless of implementation.
-  std::string cache_libname = TritonCacheLibraryName();
+  std::string cache_libname = TritonCacheLibraryName(name);
   std::string libpath = "";
   for (const auto& path : search_paths) {
     const auto full_path = JoinPath({path, cache_libname});
