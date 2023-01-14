@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -273,8 +273,7 @@ Metrics::EnableMetrics()
 }
 
 void
-Metrics::EnableCacheMetrics(
-    std::shared_ptr<RequestResponseCache> response_cache)
+Metrics::EnableCacheMetrics(std::shared_ptr<TritonCache> response_cache)
 {
   auto singleton = GetSingleton();
   // Ensure thread-safe enabling of Cache Metrics
@@ -327,7 +326,7 @@ Metrics::SetMetricsInterval(uint64_t metrics_interval_ms)
 
 void
 Metrics::StartPollingThreadSingleton(
-    std::shared_ptr<RequestResponseCache> response_cache)
+    std::shared_ptr<TritonCache> response_cache)
 {
   auto singleton = GetSingleton();
 
@@ -345,8 +344,7 @@ Metrics::StartPollingThreadSingleton(
 }
 
 bool
-Metrics::StartPollingThread(
-    std::shared_ptr<RequestResponseCache> response_cache)
+Metrics::StartPollingThread(std::shared_ptr<TritonCache> response_cache)
 {
   // Nothing to poll if no polling metrics enabled, don't spawn a thread
   if (!cache_metrics_enabled_ && !gpu_metrics_enabled_ &&
@@ -367,6 +365,8 @@ Metrics::StartPollingThread(
 
       // Poll Response Cache metrics
       if (cache_metrics_enabled_ && response_cache != nullptr) {
+        // TODO: Cache metrics will probably be moved to cache implementation
+        // with Metrics API
         PollCacheMetrics(response_cache);
       }
 
@@ -390,8 +390,12 @@ Metrics::StartPollingThread(
 }
 
 bool
-Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
+Metrics::PollCacheMetrics(std::shared_ptr<TritonCache> response_cache)
 {
+  // Cache metrics will likely be moved to cache implementation
+  return false;
+
+  /* TODO: Remove, move to cache implementation, etc.
   if (response_cache == nullptr) {
     LOG_WARNING << "error polling cache metrics, cache metrics will not be "
                 << "available: cache was nullptr";
@@ -410,6 +414,7 @@ Metrics::PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache)
       response_cache->TotalInsertionLatencyNs() / 1000);
   cache_util_global_->Set(response_cache->TotalUtilization());
   return true;
+  */
 }
 
 #ifdef TRITON_ENABLE_METRICS_CPU
@@ -698,8 +703,7 @@ Metrics::PollDcgmMetrics()
 }
 
 bool
-Metrics::InitializeCacheMetrics(
-    std::shared_ptr<RequestResponseCache> response_cache)
+Metrics::InitializeCacheMetrics(std::shared_ptr<TritonCache> response_cache)
 {
   if (response_cache == nullptr) {
     LOG_WARNING

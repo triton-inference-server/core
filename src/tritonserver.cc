@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -233,9 +233,6 @@ class TritonServerOptions {
   uint64_t PinnedMemoryPoolByteSize() const { return pinned_memory_pool_size_; }
   void SetPinnedMemoryPoolByteSize(uint64_t s) { pinned_memory_pool_size_ = s; }
 
-  uint64_t ResponseCacheByteSize() const { return response_cache_byte_size_; }
-  void SetResponseCacheByteSize(uint64_t s) { response_cache_byte_size_ = s; }
-
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
   {
     return cuda_memory_pool_size_;
@@ -311,6 +308,12 @@ class TritonServerOptions {
     return host_policy_map_;
   }
 
+  const std::string& CacheConfig() const { return cache_config_; }
+  void SetCacheConfig(const std::string& cfg) { cache_config_ = cfg; }
+
+  const std::string& CacheDir() const { return cache_dir_; }
+  void SetCacheDir(const std::string& dir) { cache_dir_ = dir; }
+
  private:
   std::string server_id_;
   std::set<std::string> repo_paths_;
@@ -327,13 +330,15 @@ class TritonServerOptions {
   uint64_t metrics_interval_;
   unsigned int exit_timeout_;
   uint64_t pinned_memory_pool_size_;
-  uint64_t response_cache_byte_size_;
   unsigned int buffer_manager_thread_count_;
   unsigned int model_load_thread_count_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
   std::string repoagent_dir_;
+  std::string cache_dir_;
+  // String representation of JSON cache config
+  std::string cache_config_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
@@ -345,7 +350,7 @@ TritonServerOptions::TritonServerOptions()
       rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
       gpu_metrics_(true), cpu_metrics_(true), metrics_interval_(2000),
       exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
-      response_cache_byte_size_(0), buffer_manager_thread_count_(0),
+      buffer_manager_thread_count_(0),
       model_load_thread_count_(
           std::max(2u, 2 * std::thread::hardware_concurrency())),
 #ifdef TRITON_ENABLE_GPU
@@ -354,7 +359,8 @@ TritonServerOptions::TritonServerOptions()
       min_compute_capability_(0),
 #endif  // TRITON_ENABLE_GPU
       backend_dir_("/opt/tritonserver/backends"),
-      repoagent_dir_("/opt/tritonserver/repoagents")
+      repoagent_dir_("/opt/tritonserver/repoagents"),
+      cache_dir_("/opt/tritonserver/caches"), cache_config_("{}")
 {
 #ifndef TRITON_ENABLE_METRICS
   metrics_ = false;
@@ -1164,13 +1170,36 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
   return nullptr;  // Success
 }
 
+// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
+  // For backwards compatibility, forward this API call to new CacheConfig API.
+  std::string config_json = R"({"size": )" + std::to_string(size) + "}";
+  return TRITONSERVER_ServerOptionsSetCacheConfig(
+      options, "" /* cache_name */, config_json.c_str());
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCacheConfig(
+    TRITONSERVER_ServerOptions* options, const char* cache_name,
+    const char* config_json)
+{
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
-  loptions->SetResponseCacheByteSize(size);
+  // NOTE: cache_name included for future extensibility, but not currently used.
+  loptions->SetCacheConfig(config_json);
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCacheDirectory(
+    TRITONSERVER_ServerOptions* options, const char* cache_dir)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetCacheDir(cache_dir);
   return nullptr;  // Success
 }
 
@@ -2106,8 +2135,11 @@ TRITONSERVER_ServerNew(
   lserver->SetRateLimiterMode(loptions->RateLimiterMode());
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
-  lserver->SetResponseCacheByteSize(loptions->ResponseCacheByteSize());
   lserver->SetCudaMemoryPoolByteSize(loptions->CudaMemoryPoolByteSize());
+  // TODO: expose server option for this?
+  lserver->SetResponseCacheEnabled(true);
+  lserver->SetCacheConfig(loptions->CacheConfig());
+  lserver->SetCacheDir(loptions->CacheDir());
   double min_compute_capability = loptions->MinSupportedComputeCapability();
   lserver->SetMinSupportedComputeCapability(min_compute_capability);
   lserver->SetStrictReadinessEnabled(loptions->StrictReadiness());
@@ -2138,7 +2170,7 @@ TRITONSERVER_ServerNew(
   if (loptions->Metrics() && lserver->ResponseCacheEnabled()) {
     // NOTE: Cache metrics must be enabled after cache initialized in
     // server->Init()
-    tc::Metrics::EnableCacheMetrics(lserver->GetResponseCache());
+    tc::Metrics::EnableCacheMetrics(lserver->CacheManager()->Cache());
   }
 #ifdef TRITON_ENABLE_METRICS_GPU
   if (loptions->Metrics() && loptions->GpuMetrics()) {
@@ -2157,7 +2189,7 @@ TRITONSERVER_ServerNew(
        loptions->CpuMetrics());
   if (loptions->Metrics() && poll_metrics) {
     // Start thread to poll enabled metrics periodically
-    tc::Metrics::StartPollingThreadSingleton(lserver->GetResponseCache());
+    tc::Metrics::StartPollingThreadSingleton(lserver->CacheManager()->Cache());
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -2245,9 +2277,6 @@ TRITONSERVER_ServerNew(
             "}",
         std::to_string(cuda_memory_pool.second)});
   }
-  options_table.InsertRow(std::vector<std::string>{
-      "response_cache_byte_size",
-      std::to_string(lserver->ResponseCacheByteSize())});
 
   std::stringstream compute_capability_ss;
   compute_capability_ss.setf(std::ios::fixed);
@@ -2259,6 +2288,8 @@ TRITONSERVER_ServerNew(
       "strict_readiness", std::to_string(lserver->StrictReadinessEnabled())});
   options_table.InsertRow(std::vector<std::string>{
       "exit_timeout", std::to_string(lserver->ExitTimeoutSeconds())});
+  options_table.InsertRow(std::vector<std::string>{
+      "cache_enabled", std::to_string(lserver->ResponseCacheEnabled())});
 
   std::string options_table_string = options_table.PrintTable();
   LOG_INFO << options_table_string;

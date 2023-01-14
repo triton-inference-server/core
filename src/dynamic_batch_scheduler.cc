@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -39,6 +39,14 @@
 
 namespace triton { namespace core {
 
+uint64_t
+CaptureTimeNs()
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 bool
 IsStaleState(Payload::State payload_state)
 {
@@ -72,7 +80,9 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   // Both the server and model config should specify
   // caching enabled for model to utilize response cache.
   response_cache_enabled_ =
-      (model_->Server()->ResponseCacheEnabled() && response_cache_enable);
+      (response_cache_enable && model_->Server()->ResponseCacheEnabled() &&
+       model_->Server()->CacheManager() &&
+       model_->Server()->CacheManager()->Cache());
 #ifdef TRITON_ENABLE_METRICS
   // Initialize metric reporter for cache statistics if cache enabled
   if (response_cache_enabled_) {
@@ -601,31 +611,34 @@ DynamicBatchScheduler::DelegateResponse(
   std::lock_guard<std::mutex> lock(completion_queue_mtx_);
   completion_queue_.emplace_back();
   auto queue_slot = &completion_queue_.back();
-  // Pass raw ptr to lambda for tracking stats from cache and updating
-  // metric reporter on cache miss stats after insertion
-  InferenceRequest* raw_request_ptr = request.get();
+  const auto key = request->CacheKey();
 
   request->SetResponseDelegator(
-      [this, queue_slot, raw_request_ptr](
+      [this, queue_slot, key](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
-        if (response_cache_enabled_ && raw_request_ptr->CacheKeyIsSet()) {
+        if (response_cache_enabled_) {
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
-          auto cache = model_->Server()->GetResponseCache();
-          auto status = cache->Insert(*response, raw_request_ptr);
+          auto cache = model_->Server()->CacheManager()->Cache();
+          auto insert_start_ns = CaptureTimeNs();
+          auto status = cache->Insert(response.get(), key);
+          auto insert_end_ns = CaptureTimeNs();
+
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
 #ifdef TRITON_ENABLE_STATS
-            // Update cache miss statistics even on failure to insert
-            // as we still spend time on lookup and attempting to insert
-            raw_request_ptr->ReportStatisticsCacheMiss(reporter_.get());
+            // Use model_ to update stats directly because request object can be
+            // released by the backend before getting to this callback.
+            const auto insert_ns = insert_end_ns - insert_start_ns;
+            // FIXME (DLIS-4372): Consolidate to single cache_miss_duration.
+            //   Lookup is negligible on cache miss or can be separated.
+            const auto lookup_ns = 0;
+            model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
+                reporter_.get(), lookup_ns, insert_ns);
 #endif  // TRITON_ENABLE_STATS
-
             if (!status.IsOk()) {
-              LOG_ERROR << raw_request_ptr->LogRequest()
-                        << "Failed to insert request_hash ["
-                        << raw_request_ptr->CacheKey()
+              LOG_ERROR << "Failed to insert key [" << key
                         << "] into response cache: " << status.Message();
             }
           }  // Otherwise do nothing; we update cache hit statistics on Lookup
@@ -648,11 +661,30 @@ DynamicBatchScheduler::CacheLookUp(
     std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response)
 {
-  auto cache = model_->Server()->GetResponseCache();
-  // Lookup request in cache
+  Status status;
+  auto cache = model_->Server()->CacheManager()->Cache();
   std::unique_ptr<InferenceResponse> local_response;
   request->ResponseFactory()->CreateResponse(&local_response);
-  auto status = cache->Lookup(local_response.get(), request.get());
+  // Hash request into cache key
+  std::string key = "";
+  if (!request->CacheKeyIsSet()) {
+    status = cache->Hash(*request, &key);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to hash request: " << status.Message();
+      return;
+    }
+    request->SetCacheKey(key);
+  } else {
+    key = request->CacheKey();
+  }
+
+  // Lookup and capture timestamps
+  {
+    request->CaptureCacheLookupStartNs();
+    status = cache->Lookup(local_response.get(), key);
+    request->CaptureCacheLookupEndNs();
+  }
+
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
 #ifdef TRITON_ENABLE_STATS

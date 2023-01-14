@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -357,8 +357,17 @@ TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize()
 {
 }
+// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCacheConfig()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCacheDirectory()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -954,6 +963,71 @@ TRITONSERVER_GetMetricKind()
 
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_ApiVersion()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemCount()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryAddItem()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryGetItem()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemDelete()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemBufferCount()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemAddBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemGetBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheInitialize()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheFinalize()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheInsert()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheLookup()
 {
 }
 

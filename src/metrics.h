@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -31,12 +31,12 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include "cache_manager.h"
 #include "prometheus/counter.h"
 #include "prometheus/gauge.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
 #include "prometheus/text_serializer.h"
-#include "response_cache.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <dcgm_agent.h>
@@ -118,12 +118,11 @@ class Metrics {
   static void EnableCpuMetrics();
 
   // Enable reporting of Cache metrics
-  static void EnableCacheMetrics(
-      std::shared_ptr<RequestResponseCache> response_cache);
+  static void EnableCacheMetrics(std::shared_ptr<TritonCache> response_cache);
 
   // Start a thread for polling enabled metrics if any
   static void StartPollingThreadSingleton(
-      std::shared_ptr<RequestResponseCache> response_cache);
+      std::shared_ptr<TritonCache> response_cache);
 
   // Set the time interval in secs at which metrics are collected
   static void SetMetricsInterval(uint64_t metrics_interval_ms);
@@ -228,10 +227,9 @@ class Metrics {
   static Metrics* GetSingleton();
   bool InitializeDcgmMetrics();
   bool InitializeCpuMetrics();
-  bool InitializeCacheMetrics(
-      std::shared_ptr<RequestResponseCache> response_cache);
-  bool StartPollingThread(std::shared_ptr<RequestResponseCache> response_cache);
-  bool PollCacheMetrics(std::shared_ptr<RequestResponseCache> response_cache);
+  bool InitializeCacheMetrics(std::shared_ptr<TritonCache> response_cache);
+  bool StartPollingThread(std::shared_ptr<TritonCache> response_cache);
+  bool PollCacheMetrics(std::shared_ptr<TritonCache> response_cache);
   bool PollDcgmMetrics();
   bool PollCpuMetrics();
 

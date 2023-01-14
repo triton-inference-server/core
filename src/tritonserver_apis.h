@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,11 +28,14 @@
 #define _COMPILING_TRITONSERVER 1
 #define _COMPILING_TRITONBACKEND 1
 #define _COMPILING_TRITONREPOAGENT 1
+#define _COMPILING_TRITONCACHE 1
 
 #include "triton/core/tritonbackend.h"
+#include "triton/core/tritoncache.h"
 #include "triton/core/tritonrepoagent.h"
 #include "triton/core/tritonserver.h"
 
 #undef _COMPILING_TRITONSERVER
 #undef _COMPILING_TRITONBACKEND
 #undef _COMPILING_TRITONREPOAGENT
+#undef _COMPILING_TRITONCACHE

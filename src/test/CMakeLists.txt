@@ -1,4 +1,4 @@
-# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -83,14 +83,20 @@ set(
 )
 
 #
-# Unit test for RequestResponseCache
+# Unit test for TritonCache
 #
 if(${TRITON_ENABLE_GPU})
   add_executable(
     response_cache_test
     response_cache_test.cc
-    ../response_cache.cc
-    ../response_cache.h
+    ../cache_manager.cc
+    ../cache_manager.h
+    ../cache_entry.cc
+    ../cache_entry.h
+    ../filesystem.cc
+    ../filesystem.h
+    ../shared_library.cc
+    ../shared_library.h
     ../status.cc
     ../status.h
     ../constants.h
@@ -135,7 +141,9 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
+      triton-common-model-config # from repo-common
       proto-library              # from repo-common
+      triton-core
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf

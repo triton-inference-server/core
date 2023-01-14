@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -34,11 +34,11 @@
 #include <vector>
 
 #include "backend_manager.h"
+#include "cache_manager.h"
 #include "infer_parameter.h"
 #include "model_config.pb.h"
 #include "model_repository_manager.h"
 #include "rate_limiter.h"
-#include "response_cache.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 
@@ -192,15 +192,14 @@ class InferenceServer {
     pinned_memory_pool_size_ = std::max((int64_t)0, s);
   }
 
-  // Get / set the response cache byte size.
-  uint64_t ResponseCacheByteSize() const { return response_cache_byte_size_; }
-  void SetResponseCacheByteSize(uint64_t s)
-  {
-    response_cache_byte_size_ = s;
-    response_cache_enabled_ = (s > 0) ? true : false;
-  }
-
+  // Get / set whether response cache will be enabled server-wide.
+  // NOTE: Models still need caching enabled in individual model configs.
   bool ResponseCacheEnabled() const { return response_cache_enabled_; }
+  void SetResponseCacheEnabled(bool e) { response_cache_enabled_ = e; }
+  std::string CacheConfig() const { return cache_config_; }
+  void SetCacheConfig(std::string config_json) { cache_config_ = config_json; }
+  std::string CacheDir() const { return cache_dir_; }
+  void SetCacheDir(std::string dir) { cache_dir_ = dir; }
 
   // Get / set CUDA memory pool size
   const std::map<int, uint64_t>& CudaMemoryPoolByteSize() const
@@ -277,10 +276,10 @@ class InferenceServer {
   // Return the pointer to RateLimiter object.
   std::shared_ptr<RateLimiter> GetRateLimiter() { return rate_limiter_; }
 
-  // Return the pointer to response cache object.
-  std::shared_ptr<RequestResponseCache> GetResponseCache()
+  // Get the Cache Manager
+  const std::shared_ptr<TritonCacheManager>& CacheManager()
   {
-    return response_cache_;
+    return cache_manager_;
   }
 
  private:
@@ -297,8 +296,9 @@ class InferenceServer {
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;
   uint64_t pinned_memory_pool_size_;
-  uint64_t response_cache_byte_size_;
   bool response_cache_enabled_;
+  std::string cache_config_;
+  std::string cache_dir_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_supported_compute_capability_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
@@ -306,7 +306,6 @@ class InferenceServer {
   std::string repoagent_dir_;
   RateLimitMode rate_limit_mode_;
   RateLimiter::ResourceMap rate_limit_resource_map_;
-
 
   // Current state of the inference server.
   ServerReadyState ready_state_;
@@ -320,7 +319,7 @@ class InferenceServer {
   std::shared_ptr<RateLimiter> rate_limiter_;
   std::unique_ptr<ModelRepositoryManager> model_repository_manager_;
   std::shared_ptr<TritonBackendManager> backend_manager_;
-  std::shared_ptr<RequestResponseCache> response_cache_;
+  std::shared_ptr<TritonCacheManager> cache_manager_;
 };
 
 }}  // namespace triton::core
