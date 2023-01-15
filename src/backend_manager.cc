@@ -31,6 +31,10 @@
 #include "shared_library.h"
 #include "triton/common/logging.h"
 
+#ifdef TRITON_ENABLE_GPU
+#include <cuda_runtime_api.h>
+#endif
+
 // For unknown reason, windows will not export the TRITONBACKEND_*
 // functions declared with dllexport in tritonbackend.h. To get those
 // functions exported it is (also?) necessary to mark the definitions
@@ -69,6 +73,16 @@ TritonBackend::Create(
   }
 
   TritonServerMessage backend_config(backend_config_json);
+
+#ifdef TRITON_ENABLE_GPU
+  // This call is to prevent a deadlock issue with dlopening backend shared
+  // libraries and calling CUDA APIs in other threads. Since CUDA API also
+  // dlopens some libraries and dlopen has an internal lock, it can create a
+  // deadlock. Intentionally ignore the CUDA_ERROR (if any) for containers
+  // running on a CPU.
+  int device_count;
+  cudaGetDeviceCount(&device_count);
+#endif
 
   auto local_backend = std::shared_ptr<TritonBackend>(
       new TritonBackend(name, dir, libpath, backend_config));
