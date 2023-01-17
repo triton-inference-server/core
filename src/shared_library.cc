@@ -30,6 +30,10 @@
 #include "mutex"
 #include "triton/common/logging.h"
 
+#ifdef TRITON_ENABLE_GPU
+#include <cuda_runtime_api.h>
+#endif
+
 #ifdef _WIN32
 // suppress the min and max definitions in Windef.h.
 #define NOMINMAX
@@ -106,6 +110,16 @@ Status
 SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 {
   LOG_VERBOSE(1) << "OpenLibraryHandle: " << path;
+
+#ifdef TRITON_ENABLE_GPU
+  // This call is to prevent a deadlock issue with dlopening backend shared
+  // libraries and calling CUDA APIs in other threads. Since CUDA API also
+  // dlopens some libraries and dlopen has an internal lock, it can create a
+  // deadlock. Intentionally ignore the CUDA_ERROR (if any) for containers
+  // running on a CPU.
+  int device_count;
+  cudaGetDeviceCount(&device_count);
+#endif
 
 #ifdef _WIN32
   // Need to put shared library directory on the DLL path so that any
