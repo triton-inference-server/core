@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -96,14 +96,12 @@ MetricModelReporter::MetricModelReporter(
       Metrics::FamilyInferenceComputeOutputDuration(), labels);
   metric_cache_hit_count_ =
       CreateCounterMetric(Metrics::FamilyCacheHitCount(), labels);
-  metric_cache_hit_lookup_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyCacheHitLookupDuration(), labels);
+  metric_cache_hit_duration_us_ =
+      CreateCounterMetric(Metrics::FamilyCacheHitDuration(), labels);
   metric_cache_miss_count_ =
       CreateCounterMetric(Metrics::FamilyCacheMissCount(), labels);
-  metric_cache_miss_lookup_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyCacheMissLookupDuration(), labels);
-  metric_cache_miss_insertion_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyCacheMissInsertionDuration(), labels);
+  metric_cache_miss_duration_us_ =
+      CreateCounterMetric(Metrics::FamilyCacheMissDuration(), labels);
 }
 
 MetricModelReporter::~MetricModelReporter()
@@ -122,11 +120,9 @@ MetricModelReporter::~MetricModelReporter()
   Metrics::FamilyInferenceComputeOutputDuration().Remove(
       metric_inf_compute_output_duration_us_);
   Metrics::FamilyCacheHitCount().Remove(metric_cache_hit_count_);
-  Metrics::FamilyCacheHitLookupDuration().Remove(
-      metric_cache_hit_lookup_duration_us_);
+  Metrics::FamilyCacheHitDuration().Remove(metric_cache_hit_duration_us_);
   Metrics::FamilyCacheMissCount().Remove(metric_cache_miss_count_);
-  Metrics::FamilyCacheMissInsertionDuration().Remove(
-      metric_cache_miss_insertion_duration_us_);
+  Metrics::FamilyCacheMissDuration().Remove(metric_cache_miss_duration_us_);
 }
 
 void
