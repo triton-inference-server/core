@@ -44,6 +44,9 @@
 
 namespace triton { namespace core {
 
+// Maps cache name -> json config string
+using CacheConfigMap = std::unordered_map<std::string, std::string>;
+
 class Model;
 class InferenceRequest;
 
@@ -196,8 +199,7 @@ class InferenceServer {
   // NOTE: Models still need caching enabled in individual model configs.
   bool ResponseCacheEnabled() const { return response_cache_enabled_; }
   void SetResponseCacheEnabled(bool e) { response_cache_enabled_ = e; }
-  std::string CacheConfig() const { return cache_config_; }
-  void SetCacheConfig(std::string config_json) { cache_config_ = config_json; }
+  void SetCacheConfig(CacheConfigMap cfg) { cache_config_map_ = cfg; }
   std::string CacheDir() const { return cache_dir_; }
   void SetCacheDir(std::string dir) { cache_dir_ = dir; }
 
@@ -297,7 +299,7 @@ class InferenceServer {
   uint32_t model_load_thread_count_;
   uint64_t pinned_memory_pool_size_;
   bool response_cache_enabled_;
-  std::string cache_config_;
+  CacheConfigMap cache_config_map_;
   std::string cache_dir_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_supported_compute_capability_;

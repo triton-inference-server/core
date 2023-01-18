@@ -1708,14 +1708,23 @@ TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
 /// Set the cache config that will be used to initialize the cache
 /// implementation for "cache_name".
 ///
-/// Examples:
+/// It is expected that the "cache_name" provided matches a directory inside
+/// the "cache_dir" used for TRITONSERVER_ServerOptionsSetCacheDirectory. The
+/// default "cache_dir" is "/opt/tritonserver/caches", so for a "cache_name" of
+/// "local", Triton would expect to find the "local" cache implementation at
+/// "/opt/tritonserver/caches/local/libtritoncache_local.so"
+///
+/// Altogether an example for the "local" cache implementation would look like:
+///   std::string cache_name = "local";
 ///   std::string config_json = R"({"size": 1048576})"
-///   std::string config_json = "{\"size\": 1048576}"
+///   auto err = TRITONSERVER_ServerOptionsSetCacheConfig(
+///     options, cache_name, config_json);
 ///
 /// \param options The server options object.
-/// FIXME: cache_name included for future extensibility, but not currently used.
-/// \param cache_name The name of the cache.
-/// \param config_json The string representation of config JSON.
+/// \param cache_name The name of the cache. Example names would be
+/// "local", "redis", or the name of a custom cache implementation.
+/// \param config_json The string representation of config JSON that is
+/// used to initialize the cache implementation.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCacheConfig(
@@ -1724,8 +1733,6 @@ TRITONSERVER_ServerOptionsSetCacheConfig(
 
 /// Set the directory containing cache shared libraries. This
 /// directory is searched when looking for cache implementations.
-/// Currently, it is expected that this directory contains a file
-/// specifically named "libtritoncache.so"/"tritoncache.dll".
 ///
 /// \param options The server options object.
 /// \param cache_dir The full path of the cache directory.

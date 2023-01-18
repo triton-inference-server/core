@@ -156,12 +156,23 @@ InferenceServer::Init()
     return status;
   }
 
-  std::shared_ptr<TritonCache> cache;
-  status = cache_manager_->CreateCache(
-      "response_cache" /* name */, cache_config_, &cache);
-  if (!status.IsOk()) {
+  // Only a single global cache is supported at this time.
+  if (cache_config_map_.size() > 1) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-    return status;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "found multiple cache configurations, but only a single cache is "
+        "currently supported");
+  }
+
+  // Initialize each cache with its respective config
+  for (const auto& [name, config] : cache_config_map_) {
+    std::shared_ptr<TritonCache> cache;
+    status = cache_manager_->CreateCache(name, config, &cache);
+    if (!status.IsOk()) {
+      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+      return status;
+    }
   }
 
   if (buffer_manager_thread_count_ > 0) {
