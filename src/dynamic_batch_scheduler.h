@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -109,6 +109,19 @@ class DynamicBatchScheduler : public Scheduler {
       std::unique_ptr<InferenceRequest>& request,
       std::unique_ptr<InferenceResponse>& cached_response);
   void FinalizeResponses();
+
+  // Custom batching function calls
+  // Returns whether custom batching is enabled.
+  bool CustomBatchEnabled() const;
+  // If custom batching is enabled for this model, see if this request should be
+  // included.
+  void CustomBatchIncl(InferenceRequest* request, bool* should_include);
+  // If custom batching is enabled for this model, initialize the batching
+  // function.
+  void CustomBatchInit();
+  // If custom batching is enabled for this model, finalizethe batching
+  // function.
+  void CustomBatchFini();
 
   TritonModel* model_;
   TritonModelInstance* model_instance_;

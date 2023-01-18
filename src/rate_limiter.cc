@@ -736,8 +736,8 @@ RateLimiter::ResourceManager::RemoveModelInstance(
 Status
 RateLimiter::ResourceManager::UpdateResourceLimits()
 {
-  std::lock_guard<std::mutex> lk1(max_resources_mtx_);
-  std::lock_guard<std::mutex> lk2(model_resources_mtx_);
+  std::lock_guard<std::mutex> lk1(model_resources_mtx_);
+  std::lock_guard<std::mutex> lk2(max_resources_mtx_);
   max_resources_.clear();
   // Obtain the maximum resource across all the instances
   // and use it as the default available.

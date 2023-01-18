@@ -53,8 +53,7 @@ class LocalizedPath {
 
   // Create an object for a remote path. Store both the original path and the
   // temporary local path.
-  LocalizedPath(
-      const std::string& original_path, const std::string& local_path)
+  LocalizedPath(const std::string& original_path, const std::string& local_path)
       : original_path_(original_path), local_path_(local_path)
   {
   }

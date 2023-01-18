@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -46,15 +46,25 @@ class TritonModelInstance;
 //
 class TritonModel : public Model {
  public:
+  typedef TRITONSERVER_Error* (*TritonModelBatchInclFn_t)(
+      TRITONBACKEND_Request* request, void* userp, bool* should_include);
+  typedef TRITONSERVER_Error* (*TritonModelBatchInitFn_t)(
+      TRITONBACKEND_Batcher* batcher, void** userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatchFiniFn_t)(void* userp);
+  typedef TRITONSERVER_Error* (*TritonModelBatcherInitFn_t)(
+      TRITONBACKEND_Batcher** batcher, TRITONBACKEND_Model* model);
+  typedef TRITONSERVER_Error* (*TritonModelBatcherFiniFn_t)(
+      TRITONBACKEND_Batcher* batcher);
+
   static Status Create(
       InferenceServer* server, const std::string& model_path,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const std::string& model_name, const int64_t version,
-      inference::ModelConfig model_config, const bool is_config_provided,
-      std::unique_ptr<TritonModel>* model);
+      const int64_t version, inference::ModelConfig model_config,
+      const bool is_config_provided, std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
+  using TritonInstanceGroup = std::vector<std::unique_ptr<TritonModelInstance>>;
   const std::string& LocalizedModelPath() const
   {
     return localized_model_dir_->Path();
@@ -65,14 +75,21 @@ class TritonModel : public Model {
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  const std::vector<std::unique_ptr<TritonModelInstance>>& Instances() const
+  const std::unordered_map<std::string, TritonInstanceGroup>& InstanceGroups()
+      const
   {
-    return instances_;
+    return instance_group_map_;
   }
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
   Status AddInstance(
       std::unique_ptr<TritonModelInstance>&& instance, const bool passive);
+
+  // Custom batching function getters.
+  TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
+  TritonModelBatchInitFn_t ModelBatchInitFn() const { return batch_init_fn_; }
+  TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
+  TRITONBACKEND_Batcher** Batcher() { return &batcher_; }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonModel);
@@ -88,6 +105,10 @@ class TritonModel : public Model {
   // can only be set once for a backend.
   Status SetConfiguredScheduler();
 
+  // Set the batching strategy, if custom functions provided by user.
+  // This function should only be called with the dynamic batcher.
+  Status SetBatchingStrategy(const std::string& batch_libpath);
+
   // Merges the global backend configs with the specific
   // backend configs.
   static Status ResolveBackendConfigs(
@@ -102,6 +123,9 @@ class TritonModel : public Model {
 
   Status Initialize();
   Status WarmUp();
+
+  // Clear library handles.
+  void ClearHandles();
 
   // The server object that owns this model. The model holds this as a
   // raw pointer because the lifetime of the server is guaranteed to
@@ -122,12 +146,26 @@ class TritonModel : public Model {
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;
 
-  // The model instances for this model.
-  std::vector<std::unique_ptr<TritonModelInstance>> instances_;
-  std::vector<std::unique_ptr<TritonModelInstance>> passive_instances_;
+  // The model instances for this model stored by the
+  // instance groups defined in the model configuration.
+  // Passive instance groups are those instances which are
+  // loaded but not added to the scheduler.
+  std::unordered_map<std::string, TritonInstanceGroup> instance_group_map_;
+  std::unordered_map<std::string, TritonInstanceGroup>
+      passive_instance_group_map_;
 
   // Opaque state associated with this model.
   void* state_;
+
+  // Custom batching shared object handle, function pointers, and batcher
+  // pointer.
+  void* batch_dlhandle_ = nullptr;
+  TritonModelBatchInclFn_t batch_incl_fn_ = nullptr;
+  TritonModelBatchInitFn_t batch_init_fn_ = nullptr;
+  TritonModelBatchFiniFn_t batch_fini_fn_ = nullptr;
+  TritonModelBatcherInitFn_t batcher_init_fn_ = nullptr;
+  TritonModelBatcherFiniFn_t batcher_fini_fn_ = nullptr;
+  TRITONBACKEND_Batcher* batcher_ = nullptr;
 };
 
 }}  // namespace triton::core
