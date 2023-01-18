@@ -2167,7 +2167,6 @@ TRITONSERVER_ServerNew(
   tc::Status status = lserver->Init();
 
 #ifdef TRITON_ENABLE_METRICS
-
 #ifdef TRITON_ENABLE_METRICS_GPU
   if (loptions->Metrics() && loptions->GpuMetrics()) {
     tc::Metrics::EnableGPUMetrics();

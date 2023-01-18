@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -77,6 +77,7 @@ class Payload {
   {
     return &required_equal_inputs_;
   }
+  void** UserPointerAddr() { return &user_pointer_; }
 
   State GetState() { return state_; }
   void SetState(State state);
@@ -97,6 +98,9 @@ class Payload {
   RequiredEqualInputs required_equal_inputs_;
 
   bool saturated_;
+
+  // Pointer for use with user-supplied batching strategy.
+  void* user_pointer_ = nullptr;
 };
 
 }}  // namespace triton::core

@@ -83,11 +83,10 @@ class CacheEntryItem {
   Status ToResponse(InferenceResponse* response);
   std::vector<Buffer> Buffers();
   size_t BufferCount();
-  void AddBuffer(boost::span<const std::byte> buffer);
-  void AddBuffer(const void* base, size_t byte_size);
-  void AddBuffer(std::pair<void*, size_t> buffer_pair);
-  void AddBuffer(std::pair<void*, size_t> buffer_pair, bool copy);
+  void AddBufferCopy(boost::span<const std::byte> buffer);
+  void AddBufferCopy(const void* base, size_t byte_size);
   void AddBuffer(void* base, size_t byte_size, bool copy);
+  void AddBuffer(Buffer buffer, bool copy);
 
  private:
   // Returns bytes buffer in buffer arg

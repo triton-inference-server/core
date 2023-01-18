@@ -224,7 +224,7 @@ TRITONCACHE_CacheEntryItemAddBuffer(
   }
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
   // COPY: This will add a copy of the buffer to the item.
-  litem->AddBuffer(base, byte_size);
+  litem->AddBufferCopy(base, byte_size);
   return nullptr;  // success
 }
 

@@ -71,7 +71,7 @@ CacheEntryItem::Buffers()
 }
 
 void
-CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
+CacheEntryItem::AddBufferCopy(const void* base, size_t byte_size)
 {
   std::unique_lock lk(buffer_mu_);
   // COPY: Make a copy of buffer for Triton to own
@@ -81,35 +81,27 @@ CacheEntryItem::AddBuffer(const void* base, size_t byte_size)
 }
 
 void
+CacheEntryItem::AddBufferCopy(boost::span<const std::byte> byte_span)
+{
+  const void* base = static_cast<const void*>(byte_span.data());
+  AddBufferCopy(base, byte_span.size());
+}
+
+void
 CacheEntryItem::AddBuffer(void* base, size_t byte_size, bool copy)
 {
   std::unique_lock lk(buffer_mu_);
   if (copy) {
-    void* new_base = malloc(byte_size);
-    memcpy(new_base, base, byte_size);
-    buffers_.emplace_back(std::make_pair(new_base, byte_size));
+    AddBufferCopy(base, byte_size);
   } else {
     buffers_.emplace_back(std::make_pair(base, byte_size));
   }
 }
 
 void
-CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair, bool copy)
+CacheEntryItem::AddBuffer(Buffer buffer, bool copy)
 {
-  AddBuffer(buffer_pair.first, buffer_pair.second, copy);
-}
-
-void
-CacheEntryItem::AddBuffer(std::pair<void*, size_t> buffer_pair)
-{
-  AddBuffer(buffer_pair.first, buffer_pair.second, true /* copy */);
-}
-
-void
-CacheEntryItem::AddBuffer(boost::span<const std::byte> byte_span)
-{
-  const void* base = static_cast<const void*>(byte_span.data());
-  AddBuffer(base, byte_span.size());
+  AddBuffer(buffer.first, buffer.second, copy);
 }
 
 CacheEntryItem::~CacheEntryItem()
@@ -134,8 +126,8 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
   for (const auto& output : response->Outputs()) {
     auto buffer = Buffer(nullptr, 0);
     RETURN_IF_ERROR(ToBytes(output, &buffer));
-    bool copy = false;  // ToBytes allocated new memory, we pass it through
-    AddBuffer(buffer, copy);
+    // ToBytes allocated new memory, so we pass it through: no copy here
+    AddBuffer(buffer, false /* copy */);
   }
 
   return Status::Success;
