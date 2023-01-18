@@ -634,7 +634,7 @@ DynamicBatchScheduler::DelegateResponse(
   completion_queue_.emplace_back();
   auto queue_slot = &completion_queue_.back();
   // Cache plumbing
-  const auto& key = request->CacheKey();
+  auto key = request->CacheKey();
   uint64_t lookup_ns =
       request->CacheLookupEndNs() - request->CacheLookupStartNs();
   if (!request->CacheKeyIsSet()) {
