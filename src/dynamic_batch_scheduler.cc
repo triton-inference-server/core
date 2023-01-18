@@ -283,6 +283,7 @@ DynamicBatchScheduler::NewPayload()
   curr_payload_ = model_->Server()->GetRateLimiter()->GetPayload(
       Payload::Operation::INFER_RUN, model_instance_);
   payload_saturated_ = false;
+  CustomBatchInit();
 }
 
 void
@@ -416,6 +417,10 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     if (curr_payload_->GetState() == Payload::State::READY) {
       auto callback = [this]() { cv_.notify_one(); };
       curr_payload_->SetCallback(callback);
+      {
+        std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
+        CustomBatchFini();
+      }
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
     }
 
@@ -448,9 +453,16 @@ DynamicBatchScheduler::GetDynamicBatch()
   // batch size would be exceeded or if the shape of the next request
   // does not match the shape of the pending batch.
   bool send_now = false;
+
+  // If the previous payload was not executed, reset the cursor to the start
+  // of the queue to re-iterate over it and find the ideal batch.
   if (!queue_.IsCursorValid()) {
     queue_.ResetCursor();
     pending_batch_size_ = 0;
+    if (CustomBatchEnabled()) {
+      CustomBatchFini();
+      CustomBatchInit();
+    }
   }
   size_t best_preferred_batch_size = 0;
   queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
@@ -506,6 +518,16 @@ DynamicBatchScheduler::GetDynamicBatch()
       }
     }
 
+    if (CustomBatchEnabled()) {
+      bool should_include = false;
+      CustomBatchIncl(queue_.RequestAtCursor().get(), &should_include);
+      if (!should_include) {
+        curr_payload_->MarkSaturated();
+        send_now = true;
+        break;
+      }
+    }
+
     pending_batch_size_ += batch_size;
     queue_.AdvanceCursor();
     queued_batch_size_ -= queue_.ApplyPolicyAtCursor();
@@ -517,7 +539,7 @@ DynamicBatchScheduler::GetDynamicBatch()
     }
   }
 
-  // Obatin the age of the oldest pending request to compare with the maximum
+  // Obtain the age of the oldest pending request to compare with the maximum
   // batch queuing delay
   uint64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                         std::chrono::steady_clock::now().time_since_epoch())
@@ -526,8 +548,8 @@ DynamicBatchScheduler::GetDynamicBatch()
   bool delay_is_exceeded =
       (pending_batch_delay_ns_ != 0) && (delay_ns >= pending_batch_delay_ns_);
 
-  // If we found a preferred batch size and the queue delay hasn't been
-  // exceeded, then execute that.
+  // If we found a preferred batch size and the queue delay hasn't
+  // been exceeded, then execute that.
   if ((best_preferred_batch_size != 0) && !delay_is_exceeded) {
     if (pending_batch_delay_ns_ == 0) {
       payload_saturated_ = true;
@@ -727,4 +749,58 @@ DynamicBatchScheduler::FinalizeResponses()
     InferenceResponse::Send(std::move(response.first), response.second);
   }
 }
+
+bool
+DynamicBatchScheduler::CustomBatchEnabled() const
+{
+  return model_->ModelBatchInitFn();
+}
+
+void
+DynamicBatchScheduler::CustomBatchIncl(
+    InferenceRequest* request, bool* should_include)
+{
+  if (!CustomBatchEnabled())
+    return;
+  TRITONSERVER_Error* err = model_->ModelBatchInclFn()(
+      reinterpret_cast<TRITONBACKEND_Request*>(request),
+      *curr_payload_.get()->UserPointerAddr(), should_include);
+  if (err) {
+    LOG_ERROR << "Custom batching include function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    TRITONSERVER_ErrorDelete(err);
+  }
+}
+
+void
+DynamicBatchScheduler::CustomBatchInit()
+{
+  if (!CustomBatchEnabled())
+    return;
+  TRITONSERVER_Error* err = model_->ModelBatchInitFn()(
+      *model_->Batcher(), curr_payload_.get()->UserPointerAddr());
+  if (err != nullptr) {
+    LOG_ERROR << "Custom batching initialization function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    TRITONSERVER_ErrorDelete(err);
+  }
+}
+
+void
+DynamicBatchScheduler::CustomBatchFini()
+{
+  if (!CustomBatchEnabled() ||
+      *curr_payload_.get()->UserPointerAddr() == nullptr)
+    return;
+  TRITONSERVER_Error* err =
+      model_->ModelBatchFiniFn()(*curr_payload_.get()->UserPointerAddr());
+  *curr_payload_.get()->UserPointerAddr() = nullptr;
+
+  if (err != nullptr) {
+    LOG_ERROR << "Custom batching finalization function failed for model "
+              << model_->Name() << ": " << TRITONSERVER_ErrorMessage(err);
+    TRITONSERVER_ErrorDelete(err);
+  }
+}
+
 }}  // namespace triton::core

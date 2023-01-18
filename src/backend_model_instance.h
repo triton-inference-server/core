@@ -55,6 +55,7 @@ class TritonModelInstance {
       const inference::ModelConfig& model_config, const bool device_blocking);
   ~TritonModelInstance();
 
+  const std::string& GroupName() const { return group_name_; }
   const std::string& Name() const { return name_; }
   size_t Index() const { return index_; }
   TRITONSERVER_InstanceGroupKind Kind() const { return kind_; }
@@ -99,14 +100,16 @@ class TritonModelInstance {
   DISALLOW_COPY_AND_ASSIGN(TritonModelInstance);
   class TritonBackendThread;
   TritonModelInstance(
-      TritonModel* model, const std::string& name, const size_t index,
+      TritonModel* model, const std::string& name,
+      const std::string& group_name, const size_t index,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const TritonServerMessage& host_policy_message,
       const std::vector<SecondaryDevice>& secondary_devices);
   static Status CreateInstance(
-      TritonModel* model, const std::string& name, const size_t index,
+      TritonModel* model, const std::string& name,
+      const std::string& group_name, const size_t index,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
       const std::string& host_policy_name,
@@ -177,6 +180,7 @@ class TritonModelInstance {
   TritonModel* model_;
 
   std::string name_;
+  std::string group_name_;
   size_t index_;
 
   // For CPU device_id_ is always 0. For GPU device_id_ indicates the

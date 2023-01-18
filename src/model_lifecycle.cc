@@ -1,4 +1,4 @@
-// Copyright 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2022-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -519,7 +519,7 @@ ModelLifeCycle::CreateModel(
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
         server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
-        model_name, version, model_config, is_config_provided, &model);
+        version, model_config, is_config_provided, &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE

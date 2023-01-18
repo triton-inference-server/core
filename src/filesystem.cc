@@ -544,6 +544,9 @@ GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
       gs_cred.path_);
   if (creds) {
     client_ = gcs::Client(gcs::ClientOptions(*creds));
+  } else {
+    client_ = gcs::Client(
+        gcs::ClientOptions(gcs::oauth2::CreateAnonymousCredentials()));
   }
 }
 

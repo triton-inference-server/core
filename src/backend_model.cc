@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -60,9 +60,8 @@ TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const std::string& model_name, const int64_t version,
-    inference::ModelConfig model_config, const bool is_config_provided,
-    std::unique_ptr<TritonModel>* model)
+    const int64_t version, inference::ModelConfig model_config,
+    const bool is_config_provided, std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -75,7 +74,7 @@ TritonModel::Create(
   }
 
   // Localize the content of the model repository corresponding to
-  // 'model_name'. This model holds a handle to the localized content
+  // 'model_path'. This model holds a handle to the localized content
   // so that it persists as long as the model is loaded.
   std::shared_ptr<LocalizedPath> localized_model_dir;
   RETURN_IF_ERROR(LocalizePath(model_path, &localized_model_dir));
@@ -173,22 +172,14 @@ TritonModel::Create(
   // path to point to the backend directory in case the backend
   // library attempts to load additional shared libaries.
   if (backend->ModelInitFn() != nullptr) {
-    {
-      // FIXME: fix lock fight DLIS-4300
-      std::unique_ptr<SharedLibrary> slib;
-      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-      RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
-    }
+    std::unique_ptr<SharedLibrary> slib;
+    RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+    RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
 
     TRITONSERVER_Error* err = backend->ModelInitFn()(
         reinterpret_cast<TRITONBACKEND_Model*>(raw_local_model));
 
-    {
-      // FIXME: fix lock fight DLIS-4300
-      std::unique_ptr<SharedLibrary> slib;
-      RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-      RETURN_IF_ERROR(slib->ResetLibraryDirectory());
-    }
+    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
 
@@ -204,6 +195,47 @@ TritonModel::Create(
                << model_config.name() << "\"";
     } else {
       device_blocking = true;
+    }
+  }
+
+  // Initalize the custom batching library for the model, if provided.
+  if (model_config.has_sequence_batching()) {
+    if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
+          "sequence batcher, using default batching strategy");
+    }
+  } else {
+    std::string batch_libpath;
+    if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
+      batch_libpath = model_config.parameters()
+                          .at("TRITON_BATCH_STRATEGY_PATH")
+                          .string_value();
+      bool exists = false;
+      RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
+      if (!exists) {
+        return Status(
+            triton::common::Error::Code::NOT_FOUND,
+            ("Batching library path not found: " + batch_libpath).c_str());
+      }
+    } else {
+      const std::string batch_libname = "batchstrategy.so";
+      for (const auto& path : search_paths) {
+        const auto full_path = JoinPath({path, batch_libname});
+        bool exists = false;
+        RETURN_IF_ERROR(FileExists(full_path, &exists));
+        if (exists) {
+          batch_libpath = full_path;
+          break;
+        }
+      }
+    }
+
+    if (!batch_libpath.empty()) {
+      LOG_INFO << "Loading custom batching strategy library " << batch_libpath
+               << " for model " << model_config.name();
+      RETURN_IF_ERROR(local_model->SetBatchingStrategy(batch_libpath));
     }
   }
 
@@ -327,9 +359,11 @@ TritonModel::AddInstance(
     std::unique_ptr<TritonModelInstance>&& instance, const bool passive)
 {
   if (passive) {
-    passive_instances_.emplace_back(std::move(instance));
+    passive_instance_group_map_[instance->GroupName()].emplace_back(
+        std::move(instance));
   } else {
-    instances_.emplace_back(std::move(instance));
+    instance_group_map_[instance->GroupName()].emplace_back(
+        std::move(instance));
   }
 
   return Status::Success;
@@ -412,6 +446,10 @@ TritonModel::SetConfiguredScheduler()
   // otherwise use the default DynamicBatchScheduler.
   if (config_.has_sequence_batching()) {
     // Sequence batcher
+    if (config_.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
+      LOG_ERROR << "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
+                   "sequence batcher, using default batching strategy";
+    }
     RETURN_IF_ERROR(SequenceBatchScheduler::Create(
         this, enforce_equal_shape_tensors, &scheduler));
   } else if (config_.has_dynamic_batching()) {
@@ -440,10 +478,65 @@ TritonModel::SetConfiguredScheduler()
 }
 
 Status
+TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
+{
+  // Load library and functions.
+  std::unique_ptr<SharedLibrary> slib;
+  RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+
+  RETURN_IF_ERROR(slib->OpenLibraryHandle(batch_libpath, &batch_dlhandle_));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchIncludeRequest",
+      true /* optional */, reinterpret_cast<void**>(&batch_incl_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchInitialize",
+      true /* optional */, reinterpret_cast<void**>(&batch_init_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatchFinalize", true /* optional */,
+      reinterpret_cast<void**>(&batch_fini_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatcherFinalize",
+      true /* optional */, reinterpret_cast<void**>(&batcher_fini_fn_)));
+  RETURN_IF_ERROR(slib->GetEntrypoint(
+      batch_dlhandle_, "TRITONBACKEND_ModelBatcherInitialize",
+      true /* optional */, reinterpret_cast<void**>(&batcher_init_fn_)));
+
+  // If one custom batching function is defined, all must be.
+  const bool defined_some = batch_incl_fn_ || batch_init_fn_ ||
+                            batch_fini_fn_ || batcher_init_fn_ ||
+                            batcher_fini_fn_;
+  const bool defined_all = batch_incl_fn_ && batch_init_fn_ && batch_fini_fn_ &&
+                           batcher_init_fn_ && batcher_fini_fn_;
+  if (defined_some && !defined_all) {
+    ClearHandles();
+    return Status(
+        Status::Code::INVALID_ARG,
+        batch_libpath +
+            " does not define all "
+            "required custom batching functions for model " +
+            config_.name());
+  }
+  // If a custom batcher is provided, initialize it.
+  if (batcher_init_fn_) {
+    TRITONSERVER_Error* err = batcher_init_fn_(
+        Batcher(), reinterpret_cast<TRITONBACKEND_Model*>(this));
+    if (err) {
+      auto err_message = TRITONSERVER_ErrorMessage(err);
+      TRITONSERVER_ErrorDelete(err);
+      return Status(Status::Code::INVALID_ARG, err_message);
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
 TritonModel::Initialize()
 {
-  for (const auto& instance : instances_) {
-    RETURN_IF_ERROR(instance->Initialize());
+  for (const auto& pair : instance_group_map_) {
+    for (const auto& instance : pair.second) {
+      RETURN_IF_ERROR(instance->Initialize());
+    }
   }
 
   return Status::Success;
@@ -452,8 +545,10 @@ TritonModel::Initialize()
 Status
 TritonModel::WarmUp()
 {
-  for (const auto& instance : instances_) {
-    RETURN_IF_ERROR(instance->WarmUp());
+  for (const auto& pair : instance_group_map_) {
+    for (const auto& instance : pair.second) {
+      RETURN_IF_ERROR(instance->WarmUp());
+    }
   }
 
   return Status::Success;
@@ -476,10 +571,24 @@ TritonModel::TritonModel(
 
 TritonModel::~TritonModel()
 {
+  // If there is a custom batcher, finalize it.
+  if (batcher_fini_fn_) {
+    TRITONSERVER_Error* err = batcher_fini_fn_(*Batcher());
+    *Batcher() = nullptr;
+    if (err) {
+      LOG_ERROR << "Custom batcher finalization failed for model "
+                << config_.name() << ": " << TRITONSERVER_ErrorMessage(err);
+      TRITONSERVER_ErrorDelete(err);
+    }
+  }
+
+  // Clear library handles.
+  ClearHandles();
+
   // Explicitly delete/finalize all model instances before finalizing
   // the model itself.
-  instances_.clear();
-  passive_instances_.clear();
+  instance_group_map_.clear();
+  passive_instance_group_map_.clear();
 
   // Unregister itself from the rate limiter. Note this should happen
   // after all instances are destructed. Destrucing instances ensures
@@ -494,6 +603,28 @@ TritonModel::~TritonModel()
         backend_->ModelFiniFn()(reinterpret_cast<TRITONBACKEND_Model*>(this)),
         "failed finalizing model");
   }
+}
+
+void
+TritonModel::ClearHandles()
+{
+  if (batch_dlhandle_ == nullptr) {
+    return;
+  }
+
+  {
+    std::unique_ptr<SharedLibrary> slib;
+    LOG_STATUS_ERROR(
+        SharedLibrary::Acquire(&slib), "~TritonModel::ClearHandles");
+    LOG_STATUS_ERROR(
+        slib->CloseLibraryHandle(batch_dlhandle_), "TritonModel::ClearHandles");
+  }
+  batch_dlhandle_ = nullptr;
+  batch_incl_fn_ = nullptr;
+  batch_init_fn_ = nullptr;
+  batch_fini_fn_ = nullptr;
+  batcher_init_fn_ = nullptr;
+  batcher_fini_fn_ = nullptr;
 }
 
 extern "C" {
@@ -890,8 +1021,8 @@ TRITONBACKEND_StateBuffer(
     void* lbuffer =
         memory->MutableBuffer(&current_memory_type, &current_memory_type_id);
 
-    // If the requested memory type doesn't match the current buffer, allocate a
-    // new buffer with the requested memory type and memory type id.
+    // If the requested memory type doesn't match the current buffer, allocate
+    // a new buffer with the requested memory type and memory type id.
     if (current_memory_type == *memory_type &&
         current_memory_type_id == *memory_type_id) {
       *buffer = lbuffer;
