@@ -308,7 +308,7 @@ class TritonServerOptions {
     return host_policy_map_;
   }
 
-  tc::CacheConfigMap CacheConfig() { return cache_config_map_; }
+  const tc::CacheConfigMap& CacheConfig() { return cache_config_map_; }
   TRITONSERVER_Error* AddCacheConfig(
       const std::string& cache_name, const std::string& config_json);
   const std::string& CacheDir() const { return cache_dir_; }
