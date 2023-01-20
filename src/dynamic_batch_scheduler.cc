@@ -633,31 +633,46 @@ DynamicBatchScheduler::DelegateResponse(
   std::lock_guard<std::mutex> lock(completion_queue_mtx_);
   completion_queue_.emplace_back();
   auto queue_slot = &completion_queue_.back();
-  const auto key = request->CacheKey();
+  // Cache plumbing
+  const std::string& key = request->CacheKey();
+  const bool is_key_set = request->CacheKeyIsSet();
+  const uint64_t lookup_end_ns = request->CacheLookupEndNs();
+  const uint64_t lookup_start_ns = request->CacheLookupStartNs();
 
   request->SetResponseDelegator(
-      [this, queue_slot, key](
+      [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
         if (response_cache_enabled_) {
+          // Logical error, the key should be set if caching is enabled
+          // for this model
+          if (!is_key_set) {
+            LOG_ERROR << "Request cache key was not set correctly.";
+          }
+
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
-          auto insert_start_ns = CaptureTimeNs();
+          uint64_t insert_start_ns = CaptureTimeNs();
           auto status = cache->Insert(response.get(), key);
-          auto insert_end_ns = CaptureTimeNs();
+          uint64_t insert_end_ns = CaptureTimeNs();
 
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
 #ifdef TRITON_ENABLE_STATS
+            uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+            // Logical error, this shouldn't happen
+            if (lookup_start_ns > lookup_end_ns) {
+              lookup_ns = 0;
+              LOG_ERROR << "Request lookup duration was not set correctly.";
+            }
+
+            uint64_t insert_ns = insert_end_ns - insert_start_ns;
+            uint64_t cache_miss_ns = lookup_ns + insert_ns;
             // Use model_ to update stats directly because request object can be
             // released by the backend before getting to this callback.
-            const auto insert_ns = insert_end_ns - insert_start_ns;
-            // FIXME (DLIS-4372): Consolidate to single cache_miss_duration.
-            //   Lookup is negligible on cache miss or can be separated.
-            const auto lookup_ns = 0;
             model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
-                reporter_.get(), lookup_ns, insert_ns);
+                reporter_.get(), cache_miss_ns);
 #endif  // TRITON_ENABLE_STATS
             if (!status.IsOk()) {
               LOG_ERROR << "Failed to insert key [" << key
