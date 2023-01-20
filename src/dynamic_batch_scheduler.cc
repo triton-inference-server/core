@@ -634,23 +634,25 @@ DynamicBatchScheduler::DelegateResponse(
   completion_queue_.emplace_back();
   auto queue_slot = &completion_queue_.back();
   // Cache plumbing
-  auto key = request->CacheKey();
-  uint64_t lookup_ns =
-      request->CacheLookupEndNs() - request->CacheLookupStartNs();
-  if (!request->CacheKeyIsSet()) {
-    key = "";
-    LOG_ERROR << "Request cache key was not set correctly.";
-  }
-  if (request->CacheLookupStartNs() > request->CacheLookupEndNs()) {
-    lookup_ns = 0;
-    LOG_ERROR << "Request lookup duration was not set correctly.";
-  }
+  const std::string& key = request->CacheKey();
+  const bool is_key_set = request->CacheKeyIsSet();
+  const uint64_t lookup_end_ns = request->CacheLookupEndNs();
+  const uint64_t lookup_start_ns = request->CacheLookupStartNs();
 
   request->SetResponseDelegator(
-      [this, queue_slot, key, lookup_ns](
-
+      [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
         if (response_cache_enabled_) {
+          // Logical error checks, these shouldn't happen
+          if (!is_key_set) {
+            LOG_ERROR << "Request cache key was not set correctly.";
+          }
+          uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+          if (lookup_start_ns > lookup_end_ns) {
+            lookup_ns = 0;
+            LOG_ERROR << "Request lookup duration was not set correctly.";
+          }
+
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
