@@ -643,14 +643,10 @@ DynamicBatchScheduler::DelegateResponse(
       [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
         if (response_cache_enabled_) {
-          // Logical error checks, these shouldn't happen
+          // Logical error, the key should be set if caching is enabled
+          // for this model
           if (!is_key_set) {
             LOG_ERROR << "Request cache key was not set correctly.";
-          }
-          uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
-          if (lookup_start_ns > lookup_end_ns) {
-            lookup_ns = 0;
-            LOG_ERROR << "Request lookup duration was not set correctly.";
           }
 
           // Cache insertion happens here because we need the backend to have
@@ -664,6 +660,13 @@ DynamicBatchScheduler::DelegateResponse(
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
 #ifdef TRITON_ENABLE_STATS
+            uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+            // Logical error, this shouldn't happen
+            if (lookup_start_ns > lookup_end_ns) {
+              lookup_ns = 0;
+              LOG_ERROR << "Request lookup duration was not set correctly.";
+            }
+
             uint64_t insert_ns = insert_end_ns - insert_start_ns;
             uint64_t cache_miss_ns = lookup_ns + insert_ns;
             // Use model_ to update stats directly because request object can be
