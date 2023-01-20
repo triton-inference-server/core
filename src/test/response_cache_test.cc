@@ -492,14 +492,16 @@ CreateCache(uint64_t cache_size)
   std::shared_ptr<tc::TritonCache> cache;
   auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
   std::cout << "Creating cache with size: " << cache_size << std::endl;
-  helpers::check_status(cache_manager->CreateCache(
-      "response_cache" /* name */, cache_config, &cache));
+  auto cache_name = "local";
+  helpers::check_status(
+      cache_manager->CreateCache(cache_name, cache_config, &cache));
 
   return cache;
 }
 
 void
-CreateCacheExpectFail(std::string cache_config)
+CreateCacheExpectFail(
+    const std::string& cache_name, const std::string& cache_config)
 {
   // Create TritonCacheManager
   std::shared_ptr<tc::TritonCacheManager> cache_manager;
@@ -509,8 +511,7 @@ CreateCacheExpectFail(std::string cache_config)
 
   // Create TritonCache
   std::shared_ptr<tc::TritonCache> cache;
-  auto status = cache_manager->CreateCache(
-      "response_cache" /* name */, cache_config, &cache);
+  auto status = cache_manager->CreateCache(cache_name, cache_config, &cache);
 
   ASSERT_FALSE(status.IsOk()) << "Creating cache with config: '" << cache_config
                               << "' succeeded when it should fail.";
@@ -636,7 +637,7 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeTooSmall)
   constexpr uint64_t cache_size = 1;
   auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
   std::cout << "Create cache of size: " << cache_size << std::endl;
-  helpers::CreateCacheExpectFail(cache_config);
+  helpers::CreateCacheExpectFail("local", cache_config);
 }
 
 // Test cache size too large to initialize.
@@ -646,7 +647,7 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeTooLarge)
   constexpr uint64_t cache_size = ULLONG_MAX;
   auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
   std::cout << "Create cache of size: " << cache_size << std::endl;
-  helpers::CreateCacheExpectFail(cache_config);
+  helpers::CreateCacheExpectFail("local", cache_config);
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)

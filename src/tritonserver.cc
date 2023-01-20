@@ -308,9 +308,9 @@ class TritonServerOptions {
     return host_policy_map_;
   }
 
-  const std::string& CacheConfig() const { return cache_config_; }
-  void SetCacheConfig(const std::string& cfg) { cache_config_ = cfg; }
-
+  const tc::CacheConfigMap& CacheConfig() { return cache_config_map_; }
+  TRITONSERVER_Error* AddCacheConfig(
+      const std::string& cache_name, const std::string& config_json);
   const std::string& CacheDir() const { return cache_dir_; }
   void SetCacheDir(const std::string& dir) { cache_dir_ = dir; }
 
@@ -337,8 +337,7 @@ class TritonServerOptions {
   std::string backend_dir_;
   std::string repoagent_dir_;
   std::string cache_dir_;
-  // String representation of JSON cache config
-  std::string cache_config_;
+  tc::CacheConfigMap cache_config_map_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 };
@@ -360,7 +359,7 @@ TritonServerOptions::TritonServerOptions()
 #endif  // TRITON_ENABLE_GPU
       backend_dir_("/opt/tritonserver/backends"),
       repoagent_dir_("/opt/tritonserver/repoagents"),
-      cache_dir_("/opt/tritonserver/caches"), cache_config_("{}")
+      cache_dir_("/opt/tritonserver/caches")
 {
 #ifndef TRITON_ENABLE_METRICS
   metrics_ = false;
@@ -409,6 +408,14 @@ TritonServerOptions::AddBackendConfig(
       backend_cmdline_config_map_[backend_name];
   cc.push_back(std::make_pair(setting, value));
 
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+TritonServerOptions::AddCacheConfig(
+    const std::string& cache_name, const std::string& config_json)
+{
+  cache_config_map_[cache_name] = config_json;
   return nullptr;  // success
 }
 
@@ -1177,8 +1184,9 @@ TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
 {
   // For backwards compatibility, forward this API call to new CacheConfig API.
   std::string config_json = R"({"size": )" + std::to_string(size) + "}";
+  std::string default_cache = "local";
   return TRITONSERVER_ServerOptionsSetCacheConfig(
-      options, "" /* cache_name */, config_json.c_str());
+      options, default_cache.c_str(), config_json.c_str());
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -1189,8 +1197,7 @@ TRITONSERVER_ServerOptionsSetCacheConfig(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   // NOTE: cache_name included for future extensibility, but not currently used.
-  loptions->SetCacheConfig(config_json);
-  return nullptr;  // success
+  return loptions->AddCacheConfig(cache_name, config_json);
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -2136,8 +2143,8 @@ TRITONSERVER_ServerNew(
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
   lserver->SetCudaMemoryPoolByteSize(loptions->CudaMemoryPoolByteSize());
-  // TODO: expose server option for this?
-  lserver->SetResponseCacheEnabled(true);
+  bool cache_enabled = !loptions->CacheConfig().empty();
+  lserver->SetResponseCacheEnabled(cache_enabled);
   lserver->SetCacheConfig(loptions->CacheConfig());
   lserver->SetCacheDir(loptions->CacheDir());
   double min_compute_capability = loptions->MinSupportedComputeCapability();
