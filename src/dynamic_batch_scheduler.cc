@@ -652,9 +652,16 @@ DynamicBatchScheduler::DelegateResponse(
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
-          uint64_t insert_start_ns = CaptureTimeNs();
+
+#ifdef TRITON_ENABLE_STATS
+          const uint64_t insert_start_ns = CaptureTimeNs();
+#endif  // TRITON_ENABLE_STATS
+
           auto status = cache->Insert(response.get(), key);
-          uint64_t insert_end_ns = CaptureTimeNs();
+
+#ifdef TRITON_ENABLE_STATS
+          const uint64_t insert_end_ns = CaptureTimeNs();
+#endif  // TRITON_ENABLE_STATS
 
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
