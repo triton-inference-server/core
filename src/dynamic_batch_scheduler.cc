@@ -37,12 +37,6 @@
 #include "triton/common/model_config.h"
 #include "triton/common/nvtx.h"
 
-#ifdef TRITON_ENABLE_STATS
-constexpr bool stats_enabled = true;
-#else
-constexpr bool stats_enabled = false;
-#endif  // TRITON_ENABLE_STATS
-
 namespace triton { namespace core {
 
 uint64_t
@@ -658,33 +652,28 @@ DynamicBatchScheduler::DelegateResponse(
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();
-          const uint64_t insert_start_ns = CaptureTimeNs();
+          uint64_t insert_start_ns = CaptureTimeNs();
           auto status = cache->Insert(response.get(), key);
-          const uint64_t insert_end_ns = CaptureTimeNs();
+          uint64_t insert_end_ns = CaptureTimeNs();
 
           bool cache_miss =
               (status.StatusCode() != Status::Code::ALREADY_EXISTS);
           if (cache_miss) {
-            if (stats_enabled) {
-              uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
-              // Logical error, this shouldn't happen
-              if (lookup_start_ns > lookup_end_ns) {
-                lookup_ns = 0;
-                LOG_ERROR << "Request lookup duration was not set correctly.";
-              }
-              uint64_t insert_ns = insert_end_ns - insert_start_ns;
-              if (insert_start_ns > insert_end_ns) {
-                insert_ns = 0;
-                LOG_ERROR << "Request insert duration was not set correctly.";
-              }
-
-              uint64_t cache_miss_ns = lookup_ns + insert_ns;
-              // Use model_ to update stats directly because request object can
-              // be released by the backend before getting to this callback.
-              model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
-                  reporter_.get(), cache_miss_ns);
+#ifdef TRITON_ENABLE_STATS
+            uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+            // Logical error, this shouldn't happen
+            if (lookup_start_ns > lookup_end_ns) {
+              lookup_ns = 0;
+              LOG_ERROR << "Request lookup duration was not set correctly.";
             }
 
+            uint64_t insert_ns = insert_end_ns - insert_start_ns;
+            uint64_t cache_miss_ns = lookup_ns + insert_ns;
+            // Use model_ to update stats directly because request object can be
+            // released by the backend before getting to this callback.
+            model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
+                reporter_.get(), cache_miss_ns);
+#endif  // TRITON_ENABLE_STATS
             if (!status.IsOk()) {
               LOG_ERROR << "Failed to insert key [" << key
                         << "] into response cache: " << status.Message();
@@ -735,11 +724,11 @@ DynamicBatchScheduler::CacheLookUp(
 
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
-    if (stats_enabled) {
-      // Update model metrics/stats on cache hits
-      // Backends will update metrics as normal on cache misses
-      request->ReportStatisticsCacheHit(reporter_.get());
-    }
+#ifdef TRITON_ENABLE_STATS
+    // Update model metrics/stats on cache hits
+    // Backends will update metrics as normal on cache misses
+    request->ReportStatisticsCacheHit(reporter_.get());
+#endif  // TRITON_ENABLE_STATS
   }
 }
 
