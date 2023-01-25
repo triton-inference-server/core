@@ -1182,7 +1182,14 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size)
 {
-  // For backwards compatibility, forward this API call to new CacheConfig API.
+  // Setting a cache config is equivalent to enabling the cache, so triton will
+  // attempt to create it. To maintain old behavior, simply return and do
+  // nothing for a cache size of zero.
+  if (size == 0) {
+    return nullptr;  // success
+  }
+
+  // Otherwise, forward args to new CacheConfig API for backwards compatibility.
   std::string config_json = R"({"size": )" + std::to_string(size) + "}";
   std::string default_cache = "local";
   return TRITONSERVER_ServerOptionsSetCacheConfig(
