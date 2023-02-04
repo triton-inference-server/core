@@ -47,6 +47,16 @@ namespace triton { namespace core {
 
 namespace {
 
+template<typename T>
+void AddToSet(std::set<T> src, std::set<T> dest)
+{
+  // std::set::merge() can be used if move to >= C++17,
+  // note this is different from merge: copy item instead of move
+  for (const auto& item : src) {
+    dest.emplace(item);
+  }
+}
+
 static std::string file_prefix = "file:";
 
 // Internal repo agent used for model file override
@@ -627,21 +637,19 @@ ModelRepositoryManager::LoadUnloadModels(
   {
     if (type == ActionType::UNLOAD) {
       for (const auto& model : models) {
-        deleted.insert(model.first);
+        for (const auto& info : infos_) {
+          if (info.first.name_ == model.first) {
+            deleted.insert(info.first);
+          }
+        }
       }
     }
     // ActionType::LOAD and in model control mode
     else {
       std::set<std::string> checked_models;
       auto current_models = models;
-      for (const auto& model : models) {
-        checked_models.emplace(model.first);
-      }
 
       ModelInfoMap new_infos;
-#ifdef TRITON_ENABLE_ENSEMBLE
-      bool first_iteration = true;
-#endif  // TRITON_ENABLE_ENSEMBLE
       while (!current_models.empty()) {
         bool polled = true;
         RETURN_IF_ERROR(Poll(
@@ -649,10 +657,9 @@ ModelRepositoryManager::LoadUnloadModels(
             &new_infos, &polled));
         *all_models_polled &= polled;
 
-        // More models should be polled if the polled models are ensembles
-        std::unordered_map<std::string, std::vector<const InferenceParameter*>>
-            next_models;
-#ifdef TRITON_ENABLE_ENSEMBLE
+        // A polling chain is needed if the polled model is ensemble,
+        // so that all (up-to-date) composing models are exposed to Triton.
+        std::set<std::string> next_models;
         // [WIP] Not an efficient way to iterate newly polled models
         // The intention here is to iteratively expand the collection of models
         // to be polled for this load operation, if ensemble is involved,
@@ -661,31 +668,37 @@ ModelRepositoryManager::LoadUnloadModels(
         // (and 'added' etc.), so iterating on the whole structure means
         // re-examination on certain entries.
         for (auto& info : new_infos) {
-          // [WIP] current bookmark..
-        }
-        // [WIP] rework below in above
-        for (const auto& model : current_models) {
-          auto it = new_infos.find(model.first);
-          // Some models may be marked as deleted and will not exist in
-          // 'new_infos'
-          if (it != new_infos.end()) {
-            it->second->explicitly_load_ = first_iteration;
-            const auto& config = it->second->model_config_;
+          // if the model is not "checked", it is model polled at current
+          // iteration, check config for more models to be polled
+          const bool checked = (checked_models.find(info.first.name_) != checked_models.end());
+          if (!checked) {
+            checked_models.emplace(info.first.name_);
+            const auto& config = info.second->model_config_;
             if (config.has_ensemble_scheduling()) {
               for (const auto& step : config.ensemble_scheduling().step()) {
-                bool need_poll =
-                    checked_models.emplace(step.model_name()).second;
-                if (need_poll) {
-                  next_models[step.model_name()];
-                }
+                next_models.emplace(step.model_name());
               }
             }
           }
         }
-        first_iteration = false;
-#endif  // TRITON_ENABLE_ENSEMBLE
-        current_models.swap(next_models);
+        // trim the model if it has been checked
+        current_models.clear();
+        for (const auto& name : next_models) {
+          const bool checked = (checked_models.find(name) != checked_models.end());
+          if (!checked) {
+            current_models[name];
+          }
+        }
       }
+
+      // After all polls, only models in the initial set ('models') are
+      // explicitly loaded.
+      for (auto& info : new_infos) {
+        info.second->explicitly_load_ = (models.find(info.first.name_) != models.end());
+      }
+
+      // [WIP] note for myself: only updating added and modified info,
+      // so 'unmodified' info is not important and no need to be correct.
 
       // Only update the infos when all validation is completed
       for (const auto& model_name : added) {
@@ -695,11 +708,16 @@ ModelRepositoryManager::LoadUnloadModels(
       for (const auto& model_name : modified) {
         auto nitr = new_infos.find(model_name);
         auto itr = infos_.find(model_name);
+        // Also check the 'explicitly_load_' in previous snapshot,
+        // if the model has been explicitly loaded, we shouldn't change
+        // its state as it may be polled as composing model and flag is set
+        // to false.
+        nitr->second->explicitly_load_ |= itr->second->explicitly_load_;
         itr->second = std::move(nitr->second);
       }
     }
   }
-  std::set<std::string> deleted_dependents;
+  std::set<ModelIdentifier> deleted_dependents;
 
   // Update dependency graph and load
   UpdateDependencyGraph(
@@ -1245,113 +1263,39 @@ ModelRepositoryManager::InitializeModelInfo(
 
 Status
 ModelRepositoryManager::UpdateDependencyGraph(
-    const std::set<std::string>& added, const std::set<std::string>& deleted,
-    const std::set<std::string>& modified,
-    std::set<std::string>* deleted_dependents)
+    const std::set<ModelIdentifier>& added, const std::set<ModelIdentifier>& deleted,
+    const std::set<ModelIdentifier>& modified,
+    std::set<ModelIdentifier>* deleted_dependents)
 {
+  DependencyGraph dg_op(dependency_graph_, global_map_, missing_nodes_);
   // update dependency graph, if the state of a node is changed, all its
   // downstreams will be affected
 
   // deleted, drop from dependency_graph, add to missing_nodes if downstreams is
   // not empty affected_nodes are all ensembles as only ensembles are depending
   // on other models
-  std::set<DependencyNode*> affected_nodes;
-  std::set<DependencyNode*> updated_nodes;
-  std::set<std::string> current_deleted = deleted;
-  while (!current_deleted.empty()) {
-    std::set<std::string> next_deleted;
-    for (const auto& model_name : current_deleted) {
-      auto it = dependency_graph_.find(model_name);
-      if (it != dependency_graph_.end()) {
-        // remove this node from its upstreams
-        for (auto& upstream : it->second->upstreams_) {
-          upstream.first->downstreams_.erase(it->second.get());
-          // Check if the upstream should be removed as well
-          if ((deleted_dependents != nullptr) &&
-              (upstream.first->downstreams_.empty()) &&
-              (!upstream.first->explicitly_load_)) {
-            next_deleted.emplace(upstream.first->model_name_);
-          }
-        }
-        it->second->upstreams_.clear();
-
-        if (!it->second->downstreams_.empty()) {
-          UncheckDownstream(&it->second->downstreams_, &affected_nodes);
-          // mark this node as missing upstream in its downstreams
-          for (auto& downstream : it->second->downstreams_) {
-            downstream->missing_upstreams_.emplace(it->second.get());
-          }
-          missing_nodes_.emplace(
-              std::make_pair(model_name, std::move(it->second)));
-        }
-
-        // Make sure deleted node will not be in affected nodes
-        affected_nodes.erase(it->second.get());
-        dependency_graph_.erase(it);
-      }
-      if (deleted_dependents != nullptr) {
-        deleted_dependents->emplace(model_name);
-      }
-    }
-    current_deleted.swap(next_deleted);
+  std::set<DependencyNode*> affected_ensembles;
+  // [WIP] model identifier version of above, replace usage of above.
+  // call 'ensemble' or not?
+  std::set<ModelIdentifier> affected_nodes, deleted_nodes;
+  const bool cascading_removal = (deleted_dependents != nullptr);
+  std::tie(affected_nodes, deleted_nodes) = dg_op.RemoveNodes(deleted, cascading_removal);
+  if (cascading_removal) {
+    deleted_dependents->swap(deleted_nodes);
   }
 
-  // modified, invalidate (uncheck) all downstreams
-  for (const auto& model_name : modified) {
-    auto it = dependency_graph_.find(model_name);
-    if (it != dependency_graph_.end()) {
-      UncheckDownstream(&it->second->downstreams_, &affected_nodes);
-      ModelInfo* info = nullptr;
-      GetModelInfo(model_name, &info);
-      it->second->model_config_ = info->model_config_;
-      it->second->explicitly_load_ = info->explicitly_load_;
-      // remove this node from its upstream node
-      for (auto& upstream : it->second->upstreams_) {
-        upstream.first->downstreams_.erase(it->second.get());
-      }
-      it->second->upstreams_.clear();
-      it->second->checked_ = false;
-      it->second->status_ = Status::Success;
-      updated_nodes.emplace(it->second.get());
-    }
-  }
+  AddToSet(dg_op.UpdateNodes(modified, this), affected_nodes);
+  AddToSet(dg_op.AddNodes(added, this), affected_nodes);
 
-  // added, add to dependency_graph, if in missing_node, invalidate (uncheck)
-  // and associate all downstreams, remove from missing_node
-  for (const auto& model_name : added) {
-    std::unique_ptr<DependencyNode> added_node;
-    auto it = missing_nodes_.find(model_name);
-    if (it != missing_nodes_.end()) {
-      UncheckDownstream(&it->second->downstreams_, &affected_nodes);
-      // remove this node from missing upstream node in its downstream nodes
-      for (auto& downstream : it->second->downstreams_) {
-        downstream->missing_upstreams_.erase(it->second.get());
-      }
-
-      it->second->checked_ = false;
-      added_node = std::move(it->second);
-      missing_nodes_.erase(it);
-    } else {
-      // Right now, nothing is going to be filled until validation
-      added_node.reset(new DependencyNode(model_name));
-    }
-    ModelInfo* info = nullptr;
-    GetModelInfo(model_name, &info);
-    added_node->model_config_ = info->model_config_;
-    added_node->explicitly_load_ = info->explicitly_load_;
-    updated_nodes.emplace(added_node.get());
-    dependency_graph_.emplace(
-        std::make_pair(model_name, std::move(added_node)));
-  }
-
-  auto& affected_ensembles = affected_nodes;
-  for (auto& updated_node : updated_nodes) {
-    bool is_ensemble = ConnectDependencyGraph(updated_node);
+  // [WIP] bookmark...
+  for (auto& updated_node : affected_nodes) {
+    bool is_ensemble = dg_op.ConnectDependencyGraph(updated_node);
     if (is_ensemble) {
       affected_ensembles.emplace(updated_node);
     }
   }
-
+  
+  // [WIP] further validation..
 #ifdef TRITON_ENABLE_ENSEMBLE
   // After the dependency graph is updated, check ensemble dependencies
   for (auto& ensemble : affected_ensembles) {
@@ -1488,14 +1432,14 @@ ModelRepositoryManager::CircularcyCheck(
 
 void
 ModelRepositoryManager::UncheckDownstream(
-    NodeSet* downstreams, NodeSet* updated_nodes)
+    const NodeSet& downstreams, NodeSet* updated_nodes)
 {
   // Mark downstream nodes as unchecked recursively
-  for (auto& node : *downstreams) {
+  for (auto& node : downstreams) {
     if (node->checked_) {
       node->checked_ = false;
       node->status_ = Status::Success;
-      UncheckDownstream(&node->downstreams_, updated_nodes);
+      UncheckDownstream(node->downstreams_, updated_nodes);
       updated_nodes->emplace(node);
     }
   }
@@ -1544,12 +1488,12 @@ ModelRepositoryManager::ConnectDependencyGraph(DependencyNode* updated_node)
 
 Status
 ModelRepositoryManager::GetModelInfo(
-    const std::string& name, ModelInfo** model_info)
+    const ModelIdentifier& model_id, ModelInfo** model_info) const
 {
-  const auto itr = infos_.find(name);
+  const auto itr = infos_.find(model_id);
   if (itr == infos_.end()) {
     return Status(
-        Status::Code::NOT_FOUND, "no configuration for model '" + name + "'");
+        Status::Code::NOT_FOUND, "no configuration for model '" + model_id.str() + "'");
   }
 
   *model_info = itr->second.get();
