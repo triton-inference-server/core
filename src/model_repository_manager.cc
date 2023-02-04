@@ -295,11 +295,14 @@ ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
     const bool polling_enabled, const bool model_control_enabled,
     const double min_compute_capability,
+    const bool enable_model_namespacing,
     std::unique_ptr<ModelLifeCycle> life_cycle)
-    : repository_paths_(repository_paths), autofill_(autofill),
+    : autofill_(autofill),
       polling_enabled_(polling_enabled),
       model_control_enabled_(model_control_enabled),
       min_compute_capability_(min_compute_capability),
+      enable_model_namespacing_(enable_model_namespacing),
+      repository_paths_(repository_paths),
       model_life_cycle_(std::move(life_cycle))
 {
 }
@@ -313,6 +316,7 @@ ModelRepositoryManager::Create(
     const std::set<std::string>& startup_models, const bool strict_model_config,
     const bool polling_enabled, const bool model_control_enabled,
     const ModelLifeCycleOptions& life_cycle_options,
+    const bool enable_model_namespacing,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
 {
   // The rest only matters if repository path is valid directory
@@ -341,7 +345,7 @@ ModelRepositoryManager::Create(
       new ModelRepositoryManager(
           repository_paths, !strict_model_config, polling_enabled,
           model_control_enabled, life_cycle_options.min_compute_capability_,
-          std::move(life_cycle)));
+          std::move(life_cycle), enable_model_namespacing));
   *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
@@ -421,7 +425,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
   // Serialize all operations that change model state
   std::lock_guard<std::mutex> lock(poll_mu_);
 
-  std::set<std::string> added, deleted, modified, unmodified;
+  std::set<ModelIdentifier> added, deleted, modified, unmodified;
 
   // We don't modify 'infos_' in place to minimize how long we need to
   // hold the lock and also prevent any partial changes to do an error
@@ -431,9 +435,9 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
   // Each subdirectory of repository path is a model directory from
   // which we read the model configuration.
   std::unordered_map<std::string, std::vector<const InferenceParameter*>>
-      subdirs;
+      model_names;
   RETURN_IF_ERROR(Poll(
-      subdirs, &added, &deleted, &modified, &unmodified, &new_infos,
+      model_names, &added, &deleted, &modified, &unmodified, &new_infos,
       all_models_polled));
 
   // Anything in 'infos_' that is not in "added", "modified", or
@@ -451,6 +455,12 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     return Status::Success;
   }
 
+  // [WIP] reminder for myself: polling model Triton model reflects
+  // storage models? Yes but not exactly.. fallback / revert in model
+  // life cycle will have the model be "older" version if the newer
+  // storage model is malformed => re-load failure.
+  // But it will always try to align in the next poll (keep polling the model
+  // as it is newer in storage)
   infos_.swap(new_infos);
 
   UpdateDependencyGraph(added, deleted, modified);
@@ -602,6 +612,7 @@ ModelRepositoryManager::LoadUnloadModel(
   return Status::Success;
 }
 
+// [WIP] interact with global mapping
 Status
 ModelRepositoryManager::LoadUnloadModels(
     const std::unordered_map<
@@ -612,7 +623,7 @@ ModelRepositoryManager::LoadUnloadModels(
   auto status = Status::Success;
   *all_models_polled = true;
   // Update ModelInfo related to file system accordingly
-  std::set<std::string> added, deleted, modified, unmodified;
+  std::set<ModelIdentifier> added, deleted, modified, unmodified;
   {
     if (type == ActionType::UNLOAD) {
       for (const auto& model : models) {
@@ -642,6 +653,17 @@ ModelRepositoryManager::LoadUnloadModels(
         std::unordered_map<std::string, std::vector<const InferenceParameter*>>
             next_models;
 #ifdef TRITON_ENABLE_ENSEMBLE
+        // [WIP] Not an efficient way to iterate newly polled models
+        // The intention here is to iteratively expand the collection of models
+        // to be polled for this load operation, if ensemble is involved,
+        // until the collection is self-contained.
+        // Every Poll() above add new entries in existing 'new_infos'
+        // (and 'added' etc.), so iterating on the whole structure means
+        // re-examination on certain entries.
+        for (auto& info : new_infos) {
+          // [WIP] current bookmark..
+        }
+        // [WIP] rework below in above
         for (const auto& model : current_models) {
           auto it = new_infos.find(model.first);
           // Some models may be marked as deleted and will not exist in
@@ -848,24 +870,35 @@ ModelRepositoryManager::GetModel(
   return status;
 }
 
+// [WIP] updating to enable_namespacing and ModelIdentifier
 Status
 ModelRepositoryManager::Poll(
     const std::unordered_map<
         std::string, std::vector<const InferenceParameter*>>& models,
-    std::set<std::string>* added, std::set<std::string>* deleted,
-    std::set<std::string>* modified, std::set<std::string>* unmodified,
+    std::set<ModelIdentifier>* added, std::set<ModelIdentifier>* deleted,
+    std::set<ModelIdentifier>* modified, std::set<ModelIdentifier>* unmodified,
     ModelInfoMap* updated_infos, bool* all_models_polled)
 {
   *all_models_polled = true;
   // empty path is the special case to indicate the model should be loaded
   // from override file content in 'models'.
-  std::map<std::string, std::string> model_to_path;
+  std::map<ModelIdentifier, std::string> model_to_path;
 
   // If no model is specified, poll all models in all model repositories.
   // Otherwise, only poll the specified models
   if (models.empty()) {
-    std::set<std::string> duplicated_models;
+    std::set<ModelIdentifier> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
+      // [WIP] should the collapsing be done here?
+      // want to reuse duplication check here when namespace is disabled?
+      //
+      // collapse namespace based on whether it is enabled
+      const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
+
+      // Model name mapping is not checked in direct polling, because
+      // it is set when registering additional model repository which is limited
+      // to explicit mode, so there is no intersection of the code paths.
+      // [TODO] revisit the above statement.
       std::set<std::string> subdirs;
       Status status = GetDirectorySubdirs(repository_path, &subdirs);
       if (!status.IsOk()) {
@@ -874,10 +907,11 @@ ModelRepositoryManager::Poll(
         *all_models_polled = false;
       } else {
         for (const auto& subdir : subdirs) {
+          const ModelIdentifier model_identifier(model_namespace, subdir);
           if (!model_to_path
-                   .emplace(subdir, JoinPath({repository_path, subdir}))
+                   .emplace(model_identifier, JoinPath({repository_path, subdir}))
                    .second) {
-            duplicated_models.insert(subdir);
+            duplicated_models.insert(model_identifier);
             *all_models_polled = false;
           }
         }
@@ -896,7 +930,9 @@ ModelRepositoryManager::Poll(
     for (const auto& model : models) {
       // Skip repository polling if override model files
       if (ModelDirectoryOverride(model.second)) {
-        model_to_path.emplace(model.first, "");
+        // [TODO] once namespace is exposed to external user, should allow and
+        // check if the namespace is provided as well,.
+        model_to_path.emplace(ModelIdentifier("", model.first), "");
         continue;
       }
       // Check model mapping first to see if matching model to load.
@@ -913,7 +949,9 @@ ModelRepositoryManager::Poll(
           *all_models_polled = false;
         }
         if (exists_in_this_repo) {
-          model_to_path.emplace(model.first, model_it->second.second);
+          // collapse namespace based on whether it is enabled
+          const std::string model_namespace = (enable_model_namespacing_ ? model_it->second.first : "");
+          model_to_path.emplace(ModelIdentifier(model_namespace, model.first), model_it->second.second);
           exists = true;
         } else {
           LOG_ERROR << "mapped path '" << full_path
@@ -931,6 +969,12 @@ ModelRepositoryManager::Poll(
                       << "': " << status.Message();
             *all_models_polled = false;
           } else if (exists_in_this_repo) {
+            // [WIP] the intention is to check if the model name is mapped to
+            // something other than the folder name. If so, we shouldn't
+            // consider the model is found in this repo.
+            // The current check is not accurate, it skips the repo as long
+            // as at least one model within is mapped.
+            //
             // Check to make sure this directory is not mapped.
             // If mapped, continue to next repository path.
             bool mapped = false;
@@ -944,8 +988,11 @@ ModelRepositoryManager::Poll(
               continue;
             }
 
+            // [WIP] keep repeating in multiple locations, clean up?
+            // collapse namespace based on whether it is enabled
+            const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
             auto res = model_to_path.emplace(
-                model.first, JoinPath({repository_path, model.first}));
+                ModelIdentifier(model_namespace, model.first), JoinPath({repository_path, model.first}));
             if (res.second) {
               exists = true;
             } else {
@@ -970,7 +1017,9 @@ ModelRepositoryManager::Poll(
   // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
     std::unique_ptr<ModelInfo> model_info;
-    const auto& mit = models.find(pair.first);
+    // [WIP] load with parameters will be appiled to all models with the same
+    // name (namespace can be different)
+    const auto& mit = models.find(pair.first.name_);
     static std::vector<const InferenceParameter*> empty_params;
     auto status = InitializeModelInfo(
         pair.first, pair.second,
@@ -983,7 +1032,7 @@ ModelRepositoryManager::Poll(
       if (!ret.second) {
         return Status(
             Status::Code::ALREADY_EXISTS,
-            "unexpected model info for model '" + pair.first + "'");
+            "unexpected model info for model '" + pair.first.str() + "'");
       }
 
       // Classify load state and set updated info
@@ -1025,7 +1074,7 @@ ModelRepositoryManager::ModelDirectoryOverride(
 
 Status
 ModelRepositoryManager::InitializeModelInfo(
-    const std::string& name, const std::string& path,
+    const ModelIdentifier& model_id, const std::string& path,
     const std::vector<const InferenceParameter*>& params,
     std::unique_ptr<ModelInfo>* info)
 {
@@ -1034,7 +1083,7 @@ ModelRepositoryManager::InitializeModelInfo(
 
   bool unmodified = false;
 
-  const auto iitr = infos_.find(name);
+  const auto iitr = infos_.find(model_id);
   // Set 'prev_mtime_ns_' if there is existing ModelInfo
   if (iitr != infos_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
@@ -1148,14 +1197,18 @@ ModelRepositoryManager::InitializeModelInfo(
           &artifact_type, &location));
       auto latest_path = std::string(location);
       linfo->model_path_ = latest_path;
+      // [TODO] should try to read the config again at the latest location?
     }
   }
   linfo->is_config_provided_ = parsed_config;
 
+  // [WIP] actuall config to be associated with the model is not really settled
+  // and read until now
+
   // Try to automatically generate missing parts of the model
   // configuration (autofill) that don't require model detail
   RETURN_IF_ERROR(GetNormalizedModelConfig(
-      name, linfo->model_path_, min_compute_capability_,
+      model_id.name_, linfo->model_path_, min_compute_capability_,
       &linfo->model_config_));
 
   // Note that the model inputs and outputs are not validated until
@@ -1169,18 +1222,18 @@ ModelRepositoryManager::InitializeModelInfo(
 
   // If the model is mapped, update its config name based on the
   // mapping.
-  if (model_mappings_.find(name) != model_mappings_.end()) {
-    linfo->model_config_.set_name(name);
+  if (model_mappings_.find(model_id.name_) != model_mappings_.end()) {
+    linfo->model_config_.set_name(model_id.name_);
   } else {
     // If there is no model mapping, make sure the name of the model
     // matches the name of the directory. This is a somewhat arbitrary
     // requirement but seems like good practice to require it of the user.
     // It also acts as a check to make sure we don't have two different
     // models with the same name.
-    if (linfo->model_config_.name() != name) {
+    if (linfo->model_config_.name() != model_id.name_) {
       return Status(
           Status::Code::INVALID_ARG,
-          "unexpected directory name '" + name + "' for model '" +
+          "unexpected directory name '" + model_id.name_ + "' for model '" +
               linfo->model_config_.name() +
               "', directory name must equal model name");
     }

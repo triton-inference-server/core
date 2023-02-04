@@ -115,7 +115,10 @@ class ModelRepositoryManager {
       const bool strict_model_config, const bool polling_enabled,
       const bool model_control_enabled,
       const ModelLifeCycleOptions& life_cycle_options,
+      const bool enable_model_namespacing,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
+
+  // [WIP] 'write' APIs, model management
 
   /// Poll the model repository to determine the new set of models and
   /// compare with the current set. And serve the new set of models based
@@ -145,6 +148,8 @@ class ModelRepositoryManager {
   /// \return error status.
   Status StopAllModels();
 
+  // [WIP] 'read' APIs, model retrieval / status
+
   /// \return the number of in-flight inferences for the all versions of all
   /// models. The set element will be a tuple of <model_name, model_version,
   /// in-flight inference count>. Note that a model version will not be included
@@ -169,12 +174,6 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       ModelReadyState* state);
 
-  /// Get the index of all models in all repositories.
-  /// \param ready_only If true return only index of models that are ready.
-  /// \param index Returns the index.
-  /// \return error status.
-  Status RepositoryIndex(const bool ready_only, std::vector<ModelIndex>* index);
-
   /// Obtain the specified model.
   /// \param model_name The name of the model.
   /// \param model_version The version of the model.
@@ -183,6 +182,26 @@ class ModelRepositoryManager {
   Status GetModel(
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
+
+  /// Obtain the specified model.
+  /// \param model_name The name of the model.
+  /// \param model_version The version of the model.
+  /// \param model Return the model object.
+  /// \return error status.
+  Status GetModel(
+      const std::string& model_namespace,
+      const std::string& model_name, const int64_t model_version,
+      std::shared_ptr<Model>* model);
+
+  // [WIP] 'read' APIs, repository (/ model) status
+
+  /// Get the index of all models in all repositories.
+  /// \param ready_only If true return only index of models that are ready.
+  /// \param index Returns the index.
+  /// \return error status.
+  Status RepositoryIndex(const bool ready_only, std::vector<ModelIndex>* index);
+
+  // [WIP] 'write' APIs, repository management
 
   // Register model repository path.
   /// \param repository Path to model repository.
@@ -203,7 +222,7 @@ class ModelRepositoryManager {
 
   // Map from model name to information about the model.
   using ModelInfoMap =
-      std::unordered_map<std::string, std::unique_ptr<ModelInfo>>;
+      std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>>;
 
   // Set of DependencyNode
   using NodeSet = std::set<DependencyNode*>;
@@ -212,7 +231,10 @@ class ModelRepositoryManager {
       const std::set<std::string>& repository_paths, const bool autofill,
       const bool polling_enabled, const bool model_control_enabled,
       const double min_compute_capability,
+      const bool enable_model_namespacing,
       std::unique_ptr<ModelLifeCycle> life_cycle);
+
+  // [WIP] 'write' APIs, model management
 
   /// The internal function that are called in Create() and PollAndUpdate().
   Status PollAndUpdateInternal(bool* all_models_polled);
@@ -223,6 +245,8 @@ class ModelRepositoryManager {
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents,
       bool* all_models_polled);
+
+  // [WIP] 'read' APIs, repository polling
 
   /// Poll the requested models in the model repository and
   /// compare with the current set. Return the additions, deletions,
@@ -245,12 +269,12 @@ class ModelRepositoryManager {
   Status Poll(
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
-      std::set<std::string>* added, std::set<std::string>* deleted,
-      std::set<std::string>* modified, std::set<std::string>* unmodified,
+      std::set<ModelIdentifier>* added, std::set<ModelIdentifier>* deleted,
+      std::set<ModelIdentifier>* modified, std::set<ModelIdentifier>* unmodified,
       ModelInfoMap* updated_infos, bool* all_models_polled);
 
   /// Helper function for Poll() to initialize ModelInfo for the model.
-  /// \param name The name of the model.
+  /// \param model_id The identifier of the model.
   /// \param path The model path. Empty path means the model is provided via
   /// 'params'
   /// \param params The model parameters provided for polling model.
@@ -258,9 +282,11 @@ class ModelRepositoryManager {
   /// existing ModelInfo for the model should be reused.
   /// \return The error status.
   Status InitializeModelInfo(
-      const std::string& name, const std::string& path,
+      const ModelIdentifier& model_id, const std::string& path,
       const std::vector<const InferenceParameter*>& params,
       std::unique_ptr<ModelInfo>* info);
+
+  // [WIP] 'write' APIs, model management
 
   /// Load models based on the dependency graph. The function will iteratively
   /// load models that all the models they depend on has been loaded, and unload
@@ -293,6 +319,8 @@ class ModelRepositoryManager {
   /// \return True if the node represents an ensemble model. False otherwise.
   bool ConnectDependencyGraph(DependencyNode* updated_node);
 
+  // [WIP] 'read' APIs, model management
+
   /// Get the model info for a named model.
   /// \param name The model name.
   /// \param model_info Returns the model information.
@@ -324,22 +352,26 @@ class ModelRepositoryManager {
   bool ModelDirectoryOverride(
       const std::vector<const InferenceParameter*>& model_params);
 
-  std::set<std::string> repository_paths_;
   const bool autofill_;
   const bool polling_enabled_;
   const bool model_control_enabled_;
   const double min_compute_capability_;
 
   std::mutex poll_mu_;
-  ModelInfoMap infos_;
 
   std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
       dependency_graph_;
   std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
       missing_nodes_;
 
+  // [WIP] repository specific
+  const bool enable_model_namespacing_;
+  ModelInfoMap infos_;
+  std::set<std::string> repository_paths_;
   // Mappings from (overridden) model names to a pair of their repository and
   // absolute path
+  // [WIP] key should be updated to contain namespace as well, need to work with
+  // enable namespace
   std::unordered_map<std::string, std::pair<std::string, std::string>>
       model_mappings_;
 
