@@ -52,18 +52,20 @@ class ModelRepositoryManager {
  public:
   // Index information for a model.
   struct ModelIndex {
-    ModelIndex(const std::string& n)
-        : name_only_(true), name_(n), version_(-1),
+    ModelIndex(const ModelIdentifier& n)
+        : name_only_(true), namespace_(n.namespace_), name_(n.name_), version_(-1),
           state_(ModelReadyState::UNKNOWN)
     {
     }
     ModelIndex(
-        const std::string& n, const int64_t v, const ModelReadyState s,
+        const ModelIdentifier& n, const int64_t v, const ModelReadyState s,
         const std::string& r)
-        : name_only_(false), name_(n), version_(v), state_(s), reason_(r)
+        : name_only_(false), namespace_(n.namespace_), name_(n.name_), version_(v), state_(s), reason_(r)
     {
     }
     const bool name_only_;
+    // [WIP] expose 'namespace_'
+    const std::string namespace_;
     const std::string name_;
     const int64_t version_;
     const ModelReadyState state_;
@@ -74,7 +76,8 @@ class ModelRepositoryManager {
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const ModelIdentifier& model_id)
-        : model_id_(model_id), status_(Status::Success), checked_(false)
+        : model_id_(model_id), status_(Status::Success), checked_(false),
+          connected_(false)
     {
     }
 
@@ -112,9 +115,10 @@ class ModelRepositoryManager {
     // match the upstream nodes when they are visible.
     // i.e. the node will look for upstream node that has matching identifier,
     // but upstream node with different namspace can still be used if not found.
-    // [WIP] formalize it
+    // [WIP] formalize it: don't need the list if always re-evaluates
     std::set<std::string> missing_upstreams_;
     std::set<std::string> fuzzy_matched_upstreams_;
+    bool connected_;
     std::unordered_map<DependencyNode*, std::set<int64_t>> upstreams_;
     std::set<DependencyNode*> downstreams_;
   };
@@ -227,9 +231,6 @@ class ModelRepositoryManager {
         model_manager->GetModelInfo(model_id, &info);
         added_node->model_config_ = info->model_config_;
         added_node->explicitly_load_ = info->explicitly_load_;
-        affected_nodes.emplace(model_id);
-        graph_ref_.emplace(
-            std::make_pair(model_id, std::move(added_node)));
 
         // Check if this model name is needed for some nodes, simply mark those nodes
         // affected to re-evalute them later
@@ -243,8 +244,60 @@ class ModelRepositoryManager {
             }
           }
         }
+
+        // Add nodes to all reference
+        affected_nodes.emplace(model_id);
+        global_map_ref_[model_id.name_].emplace(model_id);
+        graph_ref_.emplace(
+            std::make_pair(model_id, std::move(added_node)));
       }
       return affected_nodes;
+    }
+
+    // Helper function check the 'updated_node' to construct the edges between
+    // nodes in the dependency graph.
+    void ConnectDependencyGraph(const ModelIdentifier& node_id) {
+      auto updated_node = FindNode(node_id, false);
+      // Check the node's model config to determine if it depends on other models
+      // and if those models are present
+      updated_node->upstreams_.clear();
+      updated_node->missing_upstreams_.clear();
+      updated_node->connected_ = true;
+      if (updated_node->model_config_.has_ensemble_scheduling()) {
+        for (const auto& step :
+            updated_node->model_config_.ensemble_scheduling().step()) {
+          // Build model identifier to look for the composing model,
+          // currently using the same namespace as the 'updated_node' for
+          // perferred identifier.
+          // [enhancement] May allow customization once exposed to ensemble
+          // config.
+          const ModelIdentifier preferred_id(updated_node->model_id_.namespace_, step.model_name());
+          auto node = FindNode(preferred_id, true /* allow_fuzzy_match */);
+          if (node) {
+            // Add the current node to its upstream
+            node->downstreams_.emplace(updated_node);
+
+            // Add the upstream to the current node
+            auto res = updated_node->upstreams_.emplace(
+              node, std::set<int64_t>({step.model_version()}));
+            // If map insertion doesn't happen, the same model is required in
+            // different step, insert the version to existing required version set.
+            if (!res.second) {
+              res.first->second.insert(step.model_version());
+            }
+          } else {
+            updated_node->connected_ = false;
+            updated_node->missing_upstreams_.emplace(step.model_name());
+          }
+
+          // If no node is found or the found node is not exact matched,
+          // just record that in 'missing_nodes_ref_' so the current node will
+          // be rechecked whenever a new candidate is added.
+          if (!node || (node->model_id_ != preferred_id)) {
+            missing_nodes_ref_[node->model_id_.name_].emplace(updated_node->model_id_);
+          }
+        }
+      }
     }
 
     // Remove the node of the given identifier from dependency graph,
@@ -276,9 +329,10 @@ class ModelRepositoryManager {
 
         // Drop the node from all reference,
         // remove from graph at last to complete its lifecycle
+        global_map_ref_[model_id.name_].erase(model_id);
         for (const auto& model_name : node->missing_upstreams_) {
           auto mit = missing_nodes_ref_.find(model_name);
-          mit->second.erase(it->first);
+          mit->second.erase(model_id);
         }
         graph_ref_.erase(it);
       }
@@ -316,8 +370,32 @@ class ModelRepositoryManager {
       }
     }
 
+    Status CircularcyCheck(
+    DependencyNode* current_node, const DependencyNode* start_node)
+    {
+      for (auto& downstream : current_node->downstreams_) {
+        if (downstream == start_node) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "circular dependency between ensembles: " + start_node->model_id_.str() +
+                  " -> ... -> " + current_node->model_id_.str() + " -> " +
+                  start_node->model_id_.str());
+        } else {
+          const auto status = CircularcyCheck(downstream, start_node);
+          if (!status.IsOk()) {
+            current_node->status_ = status;
+            return status;
+          }
+        }
+      }
+      return Status::Success;
+    }
+
    private:
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>& graph_ref_;
+    // [WIP] modify on Add/DeleteNodes? Yes because the map is subject to change
+    // based on dependency graph (cascading removal), can't be fixed before update graph
+    // [WIP] document reasoning above?
     std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map_ref_;
     std::unordered_map<std::string, std::set<ModelIdentifier>>& missing_nodes_ref_;
   };
@@ -387,7 +465,7 @@ class ModelRepositoryManager {
   /// models. The set element will be a tuple of <model_name, model_version,
   /// in-flight inference count>. Note that a model version will not be included
   /// if it doesn't have in-flight inferences.
-  const std::set<std::tuple<std::string, int64_t, size_t>> InflightStatus();
+  const std::set<std::tuple<ModelIdentifier, int64_t, size_t>> InflightStatus();
 
   /// \param strict_readiness If true, only models that have at least one
   /// ready version will be considered as live. Otherwise, the models that
@@ -417,14 +495,15 @@ class ModelRepositoryManager {
       std::shared_ptr<Model>* model);
 
   /// Obtain the specified model.
-  /// \param model_name The name of the model.
+  /// \param model_id The identifier of the model.
   /// \param model_version The version of the model.
   /// \param model Return the model object.
   /// \return error status.
   Status GetModel(
-      const std::string& model_namespace,
-      const std::string& model_name, const int64_t model_version,
+      const ModelIdentifier& model_id, const int64_t model_version,
       std::shared_ptr<Model>* model);
+
+  Status FindModelIdentifier(const std::string& model_name, ModelIdentifier* model_id);
 
   // [WIP] 'read' APIs, repository (/ model) status
 
@@ -525,7 +604,7 @@ class ModelRepositoryManager {
   /// load models that all the models they depend on has been loaded, and unload
   /// models if their dependencies are no longer satisfied.
   /// \return The status of the model loads.
-  std::map<std::string, Status> LoadModelByDependency();
+  std::map<ModelIdentifier, Status> LoadModelByDependency();
 
   /// Helper function to update the dependency graph based on the poll result
   /// \param added The names of the models added to the repository.
@@ -547,11 +626,6 @@ class ModelRepositoryManager {
   /// \param updated_nodes Return the nodes that have been unchecked
   void UncheckDownstream(const NodeSet& downstreams, NodeSet* updated_nodes);
 
-  /// Helper function to construct the edges between nodes in dependency graph.
-  /// \param updated_node The node that is newly added or modified.
-  /// \return True if the node represents an ensemble model. False otherwise.
-  bool ConnectDependencyGraph(DependencyNode* updated_node);
-
   // [WIP] 'read' APIs, model management
 
   /// Get the model info for a named model.
@@ -568,7 +642,7 @@ class ModelRepositoryManager {
   /// unloaded for the next iteration.
   std::pair<NodeSet, NodeSet> ModelsToLoadUnload(
       const NodeSet& loaded_models,
-      const std::map<std::string, Status>& model_load_status);
+      const std::map<ModelIdentifier, Status>& model_load_status);
 
   /// Check if the node is ready for the next iteration. A node is ready if the
   /// node is invalid (containing invalid model config or its depdencies failed
@@ -577,7 +651,7 @@ class ModelRepositoryManager {
   /// \return True if the node is ready. False otherwise.
   bool CheckNode(
       DependencyNode* node,
-      const std::map<std::string, Status>& model_load_status);
+      const std::map<ModelIdentifier, Status>& model_load_status);
 
   Status CircularcyCheck(
       DependencyNode* current_node, const DependencyNode* start_node);

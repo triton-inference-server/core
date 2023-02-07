@@ -56,6 +56,11 @@ struct ModelIdentifier {
     return ((namespace_ == rhs.namespace_) && (name_ == rhs.name_));
   }
 
+  bool operator!=(const ModelIdentifier& rhs) const
+  {
+    return (!(namespace_ != rhs.namespace_) || !(name_ != rhs.name_));
+  }
+
   friend std::ostream& operator<<(std::ostream& os, const ModelIdentifier& rhs)
   {
     os << rhs.namespace_ << "::" << rhs.name_;

@@ -355,7 +355,7 @@ ModelRepositoryManager::Create(
       new ModelRepositoryManager(
           repository_paths, !strict_model_config, polling_enabled,
           model_control_enabled, life_cycle_options.min_compute_capability_,
-          std::move(life_cycle), enable_model_namespacing));
+          enable_model_namespacing, std::move(life_cycle)));
   *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
@@ -485,10 +485,11 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
   return Status::Success;
 }
 
-std::map<std::string, Status>
+std::map<ModelIdentifier, Status>
 ModelRepositoryManager::LoadModelByDependency()
 {
-  std::map<std::string, Status> res;
+  // [WIP] bookmark
+  std::map<ModelIdentifier, Status> res;
   struct ModelState {
     ModelState(DependencyNode* node) : node_(node), status_(Status::Success) {}
     DependencyNode* node_;
@@ -502,8 +503,8 @@ ModelRepositoryManager::LoadModelByDependency()
     loaded_models.clear();
     // Unload invalid models first
     for (auto& invalid_model : set_pair.second) {
-      model_life_cycle_->AsyncUnload(invalid_model->model_name_);
-      res[invalid_model->model_name_] = invalid_model->status_;
+      model_life_cycle_->AsyncUnload(invalid_model->model_id_);
+      res[invalid_model->model_id_] = invalid_model->status_;
       LOG_ERROR << invalid_model->status_.AsString();
       invalid_model->loaded_versions_ = std::set<int64_t>();
       loaded_models.emplace(invalid_model);
@@ -513,9 +514,9 @@ ModelRepositoryManager::LoadModelByDependency()
     for (auto& valid_model : set_pair.first) {
       model_states.emplace_back(new ModelState(valid_model));
       auto model_state = model_states.back().get();
-      const auto itr = infos_.find(valid_model->model_name_);
+      const auto itr = infos_.find(valid_model->model_id_);
       auto status = model_life_cycle_->AsyncLoad(
-          valid_model->model_name_, itr->second->model_path_,
+          valid_model->model_id_, itr->second->model_path_,
           valid_model->model_config_, itr->second->is_config_provided_,
           itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
@@ -524,16 +525,16 @@ ModelRepositoryManager::LoadModelByDependency()
       if (!status.IsOk()) {
         model_state->status_ = status;
         model_state->ready_.set_value();
-        LOG_ERROR << "failed to load model '" << valid_model->model_name_
+        LOG_ERROR << "failed to load model '" << valid_model->model_id_.str()
                   << "': " << status.Message();
       }
       loaded_models.emplace(valid_model);
     }
     for (auto& model_state : model_states) {
       model_state->ready_.get_future().wait();
-      res[model_state->node_->model_name_] = model_state->status_;
+      res[model_state->node_->model_id_] = model_state->status_;
       const auto version_state =
-          model_life_cycle_->VersionStates(model_state->node_->model_name_);
+          model_life_cycle_->VersionStates(model_state->node_->model_id_);
       model_state->node_->loaded_versions_.clear();
       for (const auto& vs : version_state) {
         if (vs.second.first == ModelReadyState::READY) {
@@ -544,7 +545,7 @@ ModelRepositoryManager::LoadModelByDependency()
       // ensure the next load request will attempt to load the model again
       // for operation consistency.
       if (!model_state->status_.IsOk()) {
-        auto& model_info = infos_.find(model_state->node_->model_name_)->second;
+        auto& model_info = infos_.find(model_state->node_->model_id_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
@@ -588,6 +589,7 @@ ModelRepositoryManager::LoadUnloadModel(
                                     "', failed to poll from model repository");
   }
 
+  // [WIP] bookmark.. how to check if namespacing is enabled? Check map
   const auto version_states = model_life_cycle_->VersionStates(model_name);
   if (type == ActionType::LOAD) {
     if (version_states.empty()) {
@@ -732,6 +734,9 @@ ModelRepositoryManager::LoadUnloadModels(
     model_life_cycle_->AsyncUnload(name);
   }
 
+  // [WIP] bookmark.. how to check if namespacing is enabled? Check map,
+  // or should know what model identifier to look for from poll..
+  //
   // load / unload the models affected, and check the load status of
   // the requested models
   const auto& load_status = LoadModelByDependency();
@@ -777,7 +782,7 @@ ModelRepositoryManager::StopAllModels()
   return model_life_cycle_->StopAllModels();
 }
 
-const std::set<std::tuple<std::string, int64_t, size_t>>
+const std::set<std::tuple<ModelIdentifier, int64_t, size_t>>
 ModelRepositoryManager::InflightStatus()
 {
   return model_life_cycle_->InflightStatus();
@@ -798,7 +803,11 @@ ModelRepositoryManager::ModelStates()
 const VersionStateMap
 ModelRepositoryManager::VersionStates(const std::string& model_name)
 {
-  return model_life_cycle_->VersionStates(model_name);
+  ModelIdentifier model_id("", model_name);
+  if (FindModelIdentifier(model_name, &model_id).IsOk()) {
+    return model_life_cycle_->VersionStates(model_id);
+  }
+  return {};
 }
 
 Status
@@ -806,16 +815,19 @@ ModelRepositoryManager::ModelState(
     const std::string& model_name, const int64_t model_version,
     ModelReadyState* state)
 {
-  return model_life_cycle_->ModelState(model_name, model_version, state);
+  ModelIdentifier model_id("", model_name);
+  RETURN_IF_ERROR(FindModelIdentifier(model_name, &model_id));
+  return model_life_cycle_->ModelState(model_id, model_version, state);
 }
 
 Status
 ModelRepositoryManager::RepositoryIndex(
     const bool ready_only, std::vector<ModelIndex>* index)
 {
-  std::set<std::string> seen_models;
-  std::set<std::string> duplicate_models;
+  std::set<ModelIdentifier> seen_models;
+  std::set<ModelIdentifier> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
+    const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
     // For any mapped models in this repository, save the mapping
     // from their subdirectory name to model name.
     std::map<std::string, std::string> models_in_repo;
@@ -828,44 +840,44 @@ ModelRepositoryManager::RepositoryIndex(
     std::set<std::string> subdirs;
     RETURN_IF_ERROR(GetDirectorySubdirs(repository_path, &subdirs));
     for (const auto& subdir : subdirs) {
-      auto model = subdir;
+      auto model_id = ModelIdentifier(model_namespace, subdir);
       auto model_it = models_in_repo.find(subdir);
       if (model_it != models_in_repo.end()) {
-        model = model_it->second;
+        model_id.name_ = model_it->second;
       }
 
-      if (seen_models.find(model) != seen_models.end()) {
-        duplicate_models.insert(model);
+      if (seen_models.find(model_id) != seen_models.end()) {
+        duplicate_models.insert(model_id);
       }
 
-      seen_models.insert(model);
+      seen_models.insert(model_id);
     }
   }
 
   ModelStateMap states = ModelStates();
 
-  for (const auto& model : seen_models) {
+  for (const auto& model_id : seen_models) {
     // If the same model appears in multiple repostories then show it
     // as unavailable since duplicate models are not allowed to load.
-    if (duplicate_models.find(model) != duplicate_models.end()) {
+    if (duplicate_models.find(model_id) != duplicate_models.end()) {
       index->emplace_back(
-          model, -1 /* version */, ModelReadyState::UNAVAILABLE,
+          model_id, -1 /* version */, ModelReadyState::UNAVAILABLE,
           MODEL_READY_REASON_DUPLICATE);
       continue;
     }
 
     // If there is any version/state/reason associated with the model
     // then include that in the index.
-    auto sitr = states.find(model);
+    auto sitr = states.find(model_id);
     if (sitr == states.end()) {
       if (!ready_only) {
-        index->emplace_back(model);
+        index->emplace_back(model_id);
       }
     } else {
       for (const auto& pr : sitr->second) {
         if (!ready_only || (pr.second.first == ModelReadyState::READY)) {
           index->emplace_back(
-              model, pr.first, pr.second.first, pr.second.second);
+              model_id, pr.first, pr.second.first, pr.second.second);
         }
       }
     }
@@ -879,13 +891,43 @@ ModelRepositoryManager::GetModel(
     const std::string& model_name, const int64_t model_version,
     std::shared_ptr<Model>* model)
 {
-  Status status = model_life_cycle_->GetModel(model_name, model_version, model);
+  ModelIdentifier model_id("", model_name);
+  RETURN_IF_ERROR(FindModelIdentifier(model_name, &model_id));
+  return GetModel(model_id, model_version, model);
+}
+
+Status
+ModelRepositoryManager::GetModel(
+    const ModelIdentifier& model_id, const int64_t model_version,
+    std::shared_ptr<Model>* model)
+{
+  Status status = model_life_cycle_->GetModel(model_id, model_version, model);
   if (!status.IsOk()) {
     model->reset();
     status = Status(
         status.ErrorCode(), "Request for unknown model: " + status.Message());
   }
   return status;
+}
+
+Status
+ModelRepositoryManager::FindModelIdentifier(const std::string& model_name, ModelIdentifier* model_id)
+{
+  auto git = global_map_.find(model_name);
+  switch (git->second.size())
+  {
+  case 0:
+    return Status(Status::Code::NOT_FOUND, "Model is not found in global map");
+    break;
+  case 1: {
+    *model_id = *git->second.begin();
+    break;
+  }
+  default:
+    return Status(Status::Code::INVALID_ARG, "There are multiple model with the same name in global map, model namespace must be provided to resolve ambiguity.");
+    break;
+  }
+  return Status::Success;
 }
 
 // [WIP] updating to enable_namespacing and ModelIdentifier
@@ -1274,9 +1316,6 @@ ModelRepositoryManager::UpdateDependencyGraph(
   // deleted, drop from dependency_graph, add to missing_nodes if downstreams is
   // not empty affected_nodes are all ensembles as only ensembles are depending
   // on other models
-  std::set<DependencyNode*> affected_ensembles;
-  // [WIP] model identifier version of above, replace usage of above.
-  // call 'ensemble' or not?
   std::set<ModelIdentifier> affected_nodes, deleted_nodes;
   const bool cascading_removal = (deleted_dependents != nullptr);
   std::tie(affected_nodes, deleted_nodes) = dg_op.RemoveNodes(deleted, cascading_removal);
@@ -1287,34 +1326,30 @@ ModelRepositoryManager::UpdateDependencyGraph(
   AddToSet(dg_op.UpdateNodes(modified, this), affected_nodes);
   AddToSet(dg_op.AddNodes(added, this), affected_nodes);
 
-  // [WIP] bookmark...
-  for (auto& updated_node : affected_nodes) {
-    bool is_ensemble = dg_op.ConnectDependencyGraph(updated_node);
-    if (is_ensemble) {
-      affected_ensembles.emplace(updated_node);
-    }
+  for (auto& node_id : affected_nodes) {
+    dg_op.ConnectDependencyGraph(node_id);
   }
   
-  // [WIP] further validation..
+  // Static validation on graph connectivity
 #ifdef TRITON_ENABLE_ENSEMBLE
   // After the dependency graph is updated, check ensemble dependencies
-  for (auto& ensemble : affected_ensembles) {
-    if (ensemble->status_.IsOk()) {
-      if (!ensemble->missing_upstreams_.empty()) {
+  for (auto& node_id : affected_nodes) {
+    auto node = dg_op.FindNode(node_id, false);
+    if (node->status_.IsOk()) {
+      if (!node->connected_) {
         std::string name_list;
-        for (auto it = ensemble->missing_upstreams_.begin();
-             it != ensemble->missing_upstreams_.end(); it++) {
-          if (it != ensemble->missing_upstreams_.begin()) {
+        for (const auto& missing_name : node->missing_upstreams_) {
+          if (!name_list.empty()) {
             name_list += ", ";
           }
-          name_list += (*it)->model_name_;
+          name_list += missing_name;
         }
-        ensemble->status_ = Status(
+        node->status_ = Status(
             Status::Code::INVALID_ARG,
-            "ensemble " + ensemble->model_name_ +
-                " contains models that are not available: " + name_list);
+            "ensemble " + node->model_id_.str() +
+                " contains models that are not available or ambiguous: " + name_list);
       } else {
-        ensemble->status_ = CircularcyCheck(ensemble, ensemble);
+        node->status_ = dg_op.CircularcyCheck(node, node);
       }
     }
   }
@@ -1408,28 +1443,6 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
   return Status::Success;
 }
 
-Status
-ModelRepositoryManager::CircularcyCheck(
-    DependencyNode* current_node, const DependencyNode* start_node)
-{
-  for (auto& downstream : current_node->downstreams_) {
-    if (downstream->model_name_ == start_node->model_name_) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          "circular dependency between ensembles: " + start_node->model_name_ +
-              " -> ... -> " + current_node->model_name_ + " -> " +
-              start_node->model_name_);
-    } else {
-      const auto status = CircularcyCheck(downstream, start_node);
-      if (!status.IsOk() && current_node->status_.IsOk()) {
-        current_node->status_ = status;
-        return status;
-      }
-    }
-  }
-  return Status::Success;
-}
-
 void
 ModelRepositoryManager::UncheckDownstream(
     const NodeSet& downstreams, NodeSet* updated_nodes)
@@ -1443,47 +1456,6 @@ ModelRepositoryManager::UncheckDownstream(
       updated_nodes->emplace(node);
     }
   }
-}
-
-bool
-ModelRepositoryManager::ConnectDependencyGraph(DependencyNode* updated_node)
-{
-  // Check the node's model config to determine if it depends on other models
-  // and if those models are present
-  updated_node->upstreams_.clear();
-  updated_node->missing_upstreams_.clear();
-  if (updated_node->model_config_.has_ensemble_scheduling()) {
-    for (const auto& step :
-         updated_node->model_config_.ensemble_scheduling().step()) {
-      DependencyNode* upstream_node = nullptr;
-      const auto& model_name = step.model_name();
-      auto dit = dependency_graph_.find(model_name);
-      if (dit == dependency_graph_.end()) {
-        auto mit = missing_nodes_.find(model_name);
-        if (mit == missing_nodes_.end()) {
-          std::unique_ptr<DependencyNode> node(new DependencyNode(model_name));
-          updated_node->missing_upstreams_.emplace(node.get());
-          mit = missing_nodes_.emplace(model_name, std::move(node)).first;
-        }
-        // Add the node to missing node's downstream so that when the missing
-        // node is added, the downstreams can be found easily.
-        mit->second->downstreams_.emplace(updated_node);
-        upstream_node = mit->second.get();
-      } else {
-        dit->second->downstreams_.emplace(updated_node);
-        upstream_node = dit->second.get();
-      }
-      auto res = updated_node->upstreams_.emplace(
-          upstream_node, std::set<int64_t>({step.model_version()}));
-      // If map insertion doesn't happen, the same model is required in
-      // different step, insert the version to existing required version set.
-      if (!res.second) {
-        res.first->second.insert(step.model_version());
-      }
-    }
-    return true;
-  }
-  return false;
 }
 
 Status
@@ -1503,7 +1475,7 @@ ModelRepositoryManager::GetModelInfo(
 std::pair<ModelRepositoryManager::NodeSet, ModelRepositoryManager::NodeSet>
 ModelRepositoryManager::ModelsToLoadUnload(
     const NodeSet& loaded_models,
-    const std::map<std::string, Status>& model_load_status)
+    const std::map<ModelIdentifier, Status>& model_load_status)
 {
   // <valid model set, invalid model set>
   std::pair<NodeSet, NodeSet> res;
@@ -1550,7 +1522,7 @@ ModelRepositoryManager::ModelsToLoadUnload(
 bool
 ModelRepositoryManager::CheckNode(
     DependencyNode* node,
-    const std::map<std::string, Status>& model_load_status)
+    const std::map<ModelIdentifier, Status>& model_load_status)
 {
   bool node_ready = true;
   // if the node is in invalid status, mark as ready as we know
@@ -1564,28 +1536,28 @@ ModelRepositoryManager::CheckNode(
       if (!upstream.first->status_.IsOk()) {
         node->status_ = Status(
             Status::Code::INVALID_ARG,
-            "ensemble '" + node->model_name_ + "' depends on '" +
-                upstream.first->model_name_ + "' which is not valid. Model '" +
-                upstream.first->model_name_ +
+            "ensemble '" + node->model_id_.str() + "' depends on '" +
+                upstream.first->model_id_.str() + "' which is not valid. Model '" +
+                upstream.first->model_id_.str() +
                 "' failed with error: " + upstream.first->status_.Message());
       } else if (upstream.first->loaded_versions_.empty()) {
         auto model_load_stat =
-            model_load_status.find(upstream.first->model_name_);
+            model_load_status.find(upstream.first->model_id_);
         if ((model_load_stat != model_load_status.end()) &&
             model_load_stat->second.IsOk()) {
           node->status_ = Status(
-              Status::Code::INVALID_ARG, "ensemble '" + node->model_name_ +
+              Status::Code::INVALID_ARG, "ensemble '" + node->model_id_.str() +
                                              "' depends on '" +
-                                             upstream.first->model_name_ +
+                                             upstream.first->model_id_.str() +
                                              "' which has no loaded version.");
         } else {
           // [FIXME] See https://jirasw.nvidia.com/browse/DLIS-4459
           node->status_ = Status(
               Status::Code::INVALID_ARG,
-              "ensemble '" + node->model_name_ + "' depends on '" +
-                  upstream.first->model_name_ +
+              "ensemble '" + node->model_id_.str() + "' depends on '" +
+                  upstream.first->model_id_.str() +
                   "' which has no loaded version. Model '" +
-                  upstream.first->model_name_ +
+                  upstream.first->model_id_.str() +
                   "' loading failed with error: " +
                   model_load_stat->second.Message());
         }
@@ -1599,8 +1571,8 @@ ModelRepositoryManager::CheckNode(
           if (it == upstream.first->loaded_versions_.end()) {
             node->status_ = Status(
                 Status::Code::INVALID_ARG,
-                "ensemble '" + node->model_name_ + "' depends on '" +
-                    upstream.first->model_name_ + "' whose required version " +
+                "ensemble '" + node->model_id_.str() + "' depends on '" +
+                    upstream.first->model_id_.str() + "' whose required version " +
                     std::to_string(required_version) + " is not loaded.");
           }
         }
