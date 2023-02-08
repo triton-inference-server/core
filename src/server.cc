@@ -229,7 +229,8 @@ InferenceServer::Init()
   status = ModelRepositoryManager::Create(
       this, version_, model_repository_paths_, startup_models_,
       strict_model_config_, polling_enabled, model_control_enabled,
-      life_cycle_options, &model_repository_manager_);
+      life_cycle_options, false /* enable_model_namespacing */,
+      &model_repository_manager_);
   if (!status.IsOk()) {
     if (model_repository_manager_ == nullptr) {
       ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
@@ -469,7 +470,7 @@ InferenceServer::ModelReadyVersions(
     for (const auto& vs_pair : mv_pair.second) {
       versions.emplace_back(vs_pair.first);
     }
-    ready_model_versions->emplace(mv_pair.first, std::move(versions));
+    ready_model_versions->emplace(mv_pair.first.str(), std::move(versions));
   }
 
   return Status::Success;
@@ -601,12 +602,12 @@ InferenceServer::PrintBackendAndModelSummary()
 
   for (const auto& model_state : model_states) {
     auto model_version_map = model_state.second;
-    std::string model_name = model_state.first;
+    ModelIdentifier model_id = model_state.first;
 
     // If model_version_map size is zero, no version is found for this model
     if (model_version_map.size() == 0) {
       std::vector<std::string> model_record;
-      model_record.emplace_back(model_name);
+      model_record.emplace_back(model_id.str());
       model_record.emplace_back("-");
       model_record.emplace_back("Not loaded: No model version was found");
       models_table.InsertRow(model_record);
@@ -622,7 +623,7 @@ InferenceServer::PrintBackendAndModelSummary()
           model_status += ": " + model_status_pair.second;
         }
 
-        model_record.emplace_back(model_name);
+        model_record.emplace_back(model_id.str());
         model_record.emplace_back(model_version);
         model_record.emplace_back(model_status);
         models_table.InsertRow(model_record);

@@ -32,6 +32,73 @@
 #include "status.h"
 
 namespace triton { namespace core {
+struct ModelIdentifier {
+  ModelIdentifier(const std::string& model_namespace, const std::string& name)
+   : namespace_(model_namespace), name_(name) {}
+
+  bool operator<(const ModelIdentifier& rhs) const
+  {
+    if (namespace_ == rhs.namespace_) {
+      return (name_ < rhs.name_);
+    } else {
+      return (namespace_ < rhs.namespace_);
+    }
+  }
+
+  bool operator==(const ModelIdentifier& rhs) const
+  {
+    return ((namespace_ == rhs.namespace_) && (name_ == rhs.name_));
+  }
+
+  bool operator!=(const ModelIdentifier& rhs) const
+  {
+    return (!(namespace_ != rhs.namespace_) || !(name_ != rhs.name_));
+  }
+
+  // [WIP] remove special handling to hide log differences
+  friend std::ostream& operator<<(std::ostream& os, const ModelIdentifier& rhs)
+  {
+    if (rhs.namespace_.empty()) {
+      os << rhs.name_;
+      return os;
+    }
+    os << rhs.namespace_ << "::" << rhs.name_;
+    return os;
+  }
+
+  std::string str() const
+  {
+    if (namespace_.empty()) {
+      return name_;
+    }
+    return (namespace_ + "::" + name_);
+  }
+
+  // [WIP] note for myself, should clean up
+  // namespace is not a reflection of the model repository althought it is
+  // currently implmented to be the same as the repository of the model.
+  std::string namespace_;
+  // name is the name registered to Triton, it is the model directory name
+  // by default and can be overwritten.
+  std::string name_;
+};
+}}  // namespace triton::core
+
+// define hash function for struct to be used as unordered_map key
+namespace std {
+template <>
+class hash<triton::core::ModelIdentifier> {
+ public:
+  size_t operator()(const triton::core::ModelIdentifier& model_id) const
+  {
+    // trival hash for multiple entries
+    // https://en.cppreference.com/w/cpp/utility/hash
+    return (hash<std::string>()(model_id.namespace_)
+               ^ (hash<std::string>()(model_id.name_) << 1));
+  }
+};
+}  // namespace std
+namespace triton { namespace core {
 
 class InferenceRequest;
 

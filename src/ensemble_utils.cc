@@ -36,15 +36,17 @@
 
 namespace triton { namespace core {
 
+// [WIP] change printing step.model_name() to printing the whole id
+
 namespace {
 
 /// A basic unit in ensemble graph that records the data type and shape
 /// of the ensemble tensor and which model they are inferred from.
 struct TensorNode {
   TensorNode(
-      const std::string& model_name, const bool batching,
+      const ModelIdentifier& model_id, const bool batching,
       const inference::DataType& type, const triton::common::DimsList& dims)
-      : model_name_(model_name), type_(type), dims_(dims), is_decoupled_(false),
+      : model_id_(model_id), type_(type), dims_(dims), is_decoupled_(false),
         decouple_label_(0), visited_(false)
   {
     // Expand dims to full shape, which includes batch dimension if exist
@@ -55,13 +57,13 @@ struct TensorNode {
   }
 
   // Constructor for symbolic nodes
-  TensorNode(const std::string& model_name)
-      : model_name_(model_name), is_decoupled_(false), decouple_label_(0),
+  TensorNode(const ModelIdentifier& model_id)
+      : model_id_(model_id), is_decoupled_(false), decouple_label_(0),
         visited_(false)
   {
   }
 
-  std::string model_name_;
+  ModelIdentifier model_id_;
   inference::DataType type_;
   triton::common::DimsList dims_;
   triton::common::DimsList full_dims_;
@@ -92,8 +94,8 @@ ValidateTensorConsistency(
         Status::Code::INVALID_ARG,
         message + "inconsistent data type: " +
             inference::DataType_Name(lhs.type_) + " is inferred from model " +
-            lhs.model_name_ + " while " + inference::DataType_Name(rhs.type_) +
-            " is inferred from model " + rhs.model_name_);
+            lhs.model_id_.str() + " while " + inference::DataType_Name(rhs.type_) +
+            " is inferred from model " + rhs.model_id_.str());
   }
 
   // Shapes must match or either one uses variable size shape, if one uses
@@ -109,9 +111,9 @@ ValidateTensorConsistency(
         Status::Code::INVALID_ARG,
         message + "inconsistent shape: " +
             triton::common::DimsListToString(lhs.full_dims_) +
-            " is inferred from model " + lhs.model_name_ + " while " +
+            " is inferred from model " + lhs.model_id_.str() + " while " +
             triton::common::DimsListToString(rhs.full_dims_) +
-            " is inferred from model " + rhs.model_name_);
+            " is inferred from model " + rhs.model_id_.str());
   }
 
   return Status::Success;
@@ -119,7 +121,7 @@ ValidateTensorConsistency(
 
 Status
 ValidateTensorMapping(
-    const std::string& ensemble, const inference::ModelEnsembling::Step& step,
+    const ModelIdentifier& ensemble_id, const inference::ModelEnsembling::Step& step,
     const inference::ModelConfig& model_config,
     std::unordered_map<std::string, TensorNode>* ensemble_tensors)
 {
@@ -133,7 +135,7 @@ ValidateTensorMapping(
     if (input_names.find(input_map.first) == input_names.end()) {
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble + ", ensemble tensor " + input_map.second +
+          "in ensemble " + ensemble_id.str() + ", ensemble tensor " + input_map.second +
               " is mapping to non-existing input " + input_map.first +
               " in model " + step.model_name());
     }
@@ -143,13 +145,13 @@ ValidateTensorMapping(
     for (const auto& input_map : step.input_map()) {
       if (model_input.name() == input_map.first) {
         TensorNode model_tensor(
-            step.model_name(), batching, model_input.data_type(),
+            {step.model_namespace(), step.model_name()}, batching, model_input.data_type(),
             model_input.dims());
         auto it = ensemble_tensors->find(input_map.second);
         if (it != ensemble_tensors->end()) {
           RETURN_IF_ERROR(ValidateTensorConsistency(
               it->second, model_tensor,
-              "in ensemble " + ensemble + ", ensemble tensor " +
+              "in ensemble " + ensemble_id.str() + ", ensemble tensor " +
                   input_map.second + ": "));
         } else {
           ensemble_tensors->emplace(
@@ -165,13 +167,13 @@ ValidateTensorMapping(
       }
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble + ", input " + model_input.name() +
+          "in ensemble " + ensemble_id.str() + ", input " + model_input.name() +
               " in model " + model_config.name() +
               " is not mapped to any ensemble tensors");
     } else if (mapped_cnt > 1) {
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble + ", input " + model_input.name() +
+          "in ensemble " + ensemble_id.str() + ", input " + model_input.name() +
               " in model " + model_config.name() +
               " is mapped to multiple ensemble tensors");
     }
@@ -187,24 +189,24 @@ ValidateTensorMapping(
     if (output_names.find(output_map.first) == output_names.end()) {
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble + ", ensemble tensor " + output_map.second +
+          "in ensemble " + ensemble_id.str() + ", ensemble tensor " + output_map.second +
               " is mapped from non-existing output " + output_map.first +
               " in model " + step.model_name());
     }
   }
-  std::shared_ptr<TensorNode> sibling_node(new TensorNode(step.model_name()));
+  std::shared_ptr<TensorNode> sibling_node(new TensorNode({step.model_namespace(), step.model_name()}));
   for (const auto& output_map : step.output_map()) {
     size_t mapped_cnt = 0;
     for (const auto& model_output : model_config.output()) {
       if (model_output.name() == output_map.first) {
         TensorNode model_tensor(
-            step.model_name(), batching, model_output.data_type(),
+            {step.model_namespace(), step.model_name()}, batching, model_output.data_type(),
             model_output.dims());
         auto it = ensemble_tensors->find(output_map.second);
         if (it != ensemble_tensors->end()) {
           RETURN_IF_ERROR(ValidateTensorConsistency(
               it->second, model_tensor,
-              "in ensemble " + ensemble + ", ensemble tensor " +
+              "in ensemble " + ensemble_id.str() + ", ensemble tensor " +
                   output_map.second + ": "));
         } else {
           it = ensemble_tensors
@@ -218,7 +220,7 @@ ValidateTensorMapping(
     if (mapped_cnt > 1) {
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble + ", multiple outputs in model " +
+          "in ensemble " + ensemble_id.str() + ", multiple outputs in model " +
               model_config.name() + " are mapped to the same ensemble tensor " +
               output_map.second);
     }
@@ -250,21 +252,21 @@ ValidateEnsembleConfig(
     return Status::Success;
   }
 
-  const auto& ensemble_name = ensemble->model_name_;
+  const auto& ensemble_id = ensemble->model_id_;
   const bool batching = (ensemble_config.max_batch_size() > 0);
   std::unordered_map<std::string, TensorNode> ensemble_tensors;
   for (const auto& input : ensemble_config.input()) {
     const auto& dims =
         input.has_reshape() ? input.reshape().shape() : input.dims();
-    TensorNode input_node(ensemble_name, batching, input.data_type(), dims);
+    TensorNode input_node(ensemble_id, batching, input.data_type(), dims);
     ensemble_tensors.emplace(std::make_pair(input.name(), input_node));
   }
 
-  TensorNode sink_node(ensemble_name);
+  TensorNode sink_node(ensemble_id);
   for (const auto& output : ensemble_config.output()) {
     const auto& dims =
         output.has_reshape() ? output.reshape().shape() : output.dims();
-    TensorNode output_node(ensemble_name, batching, output.data_type(), dims);
+    TensorNode output_node(ensemble_id, batching, output.data_type(), dims);
     auto it =
         ensemble_tensors.emplace(std::make_pair(output.name(), output_node))
             .first;
@@ -273,14 +275,14 @@ ValidateEnsembleConfig(
   }
 
   for (const auto& step : ensemble_config.ensemble_scheduling().step()) {
-    const auto& model_name = step.model_name();
+    const ModelIdentifier model_id{step.model_namespace(), step.model_name()};
     inference::ModelConfig model_config;
     for (auto& node : ensemble->upstreams_) {
-      if (model_name == node.first->model_name_) {
+      if (model_id == node.first->model_id_) {
         // Obtain completed config from model instance
         std::shared_ptr<Model> model;
         RETURN_IF_ERROR(
-            model_repository_manager->GetModel(model_name, -1, &model));
+            model_repository_manager->GetModel(model_id, -1, &model));
         model_config = model->Config();
         break;
       }
@@ -292,15 +294,15 @@ ValidateEnsembleConfig(
         (model_config.max_batch_size() < ensemble_config.max_batch_size())) {
       return Status(
           Status::Code::INVALID_ARG,
-          "ensemble " + ensemble_name + " allows maximum batch size " +
+          "ensemble " + ensemble_id.str() + " allows maximum batch size " +
               std::to_string(ensemble_config.max_batch_size()) +
-              ", but it contains model " + model_name +
+              ", but it contains model " + step.model_name() +
               " which only allows maximum batch size to be " +
               std::to_string(model_config.max_batch_size()));
     }
 
     RETURN_IF_ERROR(ValidateTensorMapping(
-        ensemble_name, step, model_config, &ensemble_tensors));
+        ensemble_id, step, model_config, &ensemble_tensors));
   }
 
   // Visit nodes and validate decoupled workflow if any
@@ -331,8 +333,8 @@ ValidateEnsembleConfig(
           if (prev_node->decouple_label_ != prev_decouple_label) {
             return Status(
                 Status::Code::INVALID_ARG,
-                "in ensemble " + ensemble_name + ", step of model '" +
-                    next_node->model_name_ +
+                "in ensemble " + ensemble_id.str() + ", step of model '" +
+                    next_node->model_id_.str() +
                     "' receives inputs originated from different decoupled "
                     "models");
           }

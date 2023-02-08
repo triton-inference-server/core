@@ -590,34 +590,37 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   // [WIP] bookmark.. how to check if namespacing is enabled? Check map
-  const auto version_states = model_life_cycle_->VersionStates(model_name);
-  if (type == ActionType::LOAD) {
-    if (version_states.empty()) {
-      return Status(
-          Status::Code::INTERNAL,
-          "failed to load '" + model_name + "', no version is available");
-    }
-    auto it = infos_.find(model_name);
-    if (it == infos_.end()) {
-      return Status(
-          Status::Code::INTERNAL,
-          "failed to load '" + model_name +
-              "', failed to poll from model repository");
-    }
-  } else {
-    std::string ready_version_str;
-    for (const auto& version_state : version_states) {
-      if (version_state.second.first == ModelReadyState::READY) {
-        ready_version_str += std::to_string(version_state.first);
-        ready_version_str += ",";
+  const auto& git = global_map_.find(model_name);
+  for (const auto& model_id : git->second) {
+    const auto version_states = model_life_cycle_->VersionStates(model_id);
+    if (type == ActionType::LOAD) {
+      if (version_states.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "failed to load '" + model_name + "', no version is available");
       }
-    }
-    if (!ready_version_str.empty()) {
-      ready_version_str.pop_back();
-      return Status(
-          Status::Code::INTERNAL,
-          "failed to unload '" + model_name +
-              "', versions that are still available: " + ready_version_str);
+      auto it = infos_.find(model_id);
+      if (it == infos_.end()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "failed to load '" + model_name +
+                "', failed to poll from model repository");
+      }
+    } else {
+      std::string ready_version_str;
+      for (const auto& version_state : version_states) {
+        if (version_state.second.first == ModelReadyState::READY) {
+          ready_version_str += std::to_string(version_state.first);
+          ready_version_str += ",";
+        }
+      }
+      if (!ready_version_str.empty()) {
+        ready_version_str.pop_back();
+        return Status(
+            Status::Code::INTERNAL,
+            "failed to unload '" + model_name +
+                "', versions that are still available: " + ready_version_str);
+      }
     }
   }
 
@@ -744,13 +747,16 @@ ModelRepositoryManager::LoadUnloadModels(
     std::string load_error_message = "";
 
     for (const auto& model : models) {
-      auto it = load_status.find(model.first);
-      // If 'model.first' not in load status, it means the (re-)load is not
-      // necessary because there is no change in the model's directory
-      if ((it != load_status.end()) && !it->second.IsOk()) {
-        load_error_message +=
-            ("load failed for model '" + model.first +
-             "': " + it->second.Message() + "\n");
+      auto git = global_map_.find(model.first);
+      for (const auto& model_id : git->second) {
+        auto it = load_status.find(model_id);
+        // If 'model.first' not in load status, it means the (re-)load is not
+        // necessary because there is no change in the model's directory
+        if ((it != load_status.end()) && !it->second.IsOk()) {
+          load_error_message +=
+              ("load failed for model '" + model_id.str() +
+              "': " + it->second.Message() + "\n");
+        }
       }
     }
     if (!load_error_message.empty()) {
@@ -1590,6 +1596,217 @@ ModelRepositoryManager::CheckNode(
 #endif  // TRITON_ENABLE_ENSEMBLE
   }
   return node_ready;
+}
+
+
+std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
+ModelRepositoryManager::DependencyGraph::RemoveNodes(const std::set<ModelIdentifier>& nodes, const bool cascading_removal) {
+  std::set<ModelIdentifier> all_affected_nodes, all_removed_nodes;
+  std::set<ModelIdentifier> curr_removal = nodes;
+  while (!curr_removal.empty()) {
+    std::set<ModelIdentifier> next_removal;
+    for (const auto& model_id : curr_removal) {
+      const auto affected_nodes = RemoveNode(model_id);
+
+      // Check if the upstream should be removed as well,
+      // a node should be removed if cascading removal is requested,
+      // was not explicitly loaded and now doesn't have any downstreams.
+      // For the concern that the node may then have downstreams from
+      // 'added' / 'modified' nodes, it is not possible based on the situations
+      // where dependency graph will be updated:
+      //  - POLL/NONE : There can be additions and deletions within single
+      //                operation, but all nodes are marked explicitly loaded.
+      //  - EXPLICIT : Each operation can either be "load" or "unload", so there
+      //               will not be bi-directional changes regarding downstreams.
+      if (cascading_removal) {
+        const auto& upstreams = affected_nodes.first;
+        for (const auto& upstream : upstreams) {
+          auto unode = FindNode(upstream, false);
+          if (unode && (unode->downstreams_.empty()) && (!unode->explicitly_load_)) {
+            next_removal.emplace(upstream);
+          }
+        }
+      }
+
+      // The downstreams will need to be re-evaluated once the node
+      // changes are in place
+      const auto& downstreams = affected_nodes.second;
+      // std::set::merge() can be used if move to >= C++17
+      for (const auto& id : downstreams) {
+        all_affected_nodes.emplace(id);
+      }
+
+      all_removed_nodes.emplace(model_id);
+      // Exclude removed node from affected nodes to skip some evaluations.
+      all_affected_nodes.erase(model_id);
+    }
+
+    curr_removal.swap(next_removal);
+  }
+  return {std::move(all_affected_nodes), std::move(all_removed_nodes)};
+}
+
+std::set<ModelIdentifier>
+ModelRepositoryManager::DependencyGraph::UpdateNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager) {
+  std::set<ModelIdentifier> updated_nodes;
+  // modified, invalidate (uncheck) all downstreams
+  for (const auto& model_id : nodes) {
+    auto it = graph_ref_.find(model_id);
+    if (it != graph_ref_.end()) {
+      auto& node = it->second;
+      UncheckDownstream(node->downstreams_);
+
+      // remove all upstream reference, because the
+      // config may be changed and should rebuild dependency
+      for (auto& upstream : node->upstreams_) {
+        upstream.first->DisconnectDownstream(node.get());
+      }
+      for (const auto& model_name : node->missing_upstreams_) {
+        auto mit = missing_nodes_ref_.find(model_name);
+        mit->second.erase(it->first);
+      }
+
+      // Update model info stored in the node
+      ModelInfo* info = nullptr;
+      model_manager->GetModelInfo(model_id, &info);
+      node->model_config_ = info->model_config_;
+      node->explicitly_load_ = info->explicitly_load_;
+      node->upstreams_.clear();
+      node->checked_ = false;
+      node->status_ = Status::Success;
+
+      updated_nodes.emplace(model_id);
+    }
+  }
+  return updated_nodes;
+}
+
+std::set<ModelIdentifier>
+ModelRepositoryManager::DependencyGraph::AddNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager) {
+  std::set<ModelIdentifier> affected_nodes;
+  // added, add to dependency_graph, if in missing_node, invalidate (uncheck)
+  // and associate all downstreams, remove from missing_node
+  for (const auto& model_id : nodes) {
+    std::unique_ptr<DependencyNode> added_node(new DependencyNode(model_id));
+    ModelInfo* info = nullptr;
+    model_manager->GetModelInfo(model_id, &info);
+    added_node->model_config_ = info->model_config_;
+    added_node->explicitly_load_ = info->explicitly_load_;
+
+    // Check if this model name is needed for some nodes, simply mark those nodes
+    // affected to re-evalute them later
+    auto it = missing_nodes_ref_.find(model_id.name_);
+    if (it != missing_nodes_ref_.end()) {
+      for (const auto& dependent_node_id : it->second) {
+        auto dependent_node = FindNode(dependent_node_id, false);
+        if (dependent_node) {
+          UncheckDownstream({dependent_node});
+          affected_nodes.emplace(dependent_node_id);
+        }
+      }
+    }
+
+    // Add nodes to all reference
+    affected_nodes.emplace(model_id);
+    global_map_ref_[model_id.name_].emplace(model_id);
+    graph_ref_.emplace(
+        std::make_pair(model_id, std::move(added_node)));
+  }
+  return affected_nodes;
+}
+
+void
+ModelRepositoryManager::DependencyGraph::ConnectDependencyGraph(const ModelIdentifier& node_id) {
+  auto updated_node = FindNode(node_id, false);
+  // Check the node's model config to determine if it depends on other models
+  // and if those models are present
+  updated_node->upstreams_.clear();
+  updated_node->missing_upstreams_.clear();
+  updated_node->connected_ = true;
+  if (updated_node->model_config_.has_ensemble_scheduling()) {
+    auto mutable_steps = updated_node->model_config_.mutable_ensemble_scheduling()->mutable_step();
+    for (auto& step : *mutable_steps) {
+      // Build model identifier to look for the composing model,
+      // currently using the same namespace as the 'updated_node' for
+      // preferred identifier.
+      // [enhancement] May allow customization once exposed to ensemble
+      // config.
+      const ModelIdentifier preferred_id(updated_node->model_id_.namespace_, step.model_name());
+      auto node = FindNode(preferred_id, true /* allow_fuzzy_match */);
+      if (node) {
+        // [FIXME] better way to resolve below? Not terrible but feels wrong
+        // to exploit model config for tracking state that is not user-provided.
+        // i.e. we are recording the server state into model config where
+        // the fields are defined "state-less".
+        //
+        // Set 'model_namespace' field in model config to allow direct model
+        // lookup at later stage.
+        step.set_model_namespace(node->model_id_.namespace_);
+
+        // Add the current node to its upstream
+        node->downstreams_.emplace(updated_node);
+
+        // Add the upstream to the current node
+        auto res = updated_node->upstreams_.emplace(
+          node, std::set<int64_t>({step.model_version()}));
+        // If map insertion doesn't happen, the same model is required in
+        // different step, insert the version to existing required version set.
+        if (!res.second) {
+          res.first->second.insert(step.model_version());
+        }
+      } else {
+        updated_node->connected_ = false;
+        updated_node->missing_upstreams_.emplace(step.model_name());
+      }
+
+      // If no node is found or the found node is not exact matched,
+      // just record that in 'missing_nodes_ref_' so the current node will
+      // be rechecked whenever a new candidate is added.
+      if (!node || (node->model_id_ != preferred_id)) {
+        missing_nodes_ref_[node->model_id_.name_].emplace(updated_node->model_id_);
+      }
+    }
+  }
+}
+
+// Remove the node of the given identifier from dependency graph,
+// and its reference in other nodes.
+// Returns two sets of identifiers of the existing nodes that were linked to
+// the removed node. The first set of the returned identifier is the
+// "upstreams" of the node (i.e. composing models of the ensemble), the
+// second set is the "downstreams" of the node (i.e. the model is required
+// by other ensembles)
+std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
+ModelRepositoryManager::DependencyGraph::RemoveNode(const ModelIdentifier& model_id)
+{
+  std::set<ModelIdentifier> upstreams, downstreams;
+  auto it = graph_ref_.find(model_id);
+  // no-op if not found: "node" has been removed
+  if (it != graph_ref_.end()) {
+    auto& node = it->second;
+    // remove this node from its upstreams
+    for (auto& upstream : node->upstreams_) {
+      auto& upstream_node = upstream.first;
+      upstream_node->DisconnectDownstream(node.get());
+      upstreams.emplace(upstream_node->model_id_);
+    }
+
+    // remove this node from its downstreams
+    UncheckDownstream(node->downstreams_);
+    for (auto& downstream : node->downstreams_) {
+      downstream->DisconnectUpstream(node.get());
+    }
+
+    // Drop the node from all reference,
+    // remove from graph at last to complete its lifecycle
+    global_map_ref_[model_id.name_].erase(model_id);
+    for (const auto& model_name : node->missing_upstreams_) {
+      auto mit = missing_nodes_ref_.find(model_name);
+      mit->second.erase(model_id);
+    }
+    graph_ref_.erase(it);
+  }
+  return {std::move(upstreams), std::move(downstreams)};
 }
 
 }}  // namespace triton::core

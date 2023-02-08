@@ -546,7 +546,7 @@ ModelLifeCycle::CreateModel(
               std::shared_ptr<Model> model;
               // Safe to obtain model because the ensemble can't be loaded
               // until the involved models are ready
-              GetModel(element.model_name(), element.model_version(), &model);
+              GetModel({element.model_namespace(), element.model_name()}, element.model_version(), &model);
               label_provider->AddLabels(
                   pair.second,
                   model->GetLabelProvider()->GetLabels(pair.first));

@@ -81,13 +81,6 @@ class ModelRepositoryManager {
     {
     }
 
-    // There is change in upstream node, revert the connection
-    void InvalidateUpstream(DependencyNode* upstream) {
-      upstreams_.erase(upstream);
-      fuzzy_matched_upstreams_.erase(upstream->model_id_.name_);
-      missing_upstreams_.insert(upstream->model_id_.name_);
-    }
-
     // [WIP] the replacement for above?
     void DisconnectUpstream(DependencyNode* upstream) {
       upstreams_.erase(upstream);
@@ -97,13 +90,6 @@ class ModelRepositoryManager {
     void DisconnectDownstream(DependencyNode* downstream) {
       downstreams_.erase(downstream);
     }
-
-    // [WIP] can't save work, need to go over config when connecting
-    // bool ConnectUpstream(const DependencyNode* upstream) {
-    //   const bool fuzzy_matched
-    //   fuzzy_matched_upstreams_.erase(upstream->model_id_.name_);
-    //   missing_upstreams_.insert(upstream->model_id_.name_);
-    // }
 
     ModelIdentifier model_id_;
     Status status_;
@@ -137,168 +123,19 @@ class ModelRepositoryManager {
     // contains existing nodes to be re-evaluated, because they depend on
     // the nodes removed; the second set contains all the nodes removed in this
     // operation.
-    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNodes(const std::set<ModelIdentifier>& nodes, const bool cascading_removal) {
-      std::set<ModelIdentifier> all_affected_nodes, all_removed_nodes;
-      std::set<ModelIdentifier> curr_removal = nodes;
-      while (!curr_removal.empty()) {
-        std::set<ModelIdentifier> next_removal;
-        for (const auto& model_id : curr_removal) {
-          const auto affected_nodes = RemoveNode(model_id);
-
-          // Check if the upstream should be removed as well,
-          // a node should be removed if cascading removal is requested,
-          // was not explicitly loaded and now doesn't have any downstreams.
-          // For the concern that the node may then have downstreams from
-          // 'added' / 'modified' nodes, it is not possible based on the situations
-          // where dependency graph will be updated:
-          //  - POLL/NONE : There can be additions and deletions within single
-          //                operation, but all nodes are marked explicitly loaded.
-          //  - EXPLICIT : Each operation can either be "load" or "unload", so there
-          //               will not be bi-directional changes regarding downstreams.
-          if (cascading_removal) {
-            const auto& upstreams = affected_nodes.first;
-            for (const auto& upstream : upstreams) {
-              auto unode = FindNode(upstream, false);
-              if (unode && (unode->downstreams_.empty()) && (!unode->explicitly_load_)) {
-                next_removal.emplace(upstream);
-              }
-            }
-          }
-
-          // The downstreams will need to be re-evaluated once the node
-          // changes are in place
-          const auto& downstreams = affected_nodes.second;
-          // std::set::merge() can be used if move to >= C++17
-          for (const auto& id : downstreams) {
-            all_affected_nodes.emplace(id);
-          }
-
-          all_removed_nodes.emplace(model_id);
-          // Exclude removed node from affected nodes to skip some evaluations.
-          all_affected_nodes.erase(model_id);
-        }
-
-        curr_removal.swap(next_removal);
-      }
-      return {std::move(all_affected_nodes), std::move(all_removed_nodes)};
-    }
+    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNodes(const std::set<ModelIdentifier>& nodes, const bool cascading_removal);
 
     // Update the given set of nodes to reflect the latest model information polled,
     // returns existing nodes to be re-evaluated, including the modified node.
-    std::set<ModelIdentifier> UpdateNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager) {
-      std::set<ModelIdentifier> updated_nodes;
-      // modified, invalidate (uncheck) all downstreams
-      for (const auto& model_id : nodes) {
-        auto it = graph_ref_.find(model_id);
-        if (it != graph_ref_.end()) {
-          auto& node = it->second;
-          UncheckDownstream(node->downstreams_);
-
-          // remove all upstream reference, because the
-          // config may be changed and should rebuild dependency
-          for (auto& upstream : node->upstreams_) {
-            upstream.first->DisconnectDownstream(node.get());
-          }
-          for (const auto& model_name : node->missing_upstreams_) {
-            auto mit = missing_nodes_ref_.find(model_name);
-            mit->second.erase(it->first);
-          }
-
-          // Update model info stored in the node
-          ModelInfo* info = nullptr;
-          model_manager->GetModelInfo(model_id, &info);
-          node->model_config_ = info->model_config_;
-          node->explicitly_load_ = info->explicitly_load_;
-          node->upstreams_.clear();
-          node->checked_ = false;
-          node->status_ = Status::Success;
-
-          updated_nodes.emplace(model_id);
-        }
-      }
-      return updated_nodes;
-    }
+    std::set<ModelIdentifier> UpdateNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager);
 
     // Add the given set of nodes to the dependency graph,
     // returns existing nodes to be re-evaluated, including the added node.
-    std::set<ModelIdentifier> AddNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager) {
-      std::set<ModelIdentifier> affected_nodes;
-      // added, add to dependency_graph, if in missing_node, invalidate (uncheck)
-      // and associate all downstreams, remove from missing_node
-      for (const auto& model_id : nodes) {
-        std::unique_ptr<DependencyNode> added_node(new DependencyNode(model_id));
-        ModelInfo* info = nullptr;
-        model_manager->GetModelInfo(model_id, &info);
-        added_node->model_config_ = info->model_config_;
-        added_node->explicitly_load_ = info->explicitly_load_;
-
-        // Check if this model name is needed for some nodes, simply mark those nodes
-        // affected to re-evalute them later
-        auto it = missing_nodes_ref_.find(model_id.name_);
-        if (it != missing_nodes_ref_.end()) {
-          for (const auto& dependent_node_id : it->second) {
-            auto dependent_node = FindNode(dependent_node_id, false);
-            if (dependent_node) {
-              UncheckDownstream({dependent_node});
-              affected_nodes.emplace(dependent_node_id);
-            }
-          }
-        }
-
-        // Add nodes to all reference
-        affected_nodes.emplace(model_id);
-        global_map_ref_[model_id.name_].emplace(model_id);
-        graph_ref_.emplace(
-            std::make_pair(model_id, std::move(added_node)));
-      }
-      return affected_nodes;
-    }
+    std::set<ModelIdentifier> AddNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager);
 
     // Helper function check the 'updated_node' to construct the edges between
     // nodes in the dependency graph.
-    void ConnectDependencyGraph(const ModelIdentifier& node_id) {
-      auto updated_node = FindNode(node_id, false);
-      // Check the node's model config to determine if it depends on other models
-      // and if those models are present
-      updated_node->upstreams_.clear();
-      updated_node->missing_upstreams_.clear();
-      updated_node->connected_ = true;
-      if (updated_node->model_config_.has_ensemble_scheduling()) {
-        for (const auto& step :
-            updated_node->model_config_.ensemble_scheduling().step()) {
-          // Build model identifier to look for the composing model,
-          // currently using the same namespace as the 'updated_node' for
-          // perferred identifier.
-          // [enhancement] May allow customization once exposed to ensemble
-          // config.
-          const ModelIdentifier preferred_id(updated_node->model_id_.namespace_, step.model_name());
-          auto node = FindNode(preferred_id, true /* allow_fuzzy_match */);
-          if (node) {
-            // Add the current node to its upstream
-            node->downstreams_.emplace(updated_node);
-
-            // Add the upstream to the current node
-            auto res = updated_node->upstreams_.emplace(
-              node, std::set<int64_t>({step.model_version()}));
-            // If map insertion doesn't happen, the same model is required in
-            // different step, insert the version to existing required version set.
-            if (!res.second) {
-              res.first->second.insert(step.model_version());
-            }
-          } else {
-            updated_node->connected_ = false;
-            updated_node->missing_upstreams_.emplace(step.model_name());
-          }
-
-          // If no node is found or the found node is not exact matched,
-          // just record that in 'missing_nodes_ref_' so the current node will
-          // be rechecked whenever a new candidate is added.
-          if (!node || (node->model_id_ != preferred_id)) {
-            missing_nodes_ref_[node->model_id_.name_].emplace(updated_node->model_id_);
-          }
-        }
-      }
-    }
+    void ConnectDependencyGraph(const ModelIdentifier& node_id);
 
     // Remove the node of the given identifier from dependency graph,
     // and its reference in other nodes.
@@ -307,37 +144,7 @@ class ModelRepositoryManager {
     // "upstreams" of the node (i.e. composing models of the ensemble), the
     // second set is the "downstreams" of the node (i.e. the model is required
     // by other ensembles)
-    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNode(const ModelIdentifier& model_id)
-    {
-      std::set<ModelIdentifier> upstreams, downstreams;
-      auto it = graph_ref_.find(model_id);
-      // no-op if not found: "node" has been removed
-      if (it != graph_ref_.end()) {
-        auto& node = it->second;
-        // remove this node from its upstreams
-        for (auto& upstream : node->upstreams_) {
-          auto& upstream_node = upstream.first;
-          upstream_node->DisconnectDownstream(node.get());
-          upstreams.emplace(upstream_node->model_id_);
-        }
-
-        // remove this node from its downstreams
-        UncheckDownstream(node->downstreams_);
-        for (auto& downstream : node->downstreams_) {
-          downstream->DisconnectUpstream(node.get());
-        }
-
-        // Drop the node from all reference,
-        // remove from graph at last to complete its lifecycle
-        global_map_ref_[model_id.name_].erase(model_id);
-        for (const auto& model_name : node->missing_upstreams_) {
-          auto mit = missing_nodes_ref_.find(model_name);
-          mit->second.erase(model_id);
-        }
-        graph_ref_.erase(it);
-      }
-      return {std::move(upstreams), std::move(downstreams)};
-    }
+    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNode(const ModelIdentifier& model_id);
 
     // Look up node in dependency graph with matching model identifier. If not found and fuzzy match
     // is allowed, a node in different namespace will be returned if it is the only node with the same
