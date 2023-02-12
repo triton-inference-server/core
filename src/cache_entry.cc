@@ -74,6 +74,8 @@ CacheEntryItem::Buffers()
 void
 CacheEntryItem::AddBufferCopy(const void* base, size_t byte_size)
 {
+  // std::cout << "~~~~ core cache_entry.cc CacheEntryItem AddBufferCopy
+  // copy=true addr: " << base << std::endl;
   std::unique_lock lk(buffer_mu_);
   // COPY: Make a copy of buffer for Triton to own
   void* new_base = malloc(byte_size);
@@ -93,8 +95,12 @@ CacheEntryItem::AddBuffer(void* base, size_t byte_size, bool copy)
 {
   std::unique_lock lk(buffer_mu_);
   if (copy) {
+    // TODO this may be a deadlock trying to reacquire same lock,
+    // should probably move buffer_mu to else section only
     AddBufferCopy(base, byte_size);
   } else {
+    // std::cout << "~~~~ core cache_entry.cc CacheEntryItem AddBuffer
+    // copy=false addr: " << base << std::endl;
     buffers_.emplace_back(std::make_pair(base, byte_size));
   }
 }
@@ -108,8 +114,10 @@ CacheEntryItem::AddBuffer(Buffer buffer, bool copy)
 CacheEntryItem::~CacheEntryItem()
 {
   for (auto& [buffer, byte_size] : buffers_) {
+    // TODO: free if copy, don't free if not copy
+    // see if it should be freed here or elsewhere
     if (buffer) {
-      free(buffer);
+      // free(buffer);  // TODO
     }
   }
 }
@@ -143,6 +151,8 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
 
   const auto buffers = Buffers();
   for (const auto& [base, byte_size] : buffers) {
+    // std::cout << "~~~~~~ core cache_entry.cc CacheEntryItem ToResponse buffer
+    // addr before: " << base << std::endl;
     if (!base) {
       return Status(Status::Code::INTERNAL, "buffer was nullptr");
     }
@@ -183,6 +193,8 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
           "failed to allocate buffer for output '" + cache_output.name_ + "'");
     }
     // COPY: cached output buffer to allocated response output buffer
+    // std::cout << "~~~~~~ core cache_entry.cc CacheEntryItem ToResponse buffer
+    // FromBytes: " << cache_output.buffer_ << std::endl;
     memcpy(output_buffer, cache_output.buffer_, cache_output.byte_size_);
   }
 
@@ -272,6 +284,10 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
   // Output Buffer
   memcpy(packed_bytes + position, &u64_output_byte_size, sizeof(uint64_t));
   position += sizeof(uint64_t);
+  // TODO: Unnecessary copy?
+  // 1. Cache will allocate buffer from managed buffer and copy into it
+  // 2. Might be able to just pass output_base address in packed_bytes
+  //    instead of actual buffer content, or append to existing buffer
   memcpy(packed_bytes + position, output_base, u64_output_byte_size);
   position += u64_output_byte_size;
 

@@ -42,6 +42,22 @@
 
 namespace triton { namespace core {
 
+// Custom Allocators to copy directly from the cache to the
+// desired object and avoid intermediate copies
+class TritonCacheAllocator {
+ public:
+  virtual void Allocate() = 0;
+};
+
+class CachedResponseAllocator : TritonCacheAllocator {
+ public:
+  CachedResponseAllocator(boost::span<InferenceResponse*> responses);
+  void Allocate();
+
+ private:
+  std::vector<InferenceResponse*> responses_;
+};
+
 //
 // Proxy to a cache shared library.
 //
@@ -63,6 +79,8 @@ class TritonCache {
   Status Lookup(
       boost::span<InferenceResponse*> responses, const std::string& key);
   Status Lookup(InferenceResponse* response, const std::string& key);
+  std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
+      const std::string& key, TRITONCACHE_CacheAllocator* allocator);
   std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
       const std::string& key);
   // Hashes fields of request and stores it in "key"
@@ -101,7 +119,8 @@ class TritonCache {
   typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
   TritonCacheFiniFn_t fini_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheLookupFn_t)(
-      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
+      TRITONCACHE_CacheAllocator* allocator);
   TritonCacheLookupFn_t lookup_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheInsertFn_t)(
       TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);

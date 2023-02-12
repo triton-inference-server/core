@@ -899,6 +899,81 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   }
 }
 
+/*
+TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
+{
+  // Set size large enough to hold all responses
+  auto cache = helpers::CreateCache(1024);
+  ASSERT_NE(cache, nullptr);
+
+  // Create threads
+  std::vector<std::thread> insert_threads;
+  std::vector<std::thread> lookup_threads;
+  std::vector<std::unique_ptr<tc::InferenceResponse>> responses;
+
+  size_t local_thread_count = 100;
+  for (size_t idx = 0; idx < local_thread_count; idx++) {
+    // Create response for each thread to fill from cache
+    std::unique_ptr<tc::InferenceResponse> response;
+    helpers::check_status(
+        unique_requests[idx]->ResponseFactory()->CreateResponse(&response));
+    responses.push_back(std::move(response));
+  }
+
+  // Insert then Lookup [thread_count] entries from cache in parallel
+  std::cout << "Insert responses into cache with [" << local_thread_count
+            << "] threads in parallel" << std::endl;
+  std::cout << "Lookup from cache with [" << local_thread_count
+            << "] threads in parallel" << std::endl;
+  for (size_t idx = 0; idx < local_thread_count; idx++) {
+    auto key = std::to_string(idx);
+    insert_threads.emplace_back(
+        std::thread(&helpers::insert, cache, response_400bytes.get(), key));
+    lookup_threads.emplace_back(
+        std::thread(&helpers::lookup, cache, responses[idx].get(), key));
+  }
+
+  // Join threads
+  for (size_t idx = 0; idx < local_thread_count; idx++) {
+    insert_threads[idx].join();
+    lookup_threads[idx].join();
+  }
+
+  // Grab output from sample response for comparison
+  const auto& response0_output = response0->Outputs()[0];
+
+  // Verify output results from cache
+  for (size_t idx = 0; idx < local_thread_count; idx++) {
+    // Fetch output buffer details
+    const void* response_buffer = nullptr;
+    size_t response_byte_size = 0;
+    TRITONSERVER_MemoryType response_memory_type;
+    int64_t response_memory_type_id;
+    void* userp;
+
+    // TODO: Handle multiple outputs more generically
+    const auto& response_test = responses[idx];
+    for (const auto& response_test_output : response_test->Outputs()) {
+      ASSERT_EQ(response_test_output.Name(), response0_output.Name());
+      ASSERT_EQ(response_test_output.DType(), response0_output.DType());
+      ASSERT_EQ(response_test_output.Shape(), response0_output.Shape());
+      helpers::check_status(response_test_output.DataBuffer(
+          &response_buffer, &response_byte_size, &response_memory_type,
+          &response_memory_type_id, &userp));
+
+      // TODO: Use Triton DType to cast buffer and compare outputs generically
+      const int* cache_output = static_cast<const int*>(response_buffer);
+      std::cout << "Check output buffer data from cache entry for thread ["
+                << idx << "]:" << std::endl;
+      for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
+        std::cout << cache_output[i] << " == " << data0[i] << std::endl;
+        ASSERT_EQ(cache_output[i], data0[i]);
+      }
+    }
+  }
+}
+*/
+
 TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
 {
   auto cache = helpers::CreateCache(8 * 1024 * 1024);

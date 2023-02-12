@@ -24,6 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <iostream>
 #include "cache_entry.h"
 
 // For unknown reason, windows will not export the TRITONCACHE_*
@@ -39,6 +40,7 @@
 #endif
 
 namespace triton { namespace core {
+
 
 extern "C" {
 
@@ -224,7 +226,11 @@ TRITONCACHE_CacheEntryItemAddBuffer(
   }
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
   // COPY: This will add a copy of the buffer to the item.
-  litem->AddBufferCopy(base, byte_size);
+  // TODO: Optimize this copy, maybe signal when triton is done with it, etc.
+  // litem->AddBufferCopy(base, byte_size);
+  // std::cout << "~~~~ core tritoncache.cc AddBuffer addr: " << base <<
+  // std::endl;
+  litem->AddBuffer(const_cast<void*>(base), byte_size, false);
   return nullptr;  // success
 }
 

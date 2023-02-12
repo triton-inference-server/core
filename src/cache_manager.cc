@@ -45,6 +45,23 @@ TritonCacheLibraryName(const std::string& cache_name)
 }
 
 //
+// TritonCacheAllocator
+//
+CachedResponseAllocator::CachedResponseAllocator(
+    boost::span<InferenceResponse*> responses)
+{
+  for (const auto& response : responses) {
+    responses_.push_back(response);
+  }
+}
+// TODO
+void
+CachedResponseAllocator::Allocate()
+{
+  return;
+}
+
+//
 // TritonCache
 //
 Status
@@ -286,9 +303,15 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
   return Insert({&response, 1}, key);
 }
 
-
 std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
+{
+  return Lookup(key, nullptr);
+}
+
+std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
+TritonCache::Lookup(
+    const std::string& key, TRITONCACHE_CacheAllocator* allocator)
 {
   LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
   if (lookup_fn_ == nullptr) {
@@ -298,7 +321,7 @@ TritonCache::Lookup(const std::string& key)
 
   auto entry = std::make_unique<CacheEntry>();
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
-  auto err = lookup_fn_(cache_impl_, key.c_str(), opaque_entry);
+  auto err = lookup_fn_(cache_impl_, key.c_str(), opaque_entry, allocator);
   if (err) {
     auto fail = Status(
         TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
@@ -324,7 +347,12 @@ TritonCache::Lookup(
 {
   LOG_VERBOSE(2) << "Looking up responses at cache key: " << key;
 
-  const auto& [status, items] = Lookup(key);
+  // Create response allocator to copy directly from cache to response buffers
+  auto allocator = CachedResponseAllocator(responses);
+  auto opaque_allocator =
+      reinterpret_cast<TRITONCACHE_CacheAllocator*>(&allocator);
+
+  const auto& [status, items] = Lookup(key, opaque_allocator);
   if (!status.IsOk()) {
     return status;
   }
