@@ -535,7 +535,7 @@ class GCSFileSystem : public FileSystem {
       const std::string path, bool* exists,
       google::cloud::StatusOr<gcs::ObjectMetadata>* metadata);
 
-  google::cloud::StatusOr<gcs::Client> client_;
+  std::unique_ptr<gcs::Client> client_;
 };
 
 GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
@@ -555,7 +555,7 @@ GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
           gcs::oauth2::CreateAnonymousCredentials());  // no credential
     }
   }
-  client_ = gcs::Client(options);
+  client_ = std::make_unique<gcs::Client>(options);
 }
 
 Status
