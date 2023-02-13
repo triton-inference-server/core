@@ -546,10 +546,14 @@ GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
   if (creds) {
     options.set<gcs::Oauth2CredentialsOption>(*creds);  // json credential
   } else {
-    options.set<google::cloud::UnifiedCredentialsOption>(
-        google::cloud::MakeGoogleDefaultCredentials());  // metadata service
-    options.set<google::cloud::UnifiedCredentialsOption>(
-        google::cloud::MakeInsecureCredentials());  // public bucket
+    auto creds = gcs::oauth2::CreateComputeEngineCredentials();
+    if (creds->AuthorizationHeader()) {
+      options.set<gcs::Oauth2CredentialsOption>(creds);  // metadata service
+    }
+    else {
+      options.set<gcs::Oauth2CredentialsOption>(
+          gcs::oauth2::CreateAnonymousCredentials());  // no credential
+    }
   }
   client_ = gcs::Client(options);
 }
