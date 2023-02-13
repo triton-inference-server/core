@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <iostream>
-#include "cache_entry.h"
+#include "cache_manager.h"
 
 // For unknown reason, windows will not export the TRITONCACHE_*
 // functions declared with dllexport in tritoncache.h. To get
@@ -40,7 +40,6 @@
 #endif
 
 namespace triton { namespace core {
-
 
 extern "C" {
 
@@ -254,7 +253,7 @@ TRITONCACHE_CacheEntryItemGetBuffer(
   }
 
   const auto [buffer, buffer_size] = lbuffers[index];
-  // No copy
+  // No copy, this buffer needs to stay alive until it is copied into the cache
   *base = buffer;
   // Set buffer attributes
   TRITONSERVER_BufferAttributesSetByteSize(buffer_attributes, buffer_size);
@@ -262,6 +261,24 @@ TRITONCACHE_CacheEntryItemGetBuffer(
   TRITONSERVER_BufferAttributesSetMemoryType(
       buffer_attributes, TRITONSERVER_MEMORY_CPU);
   TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+TRITONCACHE_Copy(
+    TRITONCACHE_CacheAllocator* allocator, TRITONCACHE_CacheEntry* entry)
+{
+  if (!allocator || !entry) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "allocator or entry was nullptr");
+  }
+
+  // TODO: Remove
+  std::cout << "~~~~~~~~ Using TRITONCACHE_Copy !!! ~~~~~~~~~~~" << std::endl;
+  const auto lallocator =
+      reinterpret_cast<TritonCacheAllocator*>(allocator);
+  // TODO: Split into Allocate + Copy?
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(lallocator->Allocate(entry));
   return nullptr;  // success
 }
 

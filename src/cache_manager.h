@@ -46,13 +46,13 @@ namespace triton { namespace core {
 // desired object and avoid intermediate copies
 class TritonCacheAllocator {
  public:
-  virtual void Allocate() = 0;
+  virtual Status Allocate(TRITONCACHE_CacheEntry* entry) = 0;
 };
 
 class CachedResponseAllocator : TritonCacheAllocator {
  public:
   CachedResponseAllocator(boost::span<InferenceResponse*> responses);
-  void Allocate();
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
 
  private:
   std::vector<InferenceResponse*> responses_;

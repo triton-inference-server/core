@@ -220,6 +220,14 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
     TRITONSERVER_BufferAttributes* buffer_attributes);
 
+/// Copies the buffer at 'base' into a user-provided buffer through the
+/// allocator object.
+///
+/// \param allocator Allocator that provides a buffer to copy directly into.
+/// \param entry The entry containing buffers and buffer attributes to copy from
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_Copy(
+    TRITONCACHE_CacheAllocator* allocator, TRITONCACHE_CacheEntry* entry);
+
 ///
 /// The following functions can be implemented by a cache. Functions
 /// indicated as required must be implemented or the cache will fail

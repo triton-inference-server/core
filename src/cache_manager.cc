@@ -54,11 +54,29 @@ CachedResponseAllocator::CachedResponseAllocator(
     responses_.push_back(response);
   }
 }
-// TODO
-void
-CachedResponseAllocator::Allocate()
+
+Status
+CachedResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
-  return;
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  const auto& items = lentry->Items();
+  if (items.size() != responses_.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of responses in cache does not match. Expected: " +
+            std::to_string(responses_.size()) +
+            ", received: " + std::to_string(items.size()));
+  }
+
+  for (size_t i = 0; i < items.size(); i++) {
+    RETURN_IF_ERROR(items[i]->ToResponse(responses_[i]));
+  }
+
+  return Status::Success;
 }
 
 //
