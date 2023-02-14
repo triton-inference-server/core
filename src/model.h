@@ -55,9 +55,9 @@ struct ModelIdentifier {
     return (!(namespace_ != rhs.namespace_) || !(name_ != rhs.name_));
   }
 
-  // [WIP] remove special handling to hide log differences
   friend std::ostream& operator<<(std::ostream& os, const ModelIdentifier& rhs)
   {
+    // Avoid log differences if namespace is disabled
     if (rhs.namespace_.empty()) {
       os << rhs.name_;
       return os;
@@ -68,18 +68,18 @@ struct ModelIdentifier {
 
   std::string str() const
   {
+    // Avoid log differences if namespace is disabled
     if (namespace_.empty()) {
       return name_;
     }
     return (namespace_ + "::" + name_);
   }
 
-  // [WIP] note for myself, should clean up
   // namespace is not a reflection of the model repository althought it is
   // currently implmented to be the same as the repository of the model.
   std::string namespace_;
   // name is the name registered to Triton, it is the model directory name
-  // by default and can be overwritten.
+  // by default and may be overwritten.
   std::string name_;
 };
 }}  // namespace triton::core

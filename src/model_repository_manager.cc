@@ -475,12 +475,6 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     return Status::Success;
   }
 
-  // [WIP] reminder for myself: polling model Triton model reflects
-  // storage models? Yes but not exactly.. fallback / revert in model
-  // life cycle will have the model be "older" version if the newer
-  // storage model is malformed => re-load failure.
-  // But it will always try to align in the next poll (keep polling the model
-  // as it is newer in storage)
   infos_.swap(new_infos);
 
   UpdateDependencyGraph(added, deleted, modified);
@@ -568,7 +562,7 @@ ModelRepositoryManager::LoadModelByDependency()
       }
       // If the model failed to load, should revert the timestamp to
       // ensure the next load request will attempt to load the model again
-      // for operation consistency.
+      // for operation idempotence. See comment on 'infos_'
       if (!model_state->status_.IsOk()) {
         auto& model_info = infos_.find(model_state->node_->model_id_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
@@ -673,7 +667,6 @@ ModelRepositoryManager::LoadUnloadModel(
   return Status::Success;
 }
 
-// [WIP] interact with global mapping
 Status
 ModelRepositoryManager::LoadUnloadModels(
     const std::unordered_map<
@@ -711,11 +704,10 @@ ModelRepositoryManager::LoadUnloadModels(
         // A polling chain is needed if the polled model is ensemble,
         // so that all (up-to-date) composing models are exposed to Triton.
         std::set<std::string> next_models;
-        // [WIP] Not an efficient way to iterate newly polled models
         // The intention here is to iteratively expand the collection of models
         // to be polled for this load operation, if ensemble is involved,
         // until the collection is self-contained.
-        // Every Poll() above add new entries in existing 'new_infos'
+        // [FIXME] Every Poll() above add new entries in existing 'new_infos'
         // (and 'added' etc.), so iterating on the whole structure means
         // re-examination on certain entries.
         std::set<std::string> temp_checked;
@@ -752,9 +744,6 @@ ModelRepositoryManager::LoadUnloadModels(
         info.second->explicitly_load_ = (models.find(info.first.name_) != models.end());
       }
 
-      // [WIP] note for myself: only updating added and modified info,
-      // so 'unmodified' info is not important and no need to be correct.
-
       // Only update the infos when all validation is completed
       for (const auto& model_name : added) {
         auto nitr = new_infos.find(model_name);
@@ -787,8 +776,7 @@ ModelRepositoryManager::LoadUnloadModels(
     model_life_cycle_->AsyncUnload(name);
   }
 
-  // [WIP] bookmark.. how to check if namespacing is enabled? Check map,
-  // or should know what model identifier to look for from poll..
+  // Check global map for a set of same named models
   //
   // load / unload the models affected, and check the load status of
   // the requested models
@@ -799,7 +787,8 @@ ModelRepositoryManager::LoadUnloadModels(
     for (const auto& model : models) {
       auto git = global_map_.find(model.first);
       if (git == global_map_.end()) {
-        // skip the model name is not found, requested name didn't pass polling
+        // skip the model name that is not found, requested name didn't pass
+        // polling
         continue;
       }
       for (const auto& model_id : git->second) {
@@ -993,7 +982,6 @@ ModelRepositoryManager::FindModelIdentifier(const std::string& model_name, Model
   return Status::Success;
 }
 
-// [WIP] updating to enable_namespacing and ModelIdentifier
 Status
 ModelRepositoryManager::Poll(
     const std::unordered_map<
@@ -1012,9 +1000,6 @@ ModelRepositoryManager::Poll(
   if (models.empty()) {
     std::set<ModelIdentifier> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
-      // [WIP] should the collapsing be done here?
-      // want to reuse duplication check here when namespace is disabled?
-      //
       // collapse namespace based on whether it is enabled
       const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
 
@@ -1092,11 +1077,11 @@ ModelRepositoryManager::Poll(
                       << "': " << status.Message();
             *all_models_polled = false;
           } else if (exists_in_this_repo) {
-            // [WIP] the intention is to check if the model name is mapped to
-            // something other than the folder name. If so, we shouldn't
-            // consider the model is found in this repo.
-            // The current check is not accurate, it skips the repo as long
-            // as at least one model within is mapped.
+            // [FIXME] Revisit model_mapping: The intention is to check if
+            // the model name is mapped to something other than the folder name.
+            // If so, we shouldn't consider the model is found in this repo.
+            // If the intention is correct, the current check is not accurate,
+            // it skips the repo as long as at least one model within is mapped.
             //
             // Check to make sure this directory is not mapped.
             // If mapped, continue to next repository path.
@@ -1111,7 +1096,6 @@ ModelRepositoryManager::Poll(
               continue;
             }
 
-            // [WIP] keep repeating in multiple locations, clean up?
             // collapse namespace based on whether it is enabled
             const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
             auto res = model_to_path.emplace(
@@ -1140,8 +1124,9 @@ ModelRepositoryManager::Poll(
   // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
     std::unique_ptr<ModelInfo> model_info;
-    // [WIP] load with parameters will be appiled to all models with the same
-    // name (namespace can be different)
+    // Load with parameters will be appiled to all models with the same
+    // name (namespace can be different), unless namespace is specified
+    // in the future.
     const auto& mit = models.find(pair.first.name_);
     static std::vector<const InferenceParameter*> empty_params;
     auto status = InitializeModelInfo(
@@ -1325,8 +1310,10 @@ ModelRepositoryManager::InitializeModelInfo(
   }
   linfo->is_config_provided_ = parsed_config;
 
-  // [WIP] actuall config to be associated with the model is not really settled
-  // and read until now
+  // [FIXME] better document / interact with config, the actual config to be
+  // associated with the model is not finalized and valid for read until now.
+  // Repo agent / config overwrite may provide different configs than
+  // the one in storage.
 
   // Try to automatically generate missing parts of the model
   // configuration (autofill) that don't require model detail
@@ -1877,8 +1864,11 @@ Status
 ModelRepositoryManager::DependencyGraph::CircularDependencyCheck(
   DependencyNode* current_node, const DependencyNode* start_node)
 {
-  for (auto& downstream : current_node->downstreams_) {
-    if (downstream == start_node) {
+  // Note that traverse order is towards upstream for the correct dependency
+  // ordering.
+  for (auto& upstream : current_node->upstreams_) {
+    auto& upstream_node = upstream.first;
+    if (upstream_node == start_node) {
       return Status(
           Status::Code::INVALID_ARG,
           "circular dependency between ensembles: " + start_node->model_id_.str() +
@@ -1887,7 +1877,7 @@ ModelRepositoryManager::DependencyGraph::CircularDependencyCheck(
     } else {
       // Only return error when detect circular dependency, propagate the error
       // so all node in the chain will be set.
-      const auto status = CircularDependencyCheck(downstream, start_node);
+      const auto status = CircularDependencyCheck(upstream_node, start_node);
       if (!status.IsOk()) {
         current_node->status_ = status;
         return status;

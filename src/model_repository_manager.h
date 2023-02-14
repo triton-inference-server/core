@@ -428,6 +428,27 @@ class ModelRepositoryManager {
   // Repository specific..
 
   const bool enable_model_namespacing_;
+  
+  // [FIXME] Better document below: 'infos_' is the in memory representation of
+  // repo polling results. It is a intermediate layer between the set of models
+  // in storage and the models being served, and it doesn't directly reflect the
+  // state of the two above.
+  // 
+  // There are three stages in terms of changing model:
+  //   - poll model
+  //   - resolve dependency
+  //   - load model
+  //
+  // 'infos_' is a long living object across model changes to serve as
+  // differentiator between polls (i.e. is the model newly added? modified?),
+  // so it is a subset of storage models at the time of polling. Note that
+  // it can be marked "dirty" to handle "fallback / revert" in model lifecycle:
+  // if the model is currently being served and re-load action is required, the
+  // lifecycle will keep the "older" model if the newer storage model is
+  // malformed => re-load failure. Marking info "dirty" in this case to ensure
+  // the model to be polled again even though the storage model hasn't been
+  // changed, for operation idempotence.
+  // (https://github.com/triton-inference-server/server/issues/3802)
   ModelInfoMap infos_;
   std::set<std::string> repository_paths_;
   // Mappings from (overridden) model names to a pair of their repository and

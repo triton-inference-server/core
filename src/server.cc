@@ -106,7 +106,6 @@ InferenceServer::InferenceServer()
   buffer_manager_thread_count_ = 0;
   model_load_thread_count_ =
       std::max(2u, 2 * std::thread::hardware_concurrency());
-  // [WIP] change to false and expose option
   enable_model_namespacing_ = false;
 
 #ifdef TRITON_ENABLE_GPU

@@ -36,8 +36,6 @@
 
 namespace triton { namespace core {
 
-// [WIP] change printing step.model_name() to printing the whole id
-
 namespace {
 
 /// A basic unit in ensemble graph that records the data type and shape
@@ -125,6 +123,7 @@ ValidateTensorMapping(
     const inference::ModelConfig& model_config,
     std::unordered_map<std::string, TensorNode>* ensemble_tensors)
 {
+  ModelIdentifier step_id{step.model_namespace(), step.model_name()};
   const bool batching = (model_config.max_batch_size() > 0);
   // Check all inputs are mapped and no mapping to invalid inputs
   std::set<std::string> input_names;
@@ -137,7 +136,7 @@ ValidateTensorMapping(
           Status::Code::INVALID_ARG,
           "in ensemble " + ensemble_id.str() + ", ensemble tensor " + input_map.second +
               " is mapping to non-existing input " + input_map.first +
-              " in model " + step.model_name());
+              " in model " + step_id.str());
     }
   }
   for (const auto& model_input : model_config.input()) {
@@ -145,7 +144,7 @@ ValidateTensorMapping(
     for (const auto& input_map : step.input_map()) {
       if (model_input.name() == input_map.first) {
         TensorNode model_tensor(
-            {step.model_namespace(), step.model_name()}, batching, model_input.data_type(),
+            step_id, batching, model_input.data_type(),
             model_input.dims());
         auto it = ensemble_tensors->find(input_map.second);
         if (it != ensemble_tensors->end()) {
@@ -168,13 +167,13 @@ ValidateTensorMapping(
       return Status(
           Status::Code::INVALID_ARG,
           "in ensemble " + ensemble_id.str() + ", input " + model_input.name() +
-              " in model " + model_config.name() +
+              " in model " + step_id.str() +
               " is not mapped to any ensemble tensors");
     } else if (mapped_cnt > 1) {
       return Status(
           Status::Code::INVALID_ARG,
           "in ensemble " + ensemble_id.str() + ", input " + model_input.name() +
-              " in model " + model_config.name() +
+              " in model " + step_id.str() +
               " is mapped to multiple ensemble tensors");
     }
   }
@@ -194,13 +193,13 @@ ValidateTensorMapping(
               " in model " + step.model_name());
     }
   }
-  std::shared_ptr<TensorNode> sibling_node(new TensorNode({step.model_namespace(), step.model_name()}));
+  std::shared_ptr<TensorNode> sibling_node(new TensorNode(step_id));
   for (const auto& output_map : step.output_map()) {
     size_t mapped_cnt = 0;
     for (const auto& model_output : model_config.output()) {
       if (model_output.name() == output_map.first) {
         TensorNode model_tensor(
-            {step.model_namespace(), step.model_name()}, batching, model_output.data_type(),
+            step_id, batching, model_output.data_type(),
             model_output.dims());
         auto it = ensemble_tensors->find(output_map.second);
         if (it != ensemble_tensors->end()) {
@@ -221,7 +220,7 @@ ValidateTensorMapping(
       return Status(
           Status::Code::INVALID_ARG,
           "in ensemble " + ensemble_id.str() + ", multiple outputs in model " +
-              model_config.name() + " are mapped to the same ensemble tensor " +
+              step_id.str() + " are mapped to the same ensemble tensor " +
               output_map.second);
     }
   }
