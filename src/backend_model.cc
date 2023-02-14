@@ -167,19 +167,25 @@ TritonModel::Create(
 
   TritonModel* raw_local_model = local_model.get();
 
-  // Model initialization is optional... The TRITONBACKEND_Model
-  // object is this TritonModel object. We must set set shared library
-  // path to point to the backend directory in case the backend
-  // library attempts to load additional shared libaries.
+  // Model initialization is optional... The TRITONBACKEND_Model object is this
+  // TritonModel object.
   if (backend->ModelInitFn() != nullptr) {
+    // We must set set shared library path to point to the backend directory in
+    // case the backend library attempts to load additional shared libaries.
+    // Currently, the set and reset function is effective only on Windows, so
+    // there is no need to set path on non-Windows.
+#ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
     RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
+#endif
 
     TRITONSERVER_Error* err = backend->ModelInitFn()(
         reinterpret_cast<TRITONBACKEND_Model*>(raw_local_model));
 
+#ifdef _WIN32
     RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+#endif
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
 
