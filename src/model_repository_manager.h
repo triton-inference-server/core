@@ -64,7 +64,6 @@ class ModelRepositoryManager {
     {
     }
     const bool name_only_;
-    // [WIP] expose 'namespace_'
     const std::string namespace_;
     const std::string name_;
     const int64_t version_;
@@ -76,48 +75,53 @@ class ModelRepositoryManager {
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const ModelIdentifier& model_id)
-        : model_id_(model_id), status_(Status::Success), checked_(false),
+        : status_(Status::Success), model_id_(model_id), checked_(false),
           connected_(false)
     {
     }
 
-    // [WIP] the replacement for above?
-    void DisconnectUpstream(DependencyNode* upstream) {
-      upstreams_.erase(upstream);
-      // [WIP] more logic? Or good? Upstream should be rebuilt
-    }
+    void DisconnectUpstream(DependencyNode* upstream) { upstreams_.erase(upstream); }
+    void DisconnectDownstream(DependencyNode* downstream) { downstreams_.erase(downstream); }
 
-    void DisconnectDownstream(DependencyNode* downstream) {
-      downstreams_.erase(downstream);
-    }
-
-    ModelIdentifier model_id_;
+    // Overall status
     Status status_;
-    bool checked_;
+
+    // Poll info
+    ModelIdentifier model_id_;
     bool explicitly_load_;
     inference::ModelConfig model_config_;
-    std::set<int64_t> loaded_versions_;
-    // store only the model names for missing upstreams, as we may want to fuzzy
-    // match the upstream nodes when they are visible.
+
+    // Graph info
+    bool checked_;
+    bool connected_;
+    // store only the model names for missing upstreams, and remove from it
+    // only if the upstream is exactly matched. This variable works with
+    // 'missing_nodes_' in DependencyGraph to provide bi-directional lookup for
+    // dependency resolution (exact / fuzzy match).
     // i.e. the node will look for upstream node that has matching identifier,
     // but upstream node with different namspace can still be used if not found.
-    // [WIP] formalize it: don't need the list if always re-evaluates
     std::set<std::string> missing_upstreams_;
-    std::set<std::string> fuzzy_matched_upstreams_;
-    bool connected_;
     std::unordered_map<DependencyNode*, std::set<int64_t>> upstreams_;
     std::set<DependencyNode*> downstreams_;
+
+    // Lifecycle info
+    std::set<int64_t> loaded_versions_;
   };
 
-  // [WIP] interface for dependency graph operations, next step to encapsulate all
-  // data structure (i.e. 'dependency_graph_')
+  // Interface for dependency graph operations
   class DependencyGraph {
    public:
     DependencyGraph() = delete;
-    DependencyGraph(std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>& graph_ref,
-      std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map_ref,
-      std::unordered_map<std::string, std::set<ModelIdentifier>>& missing_nodes_ref)
-     : graph_ref_(graph_ref), global_map_ref_(global_map_ref), missing_nodes_ref_(missing_nodes_ref) {}
+
+    // Passing reference of 'global_map'.
+    // There is coupling between the dependency graph and global map: global map
+    // will be used to resolve dependency (node connectivity), and global map
+    // will be updated to reflect node changes.
+    DependencyGraph(std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map)
+     : global_map_ref_(global_map) {}
+
+    std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>*
+    MutableNodes() {return &nodes_; }
 
     // Remove the given set of nodes, return two sets of nodes: The first set
     // contains existing nodes to be re-evaluated, because they depend on
@@ -133,9 +137,25 @@ class ModelRepositoryManager {
     // returns existing nodes to be re-evaluated, including the added node.
     std::set<ModelIdentifier> AddNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager);
 
-    // Helper function check the 'updated_node' to construct the edges between
-    // nodes in the dependency graph.
+    // Helper function on the 'node_id' to construct the edges between nodes
+    // in the dependency graph. The node status will be updated if the node
+    // has missing edges. This function should be called after all node changes
+    // are made to the dependency graph.
     void ConnectDependencyGraph(const ModelIdentifier& node_id);
+
+    // Look up node in dependency graph with matching model identifier. If not found and fuzzy match
+    // is allowed, a node in different namespace will be returned if it is the only node with the same
+    // name
+    DependencyNode* FindNode(const ModelIdentifier& model_id, const bool allow_fuzzy_matching);
+
+    // Check if there is circular dependency on the given node, the node
+    // status will be updated if the node has circular dependency.
+    void CircularDependencyCheck(const ModelIdentifier& node_id);
+
+   private:
+    // Recursively uncheck the downstream, so the downstreams will need to be
+    // re-checked at later stage to propagate the impact of upstream changes.
+    void UncheckDownstream(const std::set<DependencyNode*>& downstreams);
 
     // Remove the node of the given identifier from dependency graph,
     // and its reference in other nodes.
@@ -146,65 +166,14 @@ class ModelRepositoryManager {
     // by other ensembles)
     std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNode(const ModelIdentifier& model_id);
 
-    // Look up node in dependency graph with matching model identifier. If not found and fuzzy match
-    // is allowed, a node in different namespace will be returned if it is the only node with the same
-    // name
-    DependencyNode* FindNode(const ModelIdentifier& model_id, const bool allow_fuzzy_match) {
-      const auto git = graph_ref_.find(model_id);
-      if (git != graph_ref_.end()) {
-        return git->second.get();
-      } else if (allow_fuzzy_match) {
-        const auto gmit = global_map_ref_.find(model_id.name_);
-        if ((gmit != global_map_ref_.end()) && (gmit->second.size() == 1)) {
-          const auto git = graph_ref_.find(*gmit->second.begin());
-          if (git != graph_ref_.end()) {
-            return git->second.get();
-          }
-        }
-      }
-      return nullptr;
-    }
+    // Recursive version for internal use.
+    Status CircularDependencyCheck(DependencyNode* current_node, const DependencyNode* start_node);
 
-    // Recursively uncheck the downstream, so the downstreams will need to be
-    // re-checked at later stage to propagate the impact of upstream changes.
-    void UncheckDownstream(const std::set<DependencyNode*>& downstreams) {
-      for (auto& node : downstreams) {
-        if (node->checked_) {
-          node->checked_ = false;
-          node->status_ = Status::Success;
-          UncheckDownstream(node->downstreams_);
-        }
-      }
-    }
-
-    Status CircularcyCheck(
-    DependencyNode* current_node, const DependencyNode* start_node)
-    {
-      for (auto& downstream : current_node->downstreams_) {
-        if (downstream == start_node) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "circular dependency between ensembles: " + start_node->model_id_.str() +
-                  " -> ... -> " + current_node->model_id_.str() + " -> " +
-                  start_node->model_id_.str());
-        } else {
-          const auto status = CircularcyCheck(downstream, start_node);
-          if (!status.IsOk()) {
-            current_node->status_ = status;
-            return status;
-          }
-        }
-      }
-      return Status::Success;
-    }
-
-   private:
-    std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>& graph_ref_;
-    // [WIP] modify on Add/DeleteNodes? Yes because the map is subject to change
-    // based on dependency graph (cascading removal), can't be fixed before update graph
-    // [WIP] document reasoning above?
     std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map_ref_;
-    std::unordered_map<std::string, std::set<ModelIdentifier>>& missing_nodes_ref_;
+    std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>> nodes_;
+    // A list of model names that there are nodes depdending on but not present.
+    // Note that the key is not ModelIdentifier to allow more flexible matching.
+    std::unordered_map<std::string, std::set<ModelIdentifier>> missing_nodes_;
   };
 
   ~ModelRepositoryManager();
@@ -236,8 +205,6 @@ class ModelRepositoryManager {
       const bool enable_model_namespacing,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
 
-  // [WIP] 'write' APIs, model management
-
   /// Poll the model repository to determine the new set of models and
   /// compare with the current set. And serve the new set of models based
   /// on their version policy.
@@ -265,8 +232,6 @@ class ModelRepositoryManager {
   /// if the model considers them as part of the in-flight inference.
   /// \return error status.
   Status StopAllModels();
-
-  // [WIP] 'read' APIs, model retrieval / status
 
   /// \return the number of in-flight inferences for the all versions of all
   /// models. The set element will be a tuple of <model_name, model_version,
@@ -312,15 +277,11 @@ class ModelRepositoryManager {
 
   Status FindModelIdentifier(const std::string& model_name, ModelIdentifier* model_id);
 
-  // [WIP] 'read' APIs, repository (/ model) status
-
   /// Get the index of all models in all repositories.
   /// \param ready_only If true return only index of models that are ready.
   /// \param index Returns the index.
   /// \return error status.
   Status RepositoryIndex(const bool ready_only, std::vector<ModelIndex>* index);
-
-  // [WIP] 'write' APIs, repository management
 
   // Register model repository path.
   /// \param repository Path to model repository.
@@ -353,8 +314,6 @@ class ModelRepositoryManager {
       const bool enable_model_namespacing,
       std::unique_ptr<ModelLifeCycle> life_cycle);
 
-  // [WIP] 'write' APIs, model management
-
   /// The internal function that are called in Create() and PollAndUpdate().
   Status PollAndUpdateInternal(bool* all_models_polled);
 
@@ -364,8 +323,6 @@ class ModelRepositoryManager {
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents,
       bool* all_models_polled);
-
-  // [WIP] 'read' APIs, repository polling
 
   /// Poll the requested models in the model repository and
   /// compare with the current set. Return the additions, deletions,
@@ -405,8 +362,6 @@ class ModelRepositoryManager {
       const std::vector<const InferenceParameter*>& params,
       std::unique_ptr<ModelInfo>* info);
 
-  // [WIP] 'write' APIs, model management
-
   /// Load models based on the dependency graph. The function will iteratively
   /// load models that all the models they depend on has been loaded, and unload
   /// models if their dependencies are no longer satisfied.
@@ -425,15 +380,6 @@ class ModelRepositoryManager {
       const std::set<ModelIdentifier>& added, const std::set<ModelIdentifier>& deleted,
       const std::set<ModelIdentifier>& modified,
       std::set<ModelIdentifier>* deleted_dependents = nullptr);
-
-  /// Helper function to uncheck the nodes because the model that they depends
-  /// on has changed. The unchecked nodes will be validated again.
-  /// The function will be call recursively to uncheck all downstreams.
-  /// \param downstreams The nodes to be unchecked.
-  /// \param updated_nodes Return the nodes that have been unchecked
-  void UncheckDownstream(const NodeSet& downstreams, NodeSet* updated_nodes);
-
-  // [WIP] 'read' APIs, model management
 
   /// Get the model info for a named model.
   /// \param name The model name.
@@ -460,9 +406,6 @@ class ModelRepositoryManager {
       DependencyNode* node,
       const std::map<ModelIdentifier, Status>& model_load_status);
 
-  Status CircularcyCheck(
-      DependencyNode* current_node, const DependencyNode* start_node);
-
   bool ModelDirectoryOverride(
       const std::vector<const InferenceParameter*>& model_params);
 
@@ -473,29 +416,28 @@ class ModelRepositoryManager {
 
   std::mutex poll_mu_;
 
-  // [WIP] dependency graph stuff
+  // Dependency graph
+
+  // WAR to avoid change in behavior (mainly error reporting) if model namespace
+  // is not enable.
+  std::function<Status(const std::string& model_name, ModelIdentifier* model_id)> find_identifier_fn_;
   // A map from model name to model identifiers that share the same model name
   std::unordered_map<std::string, std::set<ModelIdentifier>> global_map_;
+  DependencyGraph dependency_graph_;
 
-  std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>
-      dependency_graph_;
+  // Repository specific..
 
-  // A list of model names that there are nodes depdending on but not present
-  // on the last lookup. Note that the key is not ModelIdentifier to allow more
-  // flexible matching.. [WIP] add detail / code enforcement
-  std::unordered_map<std::string, std::set<ModelIdentifier>>
-      missing_nodes_;
-
-  // [WIP] repository specific
   const bool enable_model_namespacing_;
   ModelInfoMap infos_;
   std::set<std::string> repository_paths_;
   // Mappings from (overridden) model names to a pair of their repository and
   // absolute path
-  // [WIP] key should be updated to contain namespace as well, need to work with
-  // enable namespace
+  // [FIXME] key should be updated to contain namespace as well, need to work with
+  // enable namespace. Need to revisit with repository side of things
   std::unordered_map<std::string, std::pair<std::string, std::string>>
       model_mappings_;
+
+  // Model lifecycle
 
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };

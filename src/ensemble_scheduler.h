@@ -29,6 +29,7 @@
 
 #include <memory>
 #include "metric_model_reporter.h"
+#include "model.h"
 #include "model_config.pb.h"
 #include "model_config_utils.h"
 #include "scheduler.h"
@@ -48,12 +49,12 @@ class InferenceServer;
 
 struct EnsembleInfo {
   struct StepInfo {
-    StepInfo(const std::string& model_name, const int64_t model_version)
-        : model_name_(model_name), model_version_(model_version)
+    StepInfo(const ModelIdentifier& model_id, const int64_t model_version)
+        : model_id_(model_id), model_version_(model_version)
     {
     }
 
-    std::string model_name_;
+    ModelIdentifier model_id_;
     int64_t model_version_;
     std::unordered_map<std::string, std::string> input_to_tensor_;
     std::unordered_map<std::string, std::string> output_to_tensor_;

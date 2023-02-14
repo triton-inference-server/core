@@ -106,6 +106,8 @@ InferenceServer::InferenceServer()
   buffer_manager_thread_count_ = 0;
   model_load_thread_count_ =
       std::max(2u, 2 * std::thread::hardware_concurrency());
+  // [WIP] change to false and expose option
+  enable_model_namespacing_ = false;
 
 #ifdef TRITON_ENABLE_GPU
   min_supported_compute_capability_ = TRITON_MIN_COMPUTE_CAPABILITY;
@@ -229,7 +231,7 @@ InferenceServer::Init()
   status = ModelRepositoryManager::Create(
       this, version_, model_repository_paths_, startup_models_,
       strict_model_config_, polling_enabled, model_control_enabled,
-      life_cycle_options, false /* enable_model_namespacing */,
+      life_cycle_options, enable_model_namespacing_,
       &model_repository_manager_);
   if (!status.IsOk()) {
     if (model_repository_manager_ == nullptr) {

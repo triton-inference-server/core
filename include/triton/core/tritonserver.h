@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 17
+#define TRITONSERVER_API_VERSION_MINOR 18
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1760,6 +1760,16 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
     TRITONSERVER_ServerOptions* options, unsigned int thread_count);
+
+/// Enable model namespacing to allow serving models with the same name if
+/// they are in different namespaces.
+///
+/// \param options The server options object.
+/// \param enable_namespace Whether to enable model namespacing or not.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelNamespacing(
+    TRITONSERVER_ServerOptions* options, bool enable_namespace);
 
 /// Provide a log output file.
 ///
