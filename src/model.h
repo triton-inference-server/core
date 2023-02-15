@@ -52,7 +52,7 @@ struct ModelIdentifier {
 
   bool operator!=(const ModelIdentifier& rhs) const
   {
-    return (!(namespace_ != rhs.namespace_) || !(name_ != rhs.name_));
+    return ((namespace_ != rhs.namespace_) || (name_ != rhs.name_));
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ModelIdentifier& rhs)
