@@ -684,6 +684,10 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // We expect insertion to fail here since cache is too small
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
+  // TODO:
+  std::cout << "Deleting large_item: " << large_item.get() << std::endl;
+  std::cout << "Deleting large_data buffer: " << large_data.data() << std::endl;
+  large_item->ClearBuffers();
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)

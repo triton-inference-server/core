@@ -126,17 +126,6 @@ CacheEntryItem::~CacheEntryItem()
   // reference to a cache buffer that will be copied into each
   // corresponding response buffer in the TRITONCACHE_Copy function.
   // So no cleanup is necessary here as Triton doesn't own the original buffers
-  std::unique_lock lk(buffer_mu_);
-  // TODO
-  for (auto [buffer, byte_size] : buffers_) {
-    if (buffer) {
-      // TODO: fix this flow, specifically for calling byte based
-      // Lookup/Insert APIs directly in unit test
-      // It is segfaulting ^
-      // std::cout << "~~~~~~~~~~~~~~` FREEING BUFFER: " << buffer << std::endl;
-      // free(buffer);
-    }
-  }
 }
 
 /* CacheResponseOutput */
@@ -144,8 +133,6 @@ CacheEntryItem::~CacheEntryItem()
 Status
 CacheEntryItem::FromResponse(const InferenceResponse* response)
 {
-  // TODO:
-
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
@@ -165,16 +152,12 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
 Status
 CacheEntryItem::ToResponse(InferenceResponse* response)
 {
-  // TODO:
-
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
 
   const auto buffers = Buffers();
   for (const auto& [base, byte_size] : buffers) {
-    // TODO:
-
     if (!base) {
       return Status(Status::Code::INTERNAL, "buffer was nullptr");
     }
@@ -201,8 +184,6 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
     RETURN_IF_ERROR(response_output->AllocateDataBuffer(
         &output_buffer, cache_output.byte_size_, &memory_type,
         &memory_type_id));
-
-    // TODO
 
     if (memory_type != TRITONSERVER_MEMORY_CPU &&
         memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
