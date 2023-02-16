@@ -147,8 +147,6 @@ TRITONCACHE_CacheEntryGetItem(
   }
   // Passthrough item pointer, no copy needed here.
   *item = reinterpret_cast<TRITONCACHE_CacheEntryItem*>(litem.get());
-  std::cout << "~~~~~ TRITONCACHE_CacheEntryGetItem: " << litem.get()
-            << std::endl;
   return nullptr;  // success
 }
 
@@ -227,10 +225,8 @@ TRITONCACHE_CacheEntryItemAddBuffer(
   }
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
   // This will add a short-lived reference to the corresponding cache
-  // buffer of this item. It will be copied directly into a response
-  // through the allocator callback.
-  // TODO
-  // bool triton_owned = false;
+  // buffer of this item. It should be copied into the target buffer either
+  // directly or through a callback.
   litem->AddBuffer(const_cast<void*>(base), byte_size);
   return nullptr;  // success
 }
@@ -257,15 +253,12 @@ TRITONCACHE_CacheEntryItemGetBuffer(
   const auto [buffer, buffer_size] = lbuffers[index];
   // No copy, this buffer needs to stay alive until it is copied into the cache
   *base = buffer;
-  // TODO
   // Set buffer attributes
   TRITONSERVER_BufferAttributesSetByteSize(buffer_attributes, buffer_size);
   // DLIS-2673: Add better memory_type support, default to CPU memory for now
   TRITONSERVER_BufferAttributesSetMemoryType(
       buffer_attributes, TRITONSERVER_MEMORY_CPU);
   TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
-  std::cout << "~~~~~ TRITONCACHE_CacheEntryItemGetBuffer: " << buffer
-            << std::endl;
   return nullptr;  // success
 }
 
@@ -291,43 +284,6 @@ TRITONCACHE_CacheEntryItemSetBuffer(
   auto& [buffer, buffer_size] = lbuffers[index];
   buffer = new_base;
 
-  // TODO
-  // Only overwrite attributes if provided, buffer may already have some and
-  // not need to change if new buffer shares the same properties
-  if (buffer_attributes) {
-    // Set buffer attributes
-    TRITONSERVER_BufferAttributesSetByteSize(buffer_attributes, buffer_size);
-    // DLIS-2673: Add better memory_type support, default to CPU memory for now
-    TRITONSERVER_BufferAttributesSetMemoryType(
-        buffer_attributes, TRITONSERVER_MEMORY_CPU);
-    TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
-  }
-  return nullptr;  // success
-}
-
-// Sets buffer at index in item
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONCACHE_CacheEntryItemSetBuffer(
-    TRITONCACHE_CacheEntryItem* item, size_t index, void* new_base,
-    TRITONSERVER_BufferAttributes* buffer_attributes)
-{
-  if (!item || !new_base) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        "item, base, or buffer_attributes was nullptr");
-  }
-
-  const auto litem = reinterpret_cast<CacheEntryItem*>(item);
-  auto& lbuffers = litem->MutableBuffers();
-  if (index >= lbuffers.size()) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
-  }
-
-  auto& [buffer, buffer_size] = lbuffers[index];
-  buffer = new_base;
-
-  // TODO
   // Only overwrite attributes if provided, buffer may already have some and
   // not need to change if new buffer shares the same properties
   if (buffer_attributes) {

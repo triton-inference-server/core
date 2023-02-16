@@ -89,12 +89,13 @@ class CacheEntryItem {
   void AddBuffer(boost::span<std::byte> buffer);
   void AddBuffer(void* base, size_t byte_size);
   void AddBuffer(Buffer buffer);
-  // TODO
-  // Returns bytes buffer in buffer arg
+  // Serializes response output into a bytes buffer returned in buffer arg
   Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
 
  private:
-  // TODO
+  // Calculates total byte size required to serialize response output
+  // and stores the size in 'buffer' along with a nullptr to indicate that
+  // a callback should be used for allocating the buffer.
   Status GetByteSize(const InferenceResponse::Output& output, Buffer* buffer);
   // Returns cache output in output arg
   Status FromBytes(

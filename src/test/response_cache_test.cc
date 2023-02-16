@@ -322,7 +322,6 @@ insert(
     std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
     std::string key)
 {
-  printf("Inserting key: %s\n", key.c_str());
   check_status(cache->Insert(r, key));
 }
 
@@ -331,7 +330,6 @@ lookup(
     std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
     std::string key)
 {
-  printf("Looking up key: %s\n", key.c_str());
   check_status(cache->Lookup(r, key));
 }
 
@@ -340,7 +338,6 @@ lookup_maybe_fail(
     std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
     std::string key)
 {
-  printf("Looking up key: %s\n", key.c_str());
   auto status = cache->Lookup(r, key);
   // Success and Cache Miss OK
   auto ok =
@@ -385,11 +382,11 @@ GenerateResponse(
     std::vector<int64_t> shape{1, -1};
     shape[1] = tensor.data.size();
     uint64_t output_size = sizeof(tensor.data[0]) * tensor.data.size();
-    std::cout << "Output size bytes: " << output_size << std::endl;
     helpers::check_status(
         response->AddOutput(tensor.name, dtype, shape, &response_output));
 
-    std::cout << "Allocate output data buffer for response object" << std::endl;
+    std::cout << "Allocate output data buffer for response object of size: "
+              << output_size << std::endl;
     void* buffer;
     helpers::check_status(response_output->AllocateDataBuffer(
         &buffer, output_size, &memory_type, &memory_type_id));
@@ -447,10 +444,7 @@ InsertLookupCompare(
     return tc::Status(tc::Status::Code::INTERNAL, "cache was nullptr");
   }
 
-  std::cout << "=============== Insert ===============" << std::endl;
-  // TODO
   helpers::check_status(cache->Insert(items, key, nullptr));
-  std::cout << "=============== Lookup ===============" << std::endl;
   const auto& [status, responses] = cache->Lookup(key);
   if (!status.IsOk()) {
     return tc::Status(
@@ -589,7 +583,6 @@ class RequestResponseCacheTest : public ::testing::Test {
           helpers::Tensor{"input" + std::to_string(idx), data}};
 
       std::string request_id = "unique" + std::to_string(idx);
-      std::cout << "Generating request: " << request_id << std::endl;
       auto request = helpers::GenerateRequest(
           model, model_version, dtype, memory_type, memory_type_id, inputs,
           request_id);
@@ -684,10 +677,6 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // We expect insertion to fail here since cache is too small
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
-  // TODO:
-  std::cout << "Deleting large_item: " << large_item.get() << std::endl;
-  std::cout << "Deleting large_data buffer: " << large_data.data() << std::endl;
-  large_item->ClearBuffers();
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)
@@ -710,7 +699,6 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)
   std::cout << "Insert large_response into cache" << std::endl;
   auto status = cache->Insert(large_response.get(), "large_response");
   // We expect insertion to fail here since cache is too small
-  std::cout << status.Message() << std::endl;
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
 }
@@ -766,8 +754,6 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
       helpers::InsertLookupCompare(cache, {item1}, "TestCacheSingleItemBytes"));
   helpers::check_status(helpers::InsertLookupCompare(
       cache, {item1, item2}, "TestCacheMultiItemBytes"));
-
-  std::cout << "Done!" << std::endl;
 }
 
 TEST_F(RequestResponseCacheTest, TestHashingRequests)
@@ -808,7 +794,6 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
 
   // Join threads
   for (size_t idx = 0; idx < thread_count; idx++) {
-    std::cout << "Joining idx: " << idx << std::endl;
     threads[idx].join();
   }
 
@@ -849,7 +834,6 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
     responses.push_back(std::move(response));
     // Insert response for each thread
     auto key = std::to_string(idx);
-    std::cout << "Insert response with key: " << key << std::endl;
     cache->Insert(response_400bytes.get(), key);
   }
 
@@ -908,10 +892,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
 
       // TODO: Use Triton DType to cast buffer and compare outputs generically
       const int* cache_output = static_cast<const int*>(response_buffer);
-      std::cout << "Check output buffer data from cache entry for thread ["
-                << idx << "]:" << std::endl;
       for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-        std::cout << cache_output[i] << " == " << data100[i] << std::endl;
         ASSERT_EQ(cache_output[i], data100[i]);
       }
     }
@@ -973,7 +954,6 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
   auto status = cache->Lookup(nullptr, key);
   // This hash not in cache yet
   ASSERT_FALSE(status.IsOk()) << "hash [" + key + "] should not be in cache";
-  std::cout << "Insert response into cache with request0" << std::endl;
   // Insertion should succeed
   helpers::check_status(cache->Insert(response0.get(), key));
 
@@ -1012,9 +992,7 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
 
   // TODO: Use Triton DType to cast buffer and compare outputs generically
   const int* cache_output = static_cast<const int*>(response_buffer);
-  std::cout << "Check output buffer data from cache entry:" << std::endl;
   for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-    std::cout << cache_output[i] << " == " << outputs0[0].data[i] << std::endl;
     ASSERT_EQ(cache_output[i], outputs0[0].data[i]);
   }
 }
@@ -1025,7 +1003,7 @@ int
 main(int argc, char** argv)
 {
 #ifdef TRITON_ENABLE_LOGGING
-  LOG_SET_VERBOSE(2);
+  LOG_SET_VERBOSE(1);
 #endif  // TRITON_ENABLE_LOGGING
 
   ::testing::InitGoogleTest(&argc, argv);

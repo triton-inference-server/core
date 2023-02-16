@@ -143,100 +143,6 @@ ResponseToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
   return Status::Success;
 }
 
-Status
-CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
-{
-  if (!entry) {
-    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
-  }
-
-  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
-  const auto& items = lentry->Items();
-
-  for (auto& item : items) {
-    item->CopyBuffers();
-  }
-
-  return Status::Success;
-}
-
-ResponseToCacheAllocator::ResponseToCacheAllocator(
-    boost::span<InferenceResponse*> responses)
-{
-  for (const auto& response : responses) {
-    responses_.push_back(response);
-  }
-}
-
-Status
-ResponseToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
-{
-  if (!entry) {
-    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
-  }
-
-  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
-  const auto& items = lentry->Items();
-  if (items.size() != responses_.size()) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Expected number of responses in cache does not match. Expected: " +
-            std::to_string(responses_.size()) +
-            ", received: " + std::to_string(items.size()));
-  }
-
-  for (size_t i = 0; i < items.size(); i++) {
-    auto& buffers = items[i]->MutableBuffers();
-    const auto& response_outputs = responses_[i]->Outputs();
-    if (buffers.size() != response_outputs.size()) {
-      return Status(
-          Status::Code::INTERNAL,
-          "Number of requested buffers did not match. Expected: " +
-              std::to_string(response_outputs.size()) +
-              ", received: " + std::to_string(buffers.size()));
-    }
-    // Copy each response output directly into cache allocated buffer
-    for (size_t b = 0; b < buffers.size(); b++) {
-      RETURN_IF_ERROR(items[i]->ToBytes(response_outputs[b], &buffers[b]));
-      // Clear buffer reference so we can't mess with it
-      buffers[b].first = nullptr;
-    }
-  }
-
-  return Status::Success;
-}
-
-// TODO
-/*Status
-BytesToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
-{
-  if (!entry) {
-    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
-  }
-
-  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
-  const auto& items = lentry->Items();
-  if (items.size() != responses_.size()) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Expected number of responses in cache does not match. Expected: " +
-            std::to_string(responses_.size()) +
-            ", received: " + std::to_string(items.size()));
-  }
-
-  for (size_t i = 0; i < items.size(); i++) {
-    auto& buffers = items[i]->MutableBuffers();
-    // Copy each buffer directly into cache allocated buffer
-    for (size_t b = 0; b < buffers.size(); b++) {
-      //std::memcpy(...);
-      // Clear buffer reference so we can't mess with it
-      buffers[b].first = nullptr;
-    }
-  }
-
-  return Status::Success;
-}*/
-
 //
 // TritonCache
 //
@@ -432,15 +338,13 @@ TritonCache::Insert(
     return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
   }
 
-  if (allocator == nullptr) {
-    return Status(Status::Code::INTERNAL, "allocator is nullptr");
-  }
-
-  // TODO
   // NOTE: Similar to Lookup, we are currently creating CacheEntry on Triton
   // side, and letting cache retrieve the Items/Buffers via C APIs. The cache
-  // implementation will have to copy the buffers since Triton may invalidate
-  // them shortly after the insert_fn call.
+  // will have to store a copy of the buffers since Triton may invalidate
+  // them shortly after the insert_fn call. If a nullptr buffer is passed,
+  // that indicates that the allocator callback should be used to let Triton
+  // copy directly into a cache-allocated buffer. For a non-null buffer, the
+  // cache implementation can just copy directly.
   const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
     entry->AddItem(item);
