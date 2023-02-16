@@ -82,15 +82,20 @@ class CacheEntryItem {
   Status FromResponse(const InferenceResponse* response);
   Status ToResponse(InferenceResponse* response);
   std::vector<Buffer> Buffers();
+  std::vector<Buffer>& MutableBuffers();
+  void CopyBuffers();
+  Status ClearBuffers();
   size_t BufferCount();
-  void AddBufferCopy(boost::span<const std::byte> buffer);
-  void AddBufferCopy(const void* base, size_t byte_size);
-  void AddBuffer(void* base, size_t byte_size, bool copy);
-  void AddBuffer(Buffer buffer, bool copy);
-
- private:
+  void AddBuffer(boost::span<std::byte> buffer);
+  void AddBuffer(void* base, size_t byte_size);
+  void AddBuffer(Buffer buffer);
+  // TODO
   // Returns bytes buffer in buffer arg
   Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
+
+ private:
+  // TODO
+  Status GetByteSize(const InferenceResponse::Output& output, Buffer* buffer);
   // Returns cache output in output arg
   Status FromBytes(
       boost::span<const std::byte> packed_bytes, CacheOutput* output);

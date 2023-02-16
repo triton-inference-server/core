@@ -47,7 +47,7 @@ TritonCacheLibraryName(const std::string& cache_name)
 //
 // TritonCacheAllocator
 //
-CachedResponseAllocator::CachedResponseAllocator(
+CacheToResponseAllocator::CacheToResponseAllocator(
     boost::span<InferenceResponse*> responses)
 {
   for (const auto& response : responses) {
@@ -56,7 +56,7 @@ CachedResponseAllocator::CachedResponseAllocator(
 }
 
 Status
-CachedResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
+CacheToResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
   if (!entry) {
     return Status(Status::Code::INVALID_ARG, "entry is nullptr");
@@ -74,10 +74,107 @@ CachedResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 
   for (size_t i = 0; i < items.size(); i++) {
     RETURN_IF_ERROR(items[i]->ToResponse(responses_[i]));
+    // Now that items have been copied to responses, we can clear
+    // the item buffers so we don't try to free cache buffers
+    RETURN_IF_ERROR(items[i]->ClearBuffers());
   }
 
   return Status::Success;
 }
+
+Status
+CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
+{
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  const auto& items = lentry->Items();
+
+  for (auto& item : items) {
+    item->CopyBuffers();
+  }
+
+  return Status::Success;
+}
+
+ResponseToCacheAllocator::ResponseToCacheAllocator(
+    boost::span<InferenceResponse*> responses)
+{
+  for (const auto& response : responses) {
+    responses_.push_back(response);
+  }
+}
+
+Status
+ResponseToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
+{
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  const auto& items = lentry->Items();
+  if (items.size() != responses_.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of responses in cache does not match. Expected: " +
+            std::to_string(responses_.size()) +
+            ", received: " + std::to_string(items.size()));
+  }
+
+  for (size_t i = 0; i < items.size(); i++) {
+    auto& buffers = items[i]->MutableBuffers();
+    const auto& response_outputs = responses_[i]->Outputs();
+    if (buffers.size() != response_outputs.size()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Number of requested buffers did not match. Expected: " +
+              std::to_string(response_outputs.size()) +
+              ", received: " + std::to_string(buffers.size()));
+    }
+    // Copy each response output directly into cache allocated buffer
+    for (size_t b = 0; b < buffers.size(); b++) {
+      RETURN_IF_ERROR(items[i]->ToBytes(response_outputs[b], &buffers[b]));
+      // Clear buffer reference so we can't mess with it
+      buffers[b].first = nullptr;
+    }
+  }
+
+  return Status::Success;
+}
+
+// TODO
+/*Status
+BytesToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
+{
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  const auto& items = lentry->Items();
+  if (items.size() != responses_.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of responses in cache does not match. Expected: " +
+            std::to_string(responses_.size()) +
+            ", received: " + std::to_string(items.size()));
+  }
+
+  for (size_t i = 0; i < items.size(); i++) {
+    auto& buffers = items[i]->MutableBuffers();
+    // Copy each buffer directly into cache allocated buffer
+    for (size_t b = 0; b < buffers.size(); b++) {
+      //std::memcpy(...);
+      // Clear buffer reference so we can't mess with it
+      buffers[b].first = nullptr;
+    }
+  }
+
+  return Status::Success;
+}*/
 
 //
 // TritonCache
@@ -267,27 +364,34 @@ TritonCache::Hash(const InferenceRequest& request, std::string* key)
 Status
 TritonCache::Insert(
     const std::vector<std::shared_ptr<CacheEntryItem>>& items,
-    const std::string& key)
+    const std::string& key, TRITONCACHE_Allocator* allocator)
 {
   LOG_VERBOSE(2) << "Inserting items at cache key: " << key;
   if (insert_fn_ == nullptr) {
-    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+    return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
   }
-  // NOTE: Possible optimization - Check if key exists first before forming
-  // Cache Entry
 
+  if (allocator == nullptr) {
+    return Status(Status::Code::INTERNAL, "allocator is nullptr");
+  }
+
+  // TODO
   // NOTE: Similar to Lookup, we are currently creating CacheEntry on Triton
   // side, and letting cache retrieve the Items/Buffers via C APIs. The cache
   // implementation will have to copy the buffers since Triton may invalidate
   // them shortly after the insert_fn call.
   const auto entry = std::make_unique<CacheEntry>();
   for (const auto& item : items) {
+    // TODO
     entry->AddItem(item);
   }
+
+  // TODO
   const auto opaque_entry =
       reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
   RETURN_IF_TRITONSERVER_ERROR(
-      insert_fn_(cache_impl_, key.c_str(), opaque_entry));
+      insert_fn_(cache_impl_, key.c_str(), opaque_entry, allocator));
+
   return Status::Success;
 }
 
@@ -296,7 +400,7 @@ TritonCache::Insert(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
   if (insert_fn_ == nullptr) {
-    return Status(Status::Code::NOT_FOUND, "cache insert function is nullptr");
+    return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
   }
 
   std::vector<std::shared_ptr<CacheEntryItem>> items;
@@ -308,7 +412,10 @@ TritonCache::Insert(
     RETURN_IF_ERROR(item->FromResponse(response));
     items.push_back(item);
   }
-  return Insert(items, key);
+
+  auto allocator = ResponseToCacheAllocator(responses);
+  auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
+  return Insert(items, key, opaque_allocator);
 }
 
 Status
@@ -324,12 +431,13 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
 std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
 TritonCache::Lookup(const std::string& key)
 {
-  return Lookup(key, nullptr);
+  auto allocator = CacheToBytesAllocator();
+  auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
+  return Lookup(key, opaque_allocator);
 }
 
 std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>>
-TritonCache::Lookup(
-    const std::string& key, TRITONCACHE_CacheAllocator* allocator)
+TritonCache::Lookup(const std::string& key, TRITONCACHE_Allocator* allocator)
 {
   LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
   if (lookup_fn_ == nullptr) {
@@ -337,13 +445,20 @@ TritonCache::Lookup(
     return {fail, {}};
   }
 
+  if (allocator == nullptr) {
+    auto fail = Status(Status::Code::INTERNAL, "allocator is nullptr");
+    return {fail, {}};
+  }
+
   auto entry = std::make_unique<CacheEntry>();
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
+  // TODO
   auto err = lookup_fn_(cache_impl_, key.c_str(), opaque_entry, allocator);
   if (err) {
     auto fail = Status(
         TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
         TRITONSERVER_ErrorMessage(err));
+    TRITONSERVER_ErrorDelete(err);
     return {fail, {}};
   }
 
@@ -366,9 +481,8 @@ TritonCache::Lookup(
   LOG_VERBOSE(2) << "Looking up responses at cache key: " << key;
 
   // Create response allocator to copy directly from cache to response buffers
-  auto allocator = CachedResponseAllocator(responses);
-  auto opaque_allocator =
-      reinterpret_cast<TRITONCACHE_CacheAllocator*>(&allocator);
+  auto allocator = CacheToResponseAllocator(responses);
+  auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
 
   const auto& [status, items] = Lookup(key, opaque_allocator);
   if (!status.IsOk()) {
@@ -381,10 +495,6 @@ TritonCache::Lookup(
         "Expected number of responses in cache does not match. Expected: " +
             std::to_string(responses.size()) +
             ", received: " + std::to_string(items.size()));
-  }
-
-  for (size_t i = 0; i < items.size(); i++) {
-    items[i]->ToResponse(responses[i]);
   }
 
   return Status::Success;

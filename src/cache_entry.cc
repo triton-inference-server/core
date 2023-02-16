@@ -49,8 +49,8 @@ void
 CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
 {
   std::unique_lock lk(item_mu_);
-  // TODO: Look at this flow, ownership, etc. - Currently, cache needs to not
-  // delete/invalidate the item.
+  // NOTE: Cache needs to transfer ownership to Triton and not
+  // delete/invalidate this item.
   items_.push_back(item);
 }
 
@@ -70,54 +70,71 @@ CacheEntryItem::Buffers()
   return buffers_;
 }
 
-
-void
-CacheEntryItem::AddBufferCopy(const void* base, size_t byte_size)
+std::vector<Buffer>&
+CacheEntryItem::MutableBuffers()
 {
-  // std::cout << "~~~~ core cache_entry.cc CacheEntryItem AddBufferCopy
-  // copy=true addr: " << base << std::endl;
   std::unique_lock lk(buffer_mu_);
-  // COPY: Make a copy of buffer for Triton to own
-  void* new_base = malloc(byte_size);
-  memcpy(new_base, base, byte_size);
-  buffers_.emplace_back(std::make_pair(new_base, byte_size));
+  return buffers_;
+}
+
+Status
+CacheEntryItem::ClearBuffers()
+{
+  std::unique_lock lk(buffer_mu_);
+
+  for (auto& [buffer, byte_size] : buffers_) {
+    buffer = nullptr;
+  }
+  buffers_.clear();
+  return Status::Success;
 }
 
 void
-CacheEntryItem::AddBufferCopy(boost::span<const std::byte> byte_span)
-{
-  const void* base = static_cast<const void*>(byte_span.data());
-  AddBufferCopy(base, byte_span.size());
-}
-
-void
-CacheEntryItem::AddBuffer(void* base, size_t byte_size, bool copy)
+CacheEntryItem::CopyBuffers()
 {
   std::unique_lock lk(buffer_mu_);
-  if (copy) {
-    // TODO this may be a deadlock trying to reacquire same lock,
-    // should probably move buffer_mu to else section only
-    AddBufferCopy(base, byte_size);
-  } else {
-    // std::cout << "~~~~ core cache_entry.cc CacheEntryItem AddBuffer
-    // copy=false addr: " << base << std::endl;
-    buffers_.emplace_back(std::make_pair(base, byte_size));
+  for (auto& [buffer, byte_size] : buffers_) {
+    void* new_buffer = malloc(byte_size);
+    std::memcpy(new_buffer, buffer, byte_size);
+    buffer = new_buffer;
   }
 }
 
 void
-CacheEntryItem::AddBuffer(Buffer buffer, bool copy)
+CacheEntryItem::AddBuffer(boost::span<std::byte> byte_span)
 {
-  AddBuffer(buffer.first, buffer.second, copy);
+  void* base = static_cast<void*>(byte_span.data());
+  AddBuffer(base, byte_span.size());
+}
+
+void
+CacheEntryItem::AddBuffer(void* base, size_t byte_size)
+{
+  std::unique_lock lk(buffer_mu_);
+  buffers_.emplace_back(std::make_pair(base, byte_size));
+}
+
+void
+CacheEntryItem::AddBuffer(Buffer buffer)
+{
+  AddBuffer(buffer.first, buffer.second);
 }
 
 CacheEntryItem::~CacheEntryItem()
 {
-  for (auto& [buffer, byte_size] : buffers_) {
-    // TODO: free if copy, don't free if not copy
-    // see if it should be freed here or elsewhere
+  // Currently each CacheEntryItem will hold a short-lived
+  // reference to a cache buffer that will be copied into each
+  // corresponding response buffer in the TRITONCACHE_Copy function.
+  // So no cleanup is necessary here as Triton doesn't own the original buffers
+  std::unique_lock lk(buffer_mu_);
+  // TODO
+  for (auto [buffer, byte_size] : buffers_) {
     if (buffer) {
-      // free(buffer);  // TODO
+      // TODO: fix this flow, specifically for calling byte based
+      // Lookup/Insert APIs directly in unit test
+      // It is segfaulting ^
+      // std::cout << "~~~~~~~~~~~~~~` FREEING BUFFER: " << buffer << std::endl;
+      // free(buffer);
     }
   }
 }
@@ -127,16 +144,19 @@ CacheEntryItem::~CacheEntryItem()
 Status
 CacheEntryItem::FromResponse(const InferenceResponse* response)
 {
+  // TODO:
+
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
 
-  // Build cache entry item from response outputs
+  // Fill item with required byte sizes to hold each response output
+  // These will be used to request allocated buffers from the cache
+  // to copy direcly into
   for (const auto& output : response->Outputs()) {
     auto buffer = Buffer(nullptr, 0);
-    RETURN_IF_ERROR(ToBytes(output, &buffer));
-    // ToBytes allocated new memory, so we pass it through: no copy here
-    AddBuffer(buffer, false /* copy */);
+    RETURN_IF_ERROR(GetByteSize(output, &buffer));
+    AddBuffer(buffer);
   }
 
   return Status::Success;
@@ -145,14 +165,16 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
 Status
 CacheEntryItem::ToResponse(InferenceResponse* response)
 {
+  // TODO:
+
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
 
   const auto buffers = Buffers();
   for (const auto& [base, byte_size] : buffers) {
-    // std::cout << "~~~~~~ core cache_entry.cc CacheEntryItem ToResponse buffer
-    // addr before: " << base << std::endl;
+    // TODO:
+
     if (!base) {
       return Status(Status::Code::INTERNAL, "buffer was nullptr");
     }
@@ -180,6 +202,8 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
         &output_buffer, cache_output.byte_size_, &memory_type,
         &memory_type_id));
 
+    // TODO
+
     if (memory_type != TRITONSERVER_MEMORY_CPU &&
         memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
       return Status(
@@ -193,8 +217,6 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
           "failed to allocate buffer for output '" + cache_output.name_ + "'");
     }
     // COPY: cached output buffer to allocated response output buffer
-    // std::cout << "~~~~~~ core cache_entry.cc CacheEntryItem ToResponse buffer
-    // FromBytes: " << cache_output.buffer_ << std::endl;
     memcpy(output_buffer, cache_output.buffer_, cache_output.byte_size_);
   }
 
@@ -202,7 +224,8 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
 }
 
 Status
-CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
+CacheEntryItem::GetByteSize(
+    const InferenceResponse::Output& output, Buffer* buffer)
 {
   if (!buffer) {
     return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
@@ -258,9 +281,81 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
   uint64_t u64_output_byte_size = static_cast<uint64_t>(output_byte_size);
   total_byte_size += sizeof(uint64_t);
   total_byte_size += u64_output_byte_size;
+  // Setup total size of buffer, use this to request cache to allocate
+  // a buffer of this size so we can copy directly into it
+  *buffer = Buffer(nullptr, total_byte_size);
+  return Status::Success;
+}
 
-  // Allocate full buffer and pack everything into it
-  std::byte* packed_bytes = static_cast<std::byte*>(malloc(total_byte_size));
+Status
+CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
+{
+  if (!buffer) {
+    return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
+  }
+
+  // TODO: Remove code duplication
+
+  // Fetch output buffer details
+  const void* output_base = nullptr;
+  size_t output_byte_size = 0;
+  TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+  int64_t memory_type_id = 0;
+  void* userp = nullptr;
+  auto status = output.DataBuffer(
+      &output_base, &output_byte_size, &memory_type, &memory_type_id, &userp);
+  if (!status.IsOk()) {
+    return status;
+  }
+
+  // DLIS-2673: Add better memory_type support
+  if (memory_type != TRITONSERVER_MEMORY_CPU &&
+      memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Only input buffers in CPU memory are allowed in cache currently");
+  }
+
+  // Exit early if response buffer from output is invalid
+  if (!output_base) {
+    return Status(
+        Status::Code::INTERNAL, "Response buffer from output was nullptr");
+  }
+
+  size_t total_byte_size = 0;
+
+  // Name
+  std::string name = output.Name();
+  uint32_t name_byte_size = name.size();
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += name_byte_size;
+
+  // Dtype
+  std::string dtype = triton::common::DataTypeToProtocolString(output.DType());
+  uint32_t dtype_byte_size = dtype.size();
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += dtype_byte_size;
+
+  // Shape
+  std::vector<int64_t> shape = output.Shape();
+  uint32_t shape_byte_size = shape.size() * sizeof(int64_t);
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += shape_byte_size;
+
+  // Output Buffer: Convert size_t to uint64_t for a fixed-size guarantee
+  uint64_t u64_output_byte_size = static_cast<uint64_t>(output_byte_size);
+  total_byte_size += sizeof(uint64_t);
+  total_byte_size += u64_output_byte_size;
+
+  // Pack everything into provided buffer
+  auto packed_bytes = static_cast<std::byte*>(buffer->first);
+  auto buffer_size = buffer->second;
+  if (buffer_size != total_byte_size) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "buffer size: " + std::to_string(buffer_size) +
+            " didn't match expected size: " + std::to_string(total_byte_size));
+  }
   uint64_t position = 0;
 
   // Name
@@ -284,14 +379,9 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
   // Output Buffer
   memcpy(packed_bytes + position, &u64_output_byte_size, sizeof(uint64_t));
   position += sizeof(uint64_t);
-  // TODO: Unnecessary copy?
-  // 1. Cache will allocate buffer from managed buffer and copy into it
-  // 2. Might be able to just pass output_base address in packed_bytes
-  //    instead of actual buffer content, or append to existing buffer
   memcpy(packed_bytes + position, output_base, u64_output_byte_size);
   position += u64_output_byte_size;
 
-  *buffer = Buffer(packed_bytes, total_byte_size);
   return Status::Success;
 }
 

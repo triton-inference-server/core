@@ -57,7 +57,7 @@ extern "C" {
 struct TRITONCACHE_Cache;
 struct TRITONCACHE_CacheEntry;
 struct TRITONCACHE_CacheEntryItem;
-struct TRITONCACHE_CacheAllocator;
+struct TRITONCACHE_Allocator;
 
 ///
 /// TRITONCACHE API Version
@@ -220,13 +220,19 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemGetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void** base,
     TRITONSERVER_BufferAttributes* buffer_attributes);
 
+// TODO
+TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryItemSetBuffer(
+    TRITONCACHE_CacheEntryItem* item, size_t index, void* new_base,
+    TRITONSERVER_BufferAttributes* buffer_attributes);
+
+
 /// Copies the buffer at 'base' into a user-provided buffer through the
 /// allocator object.
 ///
 /// \param allocator Allocator that provides a buffer to copy directly into.
 /// \param entry The entry containing buffers and buffer attributes to copy from
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_Copy(
-    TRITONCACHE_CacheAllocator* allocator, TRITONCACHE_CacheEntry* entry);
+    TRITONCACHE_Allocator* allocator, TRITONCACHE_CacheEntry* entry);
 
 ///
 /// The following functions can be implemented by a cache. Functions
@@ -279,6 +285,8 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheFinalize(
 /// \param key The key used to access the cache. Generally, this is some
 ///            unique value or hash representing the entry to avoid collisions.
 /// \param entry The entry to be inserted into the cache.
+/// \param allocator TritonCacheAllocator that is used to copy data directly
+///                  into cache-provided buffers to avoid intermediate copies.
 /// \return a TRITONSERVER_Error indicating success or failure.
 ///         Specific errors will be up the cache implementation, but general
 ///         error best practices that should be followed are as follows:
@@ -291,7 +299,8 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheFinalize(
 ///         - nullptr
 ///           - success
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
-    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+    TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
+    TRITONCACHE_Allocator* allocator);
 
 /// Retrieves entry from cache at specified key, if key exists.
 ///
@@ -305,9 +314,8 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
 /// \param key The key used to access the cache. Generally, this is some
 ///            unique value or hash representing the entry to avoid collisions.
 /// \param entry The entry to be retrieved from the cache.
-/// \param allocator Optional TritonCacheAllocator that can be used to copy
-///                  cache data directly into user provided buffers. If not
-///                  provided, an extra copy may be made.
+/// \param allocator TritonCacheAllocator that is used to copy cache data into
+///                  into user provided buffers to avoid intermediate copies.
 /// \return a TRITONSERVER_Error indicating success or failure.
 ///         Specific errors will be up the cache implementation, but general
 ///         error best practices that should be followed are as follows:
@@ -321,7 +329,7 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheInsert(
 ///           - success
 TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheLookup(
     TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
-    TRITONCACHE_CacheAllocator* allocator);
+    TRITONCACHE_Allocator* allocator);
 
 #ifdef __cplusplus
 }  // extern C
