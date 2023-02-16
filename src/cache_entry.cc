@@ -32,53 +32,28 @@ namespace triton { namespace core {
 /* CacheEntry */
 
 size_t
-CacheEntry::ItemCount()
-{
-  std::unique_lock lk(item_mu_);
-  return items_.size();
-}
-
-std::vector<std::shared_ptr<CacheEntryItem>>
-CacheEntry::Items()
-{
-  std::unique_lock lk(item_mu_);
-  return items_;
-}
-
-void
-CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
-{
-  std::unique_lock lk(item_mu_);
-  // NOTE: Cache needs to transfer ownership to Triton and not
-  // delete/invalidate this item.
-  items_.push_back(item);
-}
-
-/* CacheEntryItem */
-
-size_t
-CacheEntryItem::BufferCount()
+CacheEntry::BufferCount()
 {
   std::unique_lock lk(buffer_mu_);
   return buffers_.size();
 }
 
-std::vector<Buffer>
-CacheEntryItem::Buffers()
+const std::vector<Buffer>&
+CacheEntry::Buffers()
 {
   std::unique_lock lk(buffer_mu_);
   return buffers_;
 }
 
 std::vector<Buffer>&
-CacheEntryItem::MutableBuffers()
+CacheEntry::MutableBuffers()
 {
   std::unique_lock lk(buffer_mu_);
   return buffers_;
 }
 
 Status
-CacheEntryItem::ClearBuffers()
+CacheEntry::ClearBuffers()
 {
   std::unique_lock lk(buffer_mu_);
   for (auto& [buffer, byte_size] : buffers_) {
@@ -89,7 +64,7 @@ CacheEntryItem::ClearBuffers()
 }
 
 void
-CacheEntryItem::CopyBuffers()
+CacheEntry::CopyBuffers()
 {
   std::unique_lock lk(buffer_mu_);
   for (auto& [buffer, byte_size] : buffers_) {
@@ -100,37 +75,51 @@ CacheEntryItem::CopyBuffers()
 }
 
 void
-CacheEntryItem::AddBuffer(boost::span<std::byte> byte_span)
+CacheEntry::AddBuffer(boost::span<std::byte> byte_span)
 {
   void* base = static_cast<void*>(byte_span.data());
   AddBuffer(base, byte_span.size());
 }
 
 void
-CacheEntryItem::AddBuffer(void* base, size_t byte_size)
+CacheEntry::AddBuffer(void* base, size_t byte_size)
 {
   std::unique_lock lk(buffer_mu_);
   buffers_.emplace_back(std::make_pair(base, byte_size));
 }
 
 void
-CacheEntryItem::AddBuffer(Buffer buffer)
+CacheEntry::AddBuffer(Buffer buffer)
 {
   AddBuffer(buffer.first, buffer.second);
 }
 
-CacheEntryItem::~CacheEntryItem()
+CacheEntry::~CacheEntry()
 {
-  // Currently each CacheEntryItem will hold a short-lived
+  // Currently each CacheEntry will hold a short-lived
   // reference to a cache buffer that will be copied into each
   // corresponding response buffer in the TRITONCACHE_Copy function.
   // So no cleanup is necessary here as Triton doesn't own the original buffers
 }
 
 /* CacheResponseOutput */
+Status
+CacheEntry::FromResponses()
+{
+  return Status(
+      Status::Code::INTERNAL,
+      "CacheEntry::FromResponses() not implemented yet.");
+}
 
 Status
-CacheEntryItem::FromResponse(const InferenceResponse* response)
+CacheEntry::ToResponses()
+{
+  return Status(
+      Status::Code::INTERNAL, "CacheEntry::ToResponses() not implemented yet.");
+}
+
+Status
+CacheEntry::FromResponse(const InferenceResponse* response)
 {
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
@@ -149,7 +138,7 @@ CacheEntryItem::FromResponse(const InferenceResponse* response)
 }
 
 Status
-CacheEntryItem::ToResponse(InferenceResponse* response)
+CacheEntry::ToResponse(InferenceResponse* response)
 {
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
@@ -204,8 +193,7 @@ CacheEntryItem::ToResponse(InferenceResponse* response)
 }
 
 Status
-CacheEntryItem::GetByteSize(
-    const InferenceResponse::Output& output, Buffer* buffer)
+CacheEntry::GetByteSize(const InferenceResponse::Output& output, Buffer* buffer)
 {
   if (!buffer) {
     return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
@@ -268,7 +256,7 @@ CacheEntryItem::GetByteSize(
 }
 
 Status
-CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
+CacheEntry::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
 {
   if (!buffer) {
     return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
@@ -366,7 +354,7 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
 }
 
 Status
-CacheEntryItem::FromBytes(
+CacheEntry::FromBytes(
     boost::span<const std::byte> packed_bytes, CacheOutput* output)
 {
   if (!output) {
@@ -409,7 +397,7 @@ CacheEntryItem::FromBytes(
   // NOTE: Reference buffer section of packed bytes directly, DO NOT copy here.
   // We will copy this buffer into the response object in ToResponse, so the
   // buffer must remain valid until then. They should remain valid until the
-  // CacheEntryItem is destructed.
+  // CacheEntry is destructed.
   const void* output_buffer =
       static_cast<const void*>(packed_bytes.data() + position);
   position += output_byte_size;

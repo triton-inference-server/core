@@ -437,52 +437,42 @@ GenerateRequest(
 
 tc::Status
 InsertLookupCompare(
-    std::shared_ptr<tc::TritonCache> cache,
-    std::vector<std::shared_ptr<tc::CacheEntryItem>> items, std::string key)
+    std::shared_ptr<tc::TritonCache> cache, tc::CacheEntry* expected_entry,
+    std::string key)
 {
-  if (!cache) {
-    return tc::Status(tc::Status::Code::INTERNAL, "cache was nullptr");
+  if (!cache || !expected_entry) {
+    return tc::Status(tc::Status::Code::INTERNAL, "cache or entry was nullptr");
   }
 
-  helpers::check_status(cache->Insert(items, key, nullptr));
-  const auto& [status, responses] = cache->Lookup(key);
+  helpers::check_status(cache->Insert(expected_entry, key, nullptr));
+  auto lookup_entry = tc::CacheEntry();
+  auto status = cache->Lookup(key, &lookup_entry);
   if (!status.IsOk()) {
     return tc::Status(
         tc::Status::Code::INTERNAL, "Lookup failed: " + status.Message());
   }
-  const auto lookup_items = responses;
-  // Compare cached items to inserted items
-  if (lookup_items.size() != items.size()) {
+
+  auto expected_buffers = expected_entry->Buffers();
+  auto lookup_buffers = lookup_entry.Buffers();
+  if (lookup_buffers.size() != expected_buffers.size()) {
     return tc::Status(
-        tc::Status::Code::INTERNAL, "Expected " + std::to_string(items.size()) +
-                                        " got " +
-                                        std::to_string(lookup_items.size()));
+        tc::Status::Code::INTERNAL,
+        "Expected " + std::to_string(expected_buffers.size()) + " got " +
+            std::to_string(lookup_buffers.size()));
   }
 
-  for (size_t i = 0; i < items.size(); i++) {
-    auto expected_buffers = items[i]->Buffers();
-    auto lookup_buffers = lookup_items[i]->Buffers();
-    if (lookup_buffers.size() != expected_buffers.size()) {
+  for (size_t b = 0; b < expected_buffers.size(); b++) {
+    boost::span<std::byte> lookup = {
+        static_cast<std::byte*>(lookup_buffers[b].first),
+        lookup_buffers[b].second};
+    boost::span<std::byte> expected = {
+        static_cast<std::byte*>(expected_buffers[b].first),
+        expected_buffers[b].second};
+    if (!std::equal(
+            lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
       return tc::Status(
           tc::Status::Code::INTERNAL,
-          "Expected " + std::to_string(expected_buffers.size()) + " got " +
-              std::to_string(lookup_buffers.size()));
-    }
-
-
-    for (size_t b = 0; b < expected_buffers.size(); b++) {
-      boost::span<std::byte> lookup = {
-          static_cast<std::byte*>(lookup_buffers[b].first),
-          lookup_buffers[b].second};
-      boost::span<std::byte> expected = {
-          static_cast<std::byte*>(expected_buffers[b].first),
-          expected_buffers[b].second};
-      if (!std::equal(
-              lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
-        return tc::Status(
-            tc::Status::Code::INTERNAL,
-            "Buffer bytes didn't match for test input");
-      }
+          "Buffer bytes didn't match for test input");
     }
   }
   return tc::Status::Success;
@@ -667,12 +657,12 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
 
   // Setup byte buffer larger than cache size
   std::vector<std::byte> large_data(cache_size + 1);
-  // Setup items
-  std::shared_ptr<tc::CacheEntryItem> large_item(new tc::CacheEntryItem());
-  // Add buffers to items
-  large_item->AddBuffer(large_data);
+  // Setup entry
+  auto entry = tc::CacheEntry();
+  // Add buffers to entry
+  entry.AddBuffer(large_data);
 
-  auto status = cache->Insert({large_item}, "large_bytes", nullptr);
+  auto status = cache->Insert(&entry, "large_bytes", nullptr);
   // We expect insertion to fail here since cache is too small
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
@@ -707,26 +697,27 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
   // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
   auto cache = helpers::CreateCache(1200);
   ASSERT_NE(cache, nullptr);
+  auto entry = tc::CacheEntry();
   // Insert 2 responses, expecting both to fit in cache
   helpers::check_status(cache->Insert(response_400bytes.get(), "request0"));
   helpers::check_status(cache->Insert(response_400bytes.get(), "request1"));
   // Validate both responses fit in cache by looking them up
-  auto [status, items] = (cache->Lookup("request0"));
+  auto status = cache->Lookup("request0", &entry);
   ASSERT_TRUE(status.IsOk()) << status.Message();
-  ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry).IsOk());
   // Insert a 3rd response, expecting the 1st response to be evicted
   // in LRU order
   helpers::check_status(cache->Insert(response_400bytes.get(), "request2"));
-  ASSERT_TRUE(cache->Lookup("request2").first.IsOk());
-  ASSERT_FALSE(cache->Lookup("request0").first.IsOk());
+  ASSERT_TRUE(cache->Lookup("request2", &entry).IsOk());
+  ASSERT_FALSE(cache->Lookup("request0", &entry).IsOk());
   // Lookup 2nd request to bump its LRU order over 3rd
-  ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry).IsOk());
   // Insert a 4th response, expecting the 3rd to get evicted by LRU order
   // after looking up the 2nd
   helpers::check_status(cache->Insert(response_400bytes.get(), "request3"));
-  ASSERT_TRUE(cache->Lookup("request3").first.IsOk());
-  ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
-  ASSERT_FALSE(cache->Lookup("request2").first.IsOk());
+  ASSERT_TRUE(cache->Lookup("request3", &entry).IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry).IsOk());
+  ASSERT_FALSE(cache->Lookup("request2", &entry).IsOk());
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
@@ -739,20 +730,17 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
   std::vector<std::byte> buffer3{4, std::byte{0x04}};
   std::vector<std::byte> buffer4{8, std::byte{0x08}};
   std::vector<std::byte> buffer5{16, std::byte{0xFF}};
-  // Setup items
-  std::shared_ptr<tc::CacheEntryItem> item1(new tc::CacheEntryItem());
-  std::shared_ptr<tc::CacheEntryItem> item2(new tc::CacheEntryItem());
-  // Add buffers to items
-  item1->AddBuffer(buffer1);
-  item1->AddBuffer(buffer2);
-  item2->AddBuffer(buffer3);
-  item2->AddBuffer(buffer4);
-  item2->AddBuffer(buffer5);
+  // Setup entry
+  auto entry = tc::CacheEntry();
+  // Add buffers to entry
+  entry.AddBuffer(buffer1);
+  entry.AddBuffer(buffer2);
+  entry.AddBuffer(buffer3);
+  entry.AddBuffer(buffer4);
+  entry.AddBuffer(buffer5);
 
   helpers::check_status(
-      helpers::InsertLookupCompare(cache, {item1}, "TestCacheSingleItemBytes"));
-  helpers::check_status(helpers::InsertLookupCompare(
-      cache, {item1, item2}, "TestCacheMultiItemBytes"));
+      helpers::InsertLookupCompare(cache, &entry, "TestCacheEntry"));
 }
 
 TEST_F(RequestResponseCacheTest, TestHashingRequests)
@@ -799,9 +787,10 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
   // Lookup each inserted key to verify that expected number remain in cache
   size_t cache_hits = 0;
   size_t cache_misses = 0;
+  auto entry = tc::CacheEntry();
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    const auto& [status, items] = cache->Lookup(key);
+    auto status = cache->Lookup(key, &entry);
     if (status.IsOk()) {
       cache_hits++;
     } else {
@@ -839,9 +828,10 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   // Assert all entries were put into cache and no evictions occurred yet
   size_t cache_hits = 0;
   size_t cache_misses = 0;
+  auto entry = tc::CacheEntry();
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    const auto& [status, items] = cache->Lookup(key);
+    auto status = cache->Lookup(key, &entry);
     if (status.IsOk()) {
       cache_hits++;
     } else {

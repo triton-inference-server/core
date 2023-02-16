@@ -85,19 +85,19 @@ class TritonCache {
 
   const std::string& Name() const { return name_; }
   const std::string& CacheConfig() const { return cache_config_; }
-  Status Insert(
-      boost::span<InferenceResponse*> responses, const std::string& key);
   Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
-      const std::vector<std::shared_ptr<CacheEntryItem>>& items,
-      const std::string& key, TRITONCACHE_Allocator* allocator);
+      boost::span<InferenceResponse*> responses, const std::string& key);
+  Status Insert(
+      CacheEntry* entry, const std::string& key,
+      TRITONCACHE_Allocator* allocator);
+  Status Lookup(InferenceResponse* response, const std::string& key);
   Status Lookup(
       boost::span<InferenceResponse*> responses, const std::string& key);
-  Status Lookup(InferenceResponse* response, const std::string& key);
-  std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
-      const std::string& key, TRITONCACHE_Allocator* allocator);
-  std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
-      const std::string& key);
+  Status Lookup(const std::string& key, CacheEntry* entry);
+  Status Lookup(
+      const std::string& key, CacheEntry* entry,
+      TRITONCACHE_Allocator* allocator);
   // Hashes fields of request and stores it in "key"
   Status Hash(const InferenceRequest& request, std::string* key);
 

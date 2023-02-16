@@ -64,7 +64,7 @@ struct CacheOutput {
   std::vector<int64_t> shape_;
   // Inference Response output buffer
   // NOTE: Cache Output will only temporarily store pointer, it will managed by
-  //       CacheEntryItem, and will be copied into InferenceResponse object
+  //       CacheEntry, and will be copied into InferenceResponse object
   void* buffer_ = nullptr;
   // Inference Response output buffer size
   uint64_t byte_size_ = 0;
@@ -74,14 +74,16 @@ struct CacheOutput {
 // by the cache for storage and retrieval.
 using Buffer = std::pair<void*, size_t>;
 
-// A CacheEntryItem may have several Buffers associated with it
-//   ex: one response may have multiple output buffers
-class CacheEntryItem {
+// A CacheEntrymay have several Buffers associated with it
+//   ex: one request may have multiple responses
+class CacheEntry {
  public:
-  ~CacheEntryItem();
+  ~CacheEntry();
+  Status FromResponses();
+  Status ToResponses();
   Status FromResponse(const InferenceResponse* response);
   Status ToResponse(InferenceResponse* response);
-  std::vector<Buffer> Buffers();
+  const std::vector<Buffer>& Buffers();
   std::vector<Buffer>& MutableBuffers();
   void CopyBuffers();
   Status ClearBuffers();
@@ -102,33 +104,13 @@ class CacheEntryItem {
       boost::span<const std::byte> packed_bytes, CacheOutput* output);
 
   // NOTE: performance gain may be possible by removing this mutex and
-  //   guaranteeing that no two threads will access/modify an item
-  //   in parallel. This may be guaranteed by documenting that a cache
-  //   implementation should not call TRITONCACHE_CacheEntryItemAddBuffer or
-  //   TRITONCACHE_CacheEntryItemBuffer on the same item in parallel.
-  //   This will remain for simplicity until further profiling is done.
-  // Shared mutex to support read-only and read-write locks
-  std::mutex buffer_mu_;
-  std::vector<Buffer> buffers_;
-};
-
-// A CacheEntry may have several Items associated with it
-//   ex: one request may have multiple responses
-class CacheEntry {
- public:
-  std::vector<std::shared_ptr<CacheEntryItem>> Items();
-  size_t ItemCount();
-  void AddItem(std::shared_ptr<CacheEntryItem> item);
-
- private:
-  // NOTE: performance gain may be possible by removing this mutex and
   //   guaranteeing that no two threads will access/modify an entry
   //   in parallel. This may be guaranteed by documenting that a cache
-  //   implementation should not call TRITONCACHE_CacheEntryAddItem or
-  //   TRITONCACHE_CacheEntryItem on the same entry in parallel.
+  //   implementation should not call TRITONCACHE_CacheEntryAddBuffer or
+  //   TRITONCACHE_CacheEntryBuffer on the same entry in parallel.
   //   This will remain for simplicity until further profiling is done.
-  std::mutex item_mu_;
-  std::vector<std::shared_ptr<CacheEntryItem>> items_;
+  std::mutex buffer_mu_;
+  std::vector<Buffer> buffers_;
 };
 
 }}  // namespace triton::core
