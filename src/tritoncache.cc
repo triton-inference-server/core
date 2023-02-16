@@ -268,10 +268,9 @@ TRITONCACHE_CacheEntryItemSetBuffer(
     TRITONCACHE_CacheEntryItem* item, size_t index, void* new_base,
     TRITONSERVER_BufferAttributes* buffer_attributes)
 {
-  if (!item || !new_base) {
+  if (!item) {
     return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        "item, base, or buffer_attributes was nullptr");
+        TRITONSERVER_ERROR_INVALID_ARG, "item was nullptr");
   }
 
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);

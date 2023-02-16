@@ -81,7 +81,6 @@ Status
 CacheEntryItem::ClearBuffers()
 {
   std::unique_lock lk(buffer_mu_);
-
   for (auto& [buffer, byte_size] : buffers_) {
     buffer = nullptr;
   }

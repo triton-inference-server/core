@@ -477,7 +477,6 @@ InsertLookupCompare(
       boost::span<std::byte> expected = {
           static_cast<std::byte*>(expected_buffers[b].first),
           expected_buffers[b].second};
-      // if (lookup_buffers[b] != expected_buffers[b]) {
       if (!std::equal(
               lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
         return tc::Status(
@@ -854,7 +853,6 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   ASSERT_EQ(cache_misses, expected_cache_misses);
   ASSERT_EQ(cache_hits + cache_misses, thread_count);
 
-  // Lookup [thread_count] entries from cache in parallel
   std::cout << "Lookup from cache with [" << thread_count
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
@@ -922,9 +920,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
   }
 
   // Insert then Lookup [thread_count] entries from cache in parallel
-  std::cout << "Insert responses into cache with [" << thread_count
-            << "] threads in parallel" << std::endl;
-  std::cout << "Lookup from cache with [" << thread_count
+  std::cout << "Insert and Lookup responses into cache with [" << thread_count
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
