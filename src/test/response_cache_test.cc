@@ -335,6 +335,19 @@ lookup(
 }
 
 void
+lookup_maybe_fail(
+    std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
+    std::string key)
+{
+  printf("Looking up key: %s\n", key.c_str());
+  auto status = cache->Lookup(r, key);
+  // Success and Cache Miss OK
+  auto ok =
+      (status.IsOk() || status.StatusCode() == tc::Status::Code::NOT_FOUND);
+  ASSERT_TRUE(ok) << "ERROR: " << status.Message();
+}
+
+void
 reset_response(
     std::unique_ptr<tc::InferenceResponse>* response,
     tc::InferenceRequest* request)
@@ -434,11 +447,13 @@ InsertLookupCompare(
   }
 
   std::cout << "=============== Insert ===============" << std::endl;
-  helpers::check_status(cache->Insert(items, key));
+  // TODO
+  helpers::check_status(cache->Insert(items, key, nullptr));
   std::cout << "=============== Lookup ===============" << std::endl;
   const auto& [status, responses] = cache->Lookup(key);
   if (!status.IsOk()) {
-    return tc::Status(tc::Status::Code::INTERNAL, "Lookup failed");
+    return tc::Status(
+        tc::Status::Code::INTERNAL, "Lookup failed: " + status.Message());
   }
   const auto lookup_items = responses;
   // Compare cached items to inserted items
@@ -584,10 +599,10 @@ class RequestResponseCacheTest : public ::testing::Test {
 
     // Sample outputs
     helpers::Tensor output_tensor0 = {"output", data0};
-    output0_size = sizeof(int) * data0.size();
     outputs0 = std::vector<helpers::Tensor>{output_tensor0};
     // Response of 100 ints, taking ~400 bytes at a time
     data100 = std::vector<int>(100, 0);
+    output100_size = sizeof(int) * data100.size();
     helpers::Tensor output_tensor100 = {"output", data100};
     outputs100 = std::vector<helpers::Tensor>{output_tensor100};
 
@@ -618,8 +633,8 @@ class RequestResponseCacheTest : public ::testing::Test {
   inference::DataType dtype = inference::DataType::TYPE_INT32;
   TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
   int64_t memory_type_id = 0;
-  size_t thread_count = 10;
-  uint64_t output0_size;
+  size_t thread_count = 100;
+  uint64_t output100_size;
 
   std::vector<int> data0, data1, data100;
   std::vector<helpers::Tensor> inputs0, inputs1, inputs2, inputs3, inputs4,
@@ -661,17 +676,25 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // Setup items
   std::shared_ptr<tc::CacheEntryItem> large_item(new tc::CacheEntryItem());
   // Add buffers to items
-  large_item->AddBufferCopy(large_data);
+  // TODO
+  std::cout << "Adding large_data buffer: " << large_data.data() << std::endl;
+  large_item->AddBuffer(large_data);
 
   std::cout << "Create large_response (larger than cache) of size: "
             << large_data.size() << std::endl;
   std::cout << "Insert large_response into cache" << std::endl;
 
-  auto status = cache->Insert({large_item}, "large_bytes");
+  // TODO
+  auto status = cache->Insert({large_item}, "large_bytes", nullptr);
   // We expect insertion to fail here since cache is too small
+  // TODO
   std::cout << status.Message() << std::endl;
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
+  // TODO:
+  std::cout << "Deleting large_item: " << large_item.get() << std::endl;
+  std::cout << "Deleting large_data buffer: " << large_data.data() << std::endl;
+  large_item->ClearBuffers();
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)
@@ -708,7 +731,8 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
   helpers::check_status(cache->Insert(response_400bytes.get(), "request0"));
   helpers::check_status(cache->Insert(response_400bytes.get(), "request1"));
   // Validate both responses fit in cache by looking them up
-  ASSERT_TRUE(cache->Lookup("request0").first.IsOk());
+  auto [status, items] = (cache->Lookup("request0"));
+  ASSERT_TRUE(status.IsOk()) << status.Message();
   ASSERT_TRUE(cache->Lookup("request1").first.IsOk());
   // Insert a 3rd response, expecting the 1st response to be evicted
   // in LRU order
@@ -739,11 +763,11 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
   std::shared_ptr<tc::CacheEntryItem> item1(new tc::CacheEntryItem());
   std::shared_ptr<tc::CacheEntryItem> item2(new tc::CacheEntryItem());
   // Add buffers to items
-  item1->AddBufferCopy(buffer1);
-  item1->AddBufferCopy(buffer2);
-  item2->AddBufferCopy(buffer3);
-  item2->AddBufferCopy(buffer4);
-  item2->AddBufferCopy(buffer5);
+  item1->AddBuffer(buffer1);
+  item1->AddBuffer(buffer2);
+  item2->AddBuffer(buffer3);
+  item2->AddBuffer(buffer4);
+  item2->AddBuffer(buffer5);
 
   helpers::check_status(
       helpers::InsertLookupCompare(cache, {item1}, "TestCacheSingleItemBytes"));
@@ -814,7 +838,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
 TEST_F(RequestResponseCacheTest, TestParallelLookup)
 {
   // Set size large enough to hold all responses
-  auto cache = helpers::CreateCache(1024);
+  auto cache = helpers::CreateCache(2 * thread_count * output100_size);
   ASSERT_NE(cache, nullptr);
   const size_t expected_cache_hits = thread_count;
   constexpr size_t expected_cache_misses = 0;
@@ -832,7 +856,8 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
     responses.push_back(std::move(response));
     // Insert response for each thread
     auto key = std::to_string(idx);
-    cache->Insert(response0.get(), key);
+    std::cout << "Insert response with key: " << key << std::endl;
+    cache->Insert(response_400bytes.get(), key);
   }
 
   // Assert all entries were put into cache and no evictions occurred yet
@@ -844,6 +869,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
     if (status.IsOk()) {
       cache_hits++;
     } else {
+      std::cout << "ERROR: " << status.Message() << std::endl;
       cache_misses++;
     }
   }
@@ -866,7 +892,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   }
 
   // Grab output from sample response for comparison
-  const auto& response0_output = response0->Outputs()[0];
+  const auto& response0_output = response_400bytes->Outputs()[0];
 
   // Verify output results from cache
   for (size_t idx = 0; idx < thread_count; idx++) {
@@ -892,17 +918,18 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
       std::cout << "Check output buffer data from cache entry for thread ["
                 << idx << "]:" << std::endl;
       for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-        std::cout << cache_output[i] << " == " << data0[i] << std::endl;
-        ASSERT_EQ(cache_output[i], data0[i]);
+        std::cout << cache_output[i] << " == " << data100[i] << std::endl;
+        ASSERT_EQ(cache_output[i], data100[i]);
       }
     }
   }
 }
 
-/*
+// Run Inserts/Lookups in parallel to check for race conditions, deadlocks, etc
 TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
 {
-  // Set size large enough to hold all responses
+  // Set size that can hold a few responses but will certainly
+  // run into evictions
   auto cache = helpers::CreateCache(1024);
   ASSERT_NE(cache, nullptr);
 
@@ -911,8 +938,8 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
   std::vector<std::thread> lookup_threads;
   std::vector<std::unique_ptr<tc::InferenceResponse>> responses;
 
-  size_t local_thread_count = 100;
-  for (size_t idx = 0; idx < local_thread_count; idx++) {
+  std::cout << "Create responses" << std::endl;
+  for (size_t idx = 0; idx < thread_count; idx++) {
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
     helpers::check_status(
@@ -921,58 +948,24 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
   }
 
   // Insert then Lookup [thread_count] entries from cache in parallel
-  std::cout << "Insert responses into cache with [" << local_thread_count
+  std::cout << "Insert responses into cache with [" << thread_count
             << "] threads in parallel" << std::endl;
-  std::cout << "Lookup from cache with [" << local_thread_count
+  std::cout << "Lookup from cache with [" << thread_count
             << "] threads in parallel" << std::endl;
-  for (size_t idx = 0; idx < local_thread_count; idx++) {
+  for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
     insert_threads.emplace_back(
         std::thread(&helpers::insert, cache, response_400bytes.get(), key));
-    lookup_threads.emplace_back(
-        std::thread(&helpers::lookup, cache, responses[idx].get(), key));
+    lookup_threads.emplace_back(std::thread(
+        &helpers::lookup_maybe_fail, cache, responses[idx].get(), key));
   }
 
   // Join threads
-  for (size_t idx = 0; idx < local_thread_count; idx++) {
+  for (size_t idx = 0; idx < thread_count; idx++) {
     insert_threads[idx].join();
     lookup_threads[idx].join();
   }
-
-  // Grab output from sample response for comparison
-  const auto& response0_output = response0->Outputs()[0];
-
-  // Verify output results from cache
-  for (size_t idx = 0; idx < local_thread_count; idx++) {
-    // Fetch output buffer details
-    const void* response_buffer = nullptr;
-    size_t response_byte_size = 0;
-    TRITONSERVER_MemoryType response_memory_type;
-    int64_t response_memory_type_id;
-    void* userp;
-
-    // TODO: Handle multiple outputs more generically
-    const auto& response_test = responses[idx];
-    for (const auto& response_test_output : response_test->Outputs()) {
-      ASSERT_EQ(response_test_output.Name(), response0_output.Name());
-      ASSERT_EQ(response_test_output.DType(), response0_output.DType());
-      ASSERT_EQ(response_test_output.Shape(), response0_output.Shape());
-      helpers::check_status(response_test_output.DataBuffer(
-          &response_buffer, &response_byte_size, &response_memory_type,
-          &response_memory_type_id, &userp));
-
-      // TODO: Use Triton DType to cast buffer and compare outputs generically
-      const int* cache_output = static_cast<const int*>(response_buffer);
-      std::cout << "Check output buffer data from cache entry for thread ["
-                << idx << "]:" << std::endl;
-      for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-        std::cout << cache_output[i] << " == " << data0[i] << std::endl;
-        ASSERT_EQ(cache_output[i], data0[i]);
-      }
-    }
-  }
 }
-*/
 
 TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
 {

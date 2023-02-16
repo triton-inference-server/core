@@ -147,6 +147,8 @@ TRITONCACHE_CacheEntryGetItem(
   }
   // Passthrough item pointer, no copy needed here.
   *item = reinterpret_cast<TRITONCACHE_CacheEntryItem*>(litem.get());
+  std::cout << "~~~~~ TRITONCACHE_CacheEntryGetItem: " << litem.get()
+            << std::endl;
   return nullptr;  // success
 }
 
@@ -224,12 +226,14 @@ TRITONCACHE_CacheEntryItemAddBuffer(
         "Only buffers in CPU memory are allowed in cache currently");
   }
   const auto litem = reinterpret_cast<CacheEntryItem*>(item);
-  // COPY: This will add a copy of the buffer to the item.
-  // TODO: Optimize this copy, maybe signal when triton is done with it, etc.
-  // litem->AddBufferCopy(base, byte_size);
-  // std::cout << "~~~~ core tritoncache.cc AddBuffer addr: " << base <<
-  // std::endl;
-  litem->AddBuffer(const_cast<void*>(base), byte_size, false);
+  // This will add a short-lived reference to the corresponding cache
+  // buffer of this item. It will be copied directly into a response
+  // through the allocator callback.
+  // TODO
+  // bool triton_owned = false;
+  litem->AddBuffer(const_cast<void*>(base), byte_size);
+  std::cout << "~~~~~ TRITONCACHE_CacheEntryItemAddBuffer: " << base
+            << std::endl;
   return nullptr;  // success
 }
 
@@ -261,23 +265,60 @@ TRITONCACHE_CacheEntryItemGetBuffer(
   TRITONSERVER_BufferAttributesSetMemoryType(
       buffer_attributes, TRITONSERVER_MEMORY_CPU);
   TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
+  std::cout << "~~~~~ TRITONCACHE_CacheEntryItemGetBuffer: " << buffer
+            << std::endl;
+  return nullptr;  // success
+}
+
+// Sets buffer at index in item
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONCACHE_CacheEntryItemSetBuffer(
+    TRITONCACHE_CacheEntryItem* item, size_t index, void* new_base,
+    TRITONSERVER_BufferAttributes* buffer_attributes)
+{
+  if (!item || !new_base) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "item, base, or buffer_attributes was nullptr");
+  }
+
+  const auto litem = reinterpret_cast<CacheEntryItem*>(item);
+  auto& lbuffers = litem->MutableBuffers();
+  if (index >= lbuffers.size()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
+  }
+
+  auto& [buffer, buffer_size] = lbuffers[index];
+  buffer = new_base;
+
+  // TODO
+  // Only overwrite attributes if provided, buffer may already have some and
+  // not need to change if new buffer shares the same properties
+  if (buffer_attributes) {
+    // Set buffer attributes
+    TRITONSERVER_BufferAttributesSetByteSize(buffer_attributes, buffer_size);
+    // DLIS-2673: Add better memory_type support, default to CPU memory for now
+    TRITONSERVER_BufferAttributesSetMemoryType(
+        buffer_attributes, TRITONSERVER_MEMORY_CPU);
+    TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
+  }
   return nullptr;  // success
 }
 
 TRITONSERVER_Error*
 TRITONCACHE_Copy(
-    TRITONCACHE_CacheAllocator* allocator, TRITONCACHE_CacheEntry* entry)
+    TRITONCACHE_Allocator* allocator, TRITONCACHE_CacheEntry* entry)
 {
+  // TODO
+  std::cout << "~~~ Inside TRITONCACHE_Copy with allocator: " << allocator
+            << std::endl;
   if (!allocator || !entry) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "allocator or entry was nullptr");
   }
 
-  // TODO: Remove
-  std::cout << "~~~~~~~~ Using TRITONCACHE_Copy !!! ~~~~~~~~~~~" << std::endl;
-  const auto lallocator =
-      reinterpret_cast<TritonCacheAllocator*>(allocator);
-  // TODO: Split into Allocate + Copy?
+  const auto lallocator = reinterpret_cast<TritonCacheAllocator*>(allocator);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(lallocator->Allocate(entry));
   return nullptr;  // success
 }

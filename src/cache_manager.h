@@ -49,9 +49,24 @@ class TritonCacheAllocator {
   virtual Status Allocate(TRITONCACHE_CacheEntry* entry) = 0;
 };
 
-class CachedResponseAllocator : TritonCacheAllocator {
+class CacheToResponseAllocator : TritonCacheAllocator {
  public:
-  CachedResponseAllocator(boost::span<InferenceResponse*> responses);
+  CacheToResponseAllocator(boost::span<InferenceResponse*> responses);
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+
+ private:
+  std::vector<InferenceResponse*> responses_;
+};
+
+class CacheToBytesAllocator : TritonCacheAllocator {
+ public:
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+};
+
+
+class ResponseToCacheAllocator : TritonCacheAllocator {
+ public:
+  ResponseToCacheAllocator(boost::span<InferenceResponse*> responses);
   Status Allocate(TRITONCACHE_CacheEntry* entry);
 
  private:
@@ -75,12 +90,12 @@ class TritonCache {
   Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
       const std::vector<std::shared_ptr<CacheEntryItem>>& items,
-      const std::string& key);
+      const std::string& key, TRITONCACHE_Allocator* allocator);
   Status Lookup(
       boost::span<InferenceResponse*> responses, const std::string& key);
   Status Lookup(InferenceResponse* response, const std::string& key);
   std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
-      const std::string& key, TRITONCACHE_CacheAllocator* allocator);
+      const std::string& key, TRITONCACHE_Allocator* allocator);
   std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
       const std::string& key);
   // Hashes fields of request and stores it in "key"
@@ -120,10 +135,11 @@ class TritonCache {
   TritonCacheFiniFn_t fini_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheLookupFn_t)(
       TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
-      TRITONCACHE_CacheAllocator* allocator);
+      TRITONCACHE_Allocator* allocator);
   TritonCacheLookupFn_t lookup_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheInsertFn_t)(
-      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
+      TRITONCACHE_Allocator* allocator);
   TritonCacheInsertFn_t insert_fn_;
 };
 

@@ -1012,6 +1012,11 @@ TRITONCACHE_CacheEntryItemGetBuffer()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryItemSetBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONCACHE_CacheInitialize()
 {
 }
@@ -1028,6 +1033,11 @@ TRITONCACHE_CacheInsert()
 
 TRITONAPI_DECLSPEC void
 TRITONCACHE_CacheLookup()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_Copy()
 {
 }
 
