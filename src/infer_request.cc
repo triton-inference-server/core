@@ -960,8 +960,16 @@ InferenceRequest::Normalize()
 
       if (!match_config) {
         triton::common::DimsList full_dims;
+        std::string implicit_batch_note = "";
         if (model_config.max_batch_size() > 0) {
           full_dims.Add(triton::common::WILDCARD_DIM);
+          implicit_batch_note =
+              "NOTE: Setting a non-zero max_batch_size in the model config "
+              "requires a batch dimension to be prepended to each input shape. "
+              "If you want to specify the full shape including the batch dim "
+              "in your input dims config, try setting max_batch_size to zero. "
+              "See the model configuration docs for more info on "
+              "max_batch_size.";
         }
         for (int i = 0; i < input_config->dims_size(); ++i) {
           full_dims.Add(input_config->dims(i));
@@ -971,7 +979,8 @@ InferenceRequest::Normalize()
             LogRequest() + "unexpected shape for input '" + pr.first +
                 "' for model '" + ModelName() + "'. Expected " +
                 triton::common::DimsListToString(full_dims) + ", got " +
-                triton::common::DimsListToString(input.OriginalShape()));
+                triton::common::DimsListToString(input.OriginalShape()) + ". " +
+                implicit_batch_note);
       }
     }
 
