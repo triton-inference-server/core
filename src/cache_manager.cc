@@ -303,6 +303,7 @@ TritonCache::Lookup(const std::string& key)
     auto fail = Status(
         TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
         TRITONSERVER_ErrorMessage(err));
+    TRITONSERVER_ErrorDelete(err);
     return {fail, {}};
   }
 

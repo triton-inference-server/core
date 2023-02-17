@@ -335,6 +335,18 @@ lookup(
 }
 
 void
+lookup_maybe_fail(
+    std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
+    std::string key)
+{
+  auto status = cache->Lookup(r, key);
+  // Success and Cache Miss OK
+  auto ok =
+      (status.IsOk() || status.StatusCode() == tc::Status::Code::NOT_FOUND);
+  ASSERT_TRUE(ok) << "ERROR: " << status.Message();
+}
+
+void
 reset_response(
     std::unique_ptr<tc::InferenceResponse>* response,
     tc::InferenceRequest* request)
@@ -955,6 +967,46 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
   for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
     std::cout << cache_output[i] << " == " << outputs0[0].data[i] << std::endl;
     ASSERT_EQ(cache_output[i], outputs0[0].data[i]);
+  }
+}
+
+// Run Inserts/Lookups in parallel to check for race conditions, deadlocks, etc
+TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
+{
+  // Set size that can hold a few responses but will certainly
+  // run into evictions
+  auto cache = helpers::CreateCache(1024);
+  ASSERT_NE(cache, nullptr);
+
+  // Create threads
+  std::vector<std::thread> insert_threads;
+  std::vector<std::thread> lookup_threads;
+  std::vector<std::unique_ptr<tc::InferenceResponse>> responses;
+
+  std::cout << "Create responses" << std::endl;
+  for (size_t idx = 0; idx < thread_count; idx++) {
+    // Create response for each thread to fill from cache
+    std::unique_ptr<tc::InferenceResponse> response;
+    helpers::check_status(
+        unique_requests[idx]->ResponseFactory()->CreateResponse(&response));
+    responses.push_back(std::move(response));
+  }
+
+  // Insert then Lookup [thread_count] entries from cache in parallel
+  std::cout << "Insert and Lookup responses into cache with [" << thread_count
+            << "] threads in parallel" << std::endl;
+  for (size_t idx = 0; idx < thread_count; idx++) {
+    auto key = std::to_string(idx);
+    insert_threads.emplace_back(
+        std::thread(&helpers::insert, cache, response_400bytes.get(), key));
+    lookup_threads.emplace_back(std::thread(
+        &helpers::lookup_maybe_fail, cache, responses[idx].get(), key));
+  }
+
+  // Join threads
+  for (size_t idx = 0; idx < thread_count; idx++) {
+    insert_threads[idx].join();
+    lookup_threads[idx].join();
   }
 }
 
