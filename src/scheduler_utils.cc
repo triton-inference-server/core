@@ -301,9 +301,10 @@ PriorityQueue::Enqueue(
     // within the pending batch. At the same priority level the request is
     // guaranteed to be after pending batch if the batch hasn't reached
     // delayed queue.
-    if ((priority_level < pending_cursor_.curr_it_->first) ||
-        ((priority_level == pending_cursor_.curr_it_->first) &&
-         (pending_cursor_.at_delayed_queue_))) {
+    if (pending_cursor_.valid_ &&
+        ((priority_level < pending_cursor_.curr_it_->first) ||
+         ((priority_level == pending_cursor_.curr_it_->first) &&
+          (pending_cursor_.at_delayed_queue_)))) {
       pending_cursor_.valid_ = false;
     }
   }
@@ -345,7 +346,8 @@ PriorityQueue::ReleaseRejectedRequests(
     if (it->second.ReadyForErasure()) {
       // Invalidate the pending batch cursor if it points to
       // the item to be erased
-      if (it->first == pending_cursor_.curr_it_->first) {
+      if (pending_cursor_.valid_ &&
+          it->first == pending_cursor_.curr_it_->first) {
         pending_cursor_.valid_ = false;
       }
       it = queues_.erase(it); // returns iterator following removed element
