@@ -47,8 +47,9 @@ namespace triton { namespace core {
 
 namespace {
 
-template<typename T>
-void AddToSet(const std::set<T>& src, std::set<T>* dest)
+template <typename T>
+void
+AddToSet(const std::set<T>& src, std::set<T>* dest)
 {
   // std::set::merge() can be used if move to >= C++17,
   // note this is different from merge: copy item instead of move
@@ -304,11 +305,9 @@ struct ModelRepositoryManager::ModelInfo {
 ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
     const bool polling_enabled, const bool model_control_enabled,
-    const double min_compute_capability,
-    const bool enable_model_namespacing,
+    const double min_compute_capability, const bool enable_model_namespacing,
     std::unique_ptr<ModelLifeCycle> life_cycle)
-    : autofill_(autofill),
-      polling_enabled_(polling_enabled),
+    : autofill_(autofill), polling_enabled_(polling_enabled),
       model_control_enabled_(model_control_enabled),
       min_compute_capability_(min_compute_capability),
       dependency_graph_(global_map_),
@@ -321,7 +320,7 @@ ModelRepositoryManager::ModelRepositoryManager(
       return FindModelIdentifier(n, i);
     };
   } else {
-    find_identifier_fn_ =  [this](const std::string& n, ModelIdentifier* i) {
+    find_identifier_fn_ = [this](const std::string& n, ModelIdentifier* i) {
       return Status::Success;
     };
   }
@@ -501,8 +500,8 @@ ModelRepositoryManager::LoadModelByDependency()
   //      - unload otherwise (should revisit this, logically will only happen in
   //        ensemble, the ensemble is requested to be re-loaded, at this point
   //        it is too late to revert model changes so the ensemble will not be
-  //        available afterwards. In other words, ensemble is not coverred in
-  //        the model availibity claim: if re-load results in model not
+  //        available afterwards. In other words, ensemble is not covered in
+  //        the model availibility claim: if re-load results in model not
   //        available, the model state will be reverted)
   //  - Apply changes to lifecycle
   //  - Reflect the lifecycle change result to the dependency graph so that the
@@ -599,7 +598,7 @@ ModelRepositoryManager::LoadUnloadModel(
   std::lock_guard<std::mutex> lock(poll_mu_);
 
   const auto& model_name = models.begin()->first;
-  
+
   // Need ModelIdentifier to retrieve model state in lifecycle object,
   // which will not be available after graph update. So make a copy first
   // to check if unload works as intended.
@@ -626,8 +625,8 @@ ModelRepositoryManager::LoadUnloadModel(
     const auto& git = global_map_.find(model_name);
     if (git == global_map_.end()) {
       return Status(
-          Status::Code::INTERNAL, "failed to load '" + model_name +
-                                      "', unexpected miss in global map");
+          Status::Code::INTERNAL,
+          "failed to load '" + model_name + "', unexpected miss in global map");
     }
     for (const auto& model_id : git->second) {
       const auto version_states = model_life_cycle_->VersionStates(model_id);
@@ -681,9 +680,12 @@ ModelRepositoryManager::LoadUnloadModels(
   {
     if (type == ActionType::UNLOAD) {
       for (const auto& model : models) {
-        for (const auto& info : infos_) {
-          if (info.first.name_ == model.first) {
-            deleted.insert(info.first);
+        // Within the class, model is referred by ModelIdentifier, so it needs
+        // to check global map to find identifier assoicated with the name.
+        auto git = global_map_.find(model.first);
+        if (git != global_map_.end()) {
+          for (const auto& mid : git->second) {
+            deleted.insert(mid);
           }
         }
       }
@@ -714,7 +716,8 @@ ModelRepositoryManager::LoadUnloadModels(
         for (auto& info : new_infos) {
           // if the model is not "checked", it is model polled at current
           // iteration, check config for more models to be polled
-          const bool checked = (checked_models.find(info.first.name_) != checked_models.end());
+          const bool checked =
+              (checked_models.find(info.first.name_) != checked_models.end());
           if (!checked) {
             // Don't add the model name to 'checked_models' as there may be
             // same name model polled but with different namespace
@@ -731,7 +734,8 @@ ModelRepositoryManager::LoadUnloadModels(
         // trim the model if it has been checked
         current_models.clear();
         for (const auto& name : next_models) {
-          const bool checked = (checked_models.find(name) != checked_models.end());
+          const bool checked =
+              (checked_models.find(name) != checked_models.end());
           if (!checked) {
             current_models[name];
           }
@@ -741,7 +745,8 @@ ModelRepositoryManager::LoadUnloadModels(
       // After all polls, only models in the initial set ('models') are
       // explicitly loaded.
       for (auto& info : new_infos) {
-        info.second->explicitly_load_ = (models.find(info.first.name_) != models.end());
+        info.second->explicitly_load_ =
+            (models.find(info.first.name_) != models.end());
       }
 
       // Only update the infos when all validation is completed
@@ -798,7 +803,7 @@ ModelRepositoryManager::LoadUnloadModels(
         if ((it != load_status.end()) && !it->second.IsOk()) {
           load_error_message +=
               ("load failed for model '" + model_id.str() +
-              "': " + it->second.Message() + "\n");
+               "': " + it->second.Message() + "\n");
         }
       }
     }
@@ -876,7 +881,8 @@ ModelRepositoryManager::RepositoryIndex(
   std::set<ModelIdentifier> seen_models;
   std::set<ModelIdentifier> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
-    const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
+    const std::string model_namespace =
+        (enable_model_namespacing_ ? repository_path : "");
     // For any mapped models in this repository, save the mapping
     // from their subdirectory name to model name.
     std::map<std::string, std::string> models_in_repo;
@@ -960,24 +966,33 @@ ModelRepositoryManager::GetModel(
 }
 
 Status
-ModelRepositoryManager::FindModelIdentifier(const std::string& model_name, ModelIdentifier* model_id)
+ModelRepositoryManager::FindModelIdentifier(
+    const std::string& model_name, ModelIdentifier* model_id)
 {
   auto git = global_map_.find(model_name);
   if (git == global_map_.end()) {
-    return Status(Status::Code::INVALID_ARG, "Request for unknown model: '" + model_name + "' is not found");
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Request for unknown model: '" + model_name + "' is not found");
   }
-  switch (git->second.size())
-  {
-  case 0:
-    return Status(Status::Code::NOT_FOUND, "Identifier of model '" + model_name + "' is not found in global map");
-    break;
-  case 1: {
-    *model_id = *git->second.begin();
-    break;
-  }
-  default:
-    return Status(Status::Code::INVALID_ARG, "There are multiple identifiers of model '" + model_name + "' in global map, model namespace must be provided to resolve ambiguity.");
-    break;
+  switch (git->second.size()) {
+    case 0:
+      return Status(
+          Status::Code::NOT_FOUND, "Identifier of model '" + model_name +
+                                       "' is not found in global map");
+      break;
+    case 1: {
+      *model_id = *git->second.begin();
+      break;
+    }
+    default:
+      return Status(
+          Status::Code::INVALID_ARG,
+          "There are " + std::to_string(git->second.size()) +
+              " identifiers of model '" + model_name +
+              "' in global map, model namespace must be provided to resolve "
+              "ambiguity.");
+      break;
   }
   return Status::Success;
 }
@@ -1001,7 +1016,8 @@ ModelRepositoryManager::Poll(
     std::set<ModelIdentifier> duplicated_models;
     for (const auto& repository_path : repository_paths_) {
       // collapse namespace based on whether it is enabled
-      const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
+      const std::string model_namespace =
+          (enable_model_namespacing_ ? repository_path : "");
 
       // Model name mapping is not checked in direct polling, because
       // it is set when registering additional model repository which is limited
@@ -1017,7 +1033,8 @@ ModelRepositoryManager::Poll(
         for (const auto& subdir : subdirs) {
           const ModelIdentifier model_identifier(model_namespace, subdir);
           if (!model_to_path
-                   .emplace(model_identifier, JoinPath({repository_path, subdir}))
+                   .emplace(
+                       model_identifier, JoinPath({repository_path, subdir}))
                    .second) {
             duplicated_models.insert(model_identifier);
             *all_models_polled = false;
@@ -1058,8 +1075,11 @@ ModelRepositoryManager::Poll(
         }
         if (exists_in_this_repo) {
           // collapse namespace based on whether it is enabled
-          const std::string model_namespace = (enable_model_namespacing_ ? model_it->second.first : "");
-          model_to_path.emplace(ModelIdentifier(model_namespace, model.first), model_it->second.second);
+          const std::string model_namespace =
+              (enable_model_namespacing_ ? model_it->second.first : "");
+          model_to_path.emplace(
+              ModelIdentifier(model_namespace, model.first),
+              model_it->second.second);
           exists = true;
         } else {
           LOG_ERROR << "mapped path '" << full_path
@@ -1097,9 +1117,11 @@ ModelRepositoryManager::Poll(
             }
 
             // collapse namespace based on whether it is enabled
-            const std::string model_namespace = (enable_model_namespacing_ ? repository_path : "");
+            const std::string model_namespace =
+                (enable_model_namespacing_ ? repository_path : "");
             auto res = model_to_path.emplace(
-                ModelIdentifier(model_namespace, model.first), JoinPath({repository_path, model.first}));
+                ModelIdentifier(model_namespace, model.first),
+                JoinPath({repository_path, model.first}));
             if (res.second) {
               exists = true;
             } else {
@@ -1355,7 +1377,8 @@ ModelRepositoryManager::InitializeModelInfo(
 
 Status
 ModelRepositoryManager::UpdateDependencyGraph(
-    const std::set<ModelIdentifier>& added, const std::set<ModelIdentifier>& deleted,
+    const std::set<ModelIdentifier>& added,
+    const std::set<ModelIdentifier>& deleted,
     const std::set<ModelIdentifier>& modified,
     std::set<ModelIdentifier>* deleted_dependents)
 {
@@ -1370,7 +1393,8 @@ ModelRepositoryManager::UpdateDependencyGraph(
   // on other models
   std::set<ModelIdentifier> affected_nodes, deleted_nodes;
   const bool cascading_removal = (deleted_dependents != nullptr);
-  std::tie(affected_nodes, deleted_nodes) = dependency_graph_.RemoveNodes(deleted, cascading_removal);
+  std::tie(affected_nodes, deleted_nodes) =
+      dependency_graph_.RemoveNodes(deleted, cascading_removal);
   if (cascading_removal) {
     deleted_dependents->swap(deleted_nodes);
   }
@@ -1380,7 +1404,7 @@ ModelRepositoryManager::UpdateDependencyGraph(
   for (auto& node_id : affected_nodes) {
     dependency_graph_.ConnectDependencyGraph(node_id);
   }
-  
+
   for (auto& node_id : affected_nodes) {
     dependency_graph_.CircularDependencyCheck(node_id);
   }
@@ -1480,7 +1504,8 @@ ModelRepositoryManager::GetModelInfo(
   const auto itr = infos_.find(model_id);
   if (itr == infos_.end()) {
     return Status(
-        Status::Code::NOT_FOUND, "no configuration for model '" + model_id.str() + "'");
+        Status::Code::NOT_FOUND,
+        "no configuration for model '" + model_id.str() + "'");
   }
 
   *model_info = itr->second.get();
@@ -1552,7 +1577,8 @@ ModelRepositoryManager::CheckNode(
         node->status_ = Status(
             Status::Code::INVALID_ARG,
             "ensemble '" + node->model_id_.str() + "' depends on '" +
-                upstream.first->model_id_.str() + "' which is not valid. Model '" +
+                upstream.first->model_id_.str() +
+                "' which is not valid. Model '" +
                 upstream.first->model_id_.str() +
                 "' failed with error: " + upstream.first->status_.Message());
       } else if (upstream.first->loaded_versions_.empty()) {
@@ -1587,7 +1613,8 @@ ModelRepositoryManager::CheckNode(
             node->status_ = Status(
                 Status::Code::INVALID_ARG,
                 "ensemble '" + node->model_id_.str() + "' depends on '" +
-                    upstream.first->model_id_.str() + "' whose required version " +
+                    upstream.first->model_id_.str() +
+                    "' whose required version " +
                     std::to_string(required_version) + " is not loaded.");
           }
         }
@@ -1609,7 +1636,9 @@ ModelRepositoryManager::CheckNode(
 
 
 std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
-ModelRepositoryManager::DependencyGraph::RemoveNodes(const std::set<ModelIdentifier>& nodes, const bool cascading_removal) {
+ModelRepositoryManager::DependencyGraph::RemoveNodes(
+    const std::set<ModelIdentifier>& nodes, const bool cascading_removal)
+{
   std::set<ModelIdentifier> all_affected_nodes, all_removed_nodes;
   std::set<ModelIdentifier> curr_removal = nodes;
   while (!curr_removal.empty()) {
@@ -1631,7 +1660,8 @@ ModelRepositoryManager::DependencyGraph::RemoveNodes(const std::set<ModelIdentif
         const auto& upstreams = affected_nodes.first;
         for (const auto& upstream : upstreams) {
           auto unode = FindNode(upstream, false /* allow_fuzzy_matching */);
-          if (unode && (unode->downstreams_.empty()) && (!unode->explicitly_load_)) {
+          if (unode && (unode->downstreams_.empty()) &&
+              (!unode->explicitly_load_)) {
             next_removal.emplace(upstream);
           }
         }
@@ -1656,7 +1686,10 @@ ModelRepositoryManager::DependencyGraph::RemoveNodes(const std::set<ModelIdentif
 }
 
 std::set<ModelIdentifier>
-ModelRepositoryManager::DependencyGraph::UpdateNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager) {
+ModelRepositoryManager::DependencyGraph::UpdateNodes(
+    const std::set<ModelIdentifier>& nodes,
+    const ModelRepositoryManager* model_manager)
+{
   std::set<ModelIdentifier> updated_nodes;
   // modified, invalidate (uncheck) all downstreams
   for (const auto& model_id : nodes) {
@@ -1691,7 +1724,10 @@ ModelRepositoryManager::DependencyGraph::UpdateNodes(const std::set<ModelIdentif
 }
 
 std::set<ModelIdentifier>
-ModelRepositoryManager::DependencyGraph::AddNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager) {
+ModelRepositoryManager::DependencyGraph::AddNodes(
+    const std::set<ModelIdentifier>& nodes,
+    const ModelRepositoryManager* model_manager)
+{
   std::set<ModelIdentifier> affected_nodes;
   // added, add to dependency_graph, if in missing_node, invalidate (uncheck)
   // and associate all downstreams, remove from missing_node
@@ -1702,12 +1738,13 @@ ModelRepositoryManager::DependencyGraph::AddNodes(const std::set<ModelIdentifier
     added_node->model_config_ = info->model_config_;
     added_node->explicitly_load_ = info->explicitly_load_;
 
-    // Check if this model name is needed for some nodes, simply mark those nodes
-    // affected to re-evalute them later
+    // Check if this model name is needed for some nodes, simply mark those
+    // nodes affected to re-evalute them later
     auto it = missing_nodes_.find(model_id.name_);
     if (it != missing_nodes_.end()) {
       for (const auto& dependent_node_id : it->second) {
-        auto dependent_node = FindNode(dependent_node_id, false /* allow_fuzzy_matching */);
+        auto dependent_node =
+            FindNode(dependent_node_id, false /* allow_fuzzy_matching */);
         if (dependent_node) {
           UncheckDownstream({dependent_node});
           affected_nodes.emplace(dependent_node_id);
@@ -1718,14 +1755,15 @@ ModelRepositoryManager::DependencyGraph::AddNodes(const std::set<ModelIdentifier
     // Add nodes to all reference
     affected_nodes.emplace(model_id);
     global_map_ref_[model_id.name_].emplace(model_id);
-    nodes_.emplace(
-        std::make_pair(model_id, std::move(added_node)));
+    nodes_.emplace(std::make_pair(model_id, std::move(added_node)));
   }
   return affected_nodes;
 }
 
 void
-ModelRepositoryManager::DependencyGraph::ConnectDependencyGraph(const ModelIdentifier& node_id) {
+ModelRepositoryManager::DependencyGraph::ConnectDependencyGraph(
+    const ModelIdentifier& node_id)
+{
   // Check the node's model config to determine if it depends on other models
   // and if those models are present
   auto updated_node = FindNode(node_id, false /* allow_fuzzy_matching */);
@@ -1733,14 +1771,17 @@ ModelRepositoryManager::DependencyGraph::ConnectDependencyGraph(const ModelIdent
   updated_node->missing_upstreams_.clear();
   updated_node->connected_ = true;
   if (updated_node->model_config_.has_ensemble_scheduling()) {
-    auto mutable_steps = updated_node->model_config_.mutable_ensemble_scheduling()->mutable_step();
+    auto mutable_steps =
+        updated_node->model_config_.mutable_ensemble_scheduling()
+            ->mutable_step();
     for (auto& step : *mutable_steps) {
       // Build model identifier to look for the composing model,
       // currently using the same namespace as the 'updated_node' for
       // preferred identifier.
       // [enhancement] May allow user-specified namespace once allowed in
       // ensemble config.
-      const ModelIdentifier preferred_id(updated_node->model_id_.namespace_, step.model_name());
+      const ModelIdentifier preferred_id(
+          updated_node->model_id_.namespace_, step.model_name());
       auto node = FindNode(preferred_id, true /* allow_fuzzy_matching */);
       if (node) {
         // Set 'model_namespace' field in model config to allow direct model
@@ -1752,7 +1793,7 @@ ModelRepositoryManager::DependencyGraph::ConnectDependencyGraph(const ModelIdent
 
         // Add the upstream to the current node
         auto res = updated_node->upstreams_.emplace(
-          node, std::set<int64_t>({step.model_version()}));
+            node, std::set<int64_t>({step.model_version()}));
         // If map insertion doesn't happen, the same model is required in
         // different step, insert the version to existing required version set.
         if (!res.second) {
@@ -1782,48 +1823,55 @@ ModelRepositoryManager::DependencyGraph::ConnectDependencyGraph(const ModelIdent
         updated_node->status_ = Status(
             Status::Code::INVALID_ARG,
             "ensemble " + updated_node->model_id_.str() +
-                " contains models that are not available or ambiguous: " + name_list);
+                " contains models that are not available or ambiguous: " +
+                name_list);
       }
     }
   }
 }
 
 std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
-ModelRepositoryManager::DependencyGraph::RemoveNode(const ModelIdentifier& model_id)
+ModelRepositoryManager::DependencyGraph::RemoveNode(
+    const ModelIdentifier& model_id)
 {
-  std::set<ModelIdentifier> upstreams, downstreams;
   auto it = nodes_.find(model_id);
   // no-op if not found: "node" has been removed
-  if (it != nodes_.end()) {
-    auto& node = it->second;
-    // remove this node from its upstreams
-    for (auto& upstream : node->upstreams_) {
-      auto& upstream_node = upstream.first;
-      upstream_node->DisconnectDownstream(node.get());
-      upstreams.emplace(upstream_node->model_id_);
-    }
-
-    // remove this node from its downstreams
-    UncheckDownstream(node->downstreams_);
-    for (auto& downstream : node->downstreams_) {
-      downstream->DisconnectUpstream(node.get());
-      downstreams.emplace(downstream->model_id_);
-    }
-
-    // Drop the node from all reference,
-    // remove from graph at last to complete its lifecycle
-    global_map_ref_[model_id.name_].erase(model_id);
-    for (const auto& model_name : node->missing_upstreams_) {
-      auto mit = missing_nodes_.find(model_name);
-      mit->second.erase(model_id);
-    }
-    nodes_.erase(it);
+  if (it == nodes_.end()) {
+    return {{}, {}};
   }
+
+  std::set<ModelIdentifier> upstreams, downstreams;
+  auto& node = it->second;
+  // remove this node from its upstreams
+  for (auto& upstream : node->upstreams_) {
+    auto& upstream_node = upstream.first;
+    upstream_node->DisconnectDownstream(node.get());
+    upstreams.emplace(upstream_node->model_id_);
+  }
+
+  // remove this node from its downstreams
+  UncheckDownstream(node->downstreams_);
+  for (auto& downstream : node->downstreams_) {
+    downstream->DisconnectUpstream(node.get());
+    downstreams.emplace(downstream->model_id_);
+  }
+
+  // Drop the node from all reference,
+  // remove from graph at last to complete its lifecycle
+  global_map_ref_[model_id.name_].erase(model_id);
+  for (const auto& model_name : node->missing_upstreams_) {
+    auto mit = missing_nodes_.find(model_name);
+    mit->second.erase(model_id);
+  }
+  nodes_.erase(it);
+
   return {std::move(upstreams), std::move(downstreams)};
 }
 
 ModelRepositoryManager::DependencyNode*
-ModelRepositoryManager::DependencyGraph::FindNode(const ModelIdentifier& model_id, const bool allow_fuzzy_matching) {
+ModelRepositoryManager::DependencyGraph::FindNode(
+    const ModelIdentifier& model_id, const bool allow_fuzzy_matching)
+{
   const auto git = nodes_.find(model_id);
   if (git != nodes_.end()) {
     return git->second.get();
@@ -1840,7 +1888,9 @@ ModelRepositoryManager::DependencyGraph::FindNode(const ModelIdentifier& model_i
 }
 
 void
-ModelRepositoryManager::DependencyGraph::UncheckDownstream(const std::set<DependencyNode*>& downstreams) {
+ModelRepositoryManager::DependencyGraph::UncheckDownstream(
+    const std::set<DependencyNode*>& downstreams)
+{
   for (auto& node : downstreams) {
     if (node->checked_) {
       node->checked_ = false;
@@ -1852,7 +1902,7 @@ ModelRepositoryManager::DependencyGraph::UncheckDownstream(const std::set<Depend
 
 void
 ModelRepositoryManager::DependencyGraph::CircularDependencyCheck(
-  const ModelIdentifier& node_id)
+    const ModelIdentifier& node_id)
 {
   auto node = FindNode(node_id, false /* allow_fuzzy_matching */);
   if (node->status_.IsOk()) {
@@ -1862,7 +1912,7 @@ ModelRepositoryManager::DependencyGraph::CircularDependencyCheck(
 
 Status
 ModelRepositoryManager::DependencyGraph::CircularDependencyCheck(
-  DependencyNode* current_node, const DependencyNode* start_node)
+    DependencyNode* current_node, const DependencyNode* start_node)
 {
   // Note that traverse order is towards upstream for the correct dependency
   // ordering.
@@ -1870,10 +1920,11 @@ ModelRepositoryManager::DependencyGraph::CircularDependencyCheck(
     auto& upstream_node = upstream.first;
     if (upstream_node == start_node) {
       return Status(
-          Status::Code::INVALID_ARG,
-          "circular dependency between ensembles: " + start_node->model_id_.str() +
-              " -> ... -> " + current_node->model_id_.str() + " -> " +
-              start_node->model_id_.str());
+          Status::Code::INVALID_ARG, "circular dependency between ensembles: " +
+                                         start_node->model_id_.str() +
+                                         " -> ... -> " +
+                                         current_node->model_id_.str() +
+                                         " -> " + start_node->model_id_.str());
     } else {
       // Only return error when detect circular dependency, propagate the error
       // so all node in the chain will be set.

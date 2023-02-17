@@ -53,14 +53,15 @@ class ModelRepositoryManager {
   // Index information for a model.
   struct ModelIndex {
     ModelIndex(const ModelIdentifier& n)
-        : name_only_(true), namespace_(n.namespace_), name_(n.name_), version_(-1),
-          state_(ModelReadyState::UNKNOWN)
+        : name_only_(true), namespace_(n.namespace_), name_(n.name_),
+          version_(-1), state_(ModelReadyState::UNKNOWN)
     {
     }
     ModelIndex(
         const ModelIdentifier& n, const int64_t v, const ModelReadyState s,
         const std::string& r)
-        : name_only_(false), namespace_(n.namespace_), name_(n.name_), version_(v), state_(s), reason_(r)
+        : name_only_(false), namespace_(n.namespace_), name_(n.name_),
+          version_(v), state_(s), reason_(r)
     {
     }
     const bool name_only_;
@@ -80,8 +81,14 @@ class ModelRepositoryManager {
     {
     }
 
-    void DisconnectUpstream(DependencyNode* upstream) { upstreams_.erase(upstream); }
-    void DisconnectDownstream(DependencyNode* downstream) { downstreams_.erase(downstream); }
+    void DisconnectUpstream(DependencyNode* upstream)
+    {
+      upstreams_.erase(upstream);
+    }
+    void DisconnectDownstream(DependencyNode* downstream)
+    {
+      downstreams_.erase(downstream);
+    }
 
     // Overall status
     Status status_;
@@ -99,7 +106,8 @@ class ModelRepositoryManager {
     // 'missing_nodes_' in DependencyGraph to provide bi-directional lookup for
     // dependency resolution (exact / fuzzy match).
     // i.e. the node will look for upstream node that has matching identifier,
-    // but upstream node with different namspace can still be used if not found.
+    // but upstream node with different namespace can still be used if not
+    // found.
     std::set<std::string> missing_upstreams_;
     std::unordered_map<DependencyNode*, std::set<int64_t>> upstreams_;
     std::set<DependencyNode*> downstreams_;
@@ -117,25 +125,43 @@ class ModelRepositoryManager {
     // There is coupling between the dependency graph and global map: global map
     // will be used to resolve dependency (node connectivity), and global map
     // will be updated to reflect node changes.
-    DependencyGraph(std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map)
-     : global_map_ref_(global_map) {}
+    DependencyGraph(
+        std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map)
+        : global_map_ref_(global_map)
+    {
+    }
 
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>*
-    MutableNodes() {return &nodes_; }
+    MutableNodes()
+    {
+      return &nodes_;
+    }
 
     // Remove the given set of nodes, return two sets of nodes: The first set
     // contains existing nodes to be re-evaluated, because they depend on
     // the nodes removed; the second set contains all the nodes removed in this
     // operation.
-    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNodes(const std::set<ModelIdentifier>& nodes, const bool cascading_removal);
+    // 'cascading_removal' control whether other nodes will be removed. If true,
+    // it will also remove the nodes that were added to dependency graph only
+    // because they were needed by the node in 'nodes'. In other words, they
+    // will no longer be needed once the 'nodes' are removed and can be removed
+    // from the dependency graph as well. Such an operation will be recursively
+    // applied and thus called "cascading".
+    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNodes(
+        const std::set<ModelIdentifier>& nodes, const bool cascading_removal);
 
-    // Update the given set of nodes to reflect the latest model information polled,
-    // returns existing nodes to be re-evaluated, including the modified node.
-    std::set<ModelIdentifier> UpdateNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager);
+    // Update the given set of nodes to reflect the latest model information
+    // polled, returns existing nodes to be re-evaluated, including the modified
+    // node.
+    std::set<ModelIdentifier> UpdateNodes(
+        const std::set<ModelIdentifier>& nodes,
+        const ModelRepositoryManager* model_manager);
 
     // Add the given set of nodes to the dependency graph,
     // returns existing nodes to be re-evaluated, including the added node.
-    std::set<ModelIdentifier> AddNodes(const std::set<ModelIdentifier>& nodes, const ModelRepositoryManager* model_manager);
+    std::set<ModelIdentifier> AddNodes(
+        const std::set<ModelIdentifier>& nodes,
+        const ModelRepositoryManager* model_manager);
 
     // Helper function on the 'node_id' to construct the edges between nodes
     // in the dependency graph. The node status will be updated if the node
@@ -143,10 +169,11 @@ class ModelRepositoryManager {
     // are made to the dependency graph.
     void ConnectDependencyGraph(const ModelIdentifier& node_id);
 
-    // Look up node in dependency graph with matching model identifier. If not found and fuzzy match
-    // is allowed, a node in different namespace will be returned if it is the only node with the same
-    // name
-    DependencyNode* FindNode(const ModelIdentifier& model_id, const bool allow_fuzzy_matching);
+    // Look up node in dependency graph with matching model identifier. If not
+    // found and fuzzy match is allowed, a node in different namespace will be
+    // returned if it is the only node with the same name
+    DependencyNode* FindNode(
+        const ModelIdentifier& model_id, const bool allow_fuzzy_matching);
 
     // Check if there is circular dependency on the given node, the node
     // status will be updated if the node has circular dependency.
@@ -164,10 +191,12 @@ class ModelRepositoryManager {
     // "upstreams" of the node (i.e. composing models of the ensemble), the
     // second set is the "downstreams" of the node (i.e. the model is required
     // by other ensembles)
-    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNode(const ModelIdentifier& model_id);
+    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNode(
+        const ModelIdentifier& model_id);
 
     // Recursive version for internal use.
-    Status CircularDependencyCheck(DependencyNode* current_node, const DependencyNode* start_node);
+    Status CircularDependencyCheck(
+        DependencyNode* current_node, const DependencyNode* start_node);
 
     std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map_ref_;
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>> nodes_;
@@ -275,7 +304,8 @@ class ModelRepositoryManager {
       const ModelIdentifier& model_id, const int64_t model_version,
       std::shared_ptr<Model>* model);
 
-  Status FindModelIdentifier(const std::string& model_name, ModelIdentifier* model_id);
+  Status FindModelIdentifier(
+      const std::string& model_name, ModelIdentifier* model_id);
 
   /// Get the index of all models in all repositories.
   /// \param ready_only If true return only index of models that are ready.
@@ -310,8 +340,7 @@ class ModelRepositoryManager {
   ModelRepositoryManager(
       const std::set<std::string>& repository_paths, const bool autofill,
       const bool polling_enabled, const bool model_control_enabled,
-      const double min_compute_capability,
-      const bool enable_model_namespacing,
+      const double min_compute_capability, const bool enable_model_namespacing,
       std::unique_ptr<ModelLifeCycle> life_cycle);
 
   /// The internal function that are called in Create() and PollAndUpdate().
@@ -346,8 +375,9 @@ class ModelRepositoryManager {
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
       std::set<ModelIdentifier>* added, std::set<ModelIdentifier>* deleted,
-      std::set<ModelIdentifier>* modified, std::set<ModelIdentifier>* unmodified,
-      ModelInfoMap* updated_infos, bool* all_models_polled);
+      std::set<ModelIdentifier>* modified,
+      std::set<ModelIdentifier>* unmodified, ModelInfoMap* updated_infos,
+      bool* all_models_polled);
 
   /// Helper function for Poll() to initialize ModelInfo for the model.
   /// \param model_id The identifier of the model.
@@ -377,7 +407,8 @@ class ModelRepositoryManager {
   /// from the repository.
   /// \return The error status.
   Status UpdateDependencyGraph(
-      const std::set<ModelIdentifier>& added, const std::set<ModelIdentifier>& deleted,
+      const std::set<ModelIdentifier>& added,
+      const std::set<ModelIdentifier>& deleted,
       const std::set<ModelIdentifier>& modified,
       std::set<ModelIdentifier>* deleted_dependents = nullptr);
 
@@ -385,7 +416,8 @@ class ModelRepositoryManager {
   /// \param name The model name.
   /// \param model_info Returns the model information.
   /// \return OK if found, NOT_FOUND otherwise.
-  Status GetModelInfo(const ModelIdentifier& model_id, ModelInfo** model_info) const;
+  Status GetModelInfo(
+      const ModelIdentifier& model_id, ModelInfo** model_info) const;
 
   /// Get the models to be loaded / unloaded based on the model loaded in
   /// previous iteration.
@@ -419,8 +451,10 @@ class ModelRepositoryManager {
   // Dependency graph
 
   // WAR to avoid change in behavior (mainly error reporting) if model namespace
-  // is not enable.
-  std::function<Status(const std::string& model_name, ModelIdentifier* model_id)> find_identifier_fn_;
+  // is not enabled.
+  std::function<Status(
+      const std::string& model_name, ModelIdentifier* model_id)>
+      find_identifier_fn_;
   // A map from model name to model identifiers that share the same model name
   std::unordered_map<std::string, std::set<ModelIdentifier>> global_map_;
   DependencyGraph dependency_graph_;
@@ -428,12 +462,12 @@ class ModelRepositoryManager {
   // Repository specific..
 
   const bool enable_model_namespacing_;
-  
+
   // [FIXME] Better document below: 'infos_' is the in memory representation of
   // repo polling results. It is a intermediate layer between the set of models
   // in storage and the models being served, and it doesn't directly reflect the
   // state of the two above.
-  // 
+  //
   // There are three stages in terms of changing model:
   //   - poll model
   //   - resolve dependency
@@ -453,8 +487,8 @@ class ModelRepositoryManager {
   std::set<std::string> repository_paths_;
   // Mappings from (overridden) model names to a pair of their repository and
   // absolute path
-  // [FIXME] key should be updated to contain namespace as well, need to work with
-  // enable namespace. Need to revisit with repository side of things
+  // [DLIS-4596] key should be updated to contain namespace to work with enabled
+  // namespace. Also need to revisit with repository side of things.
   std::unordered_map<std::string, std::pair<std::string, std::string>>
       model_mappings_;
 
