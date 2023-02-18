@@ -1,4 +1,4 @@
-// Copyright 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2022-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -178,8 +178,7 @@ class ModelLifeCycle {
   // All versions that are being served will be unloaded only after
   // the load is finished sucessfully.
   Status AsyncLoad(
-      const ModelIdentifier& model_id,
-      const std::string& model_path,
+      const ModelIdentifier& model_id, const std::string& model_path,
       const inference::ModelConfig& model_config, const bool is_config_provided,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)>&& OnComplete);

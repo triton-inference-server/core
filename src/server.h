@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -238,7 +238,10 @@ class InferenceServer {
 
   void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
 
-  void SetModelNamespacingEnabled(const bool e) { enable_model_namespacing_ = e; }
+  void SetModelNamespacingEnabled(const bool e)
+  {
+    enable_model_namespacing_ = e;
+  }
 
   // Set a backend command-line configuration
   void SetBackendCmdlineConfig(
@@ -281,8 +284,7 @@ class InferenceServer {
         (ready_state_ != ServerReadyState::SERVER_EXITING)) {
       return Status(Status::Code::UNAVAILABLE, "Server not ready");
     }
-    return model_repository_manager_->GetModel(
-        model_id, model_version, model);
+    return model_repository_manager_->GetModel(model_id, model_version, model);
   }
 
   // Get the Backend Manager

@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -376,8 +376,8 @@ EnsembleContext::EnsembleContext(
     auto ver_it = it->second.find(step_info.model_version_);
     if (ver_it == it->second.end()) {
       std::shared_ptr<Model> model = nullptr;
-      ensemble_status_ = is_->GetModel(
-          step_info.model_id_, step_info.model_version_, &model);
+      ensemble_status_ =
+          is_->GetModel(step_info.model_id_, step_info.model_version_, &model);
       if (!ensemble_status_.IsOk()) {
         break;
       }
@@ -1347,7 +1347,9 @@ EnsembleScheduler::EnsembleScheduler(
 
   for (const auto& element : config.ensemble_scheduling().step()) {
     size_t step_idx = info_->steps_.size();
-    info_->steps_.emplace_back(ModelIdentifier(element.model_namespace(), element.model_name()), element.model_version());
+    info_->steps_.emplace_back(
+        ModelIdentifier(element.model_namespace(), element.model_name()),
+        element.model_version());
     for (const auto& pair : element.input_map()) {
       auto it = info_->tensor_to_step_.find(pair.second);
       if (it == info_->tensor_to_step_.end()) {

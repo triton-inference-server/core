@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -90,10 +90,11 @@ ValidateTensorConsistency(
   if (lhs.type_ != rhs.type_) {
     return Status(
         Status::Code::INVALID_ARG,
-        message + "inconsistent data type: " +
-            inference::DataType_Name(lhs.type_) + " is inferred from model " +
-            lhs.model_id_.str() + " while " + inference::DataType_Name(rhs.type_) +
-            " is inferred from model " + rhs.model_id_.str());
+        message +
+            "inconsistent data type: " + inference::DataType_Name(lhs.type_) +
+            " is inferred from model " + lhs.model_id_.str() + " while " +
+            inference::DataType_Name(rhs.type_) + " is inferred from model " +
+            rhs.model_id_.str());
   }
 
   // Shapes must match or either one uses variable size shape, if one uses
@@ -119,7 +120,8 @@ ValidateTensorConsistency(
 
 Status
 ValidateTensorMapping(
-    const ModelIdentifier& ensemble_id, const inference::ModelEnsembling::Step& step,
+    const ModelIdentifier& ensemble_id,
+    const inference::ModelEnsembling::Step& step,
     const inference::ModelConfig& model_config,
     std::unordered_map<std::string, TensorNode>* ensemble_tensors)
 {
@@ -134,9 +136,9 @@ ValidateTensorMapping(
     if (input_names.find(input_map.first) == input_names.end()) {
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble_id.str() + ", ensemble tensor " + input_map.second +
-              " is mapping to non-existing input " + input_map.first +
-              " in model " + step_id.str());
+          "in ensemble " + ensemble_id.str() + ", ensemble tensor " +
+              input_map.second + " is mapping to non-existing input " +
+              input_map.first + " in model " + step_id.str());
     }
   }
   for (const auto& model_input : model_config.input()) {
@@ -144,8 +146,7 @@ ValidateTensorMapping(
     for (const auto& input_map : step.input_map()) {
       if (model_input.name() == input_map.first) {
         TensorNode model_tensor(
-            step_id, batching, model_input.data_type(),
-            model_input.dims());
+            step_id, batching, model_input.data_type(), model_input.dims());
         auto it = ensemble_tensors->find(input_map.second);
         if (it != ensemble_tensors->end()) {
           RETURN_IF_ERROR(ValidateTensorConsistency(
@@ -188,9 +189,9 @@ ValidateTensorMapping(
     if (output_names.find(output_map.first) == output_names.end()) {
       return Status(
           Status::Code::INVALID_ARG,
-          "in ensemble " + ensemble_id.str() + ", ensemble tensor " + output_map.second +
-              " is mapped from non-existing output " + output_map.first +
-              " in model " + step.model_name());
+          "in ensemble " + ensemble_id.str() + ", ensemble tensor " +
+              output_map.second + " is mapped from non-existing output " +
+              output_map.first + " in model " + step.model_name());
     }
   }
   std::shared_ptr<TensorNode> sibling_node(new TensorNode(step_id));
@@ -199,8 +200,7 @@ ValidateTensorMapping(
     for (const auto& model_output : model_config.output()) {
       if (model_output.name() == output_map.first) {
         TensorNode model_tensor(
-            step_id, batching, model_output.data_type(),
-            model_output.dims());
+            step_id, batching, model_output.data_type(), model_output.dims());
         auto it = ensemble_tensors->find(output_map.second);
         if (it != ensemble_tensors->end()) {
           RETURN_IF_ERROR(ValidateTensorConsistency(

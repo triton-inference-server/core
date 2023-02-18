@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -34,7 +34,9 @@
 namespace triton { namespace core {
 struct ModelIdentifier {
   ModelIdentifier(const std::string& model_namespace, const std::string& name)
-   : namespace_(model_namespace), name_(name) {}
+      : namespace_(model_namespace), name_(name)
+  {
+  }
 
   bool operator<(const ModelIdentifier& rhs) const
   {
@@ -93,8 +95,9 @@ class hash<triton::core::ModelIdentifier> {
   {
     // trival hash for multiple entries
     // https://en.cppreference.com/w/cpp/utility/hash
-    return (hash<std::string>()(model_id.namespace_)
-               ^ (hash<std::string>()(model_id.name_) << 1));
+    return (
+        hash<std::string>()(model_id.namespace_) ^
+        (hash<std::string>()(model_id.name_) << 1));
   }
 };
 }  // namespace std

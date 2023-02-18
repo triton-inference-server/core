@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -273,7 +273,10 @@ class TritonServerOptions {
   void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
 
   bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
-  void SetModelNamespacingEnabled(const bool e) { enable_model_namespacing_ = e; }
+  void SetModelNamespacingEnabled(const bool e)
+  {
+    enable_model_namespacing_ = e;
+  }
 
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
