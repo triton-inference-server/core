@@ -99,7 +99,10 @@ class ModelRepositoryManager {
     inference::ModelConfig model_config_;
 
     // Graph info
+    // Whether the node has been checked for performing lifecycle change
+    // (load / unload)
     bool checked_;
+    // Whether the node has connected: all required upstreams are found
     bool connected_;
     // store only the model names for missing upstreams, and remove from it
     // only if the upstream is exactly matched. This variable works with
