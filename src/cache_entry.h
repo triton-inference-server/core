@@ -33,26 +33,6 @@
 #include "triton/common/logging.h"
 #include "tritonserver_apis.h"
 
-// If TRITONSERVER error is non-OK, return std::nullopt for failed optional.
-#define RETURN_NULLOPT_IF_TRITONSERVER_ERROR(E)           \
-  do {                                                    \
-    TRITONSERVER_Error* err__ = (E);                      \
-    if (err__ != nullptr) {                               \
-      LOG_VERBOSE(1) << TRITONSERVER_ErrorMessage(err__); \
-      TRITONSERVER_ErrorDelete(err__);                    \
-      return std::nullopt;                                \
-    }                                                     \
-  } while (false)
-
-#define RETURN_NULLOPT_IF_STATUS_ERROR(S)   \
-  do {                                      \
-    const Status& status__ = (S);           \
-    if (!status__.IsOk()) {                 \
-      LOG_VERBOSE(1) << status__.Message(); \
-      return std::nullopt;                  \
-    }                                       \
-  } while (false)
-
 namespace triton { namespace core {
 
 struct CacheOutput {
@@ -79,26 +59,37 @@ using Buffer = std::pair<void*, size_t>;
 class CacheEntry {
  public:
   ~CacheEntry();
-  Status FromResponses();
-  Status ToResponses();
-  Status FromResponse(const InferenceResponse* response);
-  Status ToResponse(InferenceResponse* response);
-  const std::vector<Buffer>& Buffers();
+  std::vector<Buffer> Buffers();
   std::vector<Buffer>& MutableBuffers();
-  void CopyBuffers();
-  Status ClearBuffers();
   size_t BufferCount();
   void AddBuffer(boost::span<std::byte> buffer);
   void AddBuffer(void* base, size_t byte_size);
   void AddBuffer(Buffer buffer);
   // Serializes response output into a bytes buffer returned in buffer arg
-  Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
+  // Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
+  Status ToBytes(
+      const InferenceResponse::Output& output, std::byte* buffer,
+      size_t* output_size);
+  Status SetBufferSizes(boost::span<InferenceResponse*> responses);
+  // Insert helpers
+  Status ResponsesToBuffers(boost::span<InferenceResponse*> responses);
+  Status ResponseToBuffer(InferenceResponse* response, Buffer buffer);
+  // Lookup helpers
+  Status BuffersToResponses(boost::span<InferenceResponse*> responses);
+  Status BufferToResponse(InferenceResponse* response, Buffer buffer);
+
+  // Typically, the cache entry will now own any associted buffers.
+  // However, if a CacheAllocator wants the entry to own the buffers, this
+  // can be used to signal that the entry should free its buffers on destruction
+  void FreeBuffersOnExit();
 
  private:
-  // Calculates total byte size required to serialize response output
-  // and stores the size in 'buffer' along with a nullptr to indicate that
-  // a callback should be used for allocating the buffer.
-  Status GetByteSize(const InferenceResponse::Output& output, Buffer* buffer);
+  // Calculates total byte size required to serialize response output and
+  // returns it in packed_output_byte_size
+  Status GetByteSize(
+      const InferenceResponse::Output& output,
+      uint64_t* packed_output_byte_size);
+  Status SetBufferSize(InferenceResponse* response);
   // Returns cache output in output arg
   Status FromBytes(
       boost::span<const std::byte> packed_bytes, CacheOutput* output);
@@ -109,8 +100,12 @@ class CacheEntry {
   //   implementation should not call TRITONCACHE_CacheEntryAddBuffer or
   //   TRITONCACHE_CacheEntryBuffer on the same entry in parallel.
   //   This will remain for simplicity until further profiling is done.
+  // TODO: probably don't need mutex if entries are accessed exclusively
+  // and documented that way?
   std::mutex buffer_mu_;
   std::vector<Buffer> buffers_;
+  // Free buffers on exit, default is false unless explicitly toggled
+  bool free_buffers_ = false;
 };
 
 }}  // namespace triton::core

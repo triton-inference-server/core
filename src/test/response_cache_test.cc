@@ -468,6 +468,13 @@ InsertLookupCompare(
     boost::span<std::byte> expected = {
         static_cast<std::byte*>(expected_buffers[b].first),
         expected_buffers[b].second};
+    // TODO
+    std::cout << "~~~InsertLookupCompare lookup buffer addr: "
+              << lookup_buffers[b].first
+              << ", size: " << lookup_buffers[b].second << std::endl;
+    std::cout << "~~~InsertLookupCompare lookup buffer addr: "
+              << expected_buffers[b].first
+              << ", size: " << expected_buffers[b].second << std::endl;
     if (!std::equal(
             lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
       return tc::Status(
@@ -666,6 +673,7 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // We expect insertion to fail here since cache is too small
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
+  std::cout << "End of TestCacheSizeSmallerThanEntryResponse" << std::endl;
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)
@@ -828,8 +836,8 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   // Assert all entries were put into cache and no evictions occurred yet
   size_t cache_hits = 0;
   size_t cache_misses = 0;
-  auto entry = tc::CacheEntry();
   for (size_t idx = 0; idx < thread_count; idx++) {
+    auto entry = tc::CacheEntry();
     auto key = std::to_string(idx);
     auto status = cache->Lookup(key, &entry);
     if (status.IsOk()) {
@@ -989,7 +997,7 @@ int
 main(int argc, char** argv)
 {
 #ifdef TRITON_ENABLE_LOGGING
-  LOG_SET_VERBOSE(1);
+  LOG_SET_VERBOSE(2);
 #endif  // TRITON_ENABLE_LOGGING
 
   ::testing::InitGoogleTest(&argc, argv);

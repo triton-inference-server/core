@@ -58,17 +58,35 @@ CacheToResponseAllocator::CacheToResponseAllocator(
 Status
 CacheToResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
-  // TODO
-  return Status(
-      Status::Code::INTERNAL, "CacheToResponseAllocator Not implemented yet");
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  // Parse cache buffers into responses
+  RETURN_IF_ERROR(lentry->BuffersToResponses(responses_));
+  return Status::Success;
 }
 
 Status
 CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
-  // TODO
-  return Status(
-      Status::Code::INTERNAL, "CacheToBytesAllocator Not implemented yet");
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  auto& buffers = lentry->MutableBuffers();
+
+  for (auto& [base, byte_size] : buffers) {
+    void* new_base = malloc(byte_size);
+    std::memcpy(new_base, base, byte_size);
+    base = new_base;
+  }
+
+  // Signal entry to free these buffers on destruction
+  lentry->FreeBuffersOnExit();
+  return Status::Success;
 }
 
 ResponseToCacheAllocator::ResponseToCacheAllocator(
@@ -82,9 +100,10 @@ ResponseToCacheAllocator::ResponseToCacheAllocator(
 Status
 ResponseToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
-  // TODO
-  return Status(
-      Status::Code::INTERNAL, "ResponseToCacheAllocator Not implemented yet");
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  std::cout << "=== INSIDE ResponseToCacheAllocator CALLBACK" << std::endl;
+  RETURN_IF_ERROR(lentry->ResponsesToBuffers(responses_));
+  return Status::Success;
 }
 
 //
@@ -282,18 +301,11 @@ TritonCache::Insert(
     return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
   }
 
-  return Status(
-      Status::Code::INTERNAL,
-      "Insert(entry, key, allocator) not implemented yet");
-
-  /*
-  const auto opaque_entry =
-      reinterpret_cast<TRITONCACHE_CacheEntry*>(entry.get());
+  const auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry);
+  std::cout << "~~~ [cache_manager.cc] calling insert_fn" << std::endl;
   RETURN_IF_TRITONSERVER_ERROR(
       insert_fn_(cache_impl_, key.c_str(), opaque_entry, allocator));
-
   return Status::Success;
-  */
 }
 
 Status
@@ -305,11 +317,10 @@ TritonCache::Insert(
   }
 
   std::unique_ptr<CacheEntry> entry = std::make_unique<CacheEntry>();
-  RETURN_IF_ERROR(entry->FromResponses());
+  RETURN_IF_ERROR(entry->SetBufferSizes(responses));
 
   auto allocator = ResponseToCacheAllocator(responses);
   auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
-  // TODO: std::move?
   return Insert(entry.get(), key, opaque_allocator);
 }
 
@@ -321,15 +332,6 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
   }
 
   return Insert({&response, 1}, key);
-}
-
-// TODO: smart pointers?
-Status
-TritonCache::Lookup(const std::string& key, CacheEntry* entry)
-{
-  auto allocator = CacheToBytesAllocator();
-  auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
-  return Lookup(key, entry, opaque_allocator);
 }
 
 // TODO: smart pointers?
@@ -346,15 +348,22 @@ TritonCache::Lookup(
     return Status(Status::Code::INTERNAL, "allocator is nullptr");
   }
 
-  return Status(
-      Status::Code::INTERNAL,
-      "Lookup(key, entry, allocator) not implemented yet");
-  /*
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry);
   // TODO: Make sure entry gets populated directly
-  RETURN_IF_TRITONSERVER_ERROR(lookup_fn_(cache_impl_, key.c_str(),
-  opaque_entry, allocator)); return Status::Success;
-  */
+  std::cout << "~~~ [cache_manager.cc] calling lookup_fn" << std::endl;
+  RETURN_IF_TRITONSERVER_ERROR(
+      lookup_fn_(cache_impl_, key.c_str(), opaque_entry, allocator));
+  return Status::Success;
+}
+
+// TODO: smart pointers?
+Status
+TritonCache::Lookup(const std::string& key, CacheEntry* entry)
+{
+  // Create allocator to copy directly from cache to byte buffers
+  auto allocator = CacheToBytesAllocator();
+  auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
+  return Lookup(key, entry, opaque_allocator);
 }
 
 // NOTE: Multiple responses won't be expected until supporting decoupled
@@ -363,25 +372,11 @@ Status
 TritonCache::Lookup(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  LOG_VERBOSE(2) << "Looking up responses at cache key: " << key;
-
+  auto lentry = std::make_unique<CacheEntry>();
   // Create response allocator to copy directly from cache to response buffers
   auto allocator = CacheToResponseAllocator(responses);
   auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
-
-  auto lentry = std::make_unique<CacheEntry>();
   RETURN_IF_ERROR(Lookup(key, lentry.get(), opaque_allocator));
-
-  // TODO: Check here or check in allocator?
-  auto num_buffers = lentry->BufferCount();
-  if (num_buffers != responses.size()) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Expected number of responses in cache does not match. Expected: " +
-            std::to_string(responses.size()) +
-            ", received: " + std::to_string(num_buffers));
-  }
-
   return Status::Success;
 }
 

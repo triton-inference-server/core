@@ -101,24 +101,23 @@ TRITONCACHE_CacheEntryBufferCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryAddBuffer(
     TRITONCACHE_CacheEntry* entry, const void* base,
-    TRITONSERVER_BufferAttributes* buffer_attributes)
+    TRITONSERVER_BufferAttributes* attrs)
 {
-  if (!entry || !base || !buffer_attributes) {
+  if (!entry || !base || !attrs) {
     return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        "entry, base, or buffer_attributes was nullptr");
+        TRITONSERVER_ERROR_INVALID_ARG, "entry, base, or attrs was nullptr");
   }
 
   // Get buffer attributes set by caller
   size_t byte_size = 0;
-  TRITONSERVER_BufferAttributesByteSize(buffer_attributes, &byte_size);
+  TRITONSERVER_BufferAttributesByteSize(attrs, &byte_size);
   if (!byte_size) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "Buffer byte size was zero");
   }
 
   TRITONSERVER_MemoryType memory_type;
-  TRITONSERVER_BufferAttributesMemoryType(buffer_attributes, &memory_type);
+  TRITONSERVER_BufferAttributesMemoryType(attrs, &memory_type);
   // DLIS-2673: Add better memory_type support
   if (memory_type != TRITONSERVER_MEMORY_CPU &&
       memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
@@ -131,6 +130,9 @@ TRITONCACHE_CacheEntryAddBuffer(
   // buffer of this entry. It should be copied into the target buffer either
   // directly or through a callback.
   lentry->AddBuffer(const_cast<void*>(base), byte_size);
+  // TODO
+  // Not going to store full attributes for now, so simply clean up
+  // TRITONSERVER_BufferAttributesDelete(attrs);
   return nullptr;  // success
 }
 
@@ -138,12 +140,11 @@ TRITONCACHE_CacheEntryAddBuffer(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryGetBuffer(
     TRITONCACHE_CacheEntry* entry, size_t index, void** base,
-    TRITONSERVER_BufferAttributes* buffer_attributes)
+    TRITONSERVER_BufferAttributes* attrs)
 {
-  if (!entry || !base || !buffer_attributes) {
+  if (!entry || !base || !attrs) {
     return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INVALID_ARG,
-        "entry, base, or buffer_attributes was nullptr");
+        TRITONSERVER_ERROR_INVALID_ARG, "entry, base, or attrs was nullptr");
   }
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
@@ -157,11 +158,10 @@ TRITONCACHE_CacheEntryGetBuffer(
   // No copy, this buffer needs to stay alive until it is copied into the cache
   *base = buffer;
   // Set buffer attributes
-  TRITONSERVER_BufferAttributesSetByteSize(buffer_attributes, buffer_size);
+  TRITONSERVER_BufferAttributesSetByteSize(attrs, buffer_size);
   // DLIS-2673: Add better memory_type support, default to CPU memory for now
-  TRITONSERVER_BufferAttributesSetMemoryType(
-      buffer_attributes, TRITONSERVER_MEMORY_CPU);
-  TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
+  TRITONSERVER_BufferAttributesSetMemoryType(attrs, TRITONSERVER_MEMORY_CPU);
+  TRITONSERVER_BufferAttributesSetMemoryTypeId(attrs, 0);
   return nullptr;  // success
 }
 
@@ -169,7 +169,7 @@ TRITONCACHE_CacheEntryGetBuffer(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntrySetBuffer(
     TRITONCACHE_CacheEntry* entry, size_t index, void* new_base,
-    TRITONSERVER_BufferAttributes* buffer_attributes)
+    TRITONSERVER_BufferAttributes* attrs)
 {
   if (!entry) {
     return TRITONSERVER_ErrorNew(
@@ -183,18 +183,29 @@ TRITONCACHE_CacheEntrySetBuffer(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
+  // TODO
+  std::cout << "CacheEntrySetBuffer:: Setting buffer for entry: " << entry
+            << ", index: " << index << ", new_base: " << new_base << std::endl;
   auto& [buffer, buffer_size] = lbuffers[index];
   buffer = new_base;
 
   // Only overwrite attributes if provided, buffer may already have some and
   // not need to change if new buffer shares the same properties
-  if (buffer_attributes) {
-    // Set buffer attributes
-    TRITONSERVER_BufferAttributesSetByteSize(buffer_attributes, buffer_size);
-    // DLIS-2673: Add better memory_type support, default to CPU memory for now
-    TRITONSERVER_BufferAttributesSetMemoryType(
-        buffer_attributes, TRITONSERVER_MEMORY_CPU);
-    TRITONSERVER_BufferAttributesSetMemoryTypeId(buffer_attributes, 0);
+  if (attrs) {
+    size_t byte_size = 0;
+    TRITONSERVER_BufferAttributesByteSize(attrs, &byte_size);
+    // Overwrite corresponding buffer size if provided
+    buffer_size = byte_size;
+
+    TRITONSERVER_MemoryType memory_type;
+    TRITONSERVER_BufferAttributesMemoryType(attrs, &memory_type);
+    // DLIS-2673: Add better memory_type support
+    if (memory_type != TRITONSERVER_MEMORY_CPU &&
+        memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          "Only buffers in CPU memory are allowed in cache currently");
+    }
   }
   return nullptr;  // success
 }
