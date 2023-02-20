@@ -68,6 +68,7 @@ CacheToResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
   return Status::Success;
 }
 
+// NOTE: Used for unit testing
 Status
 CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
@@ -78,6 +79,8 @@ CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   auto& buffers = lentry->MutableBuffers();
 
+  // NOTE: If the same entry object is re-used for multiple lookups
+  // and the entry buffers are freed between uses, this will leak memory.
   for (auto& [base, byte_size] : buffers) {
     void* new_base = malloc(byte_size);
     std::memcpy(new_base, base, byte_size);
@@ -356,7 +359,7 @@ TritonCache::Lookup(
   return Status::Success;
 }
 
-// TODO: smart pointers?
+// NOTE: Used for unit testing
 Status
 TritonCache::Lookup(const std::string& key, CacheEntry* entry)
 {

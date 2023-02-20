@@ -705,27 +705,27 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
   // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
   auto cache = helpers::CreateCache(1200);
   ASSERT_NE(cache, nullptr);
-  auto entry = tc::CacheEntry();
   // Insert 2 responses, expecting both to fit in cache
   helpers::check_status(cache->Insert(response_400bytes.get(), "request0"));
   helpers::check_status(cache->Insert(response_400bytes.get(), "request1"));
   // Validate both responses fit in cache by looking them up
-  auto status = cache->Lookup("request0", &entry);
+  tc::CacheEntry entry0, entry1, entry2, entry3, entry4, entry5, entry6, entry7;
+  auto status = cache->Lookup("request0", &entry0);
   ASSERT_TRUE(status.IsOk()) << status.Message();
-  ASSERT_TRUE(cache->Lookup("request1", &entry).IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry1).IsOk());
   // Insert a 3rd response, expecting the 1st response to be evicted
   // in LRU order
   helpers::check_status(cache->Insert(response_400bytes.get(), "request2"));
-  ASSERT_TRUE(cache->Lookup("request2", &entry).IsOk());
-  ASSERT_FALSE(cache->Lookup("request0", &entry).IsOk());
+  ASSERT_TRUE(cache->Lookup("request2", &entry2).IsOk());
+  ASSERT_FALSE(cache->Lookup("request0", &entry3).IsOk());
   // Lookup 2nd request to bump its LRU order over 3rd
-  ASSERT_TRUE(cache->Lookup("request1", &entry).IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry4).IsOk());
   // Insert a 4th response, expecting the 3rd to get evicted by LRU order
   // after looking up the 2nd
   helpers::check_status(cache->Insert(response_400bytes.get(), "request3"));
-  ASSERT_TRUE(cache->Lookup("request3", &entry).IsOk());
-  ASSERT_TRUE(cache->Lookup("request1", &entry).IsOk());
-  ASSERT_FALSE(cache->Lookup("request2", &entry).IsOk());
+  ASSERT_TRUE(cache->Lookup("request3", &entry5).IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry6).IsOk());
+  ASSERT_FALSE(cache->Lookup("request2", &entry7).IsOk());
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
@@ -795,9 +795,9 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
   // Lookup each inserted key to verify that expected number remain in cache
   size_t cache_hits = 0;
   size_t cache_misses = 0;
-  auto entry = tc::CacheEntry();
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
+    auto entry = tc::CacheEntry();
     auto status = cache->Lookup(key, &entry);
     if (status.IsOk()) {
       cache_hits++;
