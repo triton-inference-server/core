@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -535,19 +535,27 @@ class GCSFileSystem : public FileSystem {
       const std::string path, bool* exists,
       google::cloud::StatusOr<gcs::ObjectMetadata>* metadata);
 
-  google::cloud::StatusOr<gcs::Client> client_;
+  std::unique_ptr<gcs::Client> client_;
 };
 
 GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
 {
+  google::cloud::Options options;
   auto creds = gcs::oauth2::CreateServiceAccountCredentialsFromJsonFilePath(
       gs_cred.path_);
   if (creds) {
-    client_ = gcs::Client(gcs::ClientOptions(*creds));
+    options.set<gcs::Oauth2CredentialsOption>(*creds);  // json credential
   } else {
-    client_ = gcs::Client(
-        gcs::ClientOptions(gcs::oauth2::CreateAnonymousCredentials()));
+    auto creds = gcs::oauth2::CreateComputeEngineCredentials();
+    if (creds->AuthorizationHeader()) {
+      options.set<gcs::Oauth2CredentialsOption>(creds);  // metadata service
+    }
+    else {
+      options.set<gcs::Oauth2CredentialsOption>(
+          gcs::oauth2::CreateAnonymousCredentials());  // no credential
+    }
   }
+  client_ = std::make_unique<gcs::Client>(options);
 }
 
 Status
