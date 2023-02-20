@@ -64,7 +64,7 @@ CacheToResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   // Parse cache buffers into responses
-  RETURN_IF_ERROR(lentry->BuffersToResponses(responses_));
+  RETURN_IF_ERROR(lentry->DeserializeBuffers(responses_));
   return Status::Success;
 }
 
@@ -104,8 +104,7 @@ Status
 ResponseToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
-  std::cout << "=== INSIDE ResponseToCacheAllocator CALLBACK" << std::endl;
-  RETURN_IF_ERROR(lentry->ResponsesToBuffers(responses_));
+  RETURN_IF_ERROR(lentry->SerializeResponses(responses_));
   return Status::Success;
 }
 
@@ -294,18 +293,16 @@ TritonCache::Hash(const InferenceRequest& request, std::string* key)
   return Status::Success;
 }
 
-// TODO: smart pointer
 Status
 TritonCache::Insert(
     CacheEntry* entry, const std::string& key, TRITONCACHE_Allocator* allocator)
 {
-  LOG_VERBOSE(2) << "Inserting items at cache key: " << key;
+  LOG_VERBOSE(2) << "Inserting at cache key: " << key;
   if (insert_fn_ == nullptr) {
     return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
   }
 
   const auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry);
-  std::cout << "~~~ [cache_manager.cc] calling insert_fn" << std::endl;
   RETURN_IF_TRITONSERVER_ERROR(
       insert_fn_(cache_impl_, key.c_str(), opaque_entry, allocator));
   return Status::Success;
@@ -337,12 +334,11 @@ TritonCache::Insert(InferenceResponse* response, const std::string& key)
   return Insert({&response, 1}, key);
 }
 
-// TODO: smart pointers?
 Status
 TritonCache::Lookup(
     const std::string& key, CacheEntry* entry, TRITONCACHE_Allocator* allocator)
 {
-  LOG_VERBOSE(2) << "Looking up bytes at cache key: " << key;
+  LOG_VERBOSE(2) << "Looking up cache key: " << key;
   if (lookup_fn_ == nullptr) {
     return Status(Status::Code::INTERNAL, "lookup function is nullptr");
   }
@@ -352,8 +348,6 @@ TritonCache::Lookup(
   }
 
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry);
-  // TODO: Make sure entry gets populated directly
-  std::cout << "~~~ [cache_manager.cc] calling lookup_fn" << std::endl;
   RETURN_IF_TRITONSERVER_ERROR(
       lookup_fn_(cache_impl_, key.c_str(), opaque_entry, allocator));
   return Status::Success;

@@ -100,7 +100,7 @@ TRITONCACHE_CacheEntryBufferCount(TRITONCACHE_CacheEntry* entry, size_t* count)
 // Adds buffer to entry
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONCACHE_CacheEntryAddBuffer(
-    TRITONCACHE_CacheEntry* entry, const void* base,
+    TRITONCACHE_CacheEntry* entry, void* base,
     TRITONSERVER_BufferAttributes* attrs)
 {
   if (!entry || !base || !attrs) {
@@ -129,10 +129,7 @@ TRITONCACHE_CacheEntryAddBuffer(
   // This will add a short-lived reference to the corresponding cache
   // buffer of this entry. It should be copied into the target buffer either
   // directly or through a callback.
-  lentry->AddBuffer(const_cast<void*>(base), byte_size);
-  // TODO
-  // Not going to store full attributes for now, so simply clean up
-  // TRITONSERVER_BufferAttributesDelete(attrs);
+  lentry->AddBuffer({static_cast<std::byte*>(base), byte_size});
   return nullptr;  // success
 }
 
@@ -183,11 +180,8 @@ TRITONCACHE_CacheEntrySetBuffer(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  // TODO
-  std::cout << "CacheEntrySetBuffer:: Setting buffer for entry: " << entry
-            << ", index: " << index << ", new_base: " << new_base << std::endl;
-  auto& [buffer, buffer_size] = lbuffers[index];
-  buffer = new_base;
+  auto& [base, buffer_size] = lbuffers[index];
+  base = new_base;
 
   // Only overwrite attributes if provided, buffer may already have some and
   // not need to change if new buffer shares the same properties

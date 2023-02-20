@@ -468,13 +468,6 @@ InsertLookupCompare(
     boost::span<std::byte> expected = {
         static_cast<std::byte*>(expected_buffers[b].first),
         expected_buffers[b].second};
-    // TODO
-    std::cout << "~~~InsertLookupCompare lookup buffer addr: "
-              << lookup_buffers[b].first
-              << ", size: " << lookup_buffers[b].second << std::endl;
-    std::cout << "~~~InsertLookupCompare lookup buffer addr: "
-              << expected_buffers[b].first
-              << ", size: " << expected_buffers[b].second << std::endl;
     if (!std::equal(
             lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
       return tc::Status(
@@ -673,7 +666,6 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // We expect insertion to fail here since cache is too small
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
-  std::cout << "End of TestCacheSizeSmallerThanEntryResponse" << std::endl;
 }
 
 TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)

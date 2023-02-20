@@ -64,19 +64,12 @@ class CacheEntry {
   size_t BufferCount();
   void AddBuffer(boost::span<std::byte> buffer);
   void AddBuffer(void* base, size_t byte_size);
-  void AddBuffer(Buffer buffer);
-  // Serializes response output into a bytes buffer returned in buffer arg
-  // Status ToBytes(const InferenceResponse::Output& output, Buffer* buffer);
-  Status ToBytes(
-      const InferenceResponse::Output& output, std::byte* buffer,
-      size_t* output_size);
+  // Calculates serialized response size to request allocated buffer from cache
   Status SetBufferSizes(boost::span<InferenceResponse*> responses);
   // Insert helpers
-  Status ResponsesToBuffers(boost::span<InferenceResponse*> responses);
-  Status ResponseToBuffer(InferenceResponse* response, Buffer buffer);
+  Status SerializeResponses(boost::span<InferenceResponse*> responses);
   // Lookup helpers
-  Status BuffersToResponses(boost::span<InferenceResponse*> responses);
-  Status BufferToResponse(InferenceResponse* response, Buffer buffer);
+  Status DeserializeBuffers(boost::span<InferenceResponse*> responses);
 
   // Typically, the cache entry will now own any associted buffers.
   // However, if a CacheAllocator wants the entry to own the buffers, this
@@ -84,14 +77,21 @@ class CacheEntry {
   void FreeBuffersOnExit();
 
  private:
+  // Insert helpers
+  Status SerializeResponse(InferenceResponse* response, Buffer buffer);
+  Status SerializeResponseOutput(
+      const InferenceResponse::Output& output, std::byte* buffer,
+      size_t* output_size);
+  Status SetBufferSize(InferenceResponse* response);
   // Calculates total byte size required to serialize response output and
   // returns it in packed_output_byte_size
   Status GetByteSize(
       const InferenceResponse::Output& output,
       uint64_t* packed_output_byte_size);
-  Status SetBufferSize(InferenceResponse* response);
-  // Returns cache output in output arg
-  Status FromBytes(
+
+  // Lookup helpers
+  Status DeserializeBuffer(InferenceResponse* response, Buffer buffer);
+  Status DeserializeResponseOutput(
       boost::span<const std::byte> packed_bytes, CacheOutput* output);
 
   // NOTE: performance gain may be possible by removing this mutex and
@@ -100,8 +100,6 @@ class CacheEntry {
   //   implementation should not call TRITONCACHE_CacheEntryAddBuffer or
   //   TRITONCACHE_CacheEntryBuffer on the same entry in parallel.
   //   This will remain for simplicity until further profiling is done.
-  // TODO: probably don't need mutex if entries are accessed exclusively
-  // and documented that way?
   std::mutex buffer_mu_;
   std::vector<Buffer> buffers_;
   // Free buffers on exit, default is false unless explicitly toggled

@@ -100,9 +100,9 @@ struct TRITONCACHE_Allocator;
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_ApiVersion(
     uint32_t* major, uint32_t* minor);
 
-/// Get the number of buffers held by item
+/// Get the number of buffers held by entry
 ///
-/// \param item The CacheEntry object to query.
+/// \param entry The CacheEntry object to query.
 /// \param count Returns the number of buffers in entry.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryBufferCount(
@@ -112,14 +112,14 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryBufferCount(
 ///
 /// NOTE: (DLIS-2673) Only buffers in CPU memory supported currently.
 ///
-/// \param item The CacheEntry object to add buffer to.
+/// \param entry The CacheEntry object to add buffer to.
 /// \param base The base address of the buffer to add.
 /// \param buffer_attributes The buffer attributes associated with the buffer.
 /// The caller must create the buffer attributes object, and set the relevant
 /// fields through the BufferAttributes API.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddBuffer(
-    TRITONCACHE_CacheEntry* entry, const void* base,
+    TRITONCACHE_CacheEntry* entry, void* base,
     TRITONSERVER_BufferAttributes* buffer_attributes);
 
 /// Gets the buffer at index from entry.
@@ -133,11 +133,11 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryAddBuffer(
 /// Triton in TRITONCACHE_CacheInsert. It is expected that the cache
 /// will get the buffer, and perform any necessary copy within the
 /// TRITONCACHE_CacheInsert implementation. After TRITONCACHE_CacheInsert
-/// returns, there is no guarantee that Triton won't delete the item holding
+/// returns, there is no guarantee that Triton won't delete the entry holding
 /// the buffer. This is also why the caller is expected to create and own the
 /// BufferAttributes object, as a copy would be needed otherwise anyway.
 ///
-/// \param item The CacheEntry object owning the buffer.
+/// \param entry The CacheEntry object owning the buffer.
 /// \param index The index of the buffer, must be 0 <= index < count, where
 /// 'count' is the value returned by TRITONCACHE_CacheEntryBufferCount.
 /// \param base The base address of the buffer at index that is returned.
@@ -150,7 +150,23 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetBuffer(
     TRITONCACHE_CacheEntry* entry, size_t index, void** base,
     TRITONSERVER_BufferAttributes* buffer_attributes);
 
-// TODO
+/// Sets the buffer at index in entry.
+///
+/// The entry does not own the buffer and will generally not modify or delete
+/// it.
+///
+/// NOTE: Currently in the context of Triton, this API is used to allow the
+/// cache implementation to allocate/provide buffers for Triton to copy
+/// directly into in TRITONCACHE_CacheInsert to avoid intermediate copies.
+///
+/// \param entry The CacheEntry object owning the buffer.
+/// \param index The index of the buffer, must be 0 <= index < count, where
+/// 'count' is the value returned by TRITONCACHE_CacheEntryBufferCount.
+/// \param base The base address of the new buffer to set at index.
+/// \param buffer_attributes Optional buffer attributes associated with the
+/// buffer to overwrite existing attributes. If the entry already has a buffer
+/// with the same attributes, there is no need to provide a new one
+/// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetBuffer(
     TRITONCACHE_CacheEntry* entry, size_t index, void* new_base,
     TRITONSERVER_BufferAttributes* buffer_attributes);
