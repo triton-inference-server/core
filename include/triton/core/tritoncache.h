@@ -171,10 +171,22 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetBuffer(
     TRITONCACHE_CacheEntry* entry, size_t index, void* new_base,
     TRITONSERVER_BufferAttributes* buffer_attributes);
 
-/// Copies the buffer at 'base' into a user-provided buffer through the
-/// allocator object.
+/// Callback that can be used with a custom allocator to prepare buffers,
+/// and copy to/from the entry.
 ///
-/// \param allocator Allocator that provides a buffer to copy directly into.
+/// For example:
+///   TRITONCACHE_Lookup:
+///     The cache can provide cache-allocated buffers directly in the entry
+///     object, and can use this callback + allocator to allocate buffers
+///     on the Triton side that require some cache metadata before allocation
+///     (ex: size of cached data). After, Triton can copy directly from the
+///     cache buffers into the Triton-allocated buffers.
+///   TRITONCACHE_Insert:
+///     The cache can provide cache-allocated buffers directly in the entry
+///     object, and can use this callback + allocator to copy directly from
+///     Triton buffers (ex: InferenceResponse) into the cache-allocated buffers.
+///
+/// \param allocator Allocator that prepares buffers to copy to or from.
 /// \param entry The entry containing buffers and buffer attributes to copy from
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_Copy(
     TRITONCACHE_Allocator* allocator, TRITONCACHE_CacheEntry* entry);
