@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -383,6 +383,10 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetModelLoadThreadCount()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetModelNamespacing()
 {
 }
 TRITONAPI_DECLSPEC void

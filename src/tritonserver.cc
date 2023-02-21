@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -272,6 +272,12 @@ class TritonServerOptions {
   unsigned int ModelLoadThreadCount() const { return model_load_thread_count_; }
   void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
 
+  bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
+  void SetModelNamespacingEnabled(const bool e)
+  {
+    enable_model_namespacing_ = e;
+  }
+
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
 
@@ -330,6 +336,7 @@ class TritonServerOptions {
   uint64_t response_cache_byte_size_;
   unsigned int buffer_manager_thread_count_;
   unsigned int model_load_thread_count_;
+  bool enable_model_namespacing_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
@@ -348,6 +355,7 @@ TritonServerOptions::TritonServerOptions()
       response_cache_byte_size_(0), buffer_manager_thread_count_(0),
       model_load_thread_count_(
           std::max(2u, 2 * std::thread::hardware_concurrency())),
+      enable_model_namespacing_(false),
 #ifdef TRITON_ENABLE_GPU
       min_compute_capability_(TRITON_MIN_COMPUTE_CAPABILITY),
 #else
@@ -1221,6 +1229,16 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   loptions->SetModelLoadThreadCount(thread_count);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelNamespacing(
+    TRITONSERVER_ServerOptions* options, bool enable_namespace)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelNamespacingEnabled(enable_namespace);
   return nullptr;  // Success
 }
 
@@ -2116,6 +2134,7 @@ TRITONSERVER_ServerNew(
   lserver->SetRepoAgentDir(loptions->RepoAgentDir());
   lserver->SetBufferManagerThreadCount(loptions->BufferManagerThreadCount());
   lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
+  lserver->SetModelNamespacingEnabled(loptions->ModelNamespacingEnabled());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.

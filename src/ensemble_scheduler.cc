@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -327,7 +327,7 @@ class EnsembleContext {
   std::unordered_map<std::string, TensorData> tensor_data_;
 
   // Handle to all models that may be used in the ensemble
-  std::unordered_map<std::string, VersionMap> handles_;
+  std::unordered_map<ModelIdentifier, VersionMap> handles_;
 
   // Request specific information that obtained from ensemble request and
   // should be applied to all internal requests
@@ -368,16 +368,16 @@ EnsembleContext::EnsembleContext(
   // they have the same lifetime as the ensemble request to avoid unloading
   // while the ensemble is executing.
   for (const auto& step_info : info_->steps_) {
-    auto it = handles_.find(step_info.model_name_);
+    auto it = handles_.find(step_info.model_id_);
     if (it == handles_.end()) {
-      it = handles_.emplace(std::make_pair(step_info.model_name_, VersionMap()))
+      it = handles_.emplace(std::make_pair(step_info.model_id_, VersionMap()))
                .first;
     }
     auto ver_it = it->second.find(step_info.model_version_);
     if (ver_it == it->second.end()) {
       std::shared_ptr<Model> model = nullptr;
-      ensemble_status_ = is_->GetModel(
-          step_info.model_name_, step_info.model_version_, &model);
+      ensemble_status_ =
+          is_->GetModel(step_info.model_id_, step_info.model_version_, &model);
       if (!ensemble_status_.IsOk()) {
         break;
       }
@@ -860,7 +860,7 @@ EnsembleContext::InitStep(
     std::unique_ptr<Step>* step)
 {
   const auto& istep = info_->steps_[step_idx];
-  auto& version_map = handles_[istep.model_name_];
+  auto& version_map = handles_[istep.model_id_];
   auto& model = version_map[istep.model_version_];
 
   const bool allow_batching = (model->Config().max_batch_size() > 0);
@@ -912,7 +912,7 @@ EnsembleContext::InitStep(
                             (flags != tensor.flags_))) {
         LOG_ERROR << irequest->LogRequest()
                   << "Different set of response parameters are set for '"
-                  << istep.model_name_ << "'. Parameter correlation ID "
+                  << istep.model_id_ << "'. Parameter correlation ID "
                   << correlation_id << ", flags " << flags << " is used.";
         continue;
       }
@@ -1347,7 +1347,9 @@ EnsembleScheduler::EnsembleScheduler(
 
   for (const auto& element : config.ensemble_scheduling().step()) {
     size_t step_idx = info_->steps_.size();
-    info_->steps_.emplace_back(element.model_name(), element.model_version());
+    info_->steps_.emplace_back(
+        ModelIdentifier(element.model_namespace(), element.model_name()),
+        element.model_version());
     for (const auto& pair : element.input_map()) {
       auto it = info_->tensor_to_step_.find(pair.second);
       if (it == info_->tensor_to_step_.end()) {
