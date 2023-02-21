@@ -242,8 +242,12 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheFinalize(
 /// \param key The key used to access the cache. Generally, this is some
 ///            unique value or hash representing the entry to avoid collisions.
 /// \param entry The entry to be inserted into the cache.
-/// \param allocator TritonCacheAllocator that is used to copy data directly
-///                  into cache-provided buffers to avoid intermediate copies.
+/// \param allocator (optional) TritonCacheAllocator that is used to copy data
+///                  directly into cache-provided buffers to avoid intermediate
+///                  copies. If inserting a simple pre-existing buffer, no
+///                  allocator is needed. However, if a more complex or encoded
+///                  buffer is inserted, this can help avoid allocating/copying
+///                  a temporary buffer before insertion.
 /// \return a TRITONSERVER_Error indicating success or failure.
 ///         Specific errors will be up the cache implementation, but general
 ///         error best practices that should be followed are as follows:
