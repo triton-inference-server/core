@@ -255,8 +255,7 @@ PriorityQueue::PolicyQueue::ReadyForErasure()
 }
 
 PriorityQueue::PriorityQueue()
-    : size_(0), front_priority_level_(0), last_priority_level_(0),
-      default_policy_()
+    : size_(0), front_priority_level_(0), default_policy_()
 {
   queues_.emplace(0, PolicyQueue(default_policy_, true));
   front_priority_level_ = queues_.begin()->first;
@@ -266,8 +265,7 @@ PriorityQueue::PriorityQueue()
 PriorityQueue::PriorityQueue(
     const inference::ModelQueuePolicy& default_queue_policy,
     uint32_t priority_levels, const ModelQueuePolicyMap queue_policy_map)
-    : size_(0), last_priority_level_(priority_levels),
-      default_policy_(default_queue_policy)
+    : size_(0), default_policy_(default_queue_policy)
 {
   // Permanently instantiate PolicyQueue with keep_instantiate=true
   // to prevent them from being erased & created during scheduling
@@ -334,13 +332,13 @@ PriorityQueue::Dequeue(std::unique_ptr<InferenceRequest>* request)
 void
 PriorityQueue::ReleaseRejectedRequests(
     std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>*
-    requests)
+        requests)
 {
   auto res = std::make_shared<
       std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>(
       queues_.size());
   size_t idx = 0;
-  for (auto it = queues_.begin(); it != queues_.end(); ) {
+  for (auto it = queues_.begin(); it != queues_.end();) {
     it->second.ReleaseRejectedQueue(&((*res)[idx]));
     idx++;
     if (it->second.ReadyForErasure()) {
@@ -350,7 +348,7 @@ PriorityQueue::ReleaseRejectedRequests(
           it->first == pending_cursor_.curr_it_->first) {
         pending_cursor_.valid_ = false;
       }
-      it = queues_.erase(it); // returns iterator following removed element
+      it = queues_.erase(it);  // returns iterator following removed element
     } else {
       ++it;
     }
