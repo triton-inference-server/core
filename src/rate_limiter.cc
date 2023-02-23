@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -157,10 +157,10 @@ RateLimiter::EnqueuePayload(
                                        payload](ModelInstanceContext* mi) {
       {
         std::lock_guard<std::mutex> lk(payload_queue->mu_);
+        auto cb = [mi]() { mi->Release(); };
+        payload->AddInternalReleaseCallback(cb);
         this->SchedulePayload(mi->RawInstance(), payload_queue, payload);
       }
-      auto cb = [mi]() { mi->Release(); };
-      payload->AddInternalReleaseCallback(cb);
       if (mi->RawInstance() == nullptr) {
         payload_queue->cv_.notify_one();
       } else {
@@ -374,11 +374,15 @@ RateLimiter::OnStage(ModelInstanceContext* instance)
 void
 RateLimiter::OnRelease(ModelInstanceContext* instance)
 {
-  auto& model_context = model_contexts_[instance->RawInstance()->Model()];
-  model_context.AddAvailableInstance(instance);
-  resource_manager_->ReleaseResources(instance);
-  if (model_context.ContainsPendingRequests(instance->RawInstance()->Index())) {
-    model_context.StageInstanceIfAvailable(instance->RawInstance());
+  {
+    std::lock_guard<std::mutex> lk(model_ctx_mtx_);
+    auto& model_context = model_contexts_[instance->RawInstance()->Model()];
+    model_context.AddAvailableInstance(instance);
+    resource_manager_->ReleaseResources(instance);
+    if (model_context.ContainsPendingRequests(
+            instance->RawInstance()->Index())) {
+      model_context.StageInstanceIfAvailable(instance->RawInstance());
+    }
   }
   AttemptAllocation();
 }
