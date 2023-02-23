@@ -163,9 +163,9 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntryGetBuffer(
 /// \param index The index of the buffer, must be 0 <= index < count, where
 /// 'count' is the value returned by TRITONCACHE_CacheEntryBufferCount.
 /// \param base The base address of the new buffer to set at index.
-/// \param buffer_attributes Optional buffer attributes associated with the
+/// \param buffer_attributes (optional) buffer attributes associated with the
 /// buffer to overwrite existing attributes. If the entry already has a buffer
-/// with the same attributes, there is no need to provide a new one
+/// with the same attributes, there is no need to provide a new one.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetBuffer(
     TRITONCACHE_CacheEntry* entry, size_t index, void* new_base,
@@ -175,16 +175,16 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_CacheEntrySetBuffer(
 /// and copy to/from the entry.
 ///
 /// For example:
-///   TRITONCACHE_Lookup:
+///   TRITONCACHE_CacheLookup:
 ///     The cache can provide cache-allocated buffers directly in the entry
 ///     object, and can use this callback + allocator to allocate buffers
 ///     on the Triton side that require some cache metadata before allocation
 ///     (ex: size of cached data). After, Triton can copy directly from the
 ///     cache buffers into the Triton-allocated buffers.
-///   TRITONCACHE_Insert:
+///   TRITONCACHE_CacheInsert:
 ///     The cache can provide cache-allocated buffers directly in the entry
-///     object, and can use this callback + allocator to copy directly from
-///     Triton buffers (ex: InferenceResponse) into the cache-allocated buffers.
+///     object through the TRITONCACHE_CacheEntrySetBuffer API, then use this
+///     callback to copy buffers from Triton into the cache-allocated buffers.
 ///
 /// \param allocator Allocator that prepares buffers to copy to or from.
 /// \param entry The entry containing buffers and buffer attributes to copy from
@@ -242,12 +242,13 @@ TRITONCACHE_ISPEC TRITONSERVER_Error* TRITONCACHE_CacheFinalize(
 /// \param key The key used to access the cache. Generally, this is some
 ///            unique value or hash representing the entry to avoid collisions.
 /// \param entry The entry to be inserted into the cache.
-/// \param allocator (optional) TritonCacheAllocator that is used to copy data
-///                  directly into cache-provided buffers to avoid intermediate
-///                  copies. If inserting a simple pre-existing buffer, no
-///                  allocator is needed. However, if a more complex or encoded
-///                  buffer is inserted, this can help avoid allocating/copying
-///                  a temporary buffer before insertion.
+/// \param allocator TritonCacheAllocator that is used to copy data directly
+///                  into cache-provided buffers to avoid intermediate copies.
+///                  The cache implementation expects that the entry will hold
+///                  the requested buffer sizes. Then the cache implementation
+///                  is expected to set the buffer addresses in the entry to
+///                  the cache-allocated buffers through the
+///                  TRITONCACHE_CacheEntrySetBuffer API.
 /// \return a TRITONSERVER_Error indicating success or failure.
 ///         Specific errors will be up the cache implementation, but general
 ///         error best practices that should be followed are as follows:

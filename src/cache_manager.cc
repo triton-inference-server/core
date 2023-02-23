@@ -68,7 +68,7 @@ CacheToResponseAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
   return Status::Success;
 }
 
-// NOTE: Used for unit testing
+// NOTE: Bytes-related allocators only used for unit testing currently
 Status
 CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 {
@@ -78,6 +78,11 @@ CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
   auto& buffers = lentry->MutableBuffers();
+
+  // FIXME: This allocator could be changed in the future to take a vector of
+  // destination buffers on construction and copy into those instead. Currently
+  // this allocator gives buffer ownership to the CacheEntry object, rather than
+  // only using the entry for metadata/communication like everywhere else.
 
   // NOTE: If the same entry object is re-used for multiple lookups
   // and the entry buffers are freed between uses, this will leak memory.
@@ -89,6 +94,50 @@ CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 
   // Signal entry to free these buffers on destruction
   lentry->FreeBuffersOnExit();
+  return Status::Success;
+}
+
+BytesToCacheAllocator::BytesToCacheAllocator(
+    std::vector<boost::span<std::byte>> buffers)
+{
+  // Span is a read-only view of the underlying buffer, this should only
+  // perform a shallow copy of base pointer and size of each span.
+  buffers_ = buffers;
+}
+
+Status
+BytesToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
+{
+  if (!entry) {
+    return Status(Status::Code::INVALID_ARG, "entry is nullptr");
+  }
+
+  const auto lentry = reinterpret_cast<CacheEntry*>(entry);
+  auto& cache_buffers = lentry->MutableBuffers();
+
+  if (cache_buffers.size() != buffers_.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of buffers in cache does not match. Expected: " +
+            std::to_string(buffers_.size()) +
+            ", received: " + std::to_string(cache_buffers.size()));
+  }
+
+  // Copy from allocator provided buffers into cache-allocated buffers
+  // that were setup in 'entry' by cache implementation.
+  for (size_t i = 0; i < buffers_.size(); i++) {
+    auto [cache_buffer, cache_buffer_size] = cache_buffers[i];
+    if (buffers_[i].size() != cache_buffer_size) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Expected size of buffer in cache does not match. Expected: " +
+              std::to_string(buffers_[i].size()) +
+              ", received: " + std::to_string(cache_buffer_size));
+    }
+
+    std::memcpy(cache_buffer, buffers_[i].data(), cache_buffer_size);
+  }
+
   return Status::Success;
 }
 
@@ -310,12 +359,20 @@ TritonCache::Insert(
 
 Status
 TritonCache::Insert(
+    std::vector<boost::span<std::byte>> buffers, const std::string& key)
+{
+  std::unique_ptr<CacheEntry> entry = std::make_unique<CacheEntry>();
+  RETURN_IF_ERROR(entry->SetBufferSizes(buffers));
+
+  auto allocator = BytesToCacheAllocator(buffers);
+  auto opaque_allocator = reinterpret_cast<TRITONCACHE_Allocator*>(&allocator);
+  return Insert(entry.get(), key, opaque_allocator);
+}
+
+Status
+TritonCache::Insert(
     boost::span<InferenceResponse*> responses, const std::string& key)
 {
-  if (insert_fn_ == nullptr) {
-    return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
-  }
-
   std::unique_ptr<CacheEntry> entry = std::make_unique<CacheEntry>();
   RETURN_IF_ERROR(entry->SetBufferSizes(responses));
 

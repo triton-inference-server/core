@@ -52,16 +52,6 @@ CacheEntry::MutableBuffers()
   return buffers_;
 }
 
-// If the user decides to let the cache entry own the buffers through
-// a custom allocator, ex: CacheToBytesAllocator, this method can be
-// used to signal that the buffers should be freed on cleanup.
-void
-CacheEntry::FreeBuffersOnExit()
-{
-  std::unique_lock lk(buffer_mu_);
-  free_buffers_ = true;
-}
-
 void
 CacheEntry::AddBuffer(boost::span<std::byte> byte_span)
 {
@@ -91,7 +81,23 @@ CacheEntry::~CacheEntry()
   }
 }
 
-/* CacheResponseOutput */
+void
+CacheEntry::AddPlaceholderBuffer(size_t byte_size)
+{
+  AddBuffer(nullptr, byte_size);
+}
+
+// Set the size of each buffer in the CacheEntry object so the cache knows
+// how much to allocate for each entry before insertion.
+Status
+CacheEntry::SetBufferSizes(std::vector<boost::span<std::byte>> buffers)
+{
+  for (const auto buffer : buffers) {
+    AddPlaceholderBuffer(buffer.size());
+  }
+  return Status::Success;
+}
+
 Status
 CacheEntry::SetBufferSizes(boost::span<InferenceResponse*> responses)
 {
@@ -125,12 +131,7 @@ CacheEntry::SetBufferSize(InferenceResponse* response)
     packed_response_byte_size += packed_output_byte_size;
   }
 
-  // Add a buffer containing the necessary size to hold the response, and a
-  // nullptr base indicating that we want the cache to allocate the buffer
-  // and add the allocated buffer to this buffer object in-place of the nullptr.
-  auto buffer = Buffer(nullptr, packed_response_byte_size);
-  AddBuffer({static_cast<std::byte*>(buffer.first), buffer.second});
-
+  AddPlaceholderBuffer(packed_response_byte_size);
   return Status::Success;
 }
 
@@ -180,7 +181,11 @@ CacheEntry::SerializeResponse(InferenceResponse* response, Buffer buffer)
   // Validate serialization fit expected size
   uint64_t total_buffer_size = buffer.second;
   if (position != total_buffer_size) {
-    return Status(Status::Code::INTERNAL, "Serialized buffer size didn't match expected size");
+    return Status(
+        Status::Code::INTERNAL,
+        "Serialized buffer size does not match. Expected: " +
+            std::to_string(position) +
+            ", received: " + std::to_string(total_buffer_size));
   }
 
   return Status::Success;

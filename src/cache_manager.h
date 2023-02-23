@@ -42,8 +42,10 @@
 
 namespace triton { namespace core {
 
-// Custom Allocators to copy directly from the cache to the
-// desired object and avoid intermediate copies
+// 
+// Custom Allocators to copy directly between Cache buffers <-> Triton buffers
+// and avoid intermediate copies on Insert/Lookup.
+//
 class TritonCacheAllocator {
  public:
   virtual Status Allocate(TRITONCACHE_CacheEntry* entry) = 0;
@@ -58,12 +60,6 @@ class CacheToResponseAllocator : TritonCacheAllocator {
   std::vector<InferenceResponse*> responses_;
 };
 
-class CacheToBytesAllocator : TritonCacheAllocator {
- public:
-  Status Allocate(TRITONCACHE_CacheEntry* entry);
-};
-
-
 class ResponseToCacheAllocator : TritonCacheAllocator {
  public:
   ResponseToCacheAllocator(boost::span<InferenceResponse*> responses);
@@ -72,6 +68,22 @@ class ResponseToCacheAllocator : TritonCacheAllocator {
  private:
   std::vector<InferenceResponse*> responses_;
 };
+
+// NOTE: Bytes-related allocators only used for unit testing currently
+class CacheToBytesAllocator : TritonCacheAllocator {
+ public:
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+};
+
+class BytesToCacheAllocator : TritonCacheAllocator {
+ public:
+  BytesToCacheAllocator(std::vector<boost::span<std::byte>> buffers);
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+
+ private:
+  std::vector<boost::span<std::byte>> buffers_;
+};
+
 
 //
 // Proxy to a cache shared library.
@@ -88,6 +100,8 @@ class TritonCache {
   Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
       boost::span<InferenceResponse*> responses, const std::string& key);
+  Status Insert(
+      std::vector<boost::span<std::byte>> buffers, const std::string& key);
   Status Insert(
       CacheEntry* entry, const std::string& key,
       TRITONCACHE_Allocator* allocator);

@@ -64,17 +64,32 @@ class CacheEntry {
   size_t BufferCount();
   void AddBuffer(boost::span<std::byte> buffer);
   void AddBuffer(void* base, size_t byte_size);
-  // Calculates serialized response size to request allocated buffer from cache
-  Status SetBufferSizes(boost::span<InferenceResponse*> responses);
-  // Insert helpers
+
+  /* Insert helpers */
   Status SerializeResponses(boost::span<InferenceResponse*> responses);
-  // Lookup helpers
+
+  // Adds a placeholder buffer to this CacheEntry object containing the
+  // necessary size to hold the data we plan to insert into the cache.
+  // - The 'nullptr' base indicates to the cache implementation that we want
+  // the cache to allocate the buffer and overwrite this buffer's base address
+  // with the cache-allocated buffer's base address in-place.
+  // - This lets Triton copy directly into the cache allocated buffer through
+  // the TRITONCACHE_Copy callback.
+  void AddPlaceholderBuffer(size_t byte_size);
+
+  // Calculates serialized response size to request allocated buffer from cache
+  // and sets entry buffer sizes
+  Status SetBufferSizes(boost::span<InferenceResponse*> responses);
+  // Directly sets entry buffer sizes from provided buffers
+  Status SetBufferSizes(std::vector<boost::span<std::byte>> buffers);
+
+  /* Lookup helpers */
   Status DeserializeBuffers(boost::span<InferenceResponse*> responses);
 
   // Typically, the cache entry will now own any associted buffers.
   // However, if a CacheAllocator wants the entry to own the buffers, this
   // can be used to signal that the entry should free its buffers on destruction
-  void FreeBuffersOnExit();
+  void FreeBuffersOnExit() { free_buffers_ = true; }
 
  private:
   // Insert helpers

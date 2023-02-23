@@ -437,14 +437,17 @@ GenerateRequest(
 
 tc::Status
 InsertLookupCompare(
-    std::shared_ptr<tc::TritonCache> cache, tc::CacheEntry* expected_entry,
-    std::string key)
+    std::shared_ptr<tc::TritonCache> cache,
+    std::vector<boost::span<std::byte>> expected_buffers,
+    const std::string& key)
 {
-  if (!cache || !expected_entry) {
-    return tc::Status(tc::Status::Code::INTERNAL, "cache or entry was nullptr");
+  if (!cache) {
+    return tc::Status(tc::Status::Code::INTERNAL, "cache was nullptr");
+  } else if (expected_buffers.empty()) {
+    return tc::Status(tc::Status::Code::INTERNAL, "entry was empty");
   }
 
-  helpers::check_status(cache->Insert(expected_entry, key, nullptr));
+  helpers::check_status(cache->Insert(expected_buffers, key));
   auto lookup_entry = tc::CacheEntry();
   auto status = cache->Lookup(key, &lookup_entry);
   if (!status.IsOk()) {
@@ -452,7 +455,6 @@ InsertLookupCompare(
         tc::Status::Code::INTERNAL, "Lookup failed: " + status.Message());
   }
 
-  auto expected_buffers = expected_entry->Buffers();
   auto lookup_buffers = lookup_entry.Buffers();
   if (lookup_buffers.size() != expected_buffers.size()) {
     return tc::Status(
@@ -465,9 +467,7 @@ InsertLookupCompare(
     boost::span<std::byte> lookup = {
         static_cast<std::byte*>(lookup_buffers[b].first),
         lookup_buffers[b].second};
-    boost::span<std::byte> expected = {
-        static_cast<std::byte*>(expected_buffers[b].first),
-        expected_buffers[b].second};
+    boost::span<std::byte> expected = expected_buffers[b];
     if (!std::equal(
             lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
       return tc::Status(
@@ -658,11 +658,10 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   // Setup byte buffer larger than cache size
   std::vector<std::byte> large_data(cache_size + 1);
   // Setup entry
-  auto entry = tc::CacheEntry();
-  // Add buffers to entry
-  entry.AddBuffer(large_data);
+  std::vector<boost::span<std::byte>> entry;
+  entry.push_back(large_data);
 
-  auto status = cache->Insert(&entry, "large_bytes", nullptr);
+  auto status = cache->Insert(entry, "large_bytes");
   // We expect insertion to fail here since cache is too small
   ASSERT_FALSE(status.IsOk())
       << "Inserting item larger than cache succeeded when it should fail";
@@ -731,16 +730,16 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
   std::vector<std::byte> buffer4{8, std::byte{0x08}};
   std::vector<std::byte> buffer5{16, std::byte{0xFF}};
   // Setup entry
-  auto entry = tc::CacheEntry();
+  std::vector<boost::span<std::byte>> entry;
   // Add buffers to entry
-  entry.AddBuffer(buffer1);
-  entry.AddBuffer(buffer2);
-  entry.AddBuffer(buffer3);
-  entry.AddBuffer(buffer4);
-  entry.AddBuffer(buffer5);
+  entry.push_back(buffer1);
+  entry.push_back(buffer2);
+  entry.push_back(buffer3);
+  entry.push_back(buffer4);
+  entry.push_back(buffer5);
 
   helpers::check_status(
-      helpers::InsertLookupCompare(cache, &entry, "TestCacheEntry"));
+      helpers::InsertLookupCompare(cache, entry, "TestCacheEntry"));
 }
 
 TEST_F(RequestResponseCacheTest, TestHashingRequests)
