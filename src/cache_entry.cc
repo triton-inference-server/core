@@ -38,7 +38,7 @@ CacheEntry::BufferCount()
   return buffers_.size();
 }
 
-std::vector<Buffer>
+const std::vector<Buffer>&
 CacheEntry::Buffers()
 {
   std::unique_lock lk(buffer_mu_);
@@ -154,7 +154,7 @@ CacheEntry::SerializeResponses(boost::span<InferenceResponse*> responses)
 }
 
 Status
-CacheEntry::SerializeResponse(InferenceResponse* response, Buffer buffer)
+CacheEntry::SerializeResponse(InferenceResponse* response, Buffer& buffer)
 {
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
@@ -305,14 +305,14 @@ CacheEntry::DeserializeBuffers(boost::span<InferenceResponse*> responses)
 }
 
 Status
-CacheEntry::DeserializeBuffer(InferenceResponse* response, Buffer buffer)
+CacheEntry::DeserializeBuffer(InferenceResponse* response, const Buffer& buffer)
 {
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
 
 
-  std::byte* base = static_cast<std::byte*>(buffer.first);
+  const std::byte* base = static_cast<std::byte*>(buffer.first);
   if (!base) {
     return Status(Status::Code::INTERNAL, "buffer was nullptr");
   }

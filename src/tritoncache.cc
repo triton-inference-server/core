@@ -145,13 +145,13 @@ TRITONCACHE_CacheEntryGetBuffer(
   }
 
   const auto lentry = reinterpret_cast<CacheEntry*>(entry);
-  const auto lbuffers = lentry->Buffers();
+  const auto& lbuffers = lentry->Buffers();
   if (index >= lbuffers.size()) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  const auto [buffer, buffer_size] = lbuffers[index];
+  const auto& [buffer, buffer_size] = lbuffers[index];
   // No copy, this buffer needs to stay alive until it is copied into the cache
   *base = buffer;
   // Set buffer attributes

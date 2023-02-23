@@ -59,7 +59,7 @@ using Buffer = std::pair<void*, size_t>;
 class CacheEntry {
  public:
   ~CacheEntry();
-  std::vector<Buffer> Buffers();
+  const std::vector<Buffer>& Buffers();
   std::vector<Buffer>& MutableBuffers();
   size_t BufferCount();
   void AddBuffer(boost::span<std::byte> buffer);
@@ -93,7 +93,7 @@ class CacheEntry {
 
  private:
   // Insert helpers
-  Status SerializeResponse(InferenceResponse* response, Buffer buffer);
+  Status SerializeResponse(InferenceResponse* response, Buffer& buffer);
   Status SerializeResponseOutput(
       const InferenceResponse::Output& output, std::byte* buffer,
       size_t* output_size);
@@ -105,7 +105,7 @@ class CacheEntry {
       uint64_t* packed_output_byte_size);
 
   // Lookup helpers
-  Status DeserializeBuffer(InferenceResponse* response, Buffer buffer);
+  Status DeserializeBuffer(InferenceResponse* response, const Buffer& buffer);
   Status DeserializeResponseOutput(
       boost::span<const std::byte> packed_bytes, CacheOutput* output);
 

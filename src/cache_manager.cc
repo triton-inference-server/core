@@ -84,8 +84,8 @@ CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
   // this allocator gives buffer ownership to the CacheEntry object, rather than
   // only using the entry for metadata/communication like everywhere else.
 
-  // NOTE: If the same entry object is re-used for multiple lookups
-  // and the entry buffers are freed between uses, this will leak memory.
+  // NOTE: If the same entry object is re-used for multiple lookups and the
+  // entry buffers are not freed between uses, this will leak memory.
   for (auto& [base, byte_size] : buffers) {
     void* new_base = malloc(byte_size);
     std::memcpy(new_base, base, byte_size);
@@ -351,6 +351,10 @@ TritonCache::Insert(
     return Status(Status::Code::INTERNAL, "cache insert function is nullptr");
   }
 
+  if (allocator == nullptr) {
+    return Status(Status::Code::INVALID_ARG, "allocator is nullptr");
+  }
+
   const auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry);
   RETURN_IF_TRITONSERVER_ERROR(
       insert_fn_(cache_impl_, key.c_str(), opaque_entry, allocator));
@@ -401,7 +405,7 @@ TritonCache::Lookup(
   }
 
   if (allocator == nullptr) {
-    return Status(Status::Code::INTERNAL, "allocator is nullptr");
+    return Status(Status::Code::INVALID_ARG, "allocator is nullptr");
   }
 
   auto opaque_entry = reinterpret_cast<TRITONCACHE_CacheEntry*>(entry);

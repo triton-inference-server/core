@@ -42,7 +42,7 @@
 
 namespace triton { namespace core {
 
-// 
+//
 // Custom Allocators to copy directly between Cache buffers <-> Triton buffers
 // and avoid intermediate copies on Insert/Lookup.
 //
