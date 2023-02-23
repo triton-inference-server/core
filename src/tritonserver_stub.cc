@@ -174,6 +174,10 @@ TRITONSERVER_InferenceTraceModelVersion()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceRequestId()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestNew()
 {
 }
