@@ -52,18 +52,20 @@ class ModelRepositoryManager {
  public:
   // Index information for a model.
   struct ModelIndex {
-    ModelIndex(const std::string& n)
-        : name_only_(true), name_(n), version_(-1),
-          state_(ModelReadyState::UNKNOWN)
+    ModelIndex(const ModelIdentifier& n)
+        : name_only_(true), namespace_(n.namespace_), name_(n.name_),
+          version_(-1), state_(ModelReadyState::UNKNOWN)
     {
     }
     ModelIndex(
-        const std::string& n, const int64_t v, const ModelReadyState s,
+        const ModelIdentifier& n, const int64_t v, const ModelReadyState s,
         const std::string& r)
-        : name_only_(false), name_(n), version_(v), state_(s), reason_(r)
+        : name_only_(false), namespace_(n.namespace_), name_(n.name_),
+          version_(v), state_(s), reason_(r)
     {
     }
     const bool name_only_;
+    const std::string namespace_;
     const std::string name_;
     const int64_t version_;
     const ModelReadyState state_;
@@ -73,20 +75,137 @@ class ModelRepositoryManager {
   /// A basic unit in dependency graph that records the models seen by the model
   /// repository manager.
   struct DependencyNode {
-    DependencyNode(const std::string& model_name)
-        : model_name_(model_name), status_(Status::Success), checked_(false)
+    DependencyNode(const ModelIdentifier& model_id)
+        : status_(Status::Success), model_id_(model_id), checked_(false),
+          connected_(false)
     {
     }
 
-    std::string model_name_;
+    void DisconnectUpstream(DependencyNode* upstream)
+    {
+      upstreams_.erase(upstream);
+    }
+    void DisconnectDownstream(DependencyNode* downstream)
+    {
+      downstreams_.erase(downstream);
+    }
+
+    // Overall status
     Status status_;
-    bool checked_;
+
+    // Poll info
+    ModelIdentifier model_id_;
     bool explicitly_load_;
     inference::ModelConfig model_config_;
-    std::set<int64_t> loaded_versions_;
-    std::set<DependencyNode*> missing_upstreams_;
+
+    // Graph info
+    // Whether the node has been checked for performing lifecycle change
+    // (load / unload)
+    bool checked_;
+    // Whether the node has connected: all required upstreams are found
+    bool connected_;
+    // store only the model names for missing upstreams, and remove from it
+    // only if the upstream is exactly matched. This variable works with
+    // 'missing_nodes_' in DependencyGraph to provide bi-directional lookup for
+    // dependency resolution (exact / fuzzy match).
+    // i.e. the node will look for upstream node that has matching identifier,
+    // but upstream node with different namespace can still be used if not
+    // found.
+    std::set<std::string> missing_upstreams_;
     std::unordered_map<DependencyNode*, std::set<int64_t>> upstreams_;
     std::set<DependencyNode*> downstreams_;
+
+    // Lifecycle info
+    std::set<int64_t> loaded_versions_;
+  };
+
+  // Interface for dependency graph operations
+  class DependencyGraph {
+   public:
+    DependencyGraph() = delete;
+
+    // Passing reference of 'global_map'.
+    // There is coupling between the dependency graph and global map: global map
+    // will be used to resolve dependency (node connectivity), and global map
+    // will be updated to reflect node changes.
+    DependencyGraph(
+        std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map)
+        : global_map_ref_(global_map)
+    {
+    }
+
+    std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>*
+    MutableNodes()
+    {
+      return &nodes_;
+    }
+
+    // Remove the given set of nodes, return two sets of nodes: The first set
+    // contains existing nodes to be re-evaluated, because they depend on
+    // the nodes removed; the second set contains all the nodes removed in this
+    // operation.
+    // 'cascading_removal' control whether other nodes will be removed. If true,
+    // it will also remove the nodes that were added to dependency graph only
+    // because they were needed by the node in 'nodes'. In other words, they
+    // will no longer be needed once the 'nodes' are removed and can be removed
+    // from the dependency graph as well. Such an operation will be recursively
+    // applied and thus called "cascading".
+    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNodes(
+        const std::set<ModelIdentifier>& nodes, const bool cascading_removal);
+
+    // Update the given set of nodes to reflect the latest model information
+    // polled, returns existing nodes to be re-evaluated, including the modified
+    // node.
+    std::set<ModelIdentifier> UpdateNodes(
+        const std::set<ModelIdentifier>& nodes,
+        const ModelRepositoryManager* model_manager);
+
+    // Add the given set of nodes to the dependency graph,
+    // returns existing nodes to be re-evaluated, including the added node.
+    std::set<ModelIdentifier> AddNodes(
+        const std::set<ModelIdentifier>& nodes,
+        const ModelRepositoryManager* model_manager);
+
+    // Helper function on the 'node_id' to construct the edges between nodes
+    // in the dependency graph. The node status will be updated if the node
+    // has missing edges. This function should be called after all node changes
+    // are made to the dependency graph.
+    void ConnectDependencyGraph(const ModelIdentifier& node_id);
+
+    // Look up node in dependency graph with matching model identifier. If not
+    // found and fuzzy match is allowed, a node in different namespace will be
+    // returned if it is the only node with the same name
+    DependencyNode* FindNode(
+        const ModelIdentifier& model_id, const bool allow_fuzzy_matching);
+
+    // Check if there is circular dependency on the given node, the node
+    // status will be updated if the node has circular dependency.
+    void CircularDependencyCheck(const ModelIdentifier& node_id);
+
+   private:
+    // Recursively uncheck the downstream, so the downstreams will need to be
+    // re-checked at later stage to propagate the impact of upstream changes.
+    void UncheckDownstream(const std::set<DependencyNode*>& downstreams);
+
+    // Remove the node of the given identifier from dependency graph,
+    // and its reference in other nodes.
+    // Returns two sets of identifiers of the existing nodes that were linked to
+    // the removed node. The first set of the returned identifier is the
+    // "upstreams" of the node (i.e. composing models of the ensemble), the
+    // second set is the "downstreams" of the node (i.e. the model is required
+    // by other ensembles)
+    std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> RemoveNode(
+        const ModelIdentifier& model_id);
+
+    // Recursive version for internal use.
+    Status CircularDependencyCheck(
+        DependencyNode* current_node, const DependencyNode* start_node);
+
+    std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map_ref_;
+    std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>> nodes_;
+    // A list of model names that there are nodes depdending on but not present.
+    // Note that the key is not ModelIdentifier to allow more flexible matching.
+    std::unordered_map<std::string, std::set<ModelIdentifier>> missing_nodes_;
   };
 
   ~ModelRepositoryManager();
@@ -115,6 +234,7 @@ class ModelRepositoryManager {
       const bool strict_model_config, const bool polling_enabled,
       const bool model_control_enabled,
       const ModelLifeCycleOptions& life_cycle_options,
+      const bool enable_model_namespacing,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
 
   /// Poll the model repository to determine the new set of models and
@@ -149,7 +269,7 @@ class ModelRepositoryManager {
   /// models. The set element will be a tuple of <model_name, model_version,
   /// in-flight inference count>. Note that a model version will not be included
   /// if it doesn't have in-flight inferences.
-  const std::set<std::tuple<std::string, int64_t, size_t>> InflightStatus();
+  const std::set<std::tuple<ModelIdentifier, int64_t, size_t>> InflightStatus();
 
   /// \param strict_readiness If true, only models that have at least one
   /// ready version will be considered as live. Otherwise, the models that
@@ -169,12 +289,6 @@ class ModelRepositoryManager {
       const std::string& model_name, const int64_t model_version,
       ModelReadyState* state);
 
-  /// Get the index of all models in all repositories.
-  /// \param ready_only If true return only index of models that are ready.
-  /// \param index Returns the index.
-  /// \return error status.
-  Status RepositoryIndex(const bool ready_only, std::vector<ModelIndex>* index);
-
   /// Obtain the specified model.
   /// \param model_name The name of the model.
   /// \param model_version The version of the model.
@@ -183,6 +297,24 @@ class ModelRepositoryManager {
   Status GetModel(
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model);
+
+  /// Obtain the specified model.
+  /// \param model_id The identifier of the model.
+  /// \param model_version The version of the model.
+  /// \param model Return the model object.
+  /// \return error status.
+  Status GetModel(
+      const ModelIdentifier& model_id, const int64_t model_version,
+      std::shared_ptr<Model>* model);
+
+  Status FindModelIdentifier(
+      const std::string& model_name, ModelIdentifier* model_id);
+
+  /// Get the index of all models in all repositories.
+  /// \param ready_only If true return only index of models that are ready.
+  /// \param index Returns the index.
+  /// \return error status.
+  Status RepositoryIndex(const bool ready_only, std::vector<ModelIndex>* index);
 
   // Register model repository path.
   /// \param repository Path to model repository.
@@ -203,7 +335,7 @@ class ModelRepositoryManager {
 
   // Map from model name to information about the model.
   using ModelInfoMap =
-      std::unordered_map<std::string, std::unique_ptr<ModelInfo>>;
+      std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>>;
 
   // Set of DependencyNode
   using NodeSet = std::set<DependencyNode*>;
@@ -211,7 +343,7 @@ class ModelRepositoryManager {
   ModelRepositoryManager(
       const std::set<std::string>& repository_paths, const bool autofill,
       const bool polling_enabled, const bool model_control_enabled,
-      const double min_compute_capability,
+      const double min_compute_capability, const bool enable_model_namespacing,
       std::unique_ptr<ModelLifeCycle> life_cycle);
 
   /// The internal function that are called in Create() and PollAndUpdate().
@@ -245,12 +377,13 @@ class ModelRepositoryManager {
   Status Poll(
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
-      std::set<std::string>* added, std::set<std::string>* deleted,
-      std::set<std::string>* modified, std::set<std::string>* unmodified,
-      ModelInfoMap* updated_infos, bool* all_models_polled);
+      std::set<ModelIdentifier>* added, std::set<ModelIdentifier>* deleted,
+      std::set<ModelIdentifier>* modified,
+      std::set<ModelIdentifier>* unmodified, ModelInfoMap* updated_infos,
+      bool* all_models_polled);
 
   /// Helper function for Poll() to initialize ModelInfo for the model.
-  /// \param name The name of the model.
+  /// \param model_id The identifier of the model.
   /// \param path The model path. Empty path means the model is provided via
   /// 'params'
   /// \param params The model parameters provided for polling model.
@@ -258,7 +391,7 @@ class ModelRepositoryManager {
   /// existing ModelInfo for the model should be reused.
   /// \return The error status.
   Status InitializeModelInfo(
-      const std::string& name, const std::string& path,
+      const ModelIdentifier& model_id, const std::string& path,
       const std::vector<const InferenceParameter*>& params,
       std::unique_ptr<ModelInfo>* info);
 
@@ -266,7 +399,7 @@ class ModelRepositoryManager {
   /// load models that all the models they depend on has been loaded, and unload
   /// models if their dependencies are no longer satisfied.
   /// \return The status of the model loads.
-  std::map<std::string, Status> LoadModelByDependency();
+  std::map<ModelIdentifier, Status> LoadModelByDependency();
 
   /// Helper function to update the dependency graph based on the poll result
   /// \param added The names of the models added to the repository.
@@ -277,27 +410,17 @@ class ModelRepositoryManager {
   /// from the repository.
   /// \return The error status.
   Status UpdateDependencyGraph(
-      const std::set<std::string>& added, const std::set<std::string>& deleted,
-      const std::set<std::string>& modified,
-      std::set<std::string>* deleted_dependents = nullptr);
-
-  /// Helper function to uncheck the nodes because the model that they depends
-  /// on has changed. The unchecked nodes will be validated again.
-  /// The function will be call recursively to uncheck all downstreams.
-  /// \param downstreams The nodes to be unchecked.
-  /// \param updated_nodes Return the nodes that have been unchecked
-  void UncheckDownstream(NodeSet* downstreams, NodeSet* updated_nodes);
-
-  /// Helper function to construct the edges between nodes in dependency graph.
-  /// \param updated_node The node that is newly added or modified.
-  /// \return True if the node represents an ensemble model. False otherwise.
-  bool ConnectDependencyGraph(DependencyNode* updated_node);
+      const std::set<ModelIdentifier>& added,
+      const std::set<ModelIdentifier>& deleted,
+      const std::set<ModelIdentifier>& modified,
+      std::set<ModelIdentifier>* deleted_dependents = nullptr);
 
   /// Get the model info for a named model.
   /// \param name The model name.
   /// \param model_info Returns the model information.
   /// \return OK if found, NOT_FOUND otherwise.
-  Status GetModelInfo(const std::string& name, ModelInfo** model_info);
+  Status GetModelInfo(
+      const ModelIdentifier& model_id, ModelInfo** model_info) const;
 
   /// Get the models to be loaded / unloaded based on the model loaded in
   /// previous iteration.
@@ -307,7 +430,7 @@ class ModelRepositoryManager {
   /// unloaded for the next iteration.
   std::pair<NodeSet, NodeSet> ModelsToLoadUnload(
       const NodeSet& loaded_models,
-      const std::map<std::string, Status>& model_load_status);
+      const std::map<ModelIdentifier, Status>& model_load_status);
 
   /// Check if the node is ready for the next iteration. A node is ready if the
   /// node is invalid (containing invalid model config or its depdencies failed
@@ -316,32 +439,63 @@ class ModelRepositoryManager {
   /// \return True if the node is ready. False otherwise.
   bool CheckNode(
       DependencyNode* node,
-      const std::map<std::string, Status>& model_load_status);
-
-  Status CircularcyCheck(
-      DependencyNode* current_node, const DependencyNode* start_node);
+      const std::map<ModelIdentifier, Status>& model_load_status);
 
   bool ModelDirectoryOverride(
       const std::vector<const InferenceParameter*>& model_params);
 
-  std::set<std::string> repository_paths_;
   const bool autofill_;
   const bool polling_enabled_;
   const bool model_control_enabled_;
   const double min_compute_capability_;
 
   std::mutex poll_mu_;
+
+  // Dependency graph
+
+  // WAR to avoid change in behavior (mainly error reporting) if model namespace
+  // is not enabled.
+  std::function<Status(
+      const std::string& model_name, ModelIdentifier* model_id)>
+      find_identifier_fn_;
+  // A map from model name to model identifiers that share the same model name
+  std::unordered_map<std::string, std::set<ModelIdentifier>> global_map_;
+  DependencyGraph dependency_graph_;
+
+  // Repository specific..
+
+  const bool enable_model_namespacing_;
+
+  // [FIXME] Better document below: 'infos_' is the in memory representation of
+  // repo polling results. It is a intermediate layer between the set of models
+  // in storage and the models being served, and it doesn't directly reflect the
+  // state of the two above.
+  //
+  // There are three stages in terms of changing model:
+  //   - poll model
+  //   - resolve dependency
+  //   - load model
+  //
+  // 'infos_' is a long living object across model changes to serve as
+  // differentiator between polls (i.e. is the model newly added? modified?),
+  // so it is a subset of storage models at the time of polling. Note that
+  // it can be marked "dirty" to handle "fallback / revert" in model lifecycle:
+  // if the model is currently being served and re-load action is required, the
+  // lifecycle will keep the "older" model if the newer storage model is
+  // malformed => re-load failure. Marking info "dirty" in this case to ensure
+  // the model to be polled again even though the storage model hasn't been
+  // changed, for operation idempotence.
+  // (https://github.com/triton-inference-server/server/issues/3802)
   ModelInfoMap infos_;
-
-  std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
-      dependency_graph_;
-  std::unordered_map<std::string, std::unique_ptr<DependencyNode>>
-      missing_nodes_;
-
+  std::set<std::string> repository_paths_;
   // Mappings from (overridden) model names to a pair of their repository and
   // absolute path
+  // [DLIS-4596] key should be updated to contain namespace to work with enabled
+  // namespace. Also need to revisit with repository side of things.
   std::unordered_map<std::string, std::pair<std::string, std::string>>
       model_mappings_;
+
+  // Model lifecycle
 
   std::unique_ptr<ModelLifeCycle> model_life_cycle_;
 };

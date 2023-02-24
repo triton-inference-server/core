@@ -239,6 +239,11 @@ class InferenceServer {
 
   void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
 
+  void SetModelNamespacingEnabled(const bool e)
+  {
+    enable_model_namespacing_ = e;
+  }
+
   // Set a backend command-line configuration
   void SetBackendCmdlineConfig(
       const triton::common::BackendCmdlineConfigMap& bc)
@@ -269,6 +274,20 @@ class InferenceServer {
         model_name, model_version, model);
   }
 
+  // Return the requested model object.
+  Status GetModel(
+      const ModelIdentifier& model_id, const int64_t model_version,
+      std::shared_ptr<Model>* model)
+  {
+    // Allow model retrival while server exiting to provide graceful
+    // completion of inference sequence that spans multiple requests.
+    if ((ready_state_ != ServerReadyState::SERVER_READY) &&
+        (ready_state_ != ServerReadyState::SERVER_EXITING)) {
+      return Status(Status::Code::UNAVAILABLE, "Server not ready");
+    }
+    return model_repository_manager_->GetModel(model_id, model_version, model);
+  }
+
   // Get the Backend Manager
   const std::shared_ptr<TritonBackendManager>& BackendManager()
   {
@@ -297,6 +316,7 @@ class InferenceServer {
   uint32_t exit_timeout_secs_;
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;
+  bool enable_model_namespacing_;
   uint64_t pinned_memory_pool_size_;
   bool response_cache_enabled_;
   CacheConfigMap cache_config_map_;

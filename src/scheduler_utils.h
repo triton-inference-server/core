@@ -155,16 +155,18 @@ class PriorityQueue {
     PolicyQueue()
         : timeout_action_(inference::ModelQueuePolicy::REJECT),
           default_timeout_us_(0), allow_timeout_override_(false),
-          max_queue_size_(0)
+          max_queue_size_(0), keep_instantiated_(false)
     {
     }
 
     // Construct a policy queue with given 'policy'.
-    PolicyQueue(const inference::ModelQueuePolicy& policy)
+    PolicyQueue(const inference::ModelQueuePolicy& policy,
+                bool keep_instantiated = false)
         : timeout_action_(policy.timeout_action()),
           default_timeout_us_(policy.default_timeout_microseconds()),
           allow_timeout_override_(policy.allow_timeout_override()),
-          max_queue_size_(policy.max_queue_size())
+          max_queue_size_(policy.max_queue_size()),
+          keep_instantiated_(keep_instantiated)
     {
     }
 
@@ -209,12 +211,17 @@ class PriorityQueue {
     // Return the number of unexpired requests in the queue
     size_t UnexpiredSize() { return queue_.size(); }
 
+    // Return whether this PolicyQueue can be erased, i.e. when all queues
+    // are empty and should not be kept instantiated
+    bool ReadyForErasure();
+
    private:
     // Variables that define the policy for the queue
     const inference::ModelQueuePolicy::TimeoutAction timeout_action_;
     const uint64_t default_timeout_us_;
     const bool allow_timeout_override_;
     const uint32_t max_queue_size_;
+    const bool keep_instantiated_;
 
     std::deque<uint64_t> timeout_timestamp_ns_;
     std::deque<std::unique_ptr<InferenceRequest>> queue_;
@@ -248,6 +255,7 @@ class PriorityQueue {
   // is at to avoid traversing 'queues_'
   uint32_t front_priority_level_;
   uint32_t last_priority_level_;
+  inference::ModelQueuePolicy default_policy_;
 
   Cursor pending_cursor_;
   Cursor current_mark_;
