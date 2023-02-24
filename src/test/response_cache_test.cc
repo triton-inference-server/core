@@ -312,29 +312,29 @@ namespace helpers {
 
 // Helpers
 void
-check_status(tc::Status status)
+CheckStatus(tc::Status status)
 {
   ASSERT_TRUE(status.IsOk()) << "ERROR: " << status.Message();
 }
 
 void
-insert(
+InsertWrapper(
     std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
     std::string key)
 {
-  check_status(cache->Insert(r, key));
+  CheckStatus(cache->Insert(r, key));
 }
 
 void
-lookup(
+LookupWrapper(
     std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
     std::string key)
 {
-  check_status(cache->Lookup(r, key));
+  CheckStatus(cache->Lookup(r, key));
 }
 
 void
-lookup_maybe_fail(
+LookupWrapperMaybeMiss(
     std::shared_ptr<tc::TritonCache> cache, tc::InferenceResponse* r,
     std::string key)
 {
@@ -350,7 +350,7 @@ reset_response(
     std::unique_ptr<tc::InferenceResponse>* response,
     tc::InferenceRequest* request)
 {
-  helpers::check_status(request->ResponseFactory()->CreateResponse(response));
+  helpers::CheckStatus(request->ResponseFactory()->CreateResponse(response));
 }
 
 // Only support 1-Dimensional data to keep it simple
@@ -368,7 +368,7 @@ GenerateResponse(
 {
   std::cout << "Create response object" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response;
-  helpers::check_status(request->ResponseFactory()->CreateResponse(&response));
+  helpers::CheckStatus(request->ResponseFactory()->CreateResponse(&response));
 
   std::cout << "Add output metadata to response object" << std::endl;
   for (const auto& tensor : outputs) {
@@ -382,13 +382,13 @@ GenerateResponse(
     std::vector<int64_t> shape{1, -1};
     shape[1] = tensor.data.size();
     uint64_t output_size = sizeof(tensor.data[0]) * tensor.data.size();
-    helpers::check_status(
+    helpers::CheckStatus(
         response->AddOutput(tensor.name, dtype, shape, &response_output));
 
     std::cout << "Allocate output data buffer for response object of size: "
               << output_size << std::endl;
     void* buffer;
-    helpers::check_status(response_output->AllocateDataBuffer(
+    helpers::CheckStatus(response_output->AllocateDataBuffer(
         &buffer, output_size, &memory_type, &memory_type_id));
     if (buffer == nullptr) {
       std::cout << "[ERROR] buffer was nullptr;" << std::endl;
@@ -430,7 +430,7 @@ GenerateRequest(
         tensor.data.data(), input_size, memory_type, memory_type_id);
   }
   // PrepareForInference for use of ImmutableInputs()
-  helpers::check_status(request->PrepareForInference());
+  helpers::CheckStatus(request->PrepareForInference());
   request->SetId(request_id);  // for debugging purposes
   return request;
 }
@@ -447,7 +447,7 @@ InsertLookupCompare(
     return tc::Status(tc::Status::Code::INTERNAL, "entry was empty");
   }
 
-  helpers::check_status(cache->Insert(expected_buffers, key));
+  helpers::CheckStatus(cache->Insert(expected_buffers, key));
   auto lookup_entry = tc::CacheEntry();
   auto status = cache->Lookup(key, &lookup_entry);
   if (!status.IsOk()) {
@@ -484,7 +484,7 @@ CreateCache(uint64_t cache_size)
   // Create TritonCacheManager
   std::shared_ptr<tc::TritonCacheManager> cache_manager;
   auto cache_dir = "/opt/tritonserver/caches";
-  helpers::check_status(
+  helpers::CheckStatus(
       tc::TritonCacheManager::Create(&cache_manager, cache_dir));
 
   // Create TritonCache
@@ -492,7 +492,7 @@ CreateCache(uint64_t cache_size)
   auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
   std::cout << "Creating cache with size: " << cache_size << std::endl;
   auto cache_name = "local";
-  helpers::check_status(
+  helpers::CheckStatus(
       cache_manager->CreateCache(cache_name, cache_config, &cache));
 
   return cache;
@@ -505,7 +505,7 @@ CreateCacheExpectFail(
   // Create TritonCacheManager
   std::shared_ptr<tc::TritonCacheManager> cache_manager;
   auto cache_dir = "/opt/tritonserver/caches";
-  helpers::check_status(
+  helpers::CheckStatus(
       tc::TritonCacheManager::Create(&cache_manager, cache_dir));
 
   // Create TritonCache
@@ -697,8 +697,8 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
   auto cache = helpers::CreateCache(1200);
   ASSERT_NE(cache, nullptr);
   // Insert 2 responses, expecting both to fit in cache
-  helpers::check_status(cache->Insert(response_400bytes.get(), "request0"));
-  helpers::check_status(cache->Insert(response_400bytes.get(), "request1"));
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request0"));
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request1"));
   // Validate both responses fit in cache by looking them up
   tc::CacheEntry entry0, entry1, entry2, entry3, entry4, entry5, entry6, entry7;
   auto status = cache->Lookup("request0", &entry0);
@@ -706,14 +706,14 @@ TEST_F(RequestResponseCacheTest, TestEvictionLRU)
   ASSERT_TRUE(cache->Lookup("request1", &entry1).IsOk());
   // Insert a 3rd response, expecting the 1st response to be evicted
   // in LRU order
-  helpers::check_status(cache->Insert(response_400bytes.get(), "request2"));
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request2"));
   ASSERT_TRUE(cache->Lookup("request2", &entry2).IsOk());
   ASSERT_FALSE(cache->Lookup("request0", &entry3).IsOk());
   // Lookup 2nd request to bump its LRU order over 3rd
   ASSERT_TRUE(cache->Lookup("request1", &entry4).IsOk());
   // Insert a 4th response, expecting the 3rd to get evicted by LRU order
   // after looking up the 2nd
-  helpers::check_status(cache->Insert(response_400bytes.get(), "request3"));
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request3"));
   ASSERT_TRUE(cache->Lookup("request3", &entry5).IsOk());
   ASSERT_TRUE(cache->Lookup("request1", &entry6).IsOk());
   ASSERT_FALSE(cache->Lookup("request2", &entry7).IsOk());
@@ -738,7 +738,7 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
   entry.push_back(buffer4);
   entry.push_back(buffer5);
 
-  helpers::check_status(
+  helpers::CheckStatus(
       helpers::InsertLookupCompare(cache, entry, "TestCacheEntry"));
 }
 
@@ -747,11 +747,11 @@ TEST_F(RequestResponseCacheTest, TestHashingRequests)
   auto cache = helpers::CreateCache(1024);
   ASSERT_NE(cache, nullptr);
   std::string hash0, hash1, hash2, hash3, hash4;
-  helpers::check_status(cache->Hash(*request0, &hash0));
-  helpers::check_status(cache->Hash(*request1, &hash1));
-  helpers::check_status(cache->Hash(*request2, &hash2));
-  helpers::check_status(cache->Hash(*request3, &hash3));
-  helpers::check_status(cache->Hash(*request4, &hash4));
+  helpers::CheckStatus(cache->Hash(*request0, &hash0));
+  helpers::CheckStatus(cache->Hash(*request1, &hash1));
+  helpers::CheckStatus(cache->Hash(*request2, &hash2));
+  helpers::CheckStatus(cache->Hash(*request3, &hash3));
+  helpers::CheckStatus(cache->Hash(*request4, &hash4));
   // Different input data should have different hashes
   ASSERT_NE(hash0, hash1);
   // Same input data should have same hashes
@@ -774,8 +774,8 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    threads.emplace_back(
-        std::thread(&helpers::insert, cache, response_400bytes.get(), key));
+    threads.emplace_back(std::thread(
+        &helpers::InsertWrapper, cache, response_400bytes.get(), key));
   }
 
   // Join threads
@@ -816,7 +816,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   for (size_t idx = 0; idx < thread_count; idx++) {
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
-    helpers::check_status(
+    helpers::CheckStatus(
         unique_requests[idx]->ResponseFactory()->CreateResponse(&response));
     responses.push_back(std::move(response));
     // Insert response for each thread
@@ -847,7 +847,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
     threads.emplace_back(
-        std::thread(&helpers::lookup, cache, responses[idx].get(), key));
+        std::thread(&helpers::LookupWrapper, cache, responses[idx].get(), key));
   }
 
   // Join threads
@@ -873,7 +873,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
       ASSERT_EQ(response_test_output.Name(), response0_output.Name());
       ASSERT_EQ(response_test_output.DType(), response0_output.DType());
       ASSERT_EQ(response_test_output.Shape(), response0_output.Shape());
-      helpers::check_status(response_test_output.DataBuffer(
+      helpers::CheckStatus(response_test_output.DataBuffer(
           &response_buffer, &response_byte_size, &response_memory_type,
           &response_memory_type_id, &userp));
 
@@ -903,7 +903,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
   for (size_t idx = 0; idx < thread_count; idx++) {
     // Create response for each thread to fill from cache
     std::unique_ptr<tc::InferenceResponse> response;
-    helpers::check_status(
+    helpers::CheckStatus(
         unique_requests[idx]->ResponseFactory()->CreateResponse(&response));
     responses.push_back(std::move(response));
   }
@@ -913,10 +913,10 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    insert_threads.emplace_back(
-        std::thread(&helpers::insert, cache, response_400bytes.get(), key));
+    insert_threads.emplace_back(std::thread(
+        &helpers::InsertWrapper, cache, response_400bytes.get(), key));
     lookup_threads.emplace_back(std::thread(
-        &helpers::lookup_maybe_fail, cache, responses[idx].get(), key));
+        &helpers::LookupWrapperMaybeMiss, cache, responses[idx].get(), key));
   }
 
   // Join threads
@@ -932,7 +932,7 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
   ASSERT_NE(cache, nullptr);
 
   std::string key = "";
-  helpers::check_status(cache->Hash(*request0, &key));
+  helpers::CheckStatus(cache->Hash(*request0, &key));
   ASSERT_NE(key, "");
 
   std::cout << "Lookup request0 in empty cache" << std::endl;
@@ -940,7 +940,7 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
   // This hash not in cache yet
   ASSERT_FALSE(status.IsOk()) << "hash [" + key + "] should not be in cache";
   // Insertion should succeed
-  helpers::check_status(cache->Insert(response0.get(), key));
+  helpers::CheckStatus(cache->Insert(response0.get(), key));
 
   // Duplicate insertion should fail since request0 already exists in cache
   status = cache->Insert(response0.get(), key);
@@ -950,12 +950,12 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response_test;
-  helpers::check_status(
+  helpers::CheckStatus(
       request0->ResponseFactory()->CreateResponse(&response_test));
 
   // Lookup should now succeed
   std::cout << "Lookup request0 in cache after insertion" << std::endl;
-  helpers::check_status(cache->Lookup(response_test.get(), key));
+  helpers::CheckStatus(cache->Lookup(response_test.get(), key));
   // Grab output from sample response for comparison
   const auto& response0_output = response0->Outputs()[0];
 
@@ -970,7 +970,7 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
     ASSERT_EQ(response_test_output.Name(), response0_output.Name());
     ASSERT_EQ(response_test_output.DType(), response0_output.DType());
     ASSERT_EQ(response_test_output.Shape(), response0_output.Shape());
-    helpers::check_status(response_test_output.DataBuffer(
+    helpers::CheckStatus(response_test_output.DataBuffer(
         &response_buffer, &response_byte_size, &response_memory_type,
         &response_memory_type_id, &userp));
   }
