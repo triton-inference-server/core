@@ -58,6 +58,27 @@ AddToSet(const std::set<T>& src, std::set<T>* dest)
   }
 }
 
+template <class Mutex>
+class RevLockGuard {
+ public:
+  RevLockGuard(Mutex& mu, bool op = true) : mu_(mu), op_(op)
+  {
+    if (op_)
+      mu_.unlock();
+  }
+  ~RevLockGuard()
+  {
+    if (op_)
+      mu_.lock();
+  }
+  RevLockGuard(const RevLockGuard&) = delete;
+  RevLockGuard& operator=(const RevLockGuard&) = delete;
+
+ private:
+  Mutex& mu_;
+  bool op_;
+};
+
 static std::string file_prefix = "file:";
 
 // Internal repo agent used for model file override
@@ -527,11 +548,10 @@ ModelRepositoryManager::LoadModelByDependency(bool release_mu)
     loaded_models.clear();
     // Unload invalid models first
     for (auto& invalid_id : set_pair.second) {
-      if (release_mu)
-        poll_mu_.unlock();
-      model_life_cycle_->AsyncUnload(invalid_id);
-      if (release_mu)
-        poll_mu_.lock();
+      {
+        RevLockGuard<std::mutex> unlock(poll_mu_, release_mu);
+        model_life_cycle_->AsyncUnload(invalid_id);
+      }
       auto invalid_node = dependency_graph_.FindNode(
           invalid_id, false /* allow_fuzzy_matching */);
       res[invalid_id] = invalid_node->status_;
@@ -563,11 +583,10 @@ ModelRepositoryManager::LoadModelByDependency(bool release_mu)
       loaded_models.emplace(valid_id);
     }
     for (auto& model_state : model_states) {
-      if (release_mu)
-        poll_mu_.unlock();
-      model_state->ready_.get_future().wait();
-      if (release_mu)
-        poll_mu_.lock();
+      {
+        RevLockGuard<std::mutex> unlock(poll_mu_, release_mu);
+        model_state->ready_.get_future().wait();
+      }
       res[model_state->model_id_] = model_state->status_;
       const auto version_state =
           model_life_cycle_->VersionStates(model_state->model_id_);
@@ -631,7 +650,17 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   bool polled = true;
-  RETURN_IF_ERROR(LoadUnloadModels(models, type, unload_dependents, &polled));
+  while (true) {
+    bool no_parallel_conflict = true;
+    RETURN_IF_ERROR(LoadUnloadModels(
+        models, type, unload_dependents, &polled, &no_parallel_conflict));
+    // Check for parallel load/unload conflict
+    if (no_parallel_conflict) {
+      break;
+    }
+    RevLockGuard<std::mutex> unlock(poll_mu_);
+    std::this_thread::yield();
+  }
   // Check if model is loaded / unloaded properly
   if (!polled) {
     return Status(
@@ -691,10 +720,12 @@ ModelRepositoryManager::LoadUnloadModels(
     const std::unordered_map<
         std::string, std::vector<const InferenceParameter*>>& models,
     const ActionType type, const bool unload_dependents,
-    bool* all_models_polled)
+    bool* all_models_polled, bool* no_parallel_conflict)
 {
   auto status = Status::Success;
   *all_models_polled = true;
+  if (no_parallel_conflict != nullptr)
+    *no_parallel_conflict = true;
   // Prepare ModelInfo related to file system accordingly, do not write yet
   // until committed to load/unload the models.
   ModelInfoMap infos;
@@ -811,7 +842,11 @@ ModelRepositoryManager::LoadUnloadModels(
       &dependency_graph_ /* prev_dependency_graph */);
   if (conflict_model) {
     // A collision is found. Since info is only written to local copy, so it is
-    // safe to rollback by simply returning an error.
+    // safe to rollback by simply returning the conflict infomation.
+    if (no_parallel_conflict != nullptr) {
+      *no_parallel_conflict = false;
+      return Status::Success;
+    }
     return Status(
         Status::Code::INTERNAL,
         "a related model '" + conflict_model->str() +
@@ -832,9 +867,10 @@ ModelRepositoryManager::LoadUnloadModels(
   // In all cases, should unload them and remove from 'infos_' explicitly.
   for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
     infos_.erase(name);
-    poll_mu_.unlock();
-    model_life_cycle_->AsyncUnload(name);
-    poll_mu_.lock();
+    {
+      RevLockGuard<std::mutex> unlock(poll_mu_);
+      model_life_cycle_->AsyncUnload(name);
+    }
   }
 
   // Check global map for a set of same named models

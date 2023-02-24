@@ -382,7 +382,7 @@ class ModelRepositoryManager {
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents,
-      bool* all_models_polled);
+      bool* all_models_polled, bool* no_parallel_conflict = nullptr);
 
   /// Poll the requested models in the model repository and
   /// compare with the current set. Return the additions, deletions,
