@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1128,36 +1128,6 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
         nullptr /* metric_reporter */, std::max(1U, batch_size_),
         request_start_ns_, queue_start_ns_, cache_lookup_start_ns_,
         request_end_ns, cache_lookup_duration_ns);
-  }
-}
-
-void
-InferenceRequest::ReportStatisticsCacheMiss(
-    MetricModelReporter* metric_reporter)
-{
-  if (cache_lookup_start_ns_ >= cache_lookup_end_ns_) {
-    LOG_WARNING << LogRequest()
-                << "Cache lookup timestamps were not set correctly. Cache "
-                   "lookup duration stats may be incorrect.";
-  }
-  if (cache_insertion_start_ns_ >= cache_insertion_end_ns_) {
-    LOG_WARNING << LogRequest()
-                << "Cache insertion timestamps were not set correctly. Cache "
-                   "insertion duration stats may be incorrect.";
-  }
-
-  const uint64_t cache_lookup_duration_ns =
-      cache_lookup_end_ns_ - cache_lookup_start_ns_;
-
-  const uint64_t cache_insertion_duration_ns =
-      cache_insertion_end_ns_ - cache_insertion_start_ns_;
-
-  model_raw_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
-      metric_reporter, cache_lookup_duration_ns, cache_insertion_duration_ns);
-  if (secondary_stats_aggregator_ != nullptr) {
-    secondary_stats_aggregator_->UpdateSuccessCacheMiss(
-        nullptr /* metric_reporter */, cache_lookup_duration_ns,
-        cache_insertion_duration_ns);
   }
 }
 #endif  // TRITON_ENABLE_STATS

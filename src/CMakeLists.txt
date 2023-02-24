@@ -1,4 +1,4 @@
-# Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -27,6 +27,8 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(libtritonserver LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -62,7 +64,10 @@ endif() # TRITON_ENABLE_GPU
 #
 # Boost
 #
-find_package(Boost REQUIRED)
+# Minimum of 1.78 required for use of boost::span. This can eventually be 
+# relaxed and replaced with std::span in C++20.
+#
+find_package(Boost 1.78 REQUIRED)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -106,6 +111,8 @@ set(
   backend_model.cc
   backend_model_instance.cc
   buffer_attributes.cc
+  cache_entry.cc
+  cache_manager.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
   ensemble_scheduler.cc
@@ -131,13 +138,13 @@ set(
   pinned_memory_manager.cc
   rate_limiter.cc
   repo_agent.cc
-  response_cache.cc
   scheduler_utils.cc
   sequence_batch_scheduler.cc
   sequence_state.cc
   server.cc
   shared_library.cc
   status.cc
+  tritoncache.cc
   tritonserver.cc
 )
 
@@ -149,6 +156,8 @@ set(
   backend_model.h
   backend_model_instance.h
   buffer_attributes.h
+  cache_entry.h
+  cache_manager.h
   constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h
@@ -176,7 +185,6 @@ set(
   rate_limiter.h
   repo_agent.h
   response_allocator.h
-  response_cache.h
   scheduler.h
   scheduler_utils.h
   sequence_batch_scheduler.h
@@ -225,11 +233,13 @@ add_library(
   TritonCore::triton-core ALIAS triton-core
 )
 
-target_compile_features(triton-core PRIVATE cxx_std_11)
+target_compile_features(triton-core PRIVATE cxx_std_17)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
 		  "to corresponding value.")
+  # WAR for target_compile_features not applying correctly to MSVC.
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
   target_compile_options(
     triton-core
     PRIVATE

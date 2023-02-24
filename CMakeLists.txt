@@ -1,4 +1,4 @@
-# Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -89,6 +89,26 @@ target_include_directories(
 )
 
 #
+# Triton Cache API
+#
+add_library(
+  triton-core-cacheapi INTERFACE
+)
+
+add_library(
+  TritonCore::triton-core-cacheapi ALIAS triton-core-cacheapi
+)
+
+target_include_directories(
+  triton-core-cacheapi
+  INTERFACE
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+
+
+
+#
 # Stub library for libtritonserver.so that stubs Triton Server API and
 # Triton Backend API
 #
@@ -106,6 +126,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
 		  "to corresponding value.")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
   target_compile_options(
     triton-core-serverstub
     PRIVATE
@@ -310,6 +331,7 @@ install(
   TARGETS
     triton-core-backendapi
     triton-core-repoagentapi
+    triton-core-cacheapi
     triton-core-serverapi
   EXPORT
     triton-core-targets

@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -311,10 +311,10 @@ class InferenceRequest {
   uint64_t TimeoutMicroseconds() const { return timeout_us_; }
   void SetTimeoutMicroseconds(uint64_t t) { timeout_us_ = t; }
 
-  uint64_t CacheKey() const { return cache_key_; }
+  const std::string& CacheKey() const { return cache_key_; }
   // It is up to the user to update the cache_key_ if modifying any hashable
   // fields of the request after cache_key_is_set_ has been set to true.
-  void SetCacheKey(uint64_t key)
+  void SetCacheKey(const std::string& key)
   {
     cache_key_ = key;
     cache_key_is_set_ = true;
@@ -598,26 +598,6 @@ class InferenceRequest {
     return cache_lookup_end_ns_;
   }
 
-  uint64_t CacheInsertionStartNs() const { return cache_insertion_start_ns_; }
-  uint64_t CaptureCacheInsertionStartNs()
-  {
-    cache_insertion_start_ns_ =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count();
-    return cache_insertion_start_ns_;
-  }
-
-  uint64_t CacheInsertionEndNs() const { return cache_insertion_end_ns_; }
-  uint64_t CaptureCacheInsertionEndNs()
-  {
-    cache_insertion_end_ns_ =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count();
-    return cache_insertion_end_ns_;
-  }
-
   uint64_t BatcherStartNs() const { return batcher_start_ns_; }
   uint64_t CaptureBatcherStartNs()
   {
@@ -653,13 +633,9 @@ class InferenceRequest {
       const uint64_t compute_output_duration_ns);
 
   // Report the statistics to stats collectors associated with the request on
-  // response cache hits.
+  // response cache hits. Cache miss stats will be updated through model object
+  // directly because the backend may release the request object.
   void ReportStatisticsCacheHit(MetricModelReporter* metric_reporter);
-
-  // Report the statistics to stats collectors associated with the request on
-  // response cache misses and update request duration to include cache
-  // insertion time.
-  void ReportStatisticsCacheMiss(MetricModelReporter* metric_reporter);
 
   // Statistics for each request are aggregated into the corresponding
   // model's statistics. Optionally this function may be used to
@@ -707,7 +683,7 @@ class InferenceRequest {
   uint32_t batch_size_;
   uint32_t priority_;
   uint64_t timeout_us_;
-  uint64_t cache_key_ = 0;
+  std::string cache_key_ = "";
   // Helper to determine if request was successfully hashed
   // and cache_key_ field is valid
   bool cache_key_is_set_ = false;

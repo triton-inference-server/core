@@ -361,8 +361,17 @@ TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize()
 {
 }
+// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCacheConfig()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCacheDirectory()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -962,6 +971,56 @@ TRITONSERVER_GetMetricKind()
 
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_ApiVersion()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryBufferCount()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryAddBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntryGetBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheEntrySetBuffer()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheInitialize()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheFinalize()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheInsert()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_CacheLookup()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONCACHE_Copy()
 {
 }
 

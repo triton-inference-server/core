@@ -130,6 +130,7 @@ InferenceServer::Init()
         Status::Code::INVALID_ARG, "--model-repository must be specified");
   }
 
+  // RepoAgentManager
   if (repoagent_dir_.empty()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return Status(
@@ -142,10 +143,37 @@ InferenceServer::Init()
     return status;
   }
 
+  // BackendManager
   status = TritonBackendManager::Create(&backend_manager_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
+  }
+
+  // CacheManager
+  status = TritonCacheManager::Create(&cache_manager_, cache_dir_);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
+
+  // Only a single global cache is supported at this time.
+  if (cache_config_map_.size() > 1) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return Status(
+        Status::Code::INVALID_ARG,
+        "found multiple cache configurations, but only a single cache is "
+        "currently supported");
+  }
+
+  // Initialize each cache with its respective config
+  for (const auto& [name, config] : cache_config_map_) {
+    std::shared_ptr<TritonCache> cache;
+    status = cache_manager_->CreateCache(name, config, &cache);
+    if (!status.IsOk()) {
+      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+      return status;
+    }
   }
 
   if (buffer_manager_thread_count_ > 0) {
@@ -175,18 +203,6 @@ InferenceServer::Init()
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
-  }
-
-  if (response_cache_byte_size_ > 0) {
-    std::unique_ptr<RequestResponseCache> local_response_cache;
-    status = RequestResponseCache::Create(
-        response_cache_byte_size_, &local_response_cache);
-    if (!status.IsOk()) {
-      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-      return status;
-    }
-
-    response_cache_ = std::move(local_response_cache);
   }
 
 

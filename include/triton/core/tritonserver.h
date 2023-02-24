@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 19
+#define TRITONSERVER_API_VERSION_MINOR 20
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1703,6 +1703,8 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
 
+/// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
+///
 /// Set the total response cache byte size that the server can allocate in CPU
 /// memory. The response cache will be shared across all inference requests and
 /// across all models.
@@ -1713,6 +1715,42 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
     TRITONSERVER_ServerOptions* options, uint64_t size);
+
+/// Set the cache config that will be used to initialize the cache
+/// implementation for "cache_name".
+///
+/// It is expected that the "cache_name" provided matches a directory inside
+/// the "cache_dir" used for TRITONSERVER_ServerOptionsSetCacheDirectory. The
+/// default "cache_dir" is "/opt/tritonserver/caches", so for a "cache_name" of
+/// "local", Triton would expect to find the "local" cache implementation at
+/// "/opt/tritonserver/caches/local/libtritoncache_local.so"
+///
+/// Altogether an example for the "local" cache implementation would look like:
+///   std::string cache_name = "local";
+///   std::string config_json = R"({"size": 1048576})"
+///   auto err = TRITONSERVER_ServerOptionsSetCacheConfig(
+///     options, cache_name, config_json);
+///
+/// \param options The server options object.
+/// \param cache_name The name of the cache. Example names would be
+/// "local", "redis", or the name of a custom cache implementation.
+/// \param config_json The string representation of config JSON that is
+/// used to initialize the cache implementation.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCacheConfig(
+    TRITONSERVER_ServerOptions* options, const char* cache_name,
+    const char* config_json);
+
+/// Set the directory containing cache shared libraries. This
+/// directory is searched when looking for cache implementations.
+///
+/// \param options The server options object.
+/// \param cache_dir The full path of the cache directory.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCacheDirectory(
+    TRITONSERVER_ServerOptions* options, const char* cache_dir);
 
 /// Set the minimum support CUDA compute capability in a server
 /// options.
@@ -1890,7 +1928,7 @@ TRITONSERVER_ServerOptionsSetBackendDirectory(
 
 /// Set the directory containing repository agent shared libraries. This
 /// directory is searched when looking for the repository agent shared
-/// library for a model. If the backend is named 'ra' the directory
+/// library for a model. If the repo agent is named 'ra' the directory
 /// searched is 'repoagent_dir'/ra/libtritonrepoagent_ra.so.
 ///
 /// \param options The server options object.
