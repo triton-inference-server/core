@@ -193,15 +193,29 @@ class RateLimiter {
    public:
     ModelContext();
 
+    // Enqueue request for obtaining a model instance for scheduling
+    // a inference payload execution.
     Status EnqueueModelInstanceRequest(
         const StandardScheduleFunc& OnSchedule,
         TritonModelInstance* triton_model_instance);
+    // Marks the given instance of the model as available and ready
+    // to be staged.
     void AddAvailableInstance(ModelInstanceContext* instance);
+    // Attempts to stage the instance given upon its availability.
     void StageInstanceIfAvailable(TritonModelInstance* triton_model_instance);
+    // Allocates one of the staged model instance for execution if resources
+    // are available in the system.
     void AllocateInstanceIfAvailable();
+    // Adds a queue in the model context for holding requests meant for
+    // running on specific instance.
     void AddSpecificRequestQueue();
+    // Whether or not there are any requests waiting for execution on
+    // indexed model instance.
     bool ContainsPendingRequests(int32_t index);
+    // Starts the removal of the model context from scheduling purposes.
+    // Will wait for all enqueued model instance requests to complete.
     void RequestRemoval();
+    // Whether or not model context is decommissioned
     bool isRemovalInProgress() { return removal_in_progress_; }
 
    private:
@@ -224,10 +238,18 @@ class RateLimiter {
     static Status Create(
         const ResourceMap& resource_map,
         std::unique_ptr<ResourceManager>* resource_manager);
+    // Adds the model instance to the resource manager
     void AddModelInstance(const ModelInstanceContext* instance);
+    // Removes the model instance from the resource manager
     Status RemoveModelInstance(const ModelInstanceContext* instance);
+    // Based upon the model instances being managed by resource manager,
+    // this function will update the available resource counts.
     Status UpdateResourceLimits();
+    // Allocate resources for the given model instance. Returns
+    // false if resources are not available at this time.
     bool AllocateResources(const ModelInstanceContext* instance);
+    // Releases resources held by the given model instance back to
+    // the available pool.
     Status ReleaseResources(const ModelInstanceContext* instance);
 
    private:
@@ -251,13 +273,25 @@ class RateLimiter {
       const bool ignore_resources_and_priority,
       const ResourceMap& resource_map);
 
+  // Initializes payload queues for the given model instance. The queue
+  // holds payloads that get scheduled by rate limiter.
   void InitializePayloadQueues(const TritonModelInstance* instance);
+  // Defers scheduling of the payload to the future. Rate Limiter will
+  // schedule the payload execution based upon the resource availability/
+  // Note that OnSchedule function should only schedule(enqueued in payload
+  // queue) the payload and not execute it.
   Status DeferPayloadSchedule(
       const StandardScheduleFunc& OnSchedule, const TritonModel* model,
       TritonModelInstance* instance = nullptr);
+  // Callback function to stage the instance.
   void OnStage(ModelInstanceContext* instance_ptr);
+  // Callback function to release resources allocated to the instance
+  // and attempt allocating available resources to next staged instance.
   void OnRelease(ModelInstanceContext* instance_ptr);
+  // Attempt allocating the resources for the staged instance with
+  // highest priority.
   void AttemptAllocation();
+  // Schedules the payload for execution on model instance.
   void SchedulePayload(
       TritonModelInstance* tmi, PayloadQueue* payload_queue,
       const std::shared_ptr<Payload>& payload);
