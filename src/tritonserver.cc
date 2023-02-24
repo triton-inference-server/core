@@ -1012,6 +1012,20 @@ TRITONSERVER_InferenceTraceModelName(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceRequestId(
+    TRITONSERVER_InferenceTrace* trace, const char** request_id)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  *request_id = ltrace->RequestId().c_str();
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)
 {
@@ -2943,6 +2957,7 @@ TRITONSERVER_ServerInferAsync(
     tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
     ltrace->SetModelName(lrequest->ModelName());
     ltrace->SetModelVersion(lrequest->ActualModelVersion());
+    ltrace->SetRequestId(lrequest->Id());
 
     lrequest->SetTrace(std::make_shared<tc::InferenceTraceProxy>(ltrace));
 #else

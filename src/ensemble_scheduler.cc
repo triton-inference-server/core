@@ -957,6 +957,7 @@ EnsembleContext::InitStep(
   if (parent_trace != nullptr) {
     irequest->SetTrace(parent_trace->SpawnChildTrace());
     irequest->Trace()->SetModelName(irequest->ModelName());
+    irequest->Trace()->SetRequestId(irequest->Id());
     irequest->Trace()->SetModelVersion(irequest->ActualModelVersion());
   }
 #endif
