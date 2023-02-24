@@ -72,12 +72,17 @@ class ModelRepositoryManager {
     const std::string reason_;
   };
 
+  struct ModelInfo;
+  // Map from model name to information about the model.
+  using ModelInfoMap =
+      std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>>;
+
   /// A basic unit in dependency graph that records the models seen by the model
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const ModelIdentifier& model_id)
         : status_(Status::Success), model_id_(model_id), checked_(false),
-          connected_(false)
+          connected_(false), is_locked_(false)
     {
     }
 
@@ -117,6 +122,12 @@ class ModelRepositoryManager {
 
     // Lifecycle info
     std::set<int64_t> loaded_versions_;
+
+    // Loading/Unloading info
+    // when locked, there is another thread loading/unloading model(s) that
+    // depend on the current state of this model.
+    // i.e. this model is being unloaded, or this is an ensemble dependency.
+    bool is_locked_;
   };
 
   // Interface for dependency graph operations
@@ -124,21 +135,44 @@ class ModelRepositoryManager {
    public:
     DependencyGraph() = delete;
 
-    // Passing reference of 'global_map'.
+    // Passing pointer of 'global_map'.
     // There is coupling between the dependency graph and global map: global map
     // will be used to resolve dependency (node connectivity), and global map
     // will be updated to reflect node changes.
     DependencyGraph(
-        std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map)
-        : global_map_ref_(global_map)
+        std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map)
+        : global_map_ptr_(global_map)
     {
     }
+
+    DependencyGraph(const DependencyGraph& rhs) = delete;
+
+    // Copy from rhs, but set global_map_ptr_ to the provided global_map.
+    DependencyGraph(
+        const DependencyGraph& rhs,
+        std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map);
+
+    DependencyGraph& operator=(const DependencyGraph& rhs) = delete;
+
+    void swap(DependencyGraph& rhs);
 
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>*
     MutableNodes()
     {
       return &nodes_;
     }
+
+    // Set the nodes to either lock or unlock state. If a node is at the same
+    // state as the new state to be set (i.e. to lock a node while it is
+    // already locked), then the identifier of the node is returned. Otherwise,
+    // nullptr is returned.
+    // The previous dependency graph is optional for checking if the lock state
+    // is already set when the node is not found on this dependency graph, and
+    // return the correct identifier, as the node could be deleted on this
+    // graph from the previous.
+    std::unique_ptr<ModelIdentifier> LockUnlockNodes(
+        const std::set<ModelIdentifier>& nodes, bool to_lock,
+        const DependencyGraph* prev_dependency_graph = nullptr);
 
     // Remove the given set of nodes, return two sets of nodes: The first set
     // contains existing nodes to be re-evaluated, because they depend on
@@ -158,13 +192,13 @@ class ModelRepositoryManager {
     // node.
     std::set<ModelIdentifier> UpdateNodes(
         const std::set<ModelIdentifier>& nodes,
-        const ModelRepositoryManager* model_manager);
+        const ModelInfoMap& model_infos);
 
     // Add the given set of nodes to the dependency graph,
     // returns existing nodes to be re-evaluated, including the added node.
     std::set<ModelIdentifier> AddNodes(
         const std::set<ModelIdentifier>& nodes,
-        const ModelRepositoryManager* model_manager);
+        const ModelInfoMap& model_infos);
 
     // Helper function on the 'node_id' to construct the edges between nodes
     // in the dependency graph. The node status will be updated if the node
@@ -176,7 +210,7 @@ class ModelRepositoryManager {
     // found and fuzzy match is allowed, a node in different namespace will be
     // returned if it is the only node with the same name
     DependencyNode* FindNode(
-        const ModelIdentifier& model_id, const bool allow_fuzzy_matching);
+        const ModelIdentifier& model_id, const bool allow_fuzzy_matching) const;
 
     // Check if there is circular dependency on the given node, the node
     // status will be updated if the node has circular dependency.
@@ -201,7 +235,7 @@ class ModelRepositoryManager {
     Status CircularDependencyCheck(
         DependencyNode* current_node, const DependencyNode* start_node);
 
-    std::unordered_map<std::string, std::set<ModelIdentifier>>& global_map_ref_;
+    std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map_ptr_;
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>> nodes_;
     // A list of model names that there are nodes depdending on but not present.
     // Note that the key is not ModelIdentifier to allow more flexible matching.
@@ -331,12 +365,6 @@ class ModelRepositoryManager {
   Status UnregisterModelRepository(const std::string& repository);
 
  private:
-  struct ModelInfo;
-
-  // Map from model name to information about the model.
-  using ModelInfoMap =
-      std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>>;
-
   // Set of DependencyNode
   using NodeSet = std::set<DependencyNode*>;
 
@@ -398,22 +426,27 @@ class ModelRepositoryManager {
   /// Load models based on the dependency graph. The function will iteratively
   /// load models that all the models they depend on has been loaded, and unload
   /// models if their dependencies are no longer satisfied.
+  /// \param release_mu True will release poll_mu_ when waiting for model to be
+  /// loaded/unloaded.
   /// \return The status of the model loads.
-  std::map<ModelIdentifier, Status> LoadModelByDependency();
+  std::map<ModelIdentifier, Status> LoadModelByDependency(bool release_mu);
 
   /// Helper function to update the dependency graph based on the poll result
+  /// \param dependency_graph The dependency graph to be updated.
+  /// \param model_infos The latest infos for updating the dependency graph.
   /// \param added The names of the models added to the repository.
   /// \param deleted The names of the models removed from the repository.
   /// \param modified The names of the models remaining in the
   /// repository that have been changed.
   /// \param deleted_dependents The names of dependent models to be removed
   /// from the repository.
-  /// \return The error status.
-  Status UpdateDependencyGraph(
+  /// \return Set of model ids that are affected by this update.
+  std::set<ModelIdentifier> UpdateDependencyGraph(
+      DependencyGraph* dependency_graph, const ModelInfoMap& model_infos,
       const std::set<ModelIdentifier>& added,
       const std::set<ModelIdentifier>& deleted,
       const std::set<ModelIdentifier>& modified,
-      std::set<ModelIdentifier>* deleted_dependents = nullptr);
+      std::set<ModelIdentifier>* deleted_dependents = nullptr) const;
 
   /// Get the model info for a named model.
   /// \param name The model name.
@@ -422,14 +455,24 @@ class ModelRepositoryManager {
   Status GetModelInfo(
       const ModelIdentifier& model_id, ModelInfo** model_info) const;
 
+  /// Get the model info for a named model, from the provided model infos.
+  /// \param model_infos The model infos where the model is to be lookup.
+  /// \param name The model name.
+  /// \param model_info Returns the model information.
+  /// \return OK if found, NOT_FOUND otherwise.
+  static Status GetModelInfo(
+      const ModelInfoMap& model_infos, const ModelIdentifier& model_id,
+      ModelInfo** model_info);
+
   /// Get the models to be loaded / unloaded based on the model loaded in
   /// previous iteration.
   /// \param loaded_models The models loaded / unloaded in previous iteration.
   /// Unloaded models will be represented as models with no loaded versions.
   /// \return A pair of node set containing models to be loaded and models to be
   /// unloaded for the next iteration.
-  std::pair<NodeSet, NodeSet> ModelsToLoadUnload(
-      const NodeSet& loaded_models,
+  std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
+  ModelsToLoadUnload(
+      const std::set<ModelIdentifier>& loaded_models,
       const std::map<ModelIdentifier, Status>& model_load_status);
 
   /// Check if the node is ready for the next iteration. A node is ready if the
@@ -443,6 +486,8 @@ class ModelRepositoryManager {
 
   bool ModelDirectoryOverride(
       const std::vector<const InferenceParameter*>& model_params);
+
+  void CopyModelInfos(ModelInfoMap* new_infos) const;
 
   const bool autofill_;
   const bool polling_enabled_;
