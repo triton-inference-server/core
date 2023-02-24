@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 18
+#define TRITONSERVER_API_VERSION_MINOR 19
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -856,6 +856,17 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version);
+
+/// Get the request id associated with a trace. The caller does
+/// not own the returned string and must not modify or delete it. The
+/// lifetime of the returned string extends only as long as 'trace'.
+///
+/// \param trace The trace.
+/// \param request_id Returns the version of the model associated
+/// with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceRequestId(
+    TRITONSERVER_InferenceTrace* trace, const char** request_id);
 
 /// TRITONSERVER_InferenceRequest
 ///
