@@ -800,12 +800,6 @@ ModelRepositoryManager::LoadUnloadModels(
       global_map_);
   DependencyGraph dependency_graph(dependency_graph_, &global_map);
 
-  // Check if the prepared ModelInfo does not collide with any currently
-  // loading/unloading models, by trying to update dependency graph and mark
-  // loading/unloading and dependent models as is_locked. At this point, the
-  // prepared ModelInfo is not written to this, so it is safe to simply return
-  // and "rollback" if there is a collision.
-
   // Update the dependency graph independently for the possibility of rollback.
   auto affected_models = UpdateDependencyGraph(
       &dependency_graph, infos, added, deleted, modified,
@@ -826,9 +820,9 @@ ModelRepositoryManager::LoadUnloadModels(
 
   // At this point, it is committed to load/unload the models, so write the
   // local copy into this object. The state of the models cannot be modified by
-  // another thread while is_locked = true. Thus, it is safe to release the
-  // lock while actively loading/unloading models, but the lock must be re-held
-  // when reading/updating any model info to avoid any corruption.
+  // another thread while they are locked. Thus, it is safe to release the
+  // mutex while actively loading/unloading models, but the mutex must be
+  // re-held when reading/updating any model info to avoid any corruption.
   infos_.swap(infos);
   global_map_.swap(global_map);
   dependency_graph_.swap(dependency_graph);
