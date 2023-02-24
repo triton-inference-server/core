@@ -32,165 +32,169 @@ namespace triton { namespace core {
 /* CacheEntry */
 
 size_t
-CacheEntry::ItemCount()
-{
-  std::unique_lock lk(item_mu_);
-  return items_.size();
-}
-
-std::vector<std::shared_ptr<CacheEntryItem>>
-CacheEntry::Items()
-{
-  std::unique_lock lk(item_mu_);
-  return items_;
-}
-
-void
-CacheEntry::AddItem(std::shared_ptr<CacheEntryItem> item)
-{
-  std::unique_lock lk(item_mu_);
-  // TODO: Look at this flow, ownership, etc. - Currently, cache needs to not
-  // delete/invalidate the item.
-  items_.push_back(item);
-}
-
-/* CacheEntryItem */
-
-size_t
-CacheEntryItem::BufferCount()
+CacheEntry::BufferCount()
 {
   std::unique_lock lk(buffer_mu_);
   return buffers_.size();
 }
 
-std::vector<Buffer>
-CacheEntryItem::Buffers()
+const std::vector<Buffer>&
+CacheEntry::Buffers()
 {
   std::unique_lock lk(buffer_mu_);
   return buffers_;
 }
 
-
-void
-CacheEntryItem::AddBufferCopy(const void* base, size_t byte_size)
+std::vector<Buffer>&
+CacheEntry::MutableBuffers()
 {
   std::unique_lock lk(buffer_mu_);
-  // COPY: Make a copy of buffer for Triton to own
-  void* new_base = malloc(byte_size);
-  memcpy(new_base, base, byte_size);
-  buffers_.emplace_back(std::make_pair(new_base, byte_size));
+  return buffers_;
 }
 
 void
-CacheEntryItem::AddBufferCopy(boost::span<const std::byte> byte_span)
+CacheEntry::AddBuffer(boost::span<std::byte> byte_span)
 {
-  const void* base = static_cast<const void*>(byte_span.data());
-  AddBufferCopy(base, byte_span.size());
+  void* base = static_cast<void*>(byte_span.data());
+  AddBuffer(base, byte_span.size());
 }
 
 void
-CacheEntryItem::AddBuffer(void* base, size_t byte_size, bool copy)
+CacheEntry::AddBuffer(void* base, size_t byte_size)
 {
   std::unique_lock lk(buffer_mu_);
-  if (copy) {
-    AddBufferCopy(base, byte_size);
-  } else {
-    buffers_.emplace_back(std::make_pair(base, byte_size));
+  buffers_.emplace_back(std::make_pair(base, byte_size));
+}
+
+CacheEntry::~CacheEntry()
+{
+  std::unique_lock lk(buffer_mu_);
+  if (!free_buffers_) {
+    return;
   }
-}
 
-void
-CacheEntryItem::AddBuffer(Buffer buffer, bool copy)
-{
-  AddBuffer(buffer.first, buffer.second, copy);
-}
-
-CacheEntryItem::~CacheEntryItem()
-{
-  for (auto& [buffer, byte_size] : buffers_) {
-    if (buffer) {
-      free(buffer);
+  for (auto& [base, _] : buffers_) {
+    if (base) {
+      free(base);
+      base = nullptr;
     }
   }
 }
 
-/* CacheResponseOutput */
+void
+CacheEntry::AddPlaceholderBuffer(size_t byte_size)
+{
+  AddBuffer(nullptr, byte_size);
+}
+
+// Set the size of each buffer in the CacheEntry object so the cache knows
+// how much to allocate for each entry before insertion.
+Status
+CacheEntry::SetBufferSizes(std::vector<boost::span<std::byte>> buffers)
+{
+  for (const auto buffer : buffers) {
+    AddPlaceholderBuffer(buffer.size());
+  }
+  return Status::Success;
+}
 
 Status
-CacheEntryItem::FromResponse(const InferenceResponse* response)
+CacheEntry::SetBufferSizes(boost::span<InferenceResponse*> responses)
+{
+  for (const auto response : responses) {
+    RETURN_IF_ERROR(SetBufferSize(response));
+  }
+  return Status::Success;
+}
+
+Status
+CacheEntry::SetBufferSize(InferenceResponse* response)
 {
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
 
-  // Build cache entry item from response outputs
+  // The packed_response buffer will look like:
+  //   [num_outputs, sizeof(output1), output1, ..., sizeof(outputN), outputN]
+  // So the entire packed_response_buffer will be the sum of all the output
+  // sizes and the metadata included to parse them.
+  uint64_t packed_response_byte_size = 0;
+  // 1. First the packed buffer will hold the number of outputs as a uint32_t
+  packed_response_byte_size += sizeof(uint32_t);
+  // These sizes will be used to request allocated buffers from the cache
+  // to copy direcly into
   for (const auto& output : response->Outputs()) {
-    auto buffer = Buffer(nullptr, 0);
-    RETURN_IF_ERROR(ToBytes(output, &buffer));
-    // ToBytes allocated new memory, so we pass it through: no copy here
-    AddBuffer(buffer, false /* copy */);
+    uint64_t packed_output_byte_size = 0;
+    RETURN_IF_ERROR(GetByteSize(output, &packed_output_byte_size));
+    // 2. Then the packed buffer will hold pairs of (output_size, output_bytes)
+    packed_response_byte_size += sizeof(uint64_t);
+    packed_response_byte_size += packed_output_byte_size;
+  }
+
+  AddPlaceholderBuffer(packed_response_byte_size);
+  return Status::Success;
+}
+
+Status
+CacheEntry::SerializeResponses(boost::span<InferenceResponse*> responses)
+{
+  if (buffers_.size() != responses.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of responses in cache does not match. Expected: " +
+            std::to_string(responses.size()) +
+            ", received: " + std::to_string(buffers_.size()));
+  }
+
+  for (size_t i = 0; i < responses.size(); i++) {
+    RETURN_IF_ERROR(SerializeResponse(responses[i], buffers_[i]));
   }
 
   return Status::Success;
 }
 
 Status
-CacheEntryItem::ToResponse(InferenceResponse* response)
+CacheEntry::SerializeResponse(InferenceResponse* response, Buffer& buffer)
 {
   if (!response) {
     return Status(Status::Code::INTERNAL, "response was nullptr");
   }
 
-  const auto buffers = Buffers();
-  for (const auto& [base, byte_size] : buffers) {
-    if (!base) {
-      return Status(Status::Code::INTERNAL, "buffer was nullptr");
-    }
-    auto cache_output = CacheOutput();
-    RETURN_IF_ERROR(
-        FromBytes({static_cast<std::byte*>(base), byte_size}, &cache_output));
+  // The packed_response buffer will look like:
+  //   [num_outputs, sizeof(output1), output1, ..., sizeof(outputN), outputN]
+  size_t position = 0;
+  std::byte* base = static_cast<std::byte*>(buffer.first);
+  // 1. First the packed buffer will hold the number of outputs as a uint32_t
+  uint32_t num_outputs = response->Outputs().size();
+  std::memcpy(base, &num_outputs, sizeof(uint32_t));
+  position += sizeof(uint32_t);
 
-    InferenceResponse::Output* response_output = nullptr;
-    RETURN_IF_ERROR(response->AddOutput(
-        cache_output.name_, cache_output.dtype_, cache_output.shape_,
-        &response_output));
+  for (const auto& output : response->Outputs()) {
+    uint64_t packed_output_byte_size = 0;
+    RETURN_IF_ERROR(SerializeResponseOutput(
+        output, base + position, &packed_output_byte_size));
+    // 2. Then the packed buffer will hold pairs of (output_size, output_bytes)
+    position += sizeof(packed_output_byte_size);
+    position += packed_output_byte_size;
+  }
 
-    if (!response_output) {
-      return Status(
-          Status::Code::INTERNAL,
-          "InferenceResponse::Output pointer as nullptr");
-    }
-
-    TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
-    int64_t memory_type_id = 0;
-
-    // Allocate buffer for inference response
-    void* output_buffer;
-    RETURN_IF_ERROR(response_output->AllocateDataBuffer(
-        &output_buffer, cache_output.byte_size_, &memory_type,
-        &memory_type_id));
-
-    if (memory_type != TRITONSERVER_MEMORY_CPU &&
-        memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
-      return Status(
-          Status::Code::INTERNAL,
-          "Only input buffers in CPU memory are allowed in cache currently");
-    }
-
-    if (!output_buffer) {
-      return Status(
-          Status::Code::INTERNAL,
-          "failed to allocate buffer for output '" + cache_output.name_ + "'");
-    }
-    // COPY: cached output buffer to allocated response output buffer
-    memcpy(output_buffer, cache_output.buffer_, cache_output.byte_size_);
+  // Validate serialization fit expected size
+  uint64_t total_buffer_size = buffer.second;
+  if (position != total_buffer_size) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Serialized buffer size does not match. Expected: " +
+            std::to_string(position) +
+            ", received: " + std::to_string(total_buffer_size));
   }
 
   return Status::Success;
 }
 
 Status
-CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
+CacheEntry::SerializeResponseOutput(
+    const InferenceResponse::Output& output, std::byte* buffer,
+    size_t* output_size)
 {
   if (!buffer) {
     return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
@@ -247,40 +251,196 @@ CacheEntryItem::ToBytes(const InferenceResponse::Output& output, Buffer* buffer)
   total_byte_size += sizeof(uint64_t);
   total_byte_size += u64_output_byte_size;
 
-  // Allocate full buffer and pack everything into it
-  std::byte* packed_bytes = static_cast<std::byte*>(malloc(total_byte_size));
+  // Pack everything into provided buffer
   uint64_t position = 0;
+  // Total serialized output size
+  memcpy(buffer + position, &total_byte_size, sizeof(uint64_t));
+  position += sizeof(uint64_t);
 
   // Name
-  memcpy(packed_bytes + position, &name_byte_size, sizeof(uint32_t));
+  memcpy(buffer + position, &name_byte_size, sizeof(uint32_t));
   position += sizeof(uint32_t);
-  memcpy(packed_bytes + position, name.c_str(), name_byte_size);
+  memcpy(buffer + position, name.c_str(), name_byte_size);
   position += name_byte_size;
 
   // Dtype
-  memcpy(packed_bytes + position, &dtype_byte_size, sizeof(uint32_t));
+  memcpy(buffer + position, &dtype_byte_size, sizeof(uint32_t));
   position += sizeof(uint32_t);
-  memcpy(packed_bytes + position, dtype.c_str(), dtype_byte_size);
+  memcpy(buffer + position, dtype.c_str(), dtype_byte_size);
   position += dtype_byte_size;
 
   // Shape
-  memcpy(packed_bytes + position, &shape_byte_size, sizeof(uint32_t));
+  memcpy(buffer + position, &shape_byte_size, sizeof(uint32_t));
   position += sizeof(uint32_t);
-  memcpy(packed_bytes + position, shape.data(), shape_byte_size);
+  memcpy(buffer + position, shape.data(), shape_byte_size);
   position += shape_byte_size;
 
-  // Output Buffer
-  memcpy(packed_bytes + position, &u64_output_byte_size, sizeof(uint64_t));
+  // Response Output Buffer
+  memcpy(buffer + position, &u64_output_byte_size, sizeof(uint64_t));
   position += sizeof(uint64_t);
-  memcpy(packed_bytes + position, output_base, u64_output_byte_size);
+  memcpy(buffer + position, output_base, u64_output_byte_size);
   position += u64_output_byte_size;
 
-  *buffer = Buffer(packed_bytes, total_byte_size);
+  // Used to increment global position in total response buffer
+  *output_size = total_byte_size;
   return Status::Success;
 }
 
 Status
-CacheEntryItem::FromBytes(
+CacheEntry::DeserializeBuffers(boost::span<InferenceResponse*> responses)
+{
+  if (buffers_.size() != responses.size()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Expected number of responses in cache does not match. Expected: " +
+            std::to_string(responses.size()) +
+            ", received: " + std::to_string(buffers_.size()));
+  }
+
+  for (size_t i = 0; i < responses.size(); i++) {
+    RETURN_IF_ERROR(DeserializeBuffer(responses[i], buffers_[i]));
+  }
+
+  return Status::Success;
+}
+
+Status
+CacheEntry::DeserializeBuffer(InferenceResponse* response, const Buffer& buffer)
+{
+  if (!response) {
+    return Status(Status::Code::INTERNAL, "response was nullptr");
+  }
+
+
+  const std::byte* base = static_cast<std::byte*>(buffer.first);
+  if (!base) {
+    return Status(Status::Code::INTERNAL, "buffer was nullptr");
+  }
+
+  uint64_t position = 0;
+  // Number of response outputs serialized in buffer
+  uint32_t num_outputs = 0;
+  std::memcpy(&num_outputs, base, sizeof(num_outputs));
+  position += sizeof(num_outputs);
+
+
+  for (size_t i = 0; i < num_outputs; i++) {
+    // Get size of packed output
+    uint64_t packed_output_size = 0;
+    std::memcpy(
+        &packed_output_size, base + position, sizeof(packed_output_size));
+    position += sizeof(packed_output_size);
+
+    // Parse packed output
+    auto cache_output = CacheOutput();
+    RETURN_IF_ERROR(DeserializeResponseOutput(
+        {base + position, packed_output_size}, &cache_output));
+    position += packed_output_size;
+
+    InferenceResponse::Output* response_output = nullptr;
+    RETURN_IF_ERROR(response->AddOutput(
+        cache_output.name_, cache_output.dtype_, cache_output.shape_,
+        &response_output));
+
+    if (!response_output) {
+      return Status(
+          Status::Code::INTERNAL,
+          "InferenceResponse::Output pointer as nullptr");
+    }
+
+    TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+    int64_t memory_type_id = 0;
+
+    // Allocate buffer for inference response
+    void* output_buffer;
+    RETURN_IF_ERROR(response_output->AllocateDataBuffer(
+        &output_buffer, cache_output.byte_size_, &memory_type,
+        &memory_type_id));
+
+    if (memory_type != TRITONSERVER_MEMORY_CPU &&
+        memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Only input buffers in CPU memory are allowed in cache currently");
+    }
+
+    if (!output_buffer) {
+      return Status(
+          Status::Code::INTERNAL,
+          "failed to allocate buffer for output '" + cache_output.name_ + "'");
+    }
+    // COPY: cached output buffer to allocated response output buffer
+    memcpy(output_buffer, cache_output.buffer_, cache_output.byte_size_);
+  }
+
+  return Status::Success;
+}
+
+Status
+CacheEntry::GetByteSize(
+    const InferenceResponse::Output& output, uint64_t* packed_output_byte_size)
+{
+  if (!packed_output_byte_size) {
+    return Status(Status::Code::INVALID_ARG, "byte_size arg was null");
+  }
+
+  // Fetch output buffer details
+  const void* output_base = nullptr;
+  size_t output_byte_size = 0;
+  TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
+  int64_t memory_type_id = 0;
+  void* userp = nullptr;
+  auto status = output.DataBuffer(
+      &output_base, &output_byte_size, &memory_type, &memory_type_id, &userp);
+  if (!status.IsOk()) {
+    return status;
+  }
+
+  // DLIS-2673: Add better memory_type support
+  if (memory_type != TRITONSERVER_MEMORY_CPU &&
+      memory_type != TRITONSERVER_MEMORY_CPU_PINNED) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Only input buffers in CPU memory are allowed in cache currently");
+  }
+
+  // Exit early if response buffer from output is invalid
+  if (!output_base) {
+    return Status(
+        Status::Code::INTERNAL, "Response buffer from output was nullptr");
+  }
+
+  size_t total_byte_size = 0;
+
+  // Name
+  std::string name = output.Name();
+  uint32_t name_byte_size = name.size();
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += name_byte_size;
+
+  // Dtype
+  std::string dtype = triton::common::DataTypeToProtocolString(output.DType());
+  uint32_t dtype_byte_size = dtype.size();
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += dtype_byte_size;
+
+  // Shape
+  std::vector<int64_t> shape = output.Shape();
+  uint32_t shape_byte_size = shape.size() * sizeof(int64_t);
+  total_byte_size += sizeof(uint32_t);
+  total_byte_size += shape_byte_size;
+
+  // Output Buffer: Convert size_t to uint64_t for a fixed-size guarantee
+  uint64_t u64_output_byte_size = static_cast<uint64_t>(output_byte_size);
+  total_byte_size += sizeof(uint64_t);
+  total_byte_size += u64_output_byte_size;
+
+  *packed_output_byte_size = total_byte_size;
+  return Status::Success;
+}
+
+Status
+CacheEntry::DeserializeResponseOutput(
     boost::span<const std::byte> packed_bytes, CacheOutput* output)
 {
   if (!output) {
@@ -321,9 +481,9 @@ CacheEntryItem::FromBytes(
   position += sizeof(uint64_t);
 
   // NOTE: Reference buffer section of packed bytes directly, DO NOT copy here.
-  // We will copy this buffer into the response object in ToResponse, so the
-  // buffer must remain valid until then. They should remain valid until the
-  // CacheEntryItem is destructed.
+  // We will copy this buffer into the response object in BufferToResponse, so
+  // the buffer must remain valid until then. They should remain valid until the
+  // CacheEntry is destructed.
   const void* output_buffer =
       static_cast<const void*>(packed_bytes.data() + position);
   position += output_byte_size;

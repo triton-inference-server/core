@@ -43,6 +43,49 @@
 namespace triton { namespace core {
 
 //
+// Custom Allocators to copy directly between Cache buffers <-> Triton buffers
+// and avoid intermediate copies on Insert/Lookup.
+//
+class TritonCacheAllocator {
+ public:
+  virtual Status Allocate(TRITONCACHE_CacheEntry* entry) = 0;
+};
+
+class CacheToResponseAllocator : TritonCacheAllocator {
+ public:
+  CacheToResponseAllocator(boost::span<InferenceResponse*> responses);
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+
+ private:
+  std::vector<InferenceResponse*> responses_;
+};
+
+class ResponseToCacheAllocator : TritonCacheAllocator {
+ public:
+  ResponseToCacheAllocator(boost::span<InferenceResponse*> responses);
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+
+ private:
+  std::vector<InferenceResponse*> responses_;
+};
+
+// NOTE: Bytes-related allocators only used for unit testing currently
+class CacheToBytesAllocator : TritonCacheAllocator {
+ public:
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+};
+
+class BytesToCacheAllocator : TritonCacheAllocator {
+ public:
+  BytesToCacheAllocator(std::vector<boost::span<std::byte>> buffers);
+  Status Allocate(TRITONCACHE_CacheEntry* entry);
+
+ private:
+  std::vector<boost::span<std::byte>> buffers_;
+};
+
+
+//
 // Proxy to a cache shared library.
 //
 class TritonCache {
@@ -54,17 +97,21 @@ class TritonCache {
 
   const std::string& Name() const { return name_; }
   const std::string& CacheConfig() const { return cache_config_; }
-  Status Insert(
-      boost::span<InferenceResponse*> responses, const std::string& key);
   Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
-      const std::vector<std::shared_ptr<CacheEntryItem>>& items,
-      const std::string& key);
+      boost::span<InferenceResponse*> responses, const std::string& key);
+  Status Insert(
+      std::vector<boost::span<std::byte>> buffers, const std::string& key);
+  Status Insert(
+      CacheEntry* entry, const std::string& key,
+      TRITONCACHE_Allocator* allocator);
+  Status Lookup(InferenceResponse* response, const std::string& key);
   Status Lookup(
       boost::span<InferenceResponse*> responses, const std::string& key);
-  Status Lookup(InferenceResponse* response, const std::string& key);
-  std::pair<Status, std::vector<std::shared_ptr<CacheEntryItem>>> Lookup(
-      const std::string& key);
+  Status Lookup(const std::string& key, CacheEntry* entry);
+  Status Lookup(
+      const std::string& key, CacheEntry* entry,
+      TRITONCACHE_Allocator* allocator);
   // Hashes fields of request and stores it in "key"
   Status Hash(const InferenceRequest& request, std::string* key);
 
@@ -101,10 +148,12 @@ class TritonCache {
   typedef TRITONSERVER_Error* (*TritonCacheFiniFn_t)(TRITONCACHE_Cache* cache);
   TritonCacheFiniFn_t fini_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheLookupFn_t)(
-      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
+      TRITONCACHE_Allocator* allocator);
   TritonCacheLookupFn_t lookup_fn_;
   typedef TRITONSERVER_Error* (*TritonCacheInsertFn_t)(
-      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry);
+      TRITONCACHE_Cache* cache, const char* key, TRITONCACHE_CacheEntry* entry,
+      TRITONCACHE_Allocator* allocator);
   TritonCacheInsertFn_t insert_fn_;
 };
 
