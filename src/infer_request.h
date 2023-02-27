@@ -327,7 +327,7 @@ class InferenceRequest {
   {
     return trace_;
   }
-  std::shared_ptr<InferenceTraceProxy>* MutableTrace() { return &trace_; }
+  std::shared_ptr<InferenceTraceProxy>* MutableTraceProxy() { return &trace_; }
   void SetTrace(const std::shared_ptr<InferenceTraceProxy>& trace)
   {
     trace_ = trace;
