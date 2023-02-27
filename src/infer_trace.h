@@ -69,6 +69,8 @@ class InferenceTrace {
   void SetModelVersion(int64_t v) { model_version_ = v; }
   void SetRequestId(const std::string& request_id) { request_id_ = request_id; }
   void SetContext(const std::string& context) { context_ = context; }
+  void SetTraceName(const std::string& trace_name) { trace_name_ = trace_name; }
+  const std::string& TraceName() { return trace_name_; }
 
   // Report trace activity.
   void Report(
@@ -123,6 +125,7 @@ class InferenceTrace {
   std::string model_name_;
   int64_t model_version_;
   std::string request_id_;
+  std::string trace_name_;
 
   // Maintain next id statically so that trace id is unique even
   // across traces
@@ -144,11 +147,13 @@ class InferenceTraceProxy {
   InferenceTrace* Trace() { return trace_; }
   int64_t Id() const { return trace_->Id(); }
   int64_t ParentId() const { return trace_->ParentId(); }
+  const std::string& TraceName() { return trace_->TraceName(); }
   const std::string& ModelName() const { return trace_->ModelName(); }
   const std::string& RequestId() const { return trace_->RequestId(); }
   int64_t ModelVersion() const { return trace_->ModelVersion(); }
   const std::string& Context() const { return trace_->Context(); }
   void SetModelName(const std::string& n) { trace_->SetModelName(n); }
+  void SetTraceName(const std::string& n) { trace_->SetTraceName(n); }
   void SetRequestId(const std::string& n) { trace_->SetRequestId(n); }
   void SetModelVersion(int64_t v) { trace_->SetModelVersion(v); }
   void SetContext(const std::string& context) { trace_->SetContext(context); }
@@ -174,6 +179,8 @@ class InferenceTraceProxy {
         activity, name, datatype, base, byte_size, shape, dim_count,
         memory_type, memory_type_id);
   }
+
+  InferenceTrace* Trace() { return trace_; }
 
   std::shared_ptr<InferenceTraceProxy> SpawnChildTrace();
 
