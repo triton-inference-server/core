@@ -162,17 +162,20 @@ class ModelRepositoryManager {
       return &nodes_;
     }
 
-    // Set the nodes to either lock or unlock state. If a node is at the same
-    // state as the new state to be set (i.e. to lock a node while it is
-    // already locked), then the identifier of the node is returned. Otherwise,
-    // nullptr is returned.
-    // The previous dependency graph is optional for checking if the lock state
-    // is already set when the node is not found on this dependency graph, and
-    // return the correct identifier, as the node could be deleted on this
-    // graph from the previous.
-    std::unique_ptr<ModelIdentifier> LockUnlockNodes(
-        const std::set<ModelIdentifier>& nodes, bool to_lock,
-        const DependencyGraph* prev_dependency_graph = nullptr);
+    // Set the nodes to lock state. If a node is already locked, then the
+    // identifier of the node is returned. Otherwise, nullptr is returned.
+    // The previous dependency graph is for checking if the node is already
+    // locked when it is not found on this dependency graph, as the node could
+    // be deleted on this graph from the previous, and correctly return the
+    // identifier.
+    std::unique_ptr<ModelIdentifier> LockNodes(
+        const std::set<ModelIdentifier>& nodes,
+        const DependencyGraph& prev_dependency_graph);
+
+    // Set the nodes to unlock state. If a node is already unlocked, then the
+    // identifier of the node is returned. Otherwise, nullptr is returned.
+    std::unique_ptr<ModelIdentifier> UnlockNodes(
+        const std::set<ModelIdentifier>& nodes);
 
     // Remove the given set of nodes, return two sets of nodes: The first set
     // contains existing nodes to be re-evaluated, because they depend on

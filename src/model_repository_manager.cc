@@ -837,9 +837,8 @@ ModelRepositoryManager::LoadUnloadModels(
       unload_dependents ? &deleted_dependents : nullptr);
 
   // Check for collision in affected models and lock those models
-  auto conflict_model = dependency_graph.LockUnlockNodes(
-      affected_models, true /* to_lock */,
-      &dependency_graph_ /* prev_dependency_graph */);
+  auto conflict_model = dependency_graph.LockNodes(
+      affected_models, dependency_graph_ /* prev_dependency_graph */);
   if (conflict_model) {
     // A collision is found. Since info is only written to local copy, so it is
     // safe to rollback by simply returning the conflict infomation.
@@ -878,7 +877,7 @@ ModelRepositoryManager::LoadUnloadModels(
   // load / unload the models affected, and check the load status of
   // the requested models
   const auto& load_status = LoadModelByDependency(true /* release_mu */);
-  dependency_graph_.LockUnlockNodes(affected_models, false /* to_lock */);
+  dependency_graph_.UnlockNodes(affected_models);
   if (status.IsOk() && (type == ActionType::LOAD)) {
     std::string load_error_message = "";
 
@@ -2099,28 +2098,46 @@ ModelRepositoryManager::DependencyGraph::swap(DependencyGraph& rhs)
 }
 
 std::unique_ptr<ModelIdentifier>
-ModelRepositoryManager::DependencyGraph::LockUnlockNodes(
-    const std::set<ModelIdentifier>& nodes, bool to_lock,
-    const DependencyGraph* prev_dependency_graph)
+ModelRepositoryManager::DependencyGraph::LockNodes(
+    const std::set<ModelIdentifier>& nodes,
+    const DependencyGraph& prev_dependency_graph)
 {
   for (const auto& model_id : nodes) {
     auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
     // An affected node can be deleted from this graph, so the presence of the
     // node must be checked.
     if (node != nullptr) {
-      // The node is on this graph, check the lock state and then lock/unlock.
-      if (node->is_locked_ == to_lock) {
+      // The node is on this graph, check the lock state and then lock.
+      if (node->is_locked_) {
         return std::make_unique<ModelIdentifier>(model_id);
       }
-      node->is_locked_ = to_lock;
-    } else if (prev_dependency_graph != nullptr) {
-      // If the node is on the previous graph (and the graph is provided),
-      // check the lock state on the previous graph.
-      node = prev_dependency_graph->FindNode(
+      node->is_locked_ = true;
+    } else {
+      // The node should be on the previous graph.
+      node = prev_dependency_graph.FindNode(
           model_id, false /* allow_fuzzy_matching */);
-      if (node != nullptr && node->is_locked_ == to_lock) {
+      if (node != nullptr && node->is_locked_) {
         return std::make_unique<ModelIdentifier>(model_id);
       }
+    }
+  }
+  return std::unique_ptr<ModelIdentifier>(nullptr);
+}
+
+std::unique_ptr<ModelIdentifier>
+ModelRepositoryManager::DependencyGraph::UnlockNodes(
+    const std::set<ModelIdentifier>& nodes)
+{
+  for (const auto& model_id : nodes) {
+    auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
+    // An affected node can be deleted from this graph, so the presence of the
+    // node must be checked.
+    // If the node is present, check the lock state and then unlock.
+    if (node != nullptr) {
+      if (!node->is_locked_) {
+        return std::make_unique<ModelIdentifier>(model_id);
+      }
+      node->is_locked_ = false;
     }
   }
   return std::unique_ptr<ModelIdentifier>(nullptr);
