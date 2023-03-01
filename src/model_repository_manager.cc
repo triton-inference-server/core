@@ -832,7 +832,7 @@ ModelRepositoryManager::LoadUnloadModels(
   // re-held when reading/updating any model info to avoid any corruption.
   infos_.Swap(infos);
   global_map_.swap(global_map);
-  dependency_graph_.swap(dependency_graph);
+  dependency_graph_.Swap(dependency_graph);
 
   // The models are in 'deleted' either when they are asked to be unloaded or
   // they are not found / are duplicated across all model repositories.
@@ -2031,7 +2031,7 @@ ModelRepositoryManager::DependencyGraph::DependencyGraph(
 }
 
 void
-ModelRepositoryManager::DependencyGraph::swap(DependencyGraph& rhs)
+ModelRepositoryManager::DependencyGraph::Swap(DependencyGraph& rhs)
 {
   std::swap(global_map_ptr_, rhs.global_map_ptr_);
   nodes_.swap(rhs.nodes_);

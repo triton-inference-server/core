@@ -179,16 +179,16 @@ class ModelRepositoryManager {
     {
     }
 
-    DependencyGraph(const DependencyGraph& rhs) = delete;
+    DependencyGraph(const DependencyGraph&) = delete;
 
     // Copy from rhs, but set global_map_ptr_ to the provided global_map.
     DependencyGraph(
         const DependencyGraph& rhs,
         std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map);
 
-    DependencyGraph& operator=(const DependencyGraph& rhs) = delete;
+    DependencyGraph& operator=(const DependencyGraph&) = delete;
 
-    void swap(DependencyGraph& rhs);
+    void Swap(DependencyGraph& rhs);
 
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>*
     MutableNodes()
