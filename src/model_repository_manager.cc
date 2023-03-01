@@ -297,32 +297,6 @@ IsModified(const std::string& path, int64_t* last_ns)
 
 }  // namespace
 
-struct ModelRepositoryManager::ModelInfo {
-  ModelInfo(
-      const int64_t mtime_nsec, const int64_t prev_mtime_ns,
-      const std::string& model_path)
-      : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
-        explicitly_load_(true), model_path_(model_path),
-        is_config_provided_(false)
-  {
-  }
-  ModelInfo()
-      : mtime_nsec_(0), prev_mtime_ns_(0), explicitly_load_(true),
-        is_config_provided_(false)
-  {
-  }
-  int64_t mtime_nsec_;
-  int64_t prev_mtime_ns_;
-  bool explicitly_load_;
-  inference::ModelConfig model_config_;
-  std::string model_path_;
-  // Temporary location to hold agent model list before creating the model
-  // the ownership must transfer to ModelLifeCycle to ensure
-  // the agent model life cycle is handled properly.
-  std::shared_ptr<TritonRepoAgentModelList> agent_model_list_;
-  bool is_config_provided_;
-};
-
 ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
     const bool polling_enabled, const bool model_control_enabled,
@@ -430,7 +404,7 @@ ModelRepositoryManager::Create(
   }
   // Some models may failed to be loaded after model manager is created,
   // return proper error and let function caller decide whether to proceed.
-  for (const auto& model : (*model_repository_manager)->infos_) {
+  for (const auto& model : (*model_repository_manager)->infos_.map_) {
     const auto version_states =
         (*model_repository_manager)
             ->model_life_cycle_->VersionStates(model.first);
@@ -483,7 +457,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
 
   // Anything in 'infos_' that is not in "added", "modified", or
   // "unmodified" is deleted.
-  for (const auto& pr : infos_) {
+  for (const auto& pr : infos_.map_) {
     if ((added.find(pr.first) == added.end()) &&
         (modified.find(pr.first) == modified.end()) &&
         (unmodified.find(pr.first) == unmodified.end())) {
@@ -496,7 +470,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
     return Status::Success;
   }
 
-  infos_.swap(new_infos);
+  infos_.Swap(new_infos);
 
   UpdateDependencyGraph(&dependency_graph_, infos_, added, deleted, modified);
 
@@ -564,7 +538,7 @@ ModelRepositoryManager::LoadModelByDependency(bool release_mu)
     for (auto& valid_id : set_pair.first) {
       model_states.emplace_back(new ModelState(valid_id));
       auto model_state = model_states.back().get();
-      const auto itr = infos_.find(valid_id);
+      const auto itr = infos_.map_.find(valid_id);
       auto valid_node = dependency_graph_.FindNode(
           valid_id, false /* allow_fuzzy_matching */);
       auto status = model_life_cycle_->AsyncLoad(
@@ -602,14 +576,14 @@ ModelRepositoryManager::LoadModelByDependency(bool release_mu)
       // ensure the next load request will attempt to load the model again
       // for operation idempotence. See comment on 'infos_'
       if (!model_state->status_.IsOk()) {
-        auto& model_info = infos_.find(model_state->model_id_)->second;
+        auto& model_info = infos_.map_.find(model_state->model_id_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
     set_pair = ModelsToLoadUnload(loaded_models, res);
   }
   // Clear temporary stored agent model list after all loads are triggerred
-  for (auto& info : infos_) {
+  for (auto& info : infos_.map_) {
     info.second->agent_model_list_.reset();
   }
   return res;
@@ -684,8 +658,8 @@ ModelRepositoryManager::LoadUnloadModel(
             Status::Code::INTERNAL,
             "failed to load '" + model_name + "', no version is available");
       }
-      auto it = infos_.find(model_id);
-      if (it == infos_.end()) {
+      auto it = infos_.map_.find(model_id);
+      if (it == infos_.map_.end()) {
         return Status(
             Status::Code::INTERNAL,
             "failed to load '" + model_name +
@@ -728,8 +702,7 @@ ModelRepositoryManager::LoadUnloadModels(
     *no_parallel_conflict = true;
   // Prepare ModelInfo related to file system accordingly, do not write yet
   // until committed to load/unload the models.
-  ModelInfoMap infos;
-  CopyModelInfos(&infos);
+  ModelInfoMap infos(infos_);
   std::set<ModelIdentifier> added, deleted, modified, unmodified;
   {
     if (type == ActionType::UNLOAD) {
@@ -767,7 +740,7 @@ ModelRepositoryManager::LoadUnloadModels(
         // (and 'added' etc.), so iterating on the whole structure means
         // re-examination on certain entries.
         std::set<std::string> temp_checked;
-        for (auto& info : new_infos) {
+        for (auto& info : new_infos.map_) {
           // if the model is not "checked", it is model polled at current
           // iteration, check config for more models to be polled
           const bool checked =
@@ -798,19 +771,19 @@ ModelRepositoryManager::LoadUnloadModels(
 
       // After all polls, only models in the initial set ('models') are
       // explicitly loaded.
-      for (auto& info : new_infos) {
+      for (auto& info : new_infos.map_) {
         info.second->explicitly_load_ =
             (models.find(info.first.name_) != models.end());
       }
 
       // Only update the infos when all validation is completed
       for (const auto& model_name : added) {
-        auto nitr = new_infos.find(model_name);
-        infos.emplace(model_name, std::move(nitr->second));
+        auto nitr = new_infos.map_.find(model_name);
+        infos.map_.emplace(model_name, std::move(nitr->second));
       }
       for (const auto& model_name : modified) {
-        auto nitr = new_infos.find(model_name);
-        auto itr = infos.find(model_name);
+        auto nitr = new_infos.map_.find(model_name);
+        auto itr = infos.map_.find(model_name);
         // Also check the 'explicitly_load_' in previous snapshot,
         // if the model has been explicitly loaded, we shouldn't change
         // its state as it may be polled as composing model and flag is set
@@ -857,7 +830,7 @@ ModelRepositoryManager::LoadUnloadModels(
   // another thread while they are locked. Thus, it is safe to release the
   // mutex while actively loading/unloading models, but the mutex must be
   // re-held when reading/updating any model info to avoid any corruption.
-  infos_.swap(infos);
+  infos_.Swap(infos);
   global_map_.swap(global_map);
   dependency_graph_.swap(dependency_graph);
 
@@ -865,7 +838,7 @@ ModelRepositoryManager::LoadUnloadModels(
   // they are not found / are duplicated across all model repositories.
   // In all cases, should unload them and remove from 'infos_' explicitly.
   for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
-    infos_.erase(name);
+    infos_.map_.erase(name);
     {
       RevLockGuard<std::mutex> unlock(poll_mu_);
       model_life_cycle_->AsyncUnload(name);
@@ -911,7 +884,7 @@ Status
 ModelRepositoryManager::UnloadAllModels()
 {
   Status status;
-  for (const auto& name_info : infos_) {
+  for (const auto& name_info : infos_.map_) {
     Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
     if (!unload_status.IsOk()) {
       status = Status(
@@ -1247,10 +1220,10 @@ ModelRepositoryManager::Poll(
         pair.first, pair.second,
         ((mit == models.end()) ? empty_params : mit->second), &model_info);
 
-    const auto& iitr = infos_.find(pair.first);
-    const bool invalid_add = (!status.IsOk()) && (iitr == infos_.end());
+    const auto& iitr = infos_.map_.find(pair.first);
+    const bool invalid_add = (!status.IsOk()) && (iitr == infos_.map_.end());
     if (!invalid_add) {
-      const auto& ret = updated_infos->emplace(pair.first, nullptr);
+      const auto& ret = updated_infos->map_.emplace(pair.first, nullptr);
       if (!ret.second) {
         return Status(
             Status::Code::ALREADY_EXISTS,
@@ -1263,7 +1236,7 @@ ModelRepositoryManager::Poll(
         unmodified->insert(pair.first);
       } else {
         ret.first->second = std::move(model_info);
-        if (iitr != infos_.end()) {
+        if (iitr != infos_.map_.end()) {
           modified->insert(pair.first);
         } else {
           added->insert(pair.first);
@@ -1305,9 +1278,9 @@ ModelRepositoryManager::InitializeModelInfo(
 
   bool unmodified = false;
 
-  const auto iitr = infos_.find(model_id);
+  const auto iitr = infos_.map_.find(model_id);
   // Set 'prev_mtime_ns_' if there is existing ModelInfo
-  if (iitr != infos_.end()) {
+  if (iitr != infos_.map_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
   } else {
     linfo->prev_mtime_ns_ = 0;
@@ -1344,7 +1317,7 @@ ModelRepositoryManager::InitializeModelInfo(
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
-    if (iitr == infos_.end()) {
+    if (iitr == infos_.map_.end()) {
       linfo->mtime_nsec_ = GetModifiedTime(std::string(linfo->model_path_));
     } else {
       // Check the current timestamps to determine if model actually has been
@@ -1597,38 +1570,6 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
   return Status::Success;
 }
 
-Status
-ModelRepositoryManager::GetModelInfo(
-    const ModelIdentifier& model_id, ModelInfo** model_info) const
-{
-  return GetModelInfo(infos_, model_id, model_info);
-}
-
-Status
-ModelRepositoryManager::GetModelInfo(
-    const ModelInfoMap& model_infos, const ModelIdentifier& model_id,
-    ModelInfo** model_info)
-{
-  const auto itr = model_infos.find(model_id);
-  if (itr == model_infos.end()) {
-    return Status(
-        Status::Code::NOT_FOUND,
-        "no configuration for model '" + model_id.str() + "'");
-  }
-
-  *model_info = itr->second.get();
-  return Status::Success;
-}
-
-void
-ModelRepositoryManager::CopyModelInfos(ModelInfoMap* new_infos) const
-{
-  new_infos->clear();
-  for (auto& pair : infos_) {
-    new_infos->emplace(pair.first, std::make_unique<ModelInfo>(*pair.second));
-  }
-}
-
 std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
 ModelRepositoryManager::ModelsToLoadUnload(
     const std::set<ModelIdentifier>& loaded_models,
@@ -1836,7 +1777,7 @@ ModelRepositoryManager::DependencyGraph::UpdateNodes(
 
       // Update model info stored in the node
       ModelInfo* info = nullptr;
-      ModelRepositoryManager::GetModelInfo(model_infos, model_id, &info);
+      model_infos.GetModelInfo(model_id, &info);
       node->model_config_ = info->model_config_;
       node->explicitly_load_ = info->explicitly_load_;
       node->upstreams_.clear();
@@ -1859,7 +1800,7 @@ ModelRepositoryManager::DependencyGraph::AddNodes(
   for (const auto& model_id : nodes) {
     std::unique_ptr<DependencyNode> added_node(new DependencyNode(model_id));
     ModelInfo* info = nullptr;
-    ModelRepositoryManager::GetModelInfo(model_infos, model_id, &info);
+    model_infos.GetModelInfo(model_id, &info);
     added_node->model_config_ = info->model_config_;
     added_node->explicitly_load_ = info->explicitly_load_;
 
@@ -2141,6 +2082,34 @@ ModelRepositoryManager::DependencyGraph::UnlockNodes(
     }
   }
   return std::unique_ptr<ModelIdentifier>(nullptr);
+}
+
+ModelRepositoryManager::ModelInfoMap::ModelInfoMap(const ModelInfoMap& rhs)
+{
+  for (auto& pair : rhs.map_) {
+    map_.emplace(pair.first, std::make_unique<ModelInfo>(*pair.second));
+  }
+}
+
+void
+ModelRepositoryManager::ModelInfoMap::Swap(ModelInfoMap& rhs)
+{
+  map_.swap(rhs.map_);
+}
+
+Status
+ModelRepositoryManager::ModelInfoMap::GetModelInfo(
+    const ModelIdentifier& model_id, ModelInfo** model_info) const
+{
+  const auto itr = map_.find(model_id);
+  if (itr == map_.end()) {
+    return Status(
+        Status::Code::NOT_FOUND,
+        "no configuration for model '" + model_id.str() + "'");
+  }
+
+  *model_info = itr->second.get();
+  return Status::Success;
 }
 
 }}  // namespace triton::core
