@@ -174,6 +174,9 @@ TritonModel::Create(
     // case the backend library attempts to load additional shared libaries.
     // Currently, the set and reset function is effective only on Windows, so
     // there is no need to set path on non-Windows.
+    // However, parallel model loading will not see any speedup on Windows and
+    // the global lock inside the SharedLibrary is a WAR.
+    // [FIXME] Reduce lock WAR on SharedLibrary (DLIS-4300)
 #ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
