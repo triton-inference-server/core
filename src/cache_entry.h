@@ -36,7 +36,6 @@
 namespace triton { namespace core {
 
 // Part of std in C++17
-// enum class Byte : unsigned char {};
 using Byte = unsigned char;
 
 struct CacheOutput {
