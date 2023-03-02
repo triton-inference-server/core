@@ -77,11 +77,11 @@ class CacheToBytesAllocator : TritonCacheAllocator {
 
 class BytesToCacheAllocator : TritonCacheAllocator {
  public:
-  BytesToCacheAllocator(std::vector<boost::span<std::byte>> buffers);
+  BytesToCacheAllocator(std::vector<boost::span<Byte>> buffers);
   Status Allocate(TRITONCACHE_CacheEntry* entry);
 
  private:
-  std::vector<boost::span<std::byte>> buffers_;
+  std::vector<boost::span<Byte>> buffers_;
 };
 
 
@@ -100,8 +100,7 @@ class TritonCache {
   Status Insert(InferenceResponse* response, const std::string& key);
   Status Insert(
       boost::span<InferenceResponse*> responses, const std::string& key);
-  Status Insert(
-      std::vector<boost::span<std::byte>> buffers, const std::string& key);
+  Status Insert(std::vector<boost::span<Byte>> buffers, const std::string& key);
   Status Insert(
       CacheEntry* entry, const std::string& key,
       TRITONCACHE_Allocator* allocator);

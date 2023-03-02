@@ -167,7 +167,9 @@ InferenceServer::Init()
   }
 
   // Initialize each cache with its respective config
-  for (const auto& [name, config] : cache_config_map_) {
+  for (const auto& iter : cache_config_map_) {
+    const auto& name = iter.first;
+    const auto& config = iter.second;
     std::shared_ptr<TritonCache> cache;
     status = cache_manager_->CreateCache(name, config, &cache);
     if (!status.IsOk()) {
