@@ -35,7 +35,7 @@
 
 namespace triton { namespace core {
 
-// Part of std in C++17
+// Note: This can be replaced with std::byte starting in c++17
 using Byte = unsigned char;
 
 struct CacheOutput {
