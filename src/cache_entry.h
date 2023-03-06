@@ -35,9 +35,6 @@
 
 namespace triton { namespace core {
 
-// Note: This can be replaced with std::byte starting in c++17
-using Byte = unsigned char;
-
 struct CacheOutput {
   // Inference Response output name
   std::string name_ = "";
