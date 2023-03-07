@@ -58,27 +58,6 @@ AddToSet(const std::set<T>& src, std::set<T>* dest)
   }
 }
 
-template <class Mutex>
-class RevLockGuard {
- public:
-  RevLockGuard(Mutex& mu, bool op = true) : mu_(mu), op_(op)
-  {
-    if (op_)
-      mu_.unlock();
-  }
-  ~RevLockGuard()
-  {
-    if (op_)
-      mu_.lock();
-  }
-  RevLockGuard(const RevLockGuard&) = delete;
-  RevLockGuard& operator=(const RevLockGuard&) = delete;
-
- private:
-  Mutex& mu_;
-  bool op_;
-};
-
 static std::string file_prefix = "file:";
 
 // Internal repo agent used for model file override
@@ -391,7 +370,6 @@ ModelRepositoryManager::Create(
     for (const auto& model_name : startup_models) {
       models[model_name];
     }
-    std::lock_guard<std::mutex> lock((*model_repository_manager)->poll_mu_);
     RETURN_IF_ERROR(
         (*model_repository_manager)
             ->LoadUnloadModels(
@@ -438,7 +416,7 @@ Status
 ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
 {
   // Serialize all operations that change model state
-  std::lock_guard<std::mutex> lock(poll_mu_);
+  std::lock_guard<std::mutex> lock(mu_);
 
   std::set<ModelIdentifier> added, deleted, modified, unmodified;
 
@@ -472,20 +450,21 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
 
   infos_.Swap(new_infos);
 
-  UpdateDependencyGraph(&dependency_graph_, infos_, added, deleted, modified);
+  dependency_graph_.UpdateGraph(infos_, added, deleted, modified);
 
   for (const auto& name : deleted) {
     model_life_cycle_->AsyncUnload(name);
   }
 
   // model loading / unloading error will be printed but ignored
-  LoadModelByDependency(false /* release_mu */);
+  LoadModelByDependency(&dependency_graph_, &infos_);
 
   return Status::Success;
 }
 
 std::map<ModelIdentifier, Status>
-ModelRepositoryManager::LoadModelByDependency(bool release_mu)
+ModelRepositoryManager::LoadModelByDependency(
+    DependencyGraph* dependency_graph, ModelInfoMap* infos)
 {
   // [FIXME] This function involves iterative interaction between
   // ModelLifeCycle object and DependencyGraph object, should better
@@ -503,87 +482,71 @@ ModelRepositoryManager::LoadModelByDependency(bool release_mu)
   //  - Reflect the lifecycle change result to the dependency graph so that the
   //    downstream nodes may be ready for lifecycle changes.
   // Repeat until no more changes can be made.
-  // Dependency node pointer can be swapped when the mutex is released, so any
-  // pointers must be re-acquired from its model identifier afterward.
   std::map<ModelIdentifier, Status> res;
   struct ModelState {
-    ModelState(const ModelIdentifier& model_id)
-        : model_id_(model_id), status_(Status::Success)
-    {
-    }
-    ModelIdentifier model_id_;
+    ModelState(DependencyNode* node) : node_(node), status_(Status::Success) {}
+    DependencyNode* node_;
     Status status_;
     std::promise<void> ready_;
   };
-  std::set<ModelIdentifier> loaded_models;
-  auto set_pair = ModelsToLoadUnload(loaded_models, res);
+  NodeSet loaded_models;
+  auto set_pair = ModelsToLoadUnload(loaded_models, res, dependency_graph);
   // Loop until all model are loaded / unloaded
   while ((!set_pair.first.empty()) || (!set_pair.second.empty())) {
     loaded_models.clear();
     // Unload invalid models first
-    for (auto& invalid_id : set_pair.second) {
-      {
-        RevLockGuard<std::mutex> unlock(poll_mu_, release_mu);
-        model_life_cycle_->AsyncUnload(invalid_id);
-      }
-      auto invalid_node = dependency_graph_.FindNode(
-          invalid_id, false /* allow_fuzzy_matching */);
-      res[invalid_id] = invalid_node->status_;
-      LOG_ERROR << invalid_node->status_.AsString();
-      invalid_node->loaded_versions_ = std::set<int64_t>();
-      loaded_models.emplace(invalid_id);
+    for (auto& invalid_model : set_pair.second) {
+      model_life_cycle_->AsyncUnload(invalid_model->model_id_);
+      res[invalid_model->model_id_] = invalid_model->status_;
+      LOG_ERROR << invalid_model->status_.AsString();
+      invalid_model->loaded_versions_ = std::set<int64_t>();
+      loaded_models.emplace(invalid_model);
     }
     // load valid models and wait for load results
     std::vector<std::unique_ptr<ModelState>> model_states;
-    for (auto& valid_id : set_pair.first) {
-      model_states.emplace_back(new ModelState(valid_id));
+    for (auto& valid_model : set_pair.first) {
+      model_states.emplace_back(new ModelState(valid_model));
       auto model_state = model_states.back().get();
-      const auto itr = infos_.map_.find(valid_id);
-      auto valid_node = dependency_graph_.FindNode(
-          valid_id, false /* allow_fuzzy_matching */);
+      const auto itr = infos->map_.find(valid_model->model_id_);
       auto status = model_life_cycle_->AsyncLoad(
-          valid_id, itr->second->model_path_, valid_node->model_config_,
-          itr->second->is_config_provided_, itr->second->agent_model_list_,
-          [model_state](Status load_status) {
+          valid_model->model_id_, itr->second->model_path_,
+          valid_model->model_config_, itr->second->is_config_provided_,
+          itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();
           });
       if (!status.IsOk()) {
         model_state->status_ = status;
         model_state->ready_.set_value();
-        LOG_ERROR << "failed to load model '" << valid_id.str()
+        LOG_ERROR << "failed to load model '" << valid_model->model_id_.str()
                   << "': " << status.Message();
       }
-      loaded_models.emplace(valid_id);
+      loaded_models.emplace(valid_model);
     }
     for (auto& model_state : model_states) {
-      {
-        RevLockGuard<std::mutex> unlock(poll_mu_, release_mu);
-        model_state->ready_.get_future().wait();
-      }
-      res[model_state->model_id_] = model_state->status_;
+      model_state->ready_.get_future().wait();
+      res[model_state->node_->model_id_] = model_state->status_;
       const auto version_state =
-          model_life_cycle_->VersionStates(model_state->model_id_);
-      auto node = dependency_graph_.FindNode(
-          model_state->model_id_, false /* allow_fuzzy_matching */);
-      node->loaded_versions_.clear();
+          model_life_cycle_->VersionStates(model_state->node_->model_id_);
+      model_state->node_->loaded_versions_.clear();
       for (const auto& vs : version_state) {
         if (vs.second.first == ModelReadyState::READY) {
-          node->loaded_versions_.emplace(vs.first);
+          model_state->node_->loaded_versions_.emplace(vs.first);
         }
       }
       // If the model failed to load, should revert the timestamp to
       // ensure the next load request will attempt to load the model again
       // for operation idempotence. See comment on 'infos_'
       if (!model_state->status_.IsOk()) {
-        auto& model_info = infos_.map_.find(model_state->model_id_)->second;
+        auto& model_info =
+            infos->map_.find(model_state->node_->model_id_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
-    set_pair = ModelsToLoadUnload(loaded_models, res);
+    set_pair = ModelsToLoadUnload(loaded_models, res, dependency_graph);
   }
   // Clear temporary stored agent model list after all loads are triggerred
-  for (auto& info : infos_.map_) {
+  for (auto& info : infos->map_) {
     info.second->agent_model_list_.reset();
   }
   return res;
@@ -607,9 +570,6 @@ ModelRepositoryManager::LoadUnloadModel(
         "explicit load / unload multiple models is not currently supported");
   }
 
-  // Serialize all operations that change model state
-  std::lock_guard<std::mutex> lock(poll_mu_);
-
   const auto& model_name = models.begin()->first;
 
   // Need ModelIdentifier to retrieve model state in lifecycle object,
@@ -617,6 +577,7 @@ ModelRepositoryManager::LoadUnloadModel(
   // to check if unload works as intended.
   std::set<ModelIdentifier> to_be_unloaded_ids;
   if (type == ActionType::UNLOAD) {
+    std::lock_guard<std::mutex> lock(mu_);  // guard global_map_
     const auto& git = global_map_.find(model_name);
     if (git != global_map_.end()) {
       to_be_unloaded_ids = git->second;
@@ -632,7 +593,6 @@ ModelRepositoryManager::LoadUnloadModel(
     if (no_parallel_conflict) {
       break;
     }
-    RevLockGuard<std::mutex> unlock(poll_mu_);
     std::this_thread::yield();
   }
   // Check if model is loaded / unloaded properly
@@ -645,6 +605,7 @@ ModelRepositoryManager::LoadUnloadModel(
   // Use global map to retrieve the set of models being updated with the given
   // name
   if (type == ActionType::LOAD) {
+    std::lock_guard<std::mutex> lock(mu_);  // guard global_map_ and infos_
     const auto& git = global_map_.find(model_name);
     if (git == global_map_.end()) {
       return Status(
@@ -696,188 +657,231 @@ ModelRepositoryManager::LoadUnloadModels(
     const ActionType type, const bool unload_dependents,
     bool* all_models_polled, bool* no_parallel_conflict)
 {
-  auto status = Status::Success;
-  *all_models_polled = true;
-  if (no_parallel_conflict != nullptr)
+  if (no_parallel_conflict != nullptr) {
     *no_parallel_conflict = true;
-  // Prepare ModelInfo related to file system accordingly, do not write yet
-  // until committed to load/unload the models.
-  ModelInfoMap infos(infos_);
-  std::set<ModelIdentifier> added, deleted, modified, unmodified;
+  }
+
+  // They are here to hold information for loading/unloading models later, and
+  // also hold after loading/unloading information to be written back to this
+  // object later.
+  ModelInfoMap infos;
+  std::unordered_map<std::string, std::set<ModelIdentifier>> global_map;
+  DependencyGraph dependency_graph;
+
+  // deleted, deleted_dependents are here for async unload models later.
+  // affected_models is here for unlocking loading/unloading models later.
+  std::set<ModelIdentifier> deleted, deleted_dependents, affected_models;
+
   {
-    if (type == ActionType::UNLOAD) {
+    std::lock_guard<std::mutex> lock(mu_);
+
+    // Prepare model infos related to file system accordingly, do not write yet
+    // until committed to load/unload the models.
+    // Also poll the added, deleted, modified, unmodified models.
+    infos = infos_;
+    std::set<ModelIdentifier> added, modified, unmodified;
+    RETURN_IF_ERROR(LoadUnloadModelsPoll(
+        models, type, &added, &deleted, &modified, &unmodified, &infos,
+        all_models_polled));
+
+    // Make a copy of the dependency graph for rollback if there is a collision
+    // between the models to be loaded/unloaded by this thread with another
+    // thread actively loading/unloading models. The global map referenced by
+    // the dependency graph is managed by this object, which is the
+    // responsibility of this object to make a copy.
+    global_map = global_map_;
+    dependency_graph.Assign(dependency_graph_, &global_map);
+
+    // Update the dependency graph, and get models affected by the update.
+    affected_models = dependency_graph.UpdateGraph(
+        infos, added, deleted, modified,
+        unload_dependents ? &deleted_dependents : nullptr);
+    affected_models.insert(unmodified.begin(), unmodified.end());
+
+    // Check for collision in affected models and try to lock those models.
+    auto conflict_model = dependency_graph.LockNodes(
+        affected_models, dependency_graph_ /* prev_dependency_graph */);
+    if (conflict_model) {
+      // A collision is found. Since info is only written to local copy, so it
+      // is safe to rollback by simply returning the conflict infomation.
+      if (no_parallel_conflict != nullptr) {
+        *no_parallel_conflict = false;
+        return Status::Success;
+      }
+      return Status(
+          Status::Code::INTERNAL,
+          "a related model '" + conflict_model->str() +
+              "' to a load/unload request is currently loading or unloading");
+    }
+
+    // The models are in 'deleted' either when they are asked to be unloaded or
+    // they are not found / are duplicated across all model repositories.
+    // Explicitly remove them from infos.
+    for (const auto& name :
+         (unload_dependents ? deleted_dependents : deleted)) {
+      infos.map_.erase(name);
+    }
+
+    // At this point, it is committed to load/unload the models, so write the
+    // local copy into this object. The state of the models cannot be modified
+    // by another thread while they are locked. Thus, it is safe to release the
+    // mutex while actively loading/unloading models, but the mutex must be
+    // re-held when reading/updating any model info to avoid any corruption.
+    infos_ = infos;
+    global_map_ = global_map;
+    dependency_graph_.Assign(dependency_graph, &global_map_);
+
+    // Unlock the affected models.
+    // This serve 2 purposes:
+    // 1. The unlocked state will be writeback to the dependency graph owned by
+    //    this object, after the load/unload is completed.
+    // 2. It doubles as an indicator that all the locked models will be handled
+    //    by another thread, and this thread must not attempt to load/unload
+    //    those locked models.
+    dependency_graph.UnlockNodes(affected_models);
+  }
+
+  // Unload 'deleted' models.
+  for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
+    model_life_cycle_->AsyncUnload(name);
+  }
+  // Load/Unload the models affected
+  const auto& load_status = LoadModelByDependency(&dependency_graph, &infos);
+
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+
+    // Write updated info back to this object after model load/unload.
+    infos_.Writeback(infos, affected_models);
+    dependency_graph_.Writeback(dependency_graph, affected_models);
+
+    // Check the load status of the requested models.
+    if (type == ActionType::LOAD) {
+      std::string load_error_message = "";
       for (const auto& model : models) {
-        // Within the class, model is referred by ModelIdentifier, so it needs
-        // to check global map to find identifier assoicated with the name.
         auto git = global_map_.find(model.first);
-        if (git != global_map_.end()) {
-          for (const auto& mid : git->second) {
-            deleted.insert(mid);
+        if (git == global_map_.end()) {
+          // skip the model name that is not found, requested name didn't pass
+          // polling
+          continue;
+        }
+        for (const auto& model_id : git->second) {
+          auto it = load_status.find(model_id);
+          // If 'model.first' not in load status, it means the (re-)load is not
+          // necessary because there is no change in the model's directory
+          if ((it != load_status.end()) && !it->second.IsOk()) {
+            load_error_message +=
+                ("load failed for model '" + model_id.str() +
+                 "': " + it->second.Message() + "\n");
           }
         }
       }
+      if (!load_error_message.empty()) {
+        return Status(Status::Code::INVALID_ARG, load_error_message);
+      }
     }
-    // ActionType::LOAD and in model control mode
-    else {
-      std::set<std::string> checked_models;
-      auto current_models = models;
+  }
 
-      ModelInfoMap new_infos;
-      while (!current_models.empty()) {
-        bool polled = true;
-        RETURN_IF_ERROR(Poll(
-            current_models, &added, &deleted, &modified, &unmodified,
-            &new_infos, &polled));
-        *all_models_polled &= polled;
+  return Status::Success;
+}
 
-        // A polling chain is needed if the polled model is ensemble,
-        // so that all (up-to-date) composing models are exposed to Triton.
-        std::set<std::string> next_models;
-        // The intention here is to iteratively expand the collection of models
-        // to be polled for this load operation, if ensemble is involved,
-        // until the collection is self-contained.
-        // [FIXME] Every Poll() above add new entries in existing 'new_infos'
-        // (and 'added' etc.), so iterating on the whole structure means
-        // re-examination on certain entries.
-        std::set<std::string> temp_checked;
-        for (auto& info : new_infos.map_) {
-          // if the model is not "checked", it is model polled at current
-          // iteration, check config for more models to be polled
-          const bool checked =
-              (checked_models.find(info.first.name_) != checked_models.end());
-          if (!checked) {
-            // Don't add the model name to 'checked_models' as there may be
-            // same name model polled but with different namespace
-            temp_checked.emplace(info.first.name_);
-            const auto& config = info.second->model_config_;
-            if (config.has_ensemble_scheduling()) {
-              for (const auto& step : config.ensemble_scheduling().step()) {
-                next_models.emplace(step.model_name());
-              }
+Status
+ModelRepositoryManager::LoadUnloadModelsPoll(
+    const std::unordered_map<
+        std::string, std::vector<const InferenceParameter*>>& models,
+    const ActionType type, std::set<ModelIdentifier>* added,
+    std::set<ModelIdentifier>* deleted, std::set<ModelIdentifier>* modified,
+    std::set<ModelIdentifier>* unmodified, ModelInfoMap* infos,
+    bool* all_models_polled)
+{
+  *all_models_polled = true;
+  if (type == ActionType::UNLOAD) {
+    for (const auto& model : models) {
+      // Within the class, model is referred by ModelIdentifier, so it needs to
+      // check global map to find identifier assoicated with the name.
+      auto git = global_map_.find(model.first);
+      if (git != global_map_.end()) {
+        for (const auto& mid : git->second) {
+          deleted->insert(mid);
+        }
+      }
+    }
+  }
+  // ActionType::LOAD and in model control mode
+  else {
+    std::set<std::string> checked_models;
+    auto current_models = models;
+
+    ModelInfoMap new_infos;
+    while (!current_models.empty()) {
+      bool polled = true;
+      RETURN_IF_ERROR(Poll(
+          current_models, added, deleted, modified, unmodified, &new_infos,
+          &polled));
+      *all_models_polled &= polled;
+
+      // A polling chain is needed if the polled model is ensemble, so that all
+      // (up-to-date) composing models are exposed to Triton.
+      std::set<std::string> next_models;
+      // The intention here is to iteratively expand the collection of models
+      // to be polled for this load operation, if ensemble is involved, until
+      // the collection is self-contained.
+      // [FIXME] Every Poll() above add new entries in existing 'new_infos'
+      // (and 'added' etc.), so iterating on the whole structure means
+      // re-examination on certain entries.
+      std::set<std::string> temp_checked;
+      for (auto& info : new_infos.map_) {
+        // if the model is not "checked", it is model polled at current
+        // iteration, check config for more models to be polled
+        const bool checked =
+            (checked_models.find(info.first.name_) != checked_models.end());
+        if (!checked) {
+          // Don't add the model name to 'checked_models' as there may be same
+          // name model polled but with different namespace
+          temp_checked.emplace(info.first.name_);
+          const auto& config = info.second->model_config_;
+          if (config.has_ensemble_scheduling()) {
+            for (const auto& step : config.ensemble_scheduling().step()) {
+              next_models.emplace(step.model_name());
             }
           }
         }
-        AddToSet(temp_checked, &checked_models);
-        // trim the model if it has been checked
-        current_models.clear();
-        for (const auto& name : next_models) {
-          const bool checked =
-              (checked_models.find(name) != checked_models.end());
-          if (!checked) {
-            current_models[name];
-          }
-        }
       }
-
-      // After all polls, only models in the initial set ('models') are
-      // explicitly loaded.
-      for (auto& info : new_infos.map_) {
-        info.second->explicitly_load_ =
-            (models.find(info.first.name_) != models.end());
-      }
-
-      // Only update the infos when all validation is completed
-      for (const auto& model_name : added) {
-        auto nitr = new_infos.map_.find(model_name);
-        infos.map_.emplace(model_name, std::move(nitr->second));
-      }
-      for (const auto& model_name : modified) {
-        auto nitr = new_infos.map_.find(model_name);
-        auto itr = infos.map_.find(model_name);
-        // Also check the 'explicitly_load_' in previous snapshot,
-        // if the model has been explicitly loaded, we shouldn't change
-        // its state as it may be polled as composing model and flag is set
-        // to false.
-        nitr->second->explicitly_load_ |= itr->second->explicitly_load_;
-        itr->second = std::move(nitr->second);
-      }
-    }
-  }
-  std::set<ModelIdentifier> deleted_dependents;
-
-  // Make a copy of the dependency graph for rollback if there is a collision
-  // between the models to be loaded/unloaded by this thread with another
-  // thread actively loading/unloading models. The global map referenced by the
-  // dependency graph is managed by this object, which is the responsibility of
-  // this object to make a copy.
-  std::unordered_map<std::string, std::set<ModelIdentifier>> global_map(
-      global_map_);
-  DependencyGraph dependency_graph(dependency_graph_, &global_map);
-
-  // Update the dependency graph independently for the possibility of rollback.
-  auto affected_models = UpdateDependencyGraph(
-      &dependency_graph, infos, added, deleted, modified,
-      unload_dependents ? &deleted_dependents : nullptr);
-
-  // Check for collision in affected models and lock those models
-  auto conflict_model = dependency_graph.LockNodes(
-      affected_models, dependency_graph_ /* prev_dependency_graph */);
-  if (conflict_model) {
-    // A collision is found. Since info is only written to local copy, so it is
-    // safe to rollback by simply returning the conflict infomation.
-    if (no_parallel_conflict != nullptr) {
-      *no_parallel_conflict = false;
-      return Status::Success;
-    }
-    return Status(
-        Status::Code::INTERNAL,
-        "a related model '" + conflict_model->str() +
-            "' to a load/unload request is currently loading or unloading");
-  }
-
-  // At this point, it is committed to load/unload the models, so write the
-  // local copy into this object. The state of the models cannot be modified by
-  // another thread while they are locked. Thus, it is safe to release the
-  // mutex while actively loading/unloading models, but the mutex must be
-  // re-held when reading/updating any model info to avoid any corruption.
-  infos_.Swap(infos);
-  global_map_.swap(global_map);
-  dependency_graph_.Swap(dependency_graph);
-
-  // The models are in 'deleted' either when they are asked to be unloaded or
-  // they are not found / are duplicated across all model repositories.
-  // In all cases, should unload them and remove from 'infos_' explicitly.
-  for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
-    infos_.map_.erase(name);
-    {
-      RevLockGuard<std::mutex> unlock(poll_mu_);
-      model_life_cycle_->AsyncUnload(name);
-    }
-  }
-
-  // Check global map for a set of same named models
-  //
-  // load / unload the models affected, and check the load status of
-  // the requested models
-  const auto& load_status = LoadModelByDependency(true /* release_mu */);
-  dependency_graph_.UnlockNodes(affected_models);
-  if (status.IsOk() && (type == ActionType::LOAD)) {
-    std::string load_error_message = "";
-
-    for (const auto& model : models) {
-      auto git = global_map_.find(model.first);
-      if (git == global_map_.end()) {
-        // skip the model name that is not found, requested name didn't pass
-        // polling
-        continue;
-      }
-      for (const auto& model_id : git->second) {
-        auto it = load_status.find(model_id);
-        // If 'model.first' not in load status, it means the (re-)load is not
-        // necessary because there is no change in the model's directory
-        if ((it != load_status.end()) && !it->second.IsOk()) {
-          load_error_message +=
-              ("load failed for model '" + model_id.str() +
-               "': " + it->second.Message() + "\n");
+      AddToSet(temp_checked, &checked_models);
+      // trim the model if it has been checked
+      current_models.clear();
+      for (const auto& name : next_models) {
+        const bool checked =
+            (checked_models.find(name) != checked_models.end());
+        if (!checked) {
+          current_models[name];
         }
       }
     }
-    if (!load_error_message.empty()) {
-      status = Status(Status::Code::INVALID_ARG, load_error_message);
+
+    // After all polls, only models in the initial set ('models') are
+    // explicitly loaded.
+    for (auto& info : new_infos.map_) {
+      info.second->explicitly_load_ =
+          (models.find(info.first.name_) != models.end());
+    }
+
+    // Only update the infos when all validation is completed
+    for (const auto& model_name : *added) {
+      auto nitr = new_infos.map_.find(model_name);
+      infos->map_.emplace(model_name, std::move(nitr->second));
+    }
+    for (const auto& model_name : *modified) {
+      auto nitr = new_infos.map_.find(model_name);
+      auto itr = infos->map_.find(model_name);
+      // Also check the 'explicitly_load_' in previous snapshot, if the model
+      // has been explicitly loaded, we shouldn't change its state as it may be
+      // polled as composing model and flag is set to false.
+      nitr->second->explicitly_load_ |= itr->second->explicitly_load_;
+      itr->second = std::move(nitr->second);
     }
   }
-
-  return status;
+  return Status::Success;
 }
 
 Status
@@ -1440,50 +1444,6 @@ ModelRepositoryManager::InitializeModelInfo(
   return Status::Success;
 }
 
-std::set<ModelIdentifier>
-ModelRepositoryManager::UpdateDependencyGraph(
-    DependencyGraph* dependency_graph, const ModelInfoMap& model_infos,
-    const std::set<ModelIdentifier>& added,
-    const std::set<ModelIdentifier>& deleted,
-    const std::set<ModelIdentifier>& modified,
-    std::set<ModelIdentifier>* deleted_dependents) const
-{
-  // Update dependency graph in following steps:
-  //   1. Apply all node changes.
-  //   2. Connect the edges of all affected nodes.
-  //   3. Connectivity check.
-
-  // If the state of a node is changed, all its downstreams will be affected.
-  // deleted, drop from dependency_graph, add to missing_nodes if downstreams is
-  // not empty affected_nodes are all ensembles as only ensembles are depending
-  // on other models
-  std::set<ModelIdentifier> affected_nodes, deleted_nodes;
-  const bool cascading_removal = (deleted_dependents != nullptr);
-  std::tie(affected_nodes, deleted_nodes) =
-      dependency_graph->RemoveNodes(deleted, cascading_removal);
-  if (cascading_removal) {
-    deleted_dependents->swap(deleted_nodes);
-  }
-  AddToSet(
-      dependency_graph->UpdateNodes(modified, model_infos), &affected_nodes);
-  AddToSet(dependency_graph->AddNodes(added, model_infos), &affected_nodes);
-
-  for (auto& node_id : affected_nodes) {
-    dependency_graph->ConnectDependencyGraph(node_id);
-  }
-
-  for (auto& node_id : affected_nodes) {
-    dependency_graph->CircularDependencyCheck(node_id);
-  }
-
-  // Add deleted nodes to affected nodes
-  const auto& deleted_ref =
-      cascading_removal ? *deleted_dependents : deleted_nodes;
-  affected_nodes.insert(deleted_ref.begin(), deleted_ref.end());
-
-  return affected_nodes;
-}
-
 Status
 ModelRepositoryManager::RegisterModelRepository(
     const std::string& repository,
@@ -1506,7 +1466,7 @@ ModelRepositoryManager::RegisterModelRepository(
 
   {
     // Serialize all operations that change model state
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
 
     // Check repository and mapped models do not yet exist.
     if (repository_paths_.find(repository) != repository_paths_.end()) {
@@ -1548,7 +1508,7 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
         "EXPLICIT");
   }
   {
-    std::lock_guard<std::mutex> lock(poll_mu_);
+    std::lock_guard<std::mutex> lock(mu_);
     if (repository_paths_.erase(repository) != 1) {
       return Status(
           Status::Code::INVALID_ARG,
@@ -1570,59 +1530,52 @@ ModelRepositoryManager::UnregisterModelRepository(const std::string& repository)
   return Status::Success;
 }
 
-std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
+std::pair<ModelRepositoryManager::NodeSet, ModelRepositoryManager::NodeSet>
 ModelRepositoryManager::ModelsToLoadUnload(
-    const std::set<ModelIdentifier>& loaded_models,
-    const std::map<ModelIdentifier, Status>& model_load_status)
+    const NodeSet& loaded_models,
+    const std::map<ModelIdentifier, Status>& model_load_status,
+    DependencyGraph* dependency_graph)
 {
   // <valid model set, invalid model set>
-  std::pair<std::set<DependencyNode*>, std::set<DependencyNode*>> res_p;
+  std::pair<NodeSet, NodeSet> res;
   // first call to this function
   if (loaded_models.empty()) {
-    for (auto& pair : *(dependency_graph_.MutableNodes())) {
+    for (auto& pair : *(dependency_graph->MutableNodes())) {
       auto node = pair.second.get();
       // only care about nodes that are affected by the update
-      if (!node->checked_) {
+      // nodes is locked if and only if it is being updated by another thread
+      if (!node->checked_ && !node->is_locked_) {
         if (CheckNode(node, model_load_status)) {
           if (node->status_.IsOk()) {
-            res_p.first.emplace(node);
+            res.first.emplace(node);
           } else {
-            res_p.second.emplace(node);
+            res.second.emplace(node);
           }
         }
       }
     }
   } else {
-    for (const auto& model_id : loaded_models) {
-      auto model = dependency_graph_.FindNode(
-          model_id, false /* allow_fuzzy_matching */);
+    for (const auto& model : loaded_models) {
       for (auto node : model->downstreams_) {
         // only care about nodes that are affected by the update
-        if (!node->checked_) {
+        // nodes is locked if and only if it is being updated by another thread
+        if (!node->checked_ && !node->is_locked_) {
           if (CheckNode(node, model_load_status)) {
             if (node->status_.IsOk()) {
-              res_p.first.emplace(node);
+              res.first.emplace(node);
             } else {
-              res_p.second.emplace(node);
+              res.second.emplace(node);
             }
           }
         }
       }
     }
   }
-  for (auto& node : res_p.first) {
+  for (auto& node : res.first) {
     node->checked_ = true;
   }
-  for (auto& node : res_p.second) {
+  for (auto& node : res.second) {
     node->checked_ = true;
-  }
-  // convert pointers to identifiers
-  std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>> res;
-  for (auto& node : res_p.first) {
-    res.first.emplace(node->model_id_);
-  }
-  for (auto& node : res_p.second) {
-    res.second.emplace(node->model_id_);
   }
   return res;
 }
@@ -1702,6 +1655,48 @@ ModelRepositoryManager::CheckNode(
   return node_ready;
 }
 
+
+std::set<ModelIdentifier>
+ModelRepositoryManager::DependencyGraph::UpdateGraph(
+    const ModelInfoMap& model_infos, const std::set<ModelIdentifier>& added,
+    const std::set<ModelIdentifier>& deleted,
+    const std::set<ModelIdentifier>& modified,
+    std::set<ModelIdentifier>* deleted_dependents)
+{
+  // Update dependency graph in following steps:
+  //   1. Apply all node changes.
+  //   2. Connect the edges of all affected nodes.
+  //   3. Connectivity check.
+
+  // If the state of a node is changed, all its downstreams will be affected.
+  // deleted, drop from dependency_graph, add to missing_nodes if downstreams is
+  // not empty affected_nodes are all ensembles as only ensembles are depending
+  // on other models
+  std::set<ModelIdentifier> affected_nodes, deleted_nodes;
+  const bool cascading_removal = (deleted_dependents != nullptr);
+  std::tie(affected_nodes, deleted_nodes) =
+      RemoveNodes(deleted, cascading_removal);
+  if (cascading_removal) {
+    deleted_dependents->swap(deleted_nodes);
+  }
+  AddToSet(UpdateNodes(modified, model_infos), &affected_nodes);
+  AddToSet(AddNodes(added, model_infos), &affected_nodes);
+
+  for (auto& node_id : affected_nodes) {
+    ConnectDependencyGraph(node_id);
+  }
+
+  for (auto& node_id : affected_nodes) {
+    CircularDependencyCheck(node_id);
+  }
+
+  // Add deleted nodes to affected nodes
+  const auto& deleted_ref =
+      cascading_removal ? *deleted_dependents : deleted_nodes;
+  affected_nodes.insert(deleted_ref.begin(), deleted_ref.end());
+
+  return affected_nodes;
+}
 
 std::pair<std::set<ModelIdentifier>, std::set<ModelIdentifier>>
 ModelRepositoryManager::DependencyGraph::RemoveNodes(
@@ -2031,6 +2026,15 @@ ModelRepositoryManager::DependencyGraph::DependencyGraph(
 }
 
 void
+ModelRepositoryManager::DependencyGraph::Assign(
+    const DependencyGraph& rhs,
+    std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map)
+{
+  DependencyGraph tmp(rhs, global_map);
+  Swap(tmp);
+}
+
+void
 ModelRepositoryManager::DependencyGraph::Swap(DependencyGraph& rhs)
 {
   std::swap(global_map_ptr_, rhs.global_map_ptr_);
@@ -2084,11 +2088,41 @@ ModelRepositoryManager::DependencyGraph::UnlockNodes(
   return std::unique_ptr<ModelIdentifier>(nullptr);
 }
 
+void
+ModelRepositoryManager::DependencyGraph::Writeback(
+    const DependencyGraph& updated_dependency_graph,
+    const std::set<ModelIdentifier>& affected_models)
+{
+  for (const auto& model_id : affected_models) {
+    // An affected model can be deleted, so the presence of the model must be
+    // checked.
+    auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
+    if (node != nullptr) {
+      auto updated_node = updated_dependency_graph.FindNode(
+          model_id, false /* allow_fuzzy_matching */);
+      // Writeback
+      node->status_ = updated_node->status_;
+      node->checked_ = updated_node->checked_;
+      node->loaded_versions_ = updated_node->loaded_versions_;
+      node->is_locked_ = updated_node->is_locked_;
+    }
+  }
+}
+
+
 ModelRepositoryManager::ModelInfoMap::ModelInfoMap(const ModelInfoMap& rhs)
 {
   for (auto& pair : rhs.map_) {
     map_.emplace(pair.first, std::make_unique<ModelInfo>(*pair.second));
   }
+}
+
+ModelRepositoryManager::ModelInfoMap&
+ModelRepositoryManager::ModelInfoMap::operator=(const ModelInfoMap& rhs)
+{
+  ModelInfoMap tmp(rhs);
+  Swap(tmp);
+  return *this;
 }
 
 void
@@ -2110,6 +2144,24 @@ ModelRepositoryManager::ModelInfoMap::GetModelInfo(
 
   *model_info = itr->second.get();
   return Status::Success;
+}
+
+void
+ModelRepositoryManager::ModelInfoMap::Writeback(
+    const ModelInfoMap& updated_model_info,
+    const std::set<ModelIdentifier>& affected_models)
+{
+  for (auto& model_id : affected_models) {
+    // An affected model can be deleted, so the presence of the model must be
+    // checked.
+    auto itr = map_.find(model_id);
+    if (itr != map_.end()) {
+      auto info = itr->second.get();
+      auto updated_info = updated_model_info.map_.at(model_id).get();
+      // Writeback
+      info->mtime_nsec_ = updated_info->mtime_nsec_;
+    }
+  }
 }
 
 }}  // namespace triton::core
