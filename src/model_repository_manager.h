@@ -221,7 +221,8 @@ class ModelRepositoryManager {
 
     DependencyGraph& operator=(const DependencyGraph&) = delete;
 
-    // Copy from rhs, but set global_map_ptr_ to the provided global_map.
+    // Discard all state of this object, and copy state from rhs, but set
+    // global_map_ptr_ to the provided global_map.
     void Assign(
         const DependencyGraph& rhs,
         std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map);
@@ -259,8 +260,10 @@ class ModelRepositoryManager {
     std::unique_ptr<ModelIdentifier> UnlockNodes(
         const std::set<ModelIdentifier>& nodes);
 
-    // Write updated graph back to this object after model load/unload.
-    // This will also notify load/unload conflict to retry.
+    // Write updated graph back to this object after model load/unload. Only
+    // models specified in affected models will be updated, and the update is
+    // limited to a few node variables that could be changed after load/unload.
+    // This will also notify load/unload conflict to retry for affected models.
     void Writeback(
         const DependencyGraph& updated_dependency_graph,
         const std::set<ModelIdentifier>& affected_models);
