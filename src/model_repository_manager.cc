@@ -655,144 +655,132 @@ ModelRepositoryManager::LoadUnloadModels(
     const ActionType type, const bool unload_dependents,
     bool* all_models_polled, std::shared_ptr<EventNotifier>* conflict_notifier)
 {
-  *all_models_polled = true;
+  std::unique_lock<std::mutex> lock(mu_);
 
-  // They are here to hold information for loading/unloading models later, and
-  // also hold after loading/unloading information to be written back to this
-  // object later.
-  ModelInfoMap infos;
-  std::unordered_map<std::string, std::set<ModelIdentifier>> global_map;
-  DependencyGraph dependency_graph;
-
-  // deleted, deleted_dependents are here for async unload models later.
-  // affected_models is here for unlocking loading/unloading models later.
-  std::set<ModelIdentifier> deleted, deleted_dependents, affected_models;
-
-  {
-    std::lock_guard<std::mutex> lock(mu_);
-
-    // Prepare model infos related to file system accordingly, do not write yet
-    // until committed to load/unload the models.
-    // Also poll the added, deleted, modified, unmodified models.
-    infos = infos_;
-    std::set<ModelIdentifier> added, modified, unmodified;
-    switch (type) {
-      case ActionType::LOAD:
-        RETURN_IF_ERROR(PollModels(
-            models, &added, &deleted, &modified, &unmodified, &infos,
-            all_models_polled));
-        break;
-      case ActionType::UNLOAD:
-        for (const auto& model : models) {
-          // Within the class, model is referred by ModelIdentifier, so it needs
-          // to check global map to find identifier assoicated with the name.
-          auto git = global_map_.find(model.first);
-          if (git != global_map_.end()) {
-            for (const auto& mid : git->second) {
-              deleted.insert(mid);
-            }
+  // Prepare new model infos related to file system accordingly, do not write
+  // yet until committed to load/unload the models.
+  // Also poll the added, deleted, modified, unmodified models.
+  ModelInfoMap new_infos(infos_);
+  std::set<ModelIdentifier> added, deleted, modified, unmodified;
+  switch (type) {
+    case ActionType::LOAD:
+      RETURN_IF_ERROR(PollModels(
+          models, &added, &deleted, &modified, &unmodified, &new_infos,
+          all_models_polled));
+      break;
+    case ActionType::UNLOAD:
+      for (const auto& model : models) {
+        // Within the class, model is referred by ModelIdentifier, so it needs
+        // to check global map to find identifier assoicated with the name.
+        auto git = global_map_.find(model.first);
+        if (git != global_map_.end()) {
+          for (const auto& mid : git->second) {
+            deleted.insert(mid);
           }
         }
-        break;
-      default:
-        return Status(Status::Code::INTERNAL, "Invalid action type");
-    }
-
-    // Make a copy of the dependency graph for rollback if there is a collision
-    // between the models to be loaded/unloaded by this thread with another
-    // thread actively loading/unloading models. The global map referenced by
-    // the dependency graph is managed by this object, which is the
-    // responsibility of this object to make a copy.
-    global_map = global_map_;
-    dependency_graph.Assign(dependency_graph_, &global_map);
-
-    // Update the dependency graph, and get models affected by the update.
-    affected_models = dependency_graph.UpdateGraph(
-        infos, added, deleted, modified,
-        unload_dependents ? &deleted_dependents : nullptr);
-    affected_models.insert(unmodified.begin(), unmodified.end());
-
-    // Check for collision in affected models and try to lock those models.
-    auto conflict_model = dependency_graph.LockNodes(
-        affected_models, dependency_graph_ /* prev_dependency_graph */,
-        conflict_notifier);
-    if (conflict_model) {
-      // A collision is found. Since info is only written to local copy, so it
-      // is safe to rollback by simply returning the conflict infomation.
-      if (conflict_notifier != nullptr) {
-        return Status::Success;
       }
-      return Status(
-          Status::Code::INTERNAL,
-          "a related model '" + conflict_model->str() +
-              "' to a load/unload request is currently loading or unloading");
+      *all_models_polled = true;
+      break;
+    default:
+      return Status(Status::Code::INTERNAL, "Invalid action type");
+  }
+  std::set<ModelIdentifier> deleted_dependents;
+
+  // Make a copy of the dependency graph for rollback if there is a collision
+  // between the models to be loaded/unloaded by this thread with another
+  // thread actively loading/unloading models. The global map referenced by the
+  // dependency graph is managed by this object, which is the responsibility of
+  // this object to make a copy.
+  std::unordered_map<std::string, std::set<ModelIdentifier>> new_global_map(
+      global_map_);
+  DependencyGraph new_dependency_graph(dependency_graph_, &new_global_map);
+
+  // Update the new dependency graph, and get models affected by the update.
+  std::set<ModelIdentifier> affected_models = new_dependency_graph.UpdateGraph(
+      new_infos, added, deleted, modified,
+      unload_dependents ? &deleted_dependents : nullptr);
+  affected_models.insert(unmodified.begin(), unmodified.end());
+
+  // Check for collision in affected models and try to lock those models.
+  auto conflict_model = new_dependency_graph.LockNodes(
+      affected_models, dependency_graph_ /* prev_dependency_graph */,
+      conflict_notifier);
+  if (conflict_model) {
+    // A collision is found. Since info is only written to local copy, so it is
+    // safe to rollback by simply returning the conflict infomation.
+    if (conflict_notifier != nullptr) {
+      return Status::Success;
     }
-
-    // The models are in 'deleted' either when they are asked to be unloaded or
-    // they are not found / are duplicated across all model repositories.
-    // Explicitly remove them from infos.
-    for (const auto& name :
-         (unload_dependents ? deleted_dependents : deleted)) {
-      infos.map_.erase(name);
-    }
-
-    // At this point, it is committed to load/unload the models, so write the
-    // local copy into this object. The state of the models cannot be modified
-    // by another thread while they are locked. Thus, it is safe to release the
-    // mutex while actively loading/unloading models, but the mutex must be
-    // re-held when reading/updating any model info to avoid any corruption.
-    infos_ = infos;
-    global_map_ = global_map;
-    dependency_graph_.Assign(dependency_graph, &global_map_);
-
-    // Unlock the affected models.
-    // This serve 2 purposes:
-    // 1. The unlocked state will be writeback to the dependency graph owned by
-    //    this object, after the load/unload is completed.
-    // 2. It doubles as an indicator that all the locked models will be handled
-    //    by another thread, and this thread must not attempt to load/unload
-    //    those locked models.
-    dependency_graph.UnlockNodes(affected_models);
+    return Status(
+        Status::Code::INTERNAL,
+        "a related model '" + conflict_model->str() +
+            "' to a load/unload request is currently loading or unloading");
   }
 
+  // The models are in 'deleted' either when they are asked to be unloaded or
+  // they are not found / are duplicated across all model repositories.
+  // Explicitly remove them from new infos.
+  for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
+    new_infos.map_.erase(name);
+  }
+
+  // At this point, it is committed to load/unload the models, so write the
+  // local copy into this object. The state of the models cannot be modified by
+  // another thread while they are locked. Thus, it is safe to release the
+  // mutex while actively loading/unloading models, but the mutex must be
+  // re-held when reading/updating any model info to avoid any corruption.
+  infos_ = new_infos;
+  global_map_ = new_global_map;
+  dependency_graph_.Assign(new_dependency_graph, &global_map_);
+
+  // Unlock the affected models.
+  // This serve 2 purposes:
+  // 1. The unlocked state will be writeback to the dependency graph owned by
+  //    this object, after the load/unload is completed.
+  // 2. It doubles as an indicator that all the locked models will be handled
+  //    by another thread, and this thread must not attempt to load/unload
+  //    those locked models.
+  new_dependency_graph.UnlockNodes(affected_models);
+
+  // Release the mutex for parallel loading/unloading
+  lock.unlock();
   // Unload 'deleted' models.
   for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
     model_life_cycle_->AsyncUnload(name);
   }
   // Load/Unload the models affected
-  const auto& load_status = LoadModelByDependency(&dependency_graph, &infos);
+  const auto& load_status =
+      LoadModelByDependency(&new_dependency_graph, &new_infos);
+  // Re-held the mutex after loading/unloading
+  lock.lock();
 
-  {
-    std::lock_guard<std::mutex> lock(mu_);
+  // Write updated info back to this object after model load/unload.
+  infos_.Writeback(new_infos, affected_models);
+  dependency_graph_.Writeback(new_dependency_graph, affected_models);
 
-    // Write updated info back to this object after model load/unload.
-    infos_.Writeback(infos, affected_models);
-    dependency_graph_.Writeback(dependency_graph, affected_models);
-
-    // Check the load status of the requested models.
-    if (type == ActionType::LOAD) {
-      std::string load_error_message = "";
-      for (const auto& model : models) {
-        auto git = global_map_.find(model.first);
-        if (git == global_map_.end()) {
-          // skip the model name that is not found, requested name didn't pass
-          // polling
-          continue;
-        }
-        for (const auto& model_id : git->second) {
-          auto it = load_status.find(model_id);
-          // If 'model.first' not in load status, it means the (re-)load is not
-          // necessary because there is no change in the model's directory
-          if ((it != load_status.end()) && !it->second.IsOk()) {
-            load_error_message +=
-                ("load failed for model '" + model_id.str() +
-                 "': " + it->second.Message() + "\n");
-          }
+  // Check the load status of the requested models.
+  if (type == ActionType::LOAD) {
+    std::string load_error_message = "";
+    for (const auto& model : models) {
+      auto git = global_map_.find(model.first);
+      if (git == global_map_.end()) {
+        // skip the model name that is not found, requested name didn't pass
+        // polling
+        continue;
+      }
+      for (const auto& model_id : git->second) {
+        auto it = load_status.find(model_id);
+        // If 'model.first' not in load status, it means the (re-)load is not
+        // necessary because there is no change in the model's directory
+        if ((it != load_status.end()) && !it->second.IsOk()) {
+          load_error_message +=
+              ("load failed for model '" + model_id.str() +
+               "': " + it->second.Message() + "\n");
         }
       }
-      if (!load_error_message.empty()) {
-        return Status(Status::Code::INVALID_ARG, load_error_message);
-      }
+    }
+    if (!load_error_message.empty()) {
+      return Status(Status::Code::INVALID_ARG, load_error_message);
     }
   }
 
