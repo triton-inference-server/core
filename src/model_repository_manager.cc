@@ -382,7 +382,7 @@ ModelRepositoryManager::Create(
   }
   // Some models may failed to be loaded after model manager is created,
   // return proper error and let function caller decide whether to proceed.
-  for (const auto& model : (*model_repository_manager)->infos_.map_) {
+  for (const auto& model : (*model_repository_manager)->infos_) {
     const auto version_states =
         (*model_repository_manager)
             ->model_life_cycle_->VersionStates(model.first);
@@ -435,7 +435,7 @@ ModelRepositoryManager::PollAndUpdateInternal(bool* all_models_polled)
 
   // Anything in 'infos_' that is not in "added", "modified", or
   // "unmodified" is deleted.
-  for (const auto& pr : infos_.map_) {
+  for (const auto& pr : infos_) {
     if ((added.find(pr.first) == added.end()) &&
         (modified.find(pr.first) == modified.end()) &&
         (unmodified.find(pr.first) == unmodified.end())) {
@@ -507,7 +507,7 @@ ModelRepositoryManager::LoadModelByDependency(
     for (auto& valid_model : set_pair.first) {
       model_states.emplace_back(new ModelState(valid_model));
       auto model_state = model_states.back().get();
-      const auto itr = infos->map_.find(valid_model->model_id_);
+      const auto itr = infos->Find(valid_model->model_id_);
       auto status = model_life_cycle_->AsyncLoad(
           valid_model->model_id_, itr->second->model_path_,
           valid_model->model_config_, itr->second->is_config_provided_,
@@ -539,14 +539,14 @@ ModelRepositoryManager::LoadModelByDependency(
       // for operation idempotence. See comment on 'infos_'
       if (!model_state->status_.IsOk()) {
         auto& model_info =
-            infos->map_.find(model_state->node_->model_id_)->second;
+            infos->Find(model_state->node_->model_id_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
     set_pair = ModelsToLoadUnload(loaded_models, res, dependency_graph);
   }
   // Clear temporary stored agent model list after all loads are triggerred
-  for (auto& info : infos->map_) {
+  for (auto& info : *infos) {
     info.second->agent_model_list_.reset();
   }
   return res;
@@ -615,8 +615,8 @@ ModelRepositoryManager::LoadUnloadModel(
             Status::Code::INTERNAL,
             "failed to load '" + model_name + "', no version is available");
       }
-      auto it = infos_.map_.find(model_id);
-      if (it == infos_.map_.end()) {
+      auto it = infos_.Find(model_id);
+      if (it == infos_.end()) {
         return Status(
             Status::Code::INTERNAL,
             "failed to load '" + model_name +
@@ -726,7 +726,7 @@ ModelRepositoryManager::LoadUnloadModels(
   // they are not found / are duplicated across all model repositories.
   // Explicitly remove them from new infos.
   for (const auto& name : (unload_dependents ? deleted_dependents : deleted)) {
-    new_infos.map_.erase(name);
+    new_infos.Erase(name);
   }
 
   // At this point, it is committed to load/unload the models, so write the
@@ -823,7 +823,7 @@ ModelRepositoryManager::PollModels(
     // (and 'added' etc.), so iterating on the whole structure means
     // re-examination on certain entries.
     std::set<std::string> temp_checked;
-    for (auto& info : new_infos.map_) {
+    for (auto& info : new_infos) {
       // if the model is not "checked", it is model polled at current
       // iteration, check config for more models to be polled
       const bool checked =
@@ -853,19 +853,19 @@ ModelRepositoryManager::PollModels(
 
   // After all polls, only models in the initial set ('models') are
   // explicitly loaded.
-  for (auto& info : new_infos.map_) {
+  for (auto& info : new_infos) {
     info.second->explicitly_load_ =
         (models.find(info.first.name_) != models.end());
   }
 
   // Only update the infos when all validation is completed
   for (const auto& model_name : *added) {
-    auto nitr = new_infos.map_.find(model_name);
-    infos->map_.emplace(model_name, std::move(nitr->second));
+    auto nitr = new_infos.Find(model_name);
+    infos->Emplace(model_name, std::move(nitr->second));
   }
   for (const auto& model_name : *modified) {
-    auto nitr = new_infos.map_.find(model_name);
-    auto itr = infos->map_.find(model_name);
+    auto nitr = new_infos.Find(model_name);
+    auto itr = infos->Find(model_name);
     // Also check the 'explicitly_load_' in previous snapshot, if the model
     // has been explicitly loaded, we shouldn't change its state as it may be
     // polled as composing model and flag is set to false.
@@ -880,7 +880,7 @@ Status
 ModelRepositoryManager::UnloadAllModels()
 {
   Status status;
-  for (const auto& name_info : infos_.map_) {
+  for (const auto& name_info : infos_) {
     Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
     if (!unload_status.IsOk()) {
       status = Status(
@@ -1216,10 +1216,10 @@ ModelRepositoryManager::Poll(
         pair.first, pair.second,
         ((mit == models.end()) ? empty_params : mit->second), &model_info);
 
-    const auto& iitr = infos_.map_.find(pair.first);
-    const bool invalid_add = (!status.IsOk()) && (iitr == infos_.map_.end());
+    const auto& iitr = infos_.Find(pair.first);
+    const bool invalid_add = (!status.IsOk()) && (iitr == infos_.end());
     if (!invalid_add) {
-      const auto& ret = updated_infos->map_.emplace(pair.first, nullptr);
+      const auto& ret = updated_infos->Emplace(pair.first, nullptr);
       if (!ret.second) {
         return Status(
             Status::Code::ALREADY_EXISTS,
@@ -1232,7 +1232,7 @@ ModelRepositoryManager::Poll(
         unmodified->insert(pair.first);
       } else {
         ret.first->second = std::move(model_info);
-        if (iitr != infos_.map_.end()) {
+        if (iitr != infos_.end()) {
           modified->insert(pair.first);
         } else {
           added->insert(pair.first);
@@ -1274,9 +1274,9 @@ ModelRepositoryManager::InitializeModelInfo(
 
   bool unmodified = false;
 
-  const auto iitr = infos_.map_.find(model_id);
+  const auto iitr = infos_.Find(model_id);
   // Set 'prev_mtime_ns_' if there is existing ModelInfo
-  if (iitr != infos_.map_.end()) {
+  if (iitr != infos_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
   } else {
     linfo->prev_mtime_ns_ = 0;
@@ -1313,7 +1313,7 @@ ModelRepositoryManager::InitializeModelInfo(
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
-    if (iitr == infos_.map_.end()) {
+    if (iitr == infos_.end()) {
       linfo->mtime_nsec_ = GetModifiedTime(std::string(linfo->model_path_));
     } else {
       // Check the current timestamps to determine if model actually has been
@@ -1763,8 +1763,7 @@ ModelRepositoryManager::DependencyGraph::UpdateNodes(
       }
 
       // Update model info stored in the node
-      ModelInfo* info = nullptr;
-      model_infos.GetModelInfo(model_id, &info);
+      ModelInfo* info = model_infos.At(model_id).get();
       node->model_config_ = info->model_config_;
       node->explicitly_load_ = info->explicitly_load_;
       node->upstreams_.clear();
@@ -1786,8 +1785,7 @@ ModelRepositoryManager::DependencyGraph::AddNodes(
   // and associate all downstreams, remove from missing_node
   for (const auto& model_id : nodes) {
     std::unique_ptr<DependencyNode> added_node(new DependencyNode(model_id));
-    ModelInfo* info = nullptr;
-    model_infos.GetModelInfo(model_id, &info);
+    ModelInfo* info = model_infos.At(model_id).get();
     added_node->model_config_ = info->model_config_;
     added_node->explicitly_load_ = info->explicitly_load_;
 
@@ -2124,27 +2122,6 @@ ModelRepositoryManager::ModelInfoMap::operator=(const ModelInfoMap& rhs)
   ModelInfoMap tmp(rhs);
   Swap(tmp);
   return *this;
-}
-
-void
-ModelRepositoryManager::ModelInfoMap::Swap(ModelInfoMap& rhs)
-{
-  map_.swap(rhs.map_);
-}
-
-Status
-ModelRepositoryManager::ModelInfoMap::GetModelInfo(
-    const ModelIdentifier& model_id, ModelInfo** model_info) const
-{
-  const auto itr = map_.find(model_id);
-  if (itr == map_.end()) {
-    return Status(
-        Status::Code::NOT_FOUND,
-        "no configuration for model '" + model_id.str() + "'");
-  }
-
-  *model_info = itr->second.get();
-  return Status::Success;
 }
 
 void

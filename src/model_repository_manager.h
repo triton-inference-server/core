@@ -101,21 +101,54 @@ class ModelRepositoryManager {
   };
 
   // Map from model name to information about the model.
-  struct ModelInfoMap {
+  class ModelInfoMap {
+   public:
+    using MapType =
+        std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>>;
+    using Iterator = MapType::iterator;
+    using ConstIterator = MapType::const_iterator;
+
     ModelInfoMap() = default;
     ModelInfoMap(const ModelInfoMap& rhs);
     ModelInfoMap& operator=(const ModelInfoMap& rhs);
 
-    void Swap(ModelInfoMap& rhs);
-    Status GetModelInfo(
-        const ModelIdentifier& model_id, ModelInfo** model_info) const;
+    Iterator begin() noexcept { return map_.begin(); }
+    ConstIterator begin() const noexcept { return map_.begin(); }
+    ConstIterator cbegin() const noexcept { return map_.cbegin(); }
+    Iterator end() noexcept { return map_.end(); }
+    ConstIterator end() const noexcept { return map_.end(); }
+    ConstIterator cend() const noexcept { return map_.cend(); }
+
+    std::pair<Iterator, bool> Emplace(
+        const ModelIdentifier& model_id,
+        std::unique_ptr<ModelInfo>&& model_info)
+    {
+      return map_.emplace(model_id, std::move(model_info));
+    }
+    size_t Erase(const ModelIdentifier& key) { return map_.erase(key); }
+    void Swap(ModelInfoMap& rhs) { map_.swap(rhs.map_); }
+
+    std::unique_ptr<ModelInfo>& At(const ModelIdentifier& key)
+    {
+      return map_.at(key);
+    }
+    const std::unique_ptr<ModelInfo>& At(const ModelIdentifier& key) const
+    {
+      return map_.at(key);
+    }
+    Iterator Find(const ModelIdentifier& key) { return map_.find(key); }
+    ConstIterator Find(const ModelIdentifier& key) const
+    {
+      return map_.find(key);
+    }
 
     // Write updated model info back to this object after model load/unload.
     void Writeback(
         const ModelInfoMap& updated_model_info,
         const std::set<ModelIdentifier>& affected_models);
 
-    std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>> map_;
+   private:
+    MapType map_;
   };
 
   /// A basic unit in dependency graph that records the models seen by the model
