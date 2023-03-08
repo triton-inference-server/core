@@ -29,6 +29,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <condition_variable>
 #include <set>
 #include "infer_parameter.h"
 #include "model_config.pb.h"
@@ -117,12 +118,28 @@ class ModelRepositoryManager {
     std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>> map_;
   };
 
+  // std::condition_variable wrapper with mutex included
+  class ConditionVariable {
+   public:
+    ConditionVariable() = default;
+    ConditionVariable(const ConditionVariable&) = delete;
+    ConditionVariable& operator=(const ConditionVariable&) = delete;
+
+    void wait();
+    void notify_all();
+
+   private:
+    std::mutex mu_;
+    std::condition_variable cv_;
+  };
+
   /// A basic unit in dependency graph that records the models seen by the model
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const ModelIdentifier& model_id)
         : status_(Status::Success), model_id_(model_id), checked_(false),
-          connected_(false), is_locked_(false)
+          connected_(false), is_locked_(false),
+          conflict_retry_cv_(new ConditionVariable())
     {
     }
 
@@ -168,6 +185,14 @@ class ModelRepositoryManager {
     // depend on the current state of this model.
     // i.e. this model is being unloaded, or this is an ensemble dependency.
     bool is_locked_;
+    // when there is a load/unload conflict, related to the model represented
+    // by this node, the calling thread should wait on this condition variable
+    // until it is notified to retry.
+    // this is an optional measure to reduce the number of retry before the
+    // conflict is resolved, which is not to be relied upon to determine if the
+    // conflict has been resolved and will remain resolved during the retry.
+    // i.e. it is safe to not wait until notified and move forward.
+    std::shared_ptr<ConditionVariable> conflict_retry_cv_;
   };
 
   // Interface for dependency graph operations
@@ -221,9 +246,13 @@ class ModelRepositoryManager {
     // locked when it is not found on this dependency graph, as the node could
     // be deleted on this graph from the previous, and correctly return the
     // identifier.
+    // The conflict retry cv can be provided optionally. If a node is already
+    // locked, it will be set to a cv that the calling thread can wait on
+    // until notified to retry, to reduce the number of retries.
     std::unique_ptr<ModelIdentifier> LockNodes(
         const std::set<ModelIdentifier>& nodes,
-        const DependencyGraph& prev_dependency_graph);
+        const DependencyGraph& prev_dependency_graph,
+        std::shared_ptr<ConditionVariable>* conflict_retry_cv = nullptr);
 
     // Set the nodes to unlock state. If a node is already unlocked, then the
     // identifier of the node is returned. Otherwise, nullptr is returned.
@@ -231,6 +260,7 @@ class ModelRepositoryManager {
         const std::set<ModelIdentifier>& nodes);
 
     // Write updated graph back to this object after model load/unload.
+    // This will also notify load/unload conflict to retry.
     void Writeback(
         const DependencyGraph& updated_dependency_graph,
         const std::set<ModelIdentifier>& affected_models);
@@ -448,11 +478,14 @@ class ModelRepositoryManager {
   Status PollAndUpdateInternal(bool* all_models_polled);
 
   /// The internal function that load or unload a set of models.
+  /// If there is a load/unload conflict, the shared pointer contains a
+  /// condition variable. Otherwise, the shared pointer contains nothing.
   Status LoadUnloadModels(
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents,
-      bool* all_models_polled, bool* no_parallel_conflict = nullptr);
+      bool* all_models_polled,
+      std::shared_ptr<ConditionVariable>* conflict_retry_cv = nullptr);
 
   /// Helper function for LoadUnloadModels() to find the set of added, deleted,
   /// modified and unmodified models. Also update the provided model infos.
