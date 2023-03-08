@@ -125,8 +125,8 @@ class ModelRepositoryManager {
     ConditionVariable(const ConditionVariable&) = delete;
     ConditionVariable& operator=(const ConditionVariable&) = delete;
 
-    void wait();
-    void notify_all();
+    void Wait();
+    void NotifyAll();
 
    private:
     std::mutex mu_;

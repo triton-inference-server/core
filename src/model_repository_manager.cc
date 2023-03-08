@@ -590,7 +590,7 @@ ModelRepositoryManager::LoadUnloadModel(
     RETURN_IF_ERROR(LoadUnloadModels(
         models, type, unload_dependents, &polled, &conflict_retry_cv));
     if (conflict_retry_cv) {
-      conflict_retry_cv->wait();
+      conflict_retry_cv->Wait();
     }
   } while (conflict_retry_cv);
   // Check if model is loaded / unloaded properly
@@ -2111,7 +2111,7 @@ ModelRepositoryManager::DependencyGraph::Writeback(
       node->loaded_versions_ = updated_node->loaded_versions_;
       node->is_locked_ = updated_node->is_locked_;
       // Notify retry(s)
-      node->conflict_retry_cv_->notify_all();
+      node->conflict_retry_cv_->NotifyAll();
     }
   }
 }
@@ -2172,14 +2172,14 @@ ModelRepositoryManager::ModelInfoMap::Writeback(
 }
 
 void
-ModelRepositoryManager::ConditionVariable::wait()
+ModelRepositoryManager::ConditionVariable::Wait()
 {
   std::unique_lock<std::mutex> lock(mu_);
   cv_.wait(lock);
 }
 
 void
-ModelRepositoryManager::ConditionVariable::notify_all()
+ModelRepositoryManager::ConditionVariable::NotifyAll()
 {
   cv_.notify_all();
 }
