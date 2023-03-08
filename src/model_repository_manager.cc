@@ -656,6 +656,8 @@ ModelRepositoryManager::LoadUnloadModels(
     bool* all_models_polled,
     std::shared_ptr<ConditionVariable>* conflict_retry_cv)
 {
+  *all_models_polled = true;
+
   // They are here to hold information for loading/unloading models later, and
   // also hold after loading/unloading information to be written back to this
   // object later.
@@ -675,9 +677,27 @@ ModelRepositoryManager::LoadUnloadModels(
     // Also poll the added, deleted, modified, unmodified models.
     infos = infos_;
     std::set<ModelIdentifier> added, modified, unmodified;
-    RETURN_IF_ERROR(LoadUnloadModelsPoll(
-        models, type, &added, &deleted, &modified, &unmodified, &infos,
-        all_models_polled));
+    switch (type) {
+      case ActionType::LOAD:
+        RETURN_IF_ERROR(PollModels(
+            models, &added, &deleted, &modified, &unmodified, &infos,
+            all_models_polled));
+        break;
+      case ActionType::UNLOAD:
+        for (const auto& model : models) {
+          // Within the class, model is referred by ModelIdentifier, so it needs
+          // to check global map to find identifier assoicated with the name.
+          auto git = global_map_.find(model.first);
+          if (git != global_map_.end()) {
+            for (const auto& mid : git->second) {
+              deleted.insert(mid);
+            }
+          }
+        }
+        break;
+      default:
+        return Status(Status::Code::INTERNAL, "Invalid action type");
+    }
 
     // Make a copy of the dependency graph for rollback if there is a collision
     // between the models to be loaded/unloaded by this thread with another
@@ -781,101 +801,86 @@ ModelRepositoryManager::LoadUnloadModels(
 }
 
 Status
-ModelRepositoryManager::LoadUnloadModelsPoll(
+ModelRepositoryManager::PollModels(
     const std::unordered_map<
         std::string, std::vector<const InferenceParameter*>>& models,
-    const ActionType type, std::set<ModelIdentifier>* added,
-    std::set<ModelIdentifier>* deleted, std::set<ModelIdentifier>* modified,
-    std::set<ModelIdentifier>* unmodified, ModelInfoMap* infos,
-    bool* all_models_polled)
+    std::set<ModelIdentifier>* added, std::set<ModelIdentifier>* deleted,
+    std::set<ModelIdentifier>* modified, std::set<ModelIdentifier>* unmodified,
+    ModelInfoMap* infos, bool* all_models_polled)
 {
   *all_models_polled = true;
-  if (type == ActionType::UNLOAD) {
-    for (const auto& model : models) {
-      // Within the class, model is referred by ModelIdentifier, so it needs to
-      // check global map to find identifier assoicated with the name.
-      auto git = global_map_.find(model.first);
-      if (git != global_map_.end()) {
-        for (const auto& mid : git->second) {
-          deleted->insert(mid);
-        }
-      }
-    }
-  }
-  // ActionType::LOAD and in model control mode
-  else {
-    std::set<std::string> checked_models;
-    auto current_models = models;
 
-    ModelInfoMap new_infos;
-    while (!current_models.empty()) {
-      bool polled = true;
-      RETURN_IF_ERROR(Poll(
-          current_models, added, deleted, modified, unmodified, &new_infos,
-          &polled));
-      *all_models_polled &= polled;
+  std::set<std::string> checked_models;
+  auto current_models = models;
 
-      // A polling chain is needed if the polled model is ensemble, so that all
-      // (up-to-date) composing models are exposed to Triton.
-      std::set<std::string> next_models;
-      // The intention here is to iteratively expand the collection of models
-      // to be polled for this load operation, if ensemble is involved, until
-      // the collection is self-contained.
-      // [FIXME] Every Poll() above add new entries in existing 'new_infos'
-      // (and 'added' etc.), so iterating on the whole structure means
-      // re-examination on certain entries.
-      std::set<std::string> temp_checked;
-      for (auto& info : new_infos.map_) {
-        // if the model is not "checked", it is model polled at current
-        // iteration, check config for more models to be polled
-        const bool checked =
-            (checked_models.find(info.first.name_) != checked_models.end());
-        if (!checked) {
-          // Don't add the model name to 'checked_models' as there may be same
-          // name model polled but with different namespace
-          temp_checked.emplace(info.first.name_);
-          const auto& config = info.second->model_config_;
-          if (config.has_ensemble_scheduling()) {
-            for (const auto& step : config.ensemble_scheduling().step()) {
-              next_models.emplace(step.model_name());
-            }
+  ModelInfoMap new_infos;
+  while (!current_models.empty()) {
+    bool polled = true;
+    RETURN_IF_ERROR(Poll(
+        current_models, added, deleted, modified, unmodified, &new_infos,
+        &polled));
+    *all_models_polled &= polled;
+
+    // A polling chain is needed if the polled model is ensemble, so that all
+    // (up-to-date) composing models are exposed to Triton.
+    std::set<std::string> next_models;
+    // The intention here is to iteratively expand the collection of models
+    // to be polled for this load operation, if ensemble is involved, until
+    // the collection is self-contained.
+    // [FIXME] Every Poll() above add new entries in existing 'new_infos'
+    // (and 'added' etc.), so iterating on the whole structure means
+    // re-examination on certain entries.
+    std::set<std::string> temp_checked;
+    for (auto& info : new_infos.map_) {
+      // if the model is not "checked", it is model polled at current
+      // iteration, check config for more models to be polled
+      const bool checked =
+          (checked_models.find(info.first.name_) != checked_models.end());
+      if (!checked) {
+        // Don't add the model name to 'checked_models' as there may be same
+        // name model polled but with different namespace
+        temp_checked.emplace(info.first.name_);
+        const auto& config = info.second->model_config_;
+        if (config.has_ensemble_scheduling()) {
+          for (const auto& step : config.ensemble_scheduling().step()) {
+            next_models.emplace(step.model_name());
           }
         }
       }
-      AddToSet(temp_checked, &checked_models);
-      // trim the model if it has been checked
-      current_models.clear();
-      for (const auto& name : next_models) {
-        const bool checked =
-            (checked_models.find(name) != checked_models.end());
-        if (!checked) {
-          current_models[name];
-        }
+    }
+    AddToSet(temp_checked, &checked_models);
+    // trim the model if it has been checked
+    current_models.clear();
+    for (const auto& name : next_models) {
+      const bool checked = (checked_models.find(name) != checked_models.end());
+      if (!checked) {
+        current_models[name];
       }
     }
-
-    // After all polls, only models in the initial set ('models') are
-    // explicitly loaded.
-    for (auto& info : new_infos.map_) {
-      info.second->explicitly_load_ =
-          (models.find(info.first.name_) != models.end());
-    }
-
-    // Only update the infos when all validation is completed
-    for (const auto& model_name : *added) {
-      auto nitr = new_infos.map_.find(model_name);
-      infos->map_.emplace(model_name, std::move(nitr->second));
-    }
-    for (const auto& model_name : *modified) {
-      auto nitr = new_infos.map_.find(model_name);
-      auto itr = infos->map_.find(model_name);
-      // Also check the 'explicitly_load_' in previous snapshot, if the model
-      // has been explicitly loaded, we shouldn't change its state as it may be
-      // polled as composing model and flag is set to false.
-      nitr->second->explicitly_load_ |= itr->second->explicitly_load_;
-      itr->second = std::move(nitr->second);
-    }
   }
+
+  // After all polls, only models in the initial set ('models') are
+  // explicitly loaded.
+  for (auto& info : new_infos.map_) {
+    info.second->explicitly_load_ =
+        (models.find(info.first.name_) != models.end());
+  }
+
+  // Only update the infos when all validation is completed
+  for (const auto& model_name : *added) {
+    auto nitr = new_infos.map_.find(model_name);
+    infos->map_.emplace(model_name, std::move(nitr->second));
+  }
+  for (const auto& model_name : *modified) {
+    auto nitr = new_infos.map_.find(model_name);
+    auto itr = infos->map_.find(model_name);
+    // Also check the 'explicitly_load_' in previous snapshot, if the model
+    // has been explicitly loaded, we shouldn't change its state as it may be
+    // polled as composing model and flag is set to false.
+    nitr->second->explicitly_load_ |= itr->second->explicitly_load_;
+    itr->second = std::move(nitr->second);
+  }
+
   return Status::Success;
 }
 

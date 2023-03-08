@@ -491,11 +491,11 @@ class ModelRepositoryManager {
   /// modified and unmodified models. Also update the provided model infos.
   /// This function will not update the model info held by this object, it is
   /// the responsibility of LoadUnloadModels() to do so.
-  Status LoadUnloadModelsPoll(
+  Status PollModels(
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
-      const ActionType type, std::set<ModelIdentifier>* added,
-      std::set<ModelIdentifier>* deleted, std::set<ModelIdentifier>* modified,
+      std::set<ModelIdentifier>* added, std::set<ModelIdentifier>* deleted,
+      std::set<ModelIdentifier>* modified,
       std::set<ModelIdentifier>* unmodified, ModelInfoMap* infos,
       bool* all_models_polled);
 
