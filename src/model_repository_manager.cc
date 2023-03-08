@@ -585,14 +585,12 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   bool polled = true;
-  std::shared_ptr<EventNotifier> conflict_notifier;
+  bool no_parallel_conflict = true;
   do {
+    // Function will block during a conflict, so safe to retry immediately.
     RETURN_IF_ERROR(LoadUnloadModels(
-        models, type, unload_dependents, &polled, &conflict_notifier));
-    if (conflict_notifier) {
-      conflict_notifier->Wait();
-    }
-  } while (conflict_notifier);
+        models, type, unload_dependents, &polled, &no_parallel_conflict));
+  } while (!no_parallel_conflict);
   // Check if model is loaded / unloaded properly
   if (!polled) {
     return Status(
@@ -653,8 +651,13 @@ ModelRepositoryManager::LoadUnloadModels(
     const std::unordered_map<
         std::string, std::vector<const InferenceParameter*>>& models,
     const ActionType type, const bool unload_dependents,
-    bool* all_models_polled, std::shared_ptr<EventNotifier>* conflict_notifier)
+    bool* all_models_polled, bool* no_parallel_conflict)
 {
+  *all_models_polled = true;
+  if (no_parallel_conflict != nullptr) {
+    *no_parallel_conflict = true;
+  }
+
   std::unique_lock<std::mutex> lock(mu_);
 
   // Prepare new model infos related to file system accordingly, do not write
@@ -679,7 +682,6 @@ ModelRepositoryManager::LoadUnloadModels(
           }
         }
       }
-      *all_models_polled = true;
       break;
     default:
       return Status(Status::Code::INTERNAL, "Invalid action type");
@@ -702,13 +704,16 @@ ModelRepositoryManager::LoadUnloadModels(
   affected_models.insert(unmodified.begin(), unmodified.end());
 
   // Check for collision in affected models and try to lock those models.
+  std::shared_ptr<std::condition_variable> retry_notify_cv;
   auto conflict_model = new_dependency_graph.LockNodes(
       affected_models, dependency_graph_ /* prev_dependency_graph */,
-      conflict_notifier);
+      &retry_notify_cv);
   if (conflict_model) {
     // A collision is found. Since info is only written to local copy, so it is
     // safe to rollback by simply returning the conflict infomation.
-    if (conflict_notifier != nullptr) {
+    if (no_parallel_conflict != nullptr) {
+      *no_parallel_conflict = false;
+      retry_notify_cv->wait(lock);
       return Status::Success;
     }
     return Status(
@@ -2033,7 +2038,7 @@ std::unique_ptr<ModelIdentifier>
 ModelRepositoryManager::DependencyGraph::LockNodes(
     const std::set<ModelIdentifier>& nodes,
     const DependencyGraph& prev_dependency_graph,
-    std::shared_ptr<EventNotifier>* conflict_notifier)
+    std::shared_ptr<std::condition_variable>* retry_notify_cv)
 {
   for (const auto& model_id : nodes) {
     auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
@@ -2042,8 +2047,8 @@ ModelRepositoryManager::DependencyGraph::LockNodes(
     if (node != nullptr) {
       // The node is on this graph, check the lock state and then lock.
       if (node->is_locked_) {
-        if (conflict_notifier != nullptr) {
-          *conflict_notifier = node->conflict_notifier_;
+        if (retry_notify_cv != nullptr) {
+          *retry_notify_cv = node->retry_notify_cv_;
         }
         return std::make_unique<ModelIdentifier>(model_id);
       }
@@ -2053,15 +2058,12 @@ ModelRepositoryManager::DependencyGraph::LockNodes(
       node = prev_dependency_graph.FindNode(
           model_id, false /* allow_fuzzy_matching */);
       if (node != nullptr && node->is_locked_) {
-        if (conflict_notifier != nullptr) {
-          *conflict_notifier = node->conflict_notifier_;
+        if (retry_notify_cv != nullptr) {
+          *retry_notify_cv = node->retry_notify_cv_;
         }
         return std::make_unique<ModelIdentifier>(model_id);
       }
     }
-  }
-  if (conflict_notifier != nullptr) {
-    conflict_notifier->reset();
   }
   return std::unique_ptr<ModelIdentifier>(nullptr);
 }
@@ -2103,7 +2105,7 @@ ModelRepositoryManager::DependencyGraph::Writeback(
       node->loaded_versions_ = updated_node->loaded_versions_;
       node->is_locked_ = updated_node->is_locked_;
       // Notify retry(s)
-      node->conflict_notifier_->NotifyAll();
+      node->retry_notify_cv_->notify_all();
     }
   }
 }
@@ -2161,19 +2163,6 @@ ModelRepositoryManager::ModelInfoMap::Writeback(
       info->mtime_nsec_ = updated_info->mtime_nsec_;
     }
   }
-}
-
-void
-ModelRepositoryManager::EventNotifier::Wait()
-{
-  std::unique_lock<std::mutex> lock(mu_);
-  cv_.wait(lock);
-}
-
-void
-ModelRepositoryManager::EventNotifier::NotifyAll()
-{
-  cv_.notify_all();
 }
 
 }}  // namespace triton::core

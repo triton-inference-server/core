@@ -118,31 +118,13 @@ class ModelRepositoryManager {
     std::unordered_map<ModelIdentifier, std::unique_ptr<ModelInfo>> map_;
   };
 
-  // Represent an event that can be shared between threads, which one or more
-  // thread(s) can wait to be notified by a distinct thread.
-  class EventNotifier {
-   public:
-    EventNotifier() = default;
-    EventNotifier(const EventNotifier&) = delete;
-    EventNotifier& operator=(const EventNotifier&) = delete;
-
-    // Block the calling thread until notified.
-    void Wait();
-    // Unblock all blocked threads.
-    void NotifyAll();
-
-   private:
-    std::mutex mu_;
-    std::condition_variable cv_;
-  };
-
   /// A basic unit in dependency graph that records the models seen by the model
   /// repository manager.
   struct DependencyNode {
     DependencyNode(const ModelIdentifier& model_id)
         : status_(Status::Success), model_id_(model_id), checked_(false),
           connected_(false), is_locked_(false),
-          conflict_notifier_(new EventNotifier())
+          retry_notify_cv_(new std::condition_variable())
     {
     }
 
@@ -189,13 +171,13 @@ class ModelRepositoryManager {
     // i.e. this model is being unloaded, or this is an ensemble dependency.
     bool is_locked_;
     // when there is a load/unload conflict, related to the model represented
-    // by this node, the calling thread should wait on this event notifier
+    // by this node, the calling thread should wait on this condition variable
     // until notified to retry.
     // this is an optional measure to reduce the number of retry before the
     // conflict is resolved, which is not to be relied upon to determine if the
     // conflict has been resolved and will remain resolved during the retry.
-    // i.e. it is safe to not wait until notified and move forward.
-    std::shared_ptr<EventNotifier> conflict_notifier_;
+    // i.e. it is safe to move forward without waiting until notified.
+    std::shared_ptr<std::condition_variable> retry_notify_cv_;
   };
 
   // Interface for dependency graph operations
@@ -256,7 +238,7 @@ class ModelRepositoryManager {
     std::unique_ptr<ModelIdentifier> LockNodes(
         const std::set<ModelIdentifier>& nodes,
         const DependencyGraph& prev_dependency_graph,
-        std::shared_ptr<EventNotifier>* conflict_notifier = nullptr);
+        std::shared_ptr<std::condition_variable>* retry_notify_cv = nullptr);
 
     // Set the nodes to unlock state. If a node is already unlocked, then the
     // identifier of the node is returned. Otherwise, nullptr is returned.
@@ -484,15 +466,16 @@ class ModelRepositoryManager {
   Status PollAndUpdateInternal(bool* all_models_polled);
 
   /// The internal function that load or unload a set of models.
-  /// If there is a load/unload conflict, the shared pointer contains an event
-  /// notifier that will unblock when it is ready to retry. Otherwise, the
-  /// shared pointer will be empty.
+  /// If 'no_parallel_conflict' is provided and there is a conflict, then the
+  /// function will block until the conflict is resolved and set the correct
+  /// value into the variable, and return with success status for retrying.
+  /// If 'no_parallel_conflict' is not provided and there is a conflict, then
+  /// the function will return immediately with an error status.
   Status LoadUnloadModels(
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents,
-      bool* all_models_polled,
-      std::shared_ptr<EventNotifier>* conflict_notifier = nullptr);
+      bool* all_models_polled, bool* no_parallel_conflict = nullptr);
 
   /// Helper function for LoadUnloadModels() to find the set of added, deleted,
   /// modified and unmodified models. Also update the provided model infos.
