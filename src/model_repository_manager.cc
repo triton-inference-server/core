@@ -585,14 +585,14 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   bool polled = true;
-  std::shared_ptr<ConditionVariable> conflict_retry_cv;
+  std::shared_ptr<EventNotifier> conflict_notifier;
   do {
     RETURN_IF_ERROR(LoadUnloadModels(
-        models, type, unload_dependents, &polled, &conflict_retry_cv));
-    if (conflict_retry_cv) {
-      conflict_retry_cv->Wait();
+        models, type, unload_dependents, &polled, &conflict_notifier));
+    if (conflict_notifier) {
+      conflict_notifier->Wait();
     }
-  } while (conflict_retry_cv);
+  } while (conflict_notifier);
   // Check if model is loaded / unloaded properly
   if (!polled) {
     return Status(
@@ -653,8 +653,7 @@ ModelRepositoryManager::LoadUnloadModels(
     const std::unordered_map<
         std::string, std::vector<const InferenceParameter*>>& models,
     const ActionType type, const bool unload_dependents,
-    bool* all_models_polled,
-    std::shared_ptr<ConditionVariable>* conflict_retry_cv)
+    bool* all_models_polled, std::shared_ptr<EventNotifier>* conflict_notifier)
 {
   *all_models_polled = true;
 
@@ -716,11 +715,11 @@ ModelRepositoryManager::LoadUnloadModels(
     // Check for collision in affected models and try to lock those models.
     auto conflict_model = dependency_graph.LockNodes(
         affected_models, dependency_graph_ /* prev_dependency_graph */,
-        conflict_retry_cv);
+        conflict_notifier);
     if (conflict_model) {
       // A collision is found. Since info is only written to local copy, so it
       // is safe to rollback by simply returning the conflict infomation.
-      if (conflict_retry_cv != nullptr) {
+      if (conflict_notifier != nullptr) {
         return Status::Success;
       }
       return Status(
@@ -2046,7 +2045,7 @@ std::unique_ptr<ModelIdentifier>
 ModelRepositoryManager::DependencyGraph::LockNodes(
     const std::set<ModelIdentifier>& nodes,
     const DependencyGraph& prev_dependency_graph,
-    std::shared_ptr<ConditionVariable>* conflict_retry_cv)
+    std::shared_ptr<EventNotifier>* conflict_notifier)
 {
   for (const auto& model_id : nodes) {
     auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
@@ -2055,8 +2054,8 @@ ModelRepositoryManager::DependencyGraph::LockNodes(
     if (node != nullptr) {
       // The node is on this graph, check the lock state and then lock.
       if (node->is_locked_) {
-        if (conflict_retry_cv != nullptr) {
-          *conflict_retry_cv = node->conflict_retry_cv_;
+        if (conflict_notifier != nullptr) {
+          *conflict_notifier = node->conflict_notifier_;
         }
         return std::make_unique<ModelIdentifier>(model_id);
       }
@@ -2066,15 +2065,15 @@ ModelRepositoryManager::DependencyGraph::LockNodes(
       node = prev_dependency_graph.FindNode(
           model_id, false /* allow_fuzzy_matching */);
       if (node != nullptr && node->is_locked_) {
-        if (conflict_retry_cv != nullptr) {
-          *conflict_retry_cv = node->conflict_retry_cv_;
+        if (conflict_notifier != nullptr) {
+          *conflict_notifier = node->conflict_notifier_;
         }
         return std::make_unique<ModelIdentifier>(model_id);
       }
     }
   }
-  if (conflict_retry_cv != nullptr) {
-    conflict_retry_cv->reset();
+  if (conflict_notifier != nullptr) {
+    conflict_notifier->reset();
   }
   return std::unique_ptr<ModelIdentifier>(nullptr);
 }
@@ -2116,7 +2115,7 @@ ModelRepositoryManager::DependencyGraph::Writeback(
       node->loaded_versions_ = updated_node->loaded_versions_;
       node->is_locked_ = updated_node->is_locked_;
       // Notify retry(s)
-      node->conflict_retry_cv_->NotifyAll();
+      node->conflict_notifier_->NotifyAll();
     }
   }
 }
@@ -2177,14 +2176,14 @@ ModelRepositoryManager::ModelInfoMap::Writeback(
 }
 
 void
-ModelRepositoryManager::ConditionVariable::Wait()
+ModelRepositoryManager::EventNotifier::Wait()
 {
   std::unique_lock<std::mutex> lock(mu_);
   cv_.wait(lock);
 }
 
 void
-ModelRepositoryManager::ConditionVariable::NotifyAll()
+ModelRepositoryManager::EventNotifier::NotifyAll()
 {
   cv_.notify_all();
 }
