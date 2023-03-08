@@ -870,30 +870,20 @@ TRITONSERVER_InferenceTraceModelName(
 /// Set the name associated with a trace.
 ///
 /// \param trace The trace.
-/// \param name The name associated with the trace.
+/// \param trace_name The name associated with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceTraceSetModelName(
-    TRITONSERVER_InferenceTrace* trace, const char* name);
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceSetName(
+    TRITONSERVER_InferenceTrace* trace, const char* trace_name);
 
 /// Get the name associated with a trace. The caller does
 /// not own the returned string and must not modify or delete it. The
 /// lifetime of the returned string extends only as long as 'trace'.
 ///
 /// \param trace The trace.
-/// \param name Returns the name associated with the trace.
+/// \param trace_name Returns the name associated with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceName(
-    TRITONSERVER_InferenceTrace* trace, const char** name);
-
-/// Set the name associated with a trace.
-///
-/// \param trace The trace.
-/// \param trace_name The anme associated with a trace.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceTraceSetName(
-    TRITONSERVER_InferenceTrace* trace, const char* trace_name);
+    TRITONSERVER_InferenceTrace* trace, const char** trace_name);
 
 /// Get the version of the model associated with a trace.
 ///

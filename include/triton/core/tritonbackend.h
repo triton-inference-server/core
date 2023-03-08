@@ -1525,7 +1525,7 @@ TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
 ///
 /// \param batcher User-defined placeholder for backend to store and
 /// retrieve information about the batching strategy for this
-/// model.RITONBACKEND_ISPEC return a TRITONSERVER_Error indicating success or
+/// model. TRITONBACKEND_ISPEC returns a TRITONSERVER_Error indicating success or
 /// failure. \param model The backend model for which Triton is forming a batch.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatcherInitialize(
