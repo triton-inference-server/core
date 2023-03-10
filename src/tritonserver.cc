@@ -26,6 +26,7 @@
 
 #include <string>
 #include <vector>
+
 #include "buffer_attributes.h"
 #include "cuda_utils.h"
 #include "infer_parameter.h"
@@ -1875,6 +1876,45 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
   RETURN_IF_STATUS_ERROR(lrequest->SetResponseCallback(
       lallocator, response_allocator_userp, response_fn, response_userp));
   return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_RequestSetStringParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const char* value)
+{
+  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
+  Status status = tr->AddParameter(name, value);
+  if (!status.IsOk()) {
+    return TRITONSERVER_ErrorNew(
+        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+  }
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_RequestSetIntParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const int64_t value)
+{
+  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
+  Status status = tr->AddParameter(name, value);
+  if (!status.IsOk()) {
+    return TRITONSERVER_ErrorNew(
+        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+  }
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_RequestSetBoolParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const bool value)
+{
+  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
+  Status status = tr->AddParameter(name, value);
+  if (!status.IsOk()) {
+    return TRITONSERVER_ErrorNew(
+        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+  }
+  return nullptr;  // success
 }
 
 //

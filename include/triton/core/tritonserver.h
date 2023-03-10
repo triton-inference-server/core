@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 20
+#define TRITONSERVER_API_VERSION_MINOR 21
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1282,6 +1282,36 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
     void* response_allocator_userp,
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp);
+
+/// Set a string parameter in the request.
+///
+/// \param request The request.
+/// \param name The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_RequestSetStringParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const char* value);
+
+/// Set an integer parameter in the request.
+///
+/// \param request The request.
+/// \param name The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_RequestSetIntParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const int64_t value);
+
+/// Set an boolean parameter in the request.
+///
+/// \param request The request.
+/// \param name The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_RequestSetBoolParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const bool value);
 
 /// TRITONSERVER_InferenceResponse
 ///

@@ -335,6 +335,15 @@ class InferenceRequest {
     response_factory_->ReleaseTrace();
   }
 
+  // Add an parameter to the request.
+  Status AddParameter(const char* name, const char* value);
+  Status AddParameter(const char* name, const int64_t value);
+  Status AddParameter(const char* name, const bool value);
+  const std::deque<InferenceParameter>& Parameters() const
+  {
+    return parameters_;
+  }
+
   Status TraceInputTensors(
       TRITONSERVER_InferenceTraceActivity activity, const std::string& msg);
 #endif  // TRITON_ENABLE_TRACING
@@ -735,6 +744,10 @@ class InferenceRequest {
 
   // Whether the stats of the request should be collected.
   bool collect_stats_;
+
+  // The parameters of the response. Use a deque so that there is no
+  // reallocation.
+  std::deque<InferenceParameter> parameters_;
 
 #ifdef TRITON_ENABLE_STATS
   uint64_t request_start_ns_;
