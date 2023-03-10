@@ -1882,25 +1882,18 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_RequestSetStringParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const char* value)
 {
-  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  Status status = tr->AddParameter(name, value);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_RequestSetIntParameter(
-    TRITONSERVER_InferenceRequest* request, const char* name, const int64_t value)
+    TRITONSERVER_InferenceRequest* request, const char* name,
+    const int64_t value)
 {
-  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  Status status = tr->AddParameter(name, value);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
 }
 
@@ -1908,12 +1901,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_RequestSetBoolParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const bool value)
 {
-  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  Status status = tr->AddParameter(name, value);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
 }
 

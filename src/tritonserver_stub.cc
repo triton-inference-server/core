@@ -695,6 +695,14 @@ TRITONSERVER_RequestSetStringParameter()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestParameter()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestParameterCount()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ResponseFactoryNew()
 {
 }

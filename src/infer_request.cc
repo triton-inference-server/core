@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <deque>
+
 #include "model.h"
 #include "model_config_utils.h"
 #include "server.h"
@@ -128,6 +129,27 @@ InferenceRequest::SetPriority(uint32_t p)
   } else {
     priority_ = p;
   }
+}
+
+Status
+InferenceRequest::AddParameter(const char* name, const char* value)
+{
+  parameters_.emplace_back(name, value);
+  return Status::Success;
+}
+
+Status
+InferenceRequest::AddParameter(const char* name, const int64_t value)
+{
+  parameters_.emplace_back(name, value);
+  return Status::Success;
+}
+
+Status
+InferenceRequest::AddParameter(const char* name, const bool value)
+{
+  parameters_.emplace_back(name, value);
+  return Status::Success;
 }
 
 #ifdef TRITON_ENABLE_TRACING

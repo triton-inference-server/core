@@ -433,7 +433,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestParameterCount(
 /// \param type Returns the type of the parameter.
 /// \param vvalue Returns a pointer to the parameter value.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONSERVER_RequestParameter(
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestParameter(
     TRITONBACKEND_Request* request, const uint32_t index, const char** name,
     TRITONSERVER_ParameterType* type, const void** vvalue);
 
