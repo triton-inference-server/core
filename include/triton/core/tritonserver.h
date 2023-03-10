@@ -1303,7 +1303,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_RequestSetIntParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const int64_t value);
 
-/// Set an boolean parameter in the request.
+/// Set a boolean parameter in the request.
 ///
 /// \param request The request.
 /// \param name The name of the parameter.

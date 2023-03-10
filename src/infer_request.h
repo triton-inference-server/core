@@ -745,7 +745,7 @@ class InferenceRequest {
   // Whether the stats of the request should be collected.
   bool collect_stats_;
 
-  // The parameters of the response. Use a deque so that there is no
+  // The parameters of the request. Use a deque so that there is no
   // reallocation.
   std::deque<InferenceParameter> parameters_;
 

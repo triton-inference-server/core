@@ -670,7 +670,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value);
 
-/// Set an boolean parameter in the response.
+/// Set a boolean parameter in the response.
 ///
 /// \param response The response.
 /// \param name The name of the parameter.
