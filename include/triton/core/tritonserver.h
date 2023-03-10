@@ -1290,7 +1290,7 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_RequestSetStringParameter(
+TRITONSERVER_InferenceRequestSetStringParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const char* value);
 
 /// Set an integer parameter in the request.
@@ -1300,7 +1300,7 @@ TRITONSERVER_RequestSetStringParameter(
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_RequestSetIntParameter(
+TRITONSERVER_InferenceRequestSetIntParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const int64_t value);
 
 /// Set a boolean parameter in the request.
@@ -1310,7 +1310,7 @@ TRITONSERVER_RequestSetIntParameter(
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_RequestSetBoolParameter(
+TRITONSERVER_InferenceRequestSetBoolParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const bool value);
 
 /// TRITONSERVER_InferenceResponse

@@ -1879,7 +1879,7 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_RequestSetStringParameter(
+TRITONSERVER_InferenceRequestSetStringParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const char* value)
 {
   tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
@@ -1888,7 +1888,7 @@ TRITONSERVER_RequestSetStringParameter(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_RequestSetIntParameter(
+TRITONSERVER_InferenceRequestSetIntParameter(
     TRITONSERVER_InferenceRequest* request, const char* name,
     const int64_t value)
 {
@@ -1898,7 +1898,7 @@ TRITONSERVER_RequestSetIntParameter(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_RequestSetBoolParameter(
+TRITONSERVER_InferenceRequestSetBoolParameter(
     TRITONSERVER_InferenceRequest* request, const char* name, const bool value)
 {
   tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
