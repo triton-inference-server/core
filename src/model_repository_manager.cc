@@ -711,6 +711,7 @@ ModelRepositoryManager::LoadUnloadModels(
   if (conflict_model) {
     // A collision is found. Since info is only written to local copy, so it is
     // safe to rollback by simply returning the conflict infomation.
+    LOG_VERBOSE(2) << "Load/Unload conflict '" << conflict_model->str() << "'";
     if (no_parallel_conflict != nullptr) {
       *no_parallel_conflict = false;
       retry_notify_cv->wait(lock);
