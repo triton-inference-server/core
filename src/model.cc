@@ -125,7 +125,7 @@ Model::Init(const bool is_config_provided)
   } else if (config_.has_ensemble_scheduling()) {
     // For ensemble, allow any priority level to pass through
     default_priority_level_ = 0;
-    max_priority_level_ = UINT32_MAX;
+    max_priority_level_ = UINT64_MAX;
   } else {
     default_priority_level_ = 0;
     max_priority_level_ = 0;

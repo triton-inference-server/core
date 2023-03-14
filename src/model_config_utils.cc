@@ -1850,8 +1850,11 @@ ValidateModelConfigInt64()
       "ModelConfig::output::reshape::shape",
       "ModelConfig::version_policy::specific::versions",
       "ModelConfig::dynamic_batching::max_queue_delay_microseconds",
+      "ModelConfig::dynamic_batching::priority_levels",
+      "ModelConfig::dynamic_batching::default_priority_levels",
       "ModelConfig::dynamic_batching::default_queue_policy::default_timeout_"
       "microseconds",
+      "ModelConfig::dynamic_batching::priority_queue_policy::key",
       "ModelConfig::dynamic_batching::priority_queue_policy::value::default_"
       "timeout_microseconds",
       "ModelConfig::sequence_batching::direct::max_queue_delay_microseconds",
@@ -2035,12 +2038,17 @@ ModelConfigToJson(
   }
 
   // Fix dynamic_batching::max_queue_delay_microseconds,
+  // dynamic_batching::priority_levels,
+  // dynamic_batching::default_priority_level,
   // dynamic_batching::default_queue_policy::default_timeout_microseconds,
+  // dynamic_batching::priority_queue_policy::key (TODO!!!)
   // dynamic_batching::priority_queue_policy::value::default_timeout_microseconds
   {
     triton::common::TritonJson::Value db;
     if (config_json.Find("dynamic_batching", &db)) {
       RETURN_IF_ERROR(FixInt(config_json, db, "max_queue_delay_microseconds"));
+      RETURN_IF_ERROR(FixInt(config_json, db, "priority_levels"));
+      RETURN_IF_ERROR(FixInt(config_json, db, "default_priority_level"));
       triton::common::TritonJson::Value dqp;
       if (db.Find("default_queue_policy", &dqp)) {
         RETURN_IF_ERROR(

@@ -121,7 +121,7 @@ InferenceRequest::ActualModelVersion() const
 }
 
 void
-InferenceRequest::SetPriority(uint32_t p)
+InferenceRequest::SetPriority(uint64_t p)
 {
   if ((p == 0) || (p > model_raw_->MaxPriorityLevel())) {
     priority_ = model_raw_->DefaultPriorityLevel();

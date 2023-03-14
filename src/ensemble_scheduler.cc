@@ -334,7 +334,7 @@ class EnsembleContext {
   uint32_t flags_;
   std::string request_id_;
   InferenceRequest::SequenceId correlation_id_;
-  uint32_t priority_;
+  uint64_t priority_;
   uint64_t timeout_;
 
   // Objects related to the ensemble infer request
