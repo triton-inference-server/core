@@ -62,7 +62,7 @@ class CacheEntry {
   const std::vector<Buffer>& Buffers();
   std::vector<Buffer>& MutableBuffers();
   size_t BufferCount();
-  void AddBuffer(boost::span<std::byte> buffer);
+  void AddBuffer(boost::span<Byte> buffer);
   void AddBuffer(void* base, size_t byte_size);
 
   /* Insert helpers */
@@ -81,7 +81,7 @@ class CacheEntry {
   // and sets entry buffer sizes
   Status SetBufferSizes(boost::span<InferenceResponse*> responses);
   // Directly sets entry buffer sizes from provided buffers
-  Status SetBufferSizes(std::vector<boost::span<std::byte>> buffers);
+  Status SetBufferSizes(std::vector<boost::span<Byte>> buffers);
 
   /* Lookup helpers */
   Status DeserializeBuffers(boost::span<InferenceResponse*> responses);
@@ -95,7 +95,7 @@ class CacheEntry {
   // Insert helpers
   Status SerializeResponse(InferenceResponse* response, Buffer& buffer);
   Status SerializeResponseOutput(
-      const InferenceResponse::Output& output, std::byte* buffer,
+      const InferenceResponse::Output& output, Byte* buffer,
       size_t* output_size);
   Status SetBufferSize(InferenceResponse* response);
   // Calculates total byte size required to serialize response output and
@@ -107,7 +107,7 @@ class CacheEntry {
   // Lookup helpers
   Status DeserializeBuffer(InferenceResponse* response, const Buffer& buffer);
   Status DeserializeResponseOutput(
-      boost::span<const std::byte> packed_bytes, CacheOutput* output);
+      boost::span<const Byte> packed_bytes, CacheOutput* output);
 
   // NOTE: performance gain may be possible by removing this mutex and
   //   guaranteeing that no two threads will access/modify an entry

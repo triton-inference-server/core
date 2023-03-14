@@ -160,8 +160,9 @@ class PriorityQueue {
     }
 
     // Construct a policy queue with given 'policy'.
-    PolicyQueue(const inference::ModelQueuePolicy& policy,
-                bool keep_instantiated = false)
+    PolicyQueue(
+        const inference::ModelQueuePolicy& policy,
+        bool keep_instantiated = false)
         : timeout_action_(policy.timeout_action()),
           default_timeout_us_(policy.default_timeout_microseconds()),
           allow_timeout_override_(policy.allow_timeout_override()),
