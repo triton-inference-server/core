@@ -1286,32 +1286,32 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
 /// Set a string parameter in the request.
 ///
 /// \param request The request.
-/// \param name The name of the parameter.
+/// \param key The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetStringParameter(
-    TRITONSERVER_InferenceRequest* request, const char* name, const char* value);
+    TRITONSERVER_InferenceRequest* request, const char* key, const char* value);
 
 /// Set an integer parameter in the request.
 ///
 /// \param request The request.
-/// \param name The name of the parameter.
+/// \param key The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetIntParameter(
-    TRITONSERVER_InferenceRequest* request, const char* name, const int64_t value);
+    TRITONSERVER_InferenceRequest* request, const char* key, const int64_t value);
 
 /// Set a boolean parameter in the request.
 ///
 /// \param request The request.
-/// \param name The name of the parameter.
+/// \param key The name of the parameter.
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetBoolParameter(
-    TRITONSERVER_InferenceRequest* request, const char* name, const bool value);
+    TRITONSERVER_InferenceRequest* request, const char* key, const bool value);
 
 /// TRITONSERVER_InferenceResponse
 ///

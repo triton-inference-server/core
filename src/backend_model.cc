@@ -1251,7 +1251,7 @@ TRITONBACKEND_RequestParameterCount(
 
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestParameter(
-    TRITONBACKEND_Request* request, const uint32_t index, const char** name,
+    TRITONBACKEND_Request* request, const uint32_t index, const char** key,
     TRITONSERVER_ParameterType* type, const void** vvalue)
 {
   InferenceRequest* lrequest = reinterpret_cast<InferenceRequest*>(request);
@@ -1267,7 +1267,7 @@ TRITONBACKEND_RequestParameter(
 
   const InferenceParameter& param = parameters[index];
 
-  *name = param.Name().c_str();
+  *key = param.Name().c_str();
   *type = param.Type();
   *vvalue = param.ValuePointer();
 

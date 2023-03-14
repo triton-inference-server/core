@@ -429,12 +429,12 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestParameterCount(
 /// \param index The index of the parameter. Must be 0 <= index <
 /// count, where count is the value returned by
 /// TRITONBACKEND_RequestParameterCount.
-/// \param name Returns the name of the parameter.
+/// \param key Returns the key of the parameter.
 /// \param type Returns the type of the parameter.
 /// \param vvalue Returns a pointer to the parameter value.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestParameter(
-    TRITONBACKEND_Request* request, const uint32_t index, const char** name,
+    TRITONBACKEND_Request* request, const uint32_t index, const char** key,
     TRITONSERVER_ParameterType* type, const void** vvalue);
 
 /// Get the number of input tensors specified in the request.
