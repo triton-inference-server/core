@@ -1066,7 +1066,7 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
 /// \param priority Returns the priority level.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
-    TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority);
+    TRITONSERVER_InferenceRequest* inference_request, uint64_t* priority);
 
 /// Set the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
@@ -1077,7 +1077,7 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
-    TRITONSERVER_InferenceRequest* inference_request, uint32_t priority);
+    TRITONSERVER_InferenceRequest* inference_request, uint64_t priority);
 
 /// Get the timeout for a request, in microseconds. The default is 0
 /// which indicates that the request has no timeout.

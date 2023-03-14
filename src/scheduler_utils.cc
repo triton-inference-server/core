@@ -266,8 +266,7 @@ PriorityQueue::PriorityQueue()
 PriorityQueue::PriorityQueue(
     const inference::ModelQueuePolicy& default_queue_policy,
     uint64_t priority_levels, const ModelQueuePolicyMap queue_policy_map)
-    : size_(0), last_priority_level_(priority_levels),
-      default_policy_(default_queue_policy)
+    : size_(0), default_policy_(default_queue_policy)
 {
   // Permanently instantiate PolicyQueue with keep_instantiate=true
   // to prevent them from being erased & created during scheduling
