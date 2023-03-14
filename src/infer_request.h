@@ -335,6 +335,10 @@ class InferenceRequest {
     response_factory_->ReleaseTrace();
   }
 
+  Status TraceInputTensors(
+      TRITONSERVER_InferenceTraceActivity activity, const std::string& msg);
+#endif  // TRITON_ENABLE_TRACING
+
   // Add an parameter to the request.
   Status AddParameter(const char* name, const char* value);
   Status AddParameter(const char* name, const int64_t value);
@@ -344,9 +348,6 @@ class InferenceRequest {
     return parameters_;
   }
 
-  Status TraceInputTensors(
-      TRITONSERVER_InferenceTraceActivity activity, const std::string& msg);
-#endif  // TRITON_ENABLE_TRACING
 
   // The original inputs are the inputs added to the request before
   // the inference execution (that is before
