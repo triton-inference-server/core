@@ -121,7 +121,7 @@ bool
 RateLimiter::PayloadSlotAvailable(const TritonModel* model)
 {
   bool result;
-  PayloadQueue* payload_queue;
+  PayloadQueue* payload_queue = nullptr;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     payload_queue = payload_queues_[model].get();
@@ -139,7 +139,7 @@ RateLimiter::EnqueuePayload(
     const TritonModel* model, std::shared_ptr<Payload> payload)
 {
   auto pinstance = payload->GetInstance();
-  PayloadQueue* payload_queue;
+  PayloadQueue* payload_queue = nullptr;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(model) == payload_queues_.end()) {
@@ -186,7 +186,7 @@ RateLimiter::DequeuePayload(
     std::shared_ptr<Payload>* payload)
 {
   payload->reset();
-  PayloadQueue* payload_queue;
+  PayloadQueue* payload_queue = nullptr;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(instances[0]->Model()) == payload_queues_.end()) {
@@ -314,7 +314,7 @@ RateLimiter::InitializePayloadQueues(const TritonModelInstance* instance)
   } else {
     max_queue_delay_microseconds = 0;
   }
-  PayloadQueue* payload_queue;
+  PayloadQueue* payload_queue = nullptr;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(instance->Model()) == payload_queues_.end()) {
