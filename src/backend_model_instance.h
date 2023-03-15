@@ -48,11 +48,51 @@ class InferenceRequest;
 //
 class TritonModelInstance {
  public:
+  class TritonBackendThread {
+   public:
+    static Status CreateBackendThread(
+        const std::string name, TritonModelInstance* model, const int nice,
+        const int32_t device_id,
+        std::unique_ptr<TritonBackendThread>* triton_backend_thread);
+    void AddModelInstance(TritonModelInstance* model_instance);
+    Status InitAndWarmUpModelInstance(TritonModelInstance* model_instance);
+    void StopBackendThread();
+    ~TritonBackendThread();
+
+   private:
+    TritonBackendThread(const std::string& name, TritonModel* model);
+    void BackendThread(const int nice, const int32_t device_id);
+
+    std::string name_;
+
+    TritonModel* model_;
+    std::deque<TritonModelInstance*> model_instances_;
+
+    std::thread backend_thread_;
+    std::atomic<bool> backend_thread_exit_;
+  };
+
+  struct SecondaryDevice {
+    SecondaryDevice(const std::string kind, const int64_t id)
+        : kind_(kind), id_(id)
+    {
+    }
+    const std::string kind_;
+    const int64_t id_;
+  };
+
   static Status CreateInstances(
       TritonModel* model,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
       const inference::ModelConfig& model_config, const bool device_blocking);
+  static Status CreateInstance(
+      TritonModel* model, const inference::ModelInstanceGroup& group,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      std::map<uint32_t, std::shared_ptr<TritonBackendThread>>&
+          device_to_thread_map,
+      const bool device_blocking, const int32_t c);
   ~TritonModelInstance();
 
   const std::string& GroupName() const { return group_name_; }
@@ -71,14 +111,11 @@ class TritonModelInstance {
   bool IsPassive() const { return passive_; }
   const std::vector<std::string>& Profiles() const { return profile_names_; }
 
-  struct SecondaryDevice {
-    SecondaryDevice(const std::string kind, const int64_t id)
-        : kind_(kind), id_(id)
-    {
-    }
-    const std::string kind_;
-    const int64_t id_;
-  };
+  std::shared_ptr<TritonBackendThread> BackendThread()
+  {
+    return triton_backend_thread_;
+  }
+
   const std::vector<SecondaryDevice>& SecondaryDevices() const
   {
     return secondary_devices_;
@@ -97,8 +134,26 @@ class TritonModelInstance {
   MetricModelReporter* MetricReporter() const { return reporter_.get(); }
 
  private:
+  struct WarmupData {
+    WarmupData(const std::string& sample_name, const size_t count)
+        : sample_name_(sample_name), count_(std::max(count, size_t{1}))
+    {
+    }
+
+    std::string sample_name_;
+    size_t count_;
+    // Using a batch of requests to satisfy batch size, this provides better
+    // alignment on the batch expected by the model, especially for sequence
+    // model.
+    std::vector<std::unique_ptr<InferenceRequest>> requests_;
+
+    // Placeholder for input data
+    std::unique_ptr<AllocatedMemory> zero_data_;
+    std::unique_ptr<AllocatedMemory> random_data_;
+    std::vector<std::unique_ptr<std::string>> provided_data_;
+  };
+
   DISALLOW_COPY_AND_ASSIGN(TritonModelInstance);
-  class TritonBackendThread;
   TritonModelInstance(
       TritonModel* model, const std::string& name,
       const std::string& group_name, const size_t index,
@@ -128,49 +183,8 @@ class TritonModelInstance {
 
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
 
-  class TritonBackendThread {
-   public:
-    static Status CreateBackendThread(
-        const std::string name, TritonModelInstance* model, const int nice,
-        const int32_t device_id,
-        std::unique_ptr<TritonBackendThread>* triton_backend_thread);
-    void AddModelInstance(TritonModelInstance* model_instance);
-    Status InitAndWarmUpModelInstance(TritonModelInstance* model_instance);
-    void StopBackendThread();
-    ~TritonBackendThread();
-
-   private:
-    TritonBackendThread(const std::string& name, TritonModel* model);
-    void BackendThread(const int nice, const int32_t device_id);
-
-    std::string name_;
-
-    TritonModel* model_;
-    std::deque<TritonModelInstance*> model_instances_;
-
-    std::thread backend_thread_;
-    std::atomic<bool> backend_thread_exit_;
-  };
   std::shared_ptr<TritonBackendThread> triton_backend_thread_;
 
-  struct WarmupData {
-    WarmupData(const std::string& sample_name, const size_t count)
-        : sample_name_(sample_name), count_(std::max(count, size_t{1}))
-    {
-    }
-
-    std::string sample_name_;
-    size_t count_;
-    // Using a batch of requests to satisfy batch size, this provides better
-    // alignment on the batch expected by the model, especially for sequence
-    // model.
-    std::vector<std::unique_ptr<InferenceRequest>> requests_;
-
-    // Placeholder for input data
-    std::unique_ptr<AllocatedMemory> zero_data_;
-    std::unique_ptr<AllocatedMemory> random_data_;
-    std::vector<std::unique_ptr<std::string>> provided_data_;
-  };
   std::vector<WarmupData> warmup_samples_;
 
   // The TritonModel object that owns this instance. The instance

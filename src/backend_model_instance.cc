@@ -211,9 +211,9 @@ TritonModelInstance::CreateInstances(
           secondary_device.device_id());
     }
     for (int32_t c = 0; c < group.count(); ++c) {
-      std::string instance_name{group.count() > 1
-                                    ? group.name() + "_" + std::to_string(c)
-                                    : group.name()};
+      std::string instance_name{
+          group.count() > 1 ? group.name() + "_" + std::to_string(c)
+                            : group.name()};
       const bool passive = group.passive();
       std::vector<std::tuple<
           std::string, TRITONSERVER_InstanceGroupKind, int32_t,
@@ -287,6 +287,109 @@ TritonModelInstance::CreateInstances(
                     " has exceeded, model loading is rejected.");
           }
         }
+      }
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
+TritonModelInstance::CreateInstance(
+    TritonModel* model, const inference::ModelInstanceGroup& group,
+    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+    std::map<uint32_t, std::shared_ptr<TritonBackendThread>>&
+        device_to_thread_map,
+    const bool device_blocking, const int32_t c)
+{
+  triton::common::HostPolicyCmdlineConfig empty_host_policy;
+  std::vector<std::string> profile_names;
+  for (const auto& profile_name : group.profile()) {
+    profile_names.push_back(profile_name);
+  }
+
+  std::vector<SecondaryDevice> secondary_devices;
+  for (const auto& secondary_device : group.secondary_devices()) {
+    secondary_devices.emplace_back(
+        inference::ModelInstanceGroup_SecondaryDevice_SecondaryDeviceKind_Name(
+            secondary_device.kind()),
+        secondary_device.device_id());
+  }
+
+  std::string instance_name{
+      group.count() > 1 ? group.name() + "_" + std::to_string(c)
+                        : group.name()};
+  const bool passive = group.passive();
+  std::vector<std::tuple<
+      std::string, TRITONSERVER_InstanceGroupKind, int32_t,
+      const inference::ModelRateLimiter*>>
+      instance_setting;
+  if (group.kind() == inference::ModelInstanceGroup::KIND_CPU) {
+    instance_setting.emplace_back(
+        group.host_policy().empty() ? "cpu" : group.host_policy(),
+        TRITONSERVER_INSTANCEGROUPKIND_CPU, 0 /* device_id */,
+        &group.rate_limiter());
+  } else if (group.kind() == inference::ModelInstanceGroup::KIND_GPU) {
+    for (const int32_t device_id : group.gpus()) {
+      instance_setting.emplace_back(
+          group.host_policy().empty() ? ("gpu_" + std::to_string(device_id))
+                                      : group.host_policy(),
+          TRITONSERVER_INSTANCEGROUPKIND_GPU, device_id, &group.rate_limiter());
+    }
+  } else if (group.kind() == inference::ModelInstanceGroup::KIND_MODEL) {
+    instance_setting.emplace_back(
+        group.host_policy().empty() ? "model" : group.host_policy(),
+        TRITONSERVER_INSTANCEGROUPKIND_MODEL, 0 /* device_id */,
+        &group.rate_limiter());
+  } else {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("instance_group kind ") +
+            ModelInstanceGroup_Kind_Name(group.kind()) + " not supported");
+  }
+  for (const auto is : instance_setting) {
+    const auto& kind = std::get<1>(is);
+    const auto& id = std::get<2>(is);
+
+    const std::string& policy_name = std::get<0>(is);
+    const triton::common::HostPolicyCmdlineConfig* host_policy;
+    const auto policy_it = host_policy_map.find(policy_name);
+    if (policy_it != host_policy_map.end()) {
+      host_policy = &policy_it->second;
+    } else {
+      host_policy = &empty_host_policy;
+    }
+    RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
+    auto err = CreateInstance(
+        model, instance_name, group.name(), c, kind, id, profile_names, passive,
+        policy_name, *host_policy, *(std::get<3>(is)), device_blocking,
+        &device_to_thread_map, secondary_devices);
+    RETURN_IF_ERROR(ResetNumaMemoryPolicy());
+    RETURN_IF_ERROR(err);
+
+    // When deploying on GPU, we want to make sure the GPU memory usage
+    // is within allowed range, otherwise, stop the creation to ensure
+    // there is sufficient GPU memory for other use.
+    // We check the usage after loading the instance to better enforcing
+    // the limit. If we check before loading, we may create instance
+    // that occupies the rest of available memory which against the purpose
+    if (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+      size_t free, total;
+      double memory_limit;
+      RETURN_IF_ERROR(GetDeviceMemoryInfo(id, &free, &total));
+      RETURN_IF_ERROR(BackendConfigurationModelLoadGpuFraction(
+          backend_cmdline_config_map, id, &memory_limit));
+      const size_t allow = total * memory_limit;
+      const size_t used = total - free;
+      if (used > allow) {
+        return Status(
+            Status::Code::UNAVAILABLE,
+            std::string("can not create model '") + instance_name +
+                "': memory limit set for " +
+                TRITONSERVER_InstanceGroupKindString(kind) + " " +
+                std::to_string(id) +
+                " has exceeded, model loading is rejected.");
       }
     }
   }
@@ -514,8 +617,9 @@ TritonModelInstance::GenerateWarmupData()
             warmup_data.provided_data_.emplace_back(new std::string());
             auto input_data = warmup_data.provided_data_.back().get();
             RETURN_IF_ERROR(ReadTextFile(
-                JoinPath({model_->LocalizedModelPath(), kWarmupDataFolder,
-                          input_meta.second.input_data_file()}),
+                JoinPath(
+                    {model_->LocalizedModelPath(), kWarmupDataFolder,
+                     input_meta.second.input_data_file()}),
                 input_data));
             if (input_meta.second.data_type() ==
                 inference::DataType::TYPE_STRING) {
