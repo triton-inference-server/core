@@ -683,6 +683,26 @@ TRITONBACKEND_RequestRelease()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestSetBoolParameter()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestSetIntParameter()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestSetStringParameter()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestParameter()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestParameterCount()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ResponseFactoryNew()
 {
 }

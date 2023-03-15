@@ -27,6 +27,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include "triton/core/tritonserver.h"
 
 #ifdef __cplusplus
@@ -93,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 11
+#define TRITONBACKEND_API_VERSION_MINOR 12
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -406,6 +407,36 @@ TRITONBACKEND_RequestCorrelationIdString(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestFlags(
     TRITONBACKEND_Request* request, uint32_t* flags);
 
+/// Get the number of parameters specified in the inference request.
+///
+/// \param request The inference request.
+/// \param count Returns the number of parameters.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestParameterCount(
+    TRITONBACKEND_Request* request, uint32_t* count);
+
+/// Get a request parameters by index. The order of parameters in a given
+/// request is not necessarily consistent with other requests, even if
+/// the requests are in the same batch. As a result, you can not
+/// assume that an index obtained from one request will point to the
+/// same parameter in a different request.
+///
+/// The lifetime of the returned parameter object matches that of the
+/// request and so the parameter object should not be accessed after the
+/// request object is released.
+///
+/// \param request The inference request.
+/// \param index The index of the parameter. Must be 0 <= index <
+/// count, where count is the value returned by
+/// TRITONBACKEND_RequestParameterCount.
+/// \param key Returns the key of the parameter.
+/// \param type Returns the type of the parameter.
+/// \param vvalue Returns a pointer to the parameter value.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestParameter(
+    TRITONBACKEND_Request* request, const uint32_t index, const char** key,
+    TRITONSERVER_ParameterType* type, const void** vvalue);
+
 /// Get the number of input tensors specified in the request.
 ///
 /// \param request The inference request.
@@ -639,7 +670,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value);
 
-/// Set an boolean parameter in the response.
+/// Set a boolean parameter in the response.
 ///
 /// \param response The response.
 /// \param name The name of the parameter.

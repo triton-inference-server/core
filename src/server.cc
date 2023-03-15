@@ -34,7 +34,6 @@
 #include <memory>
 #include <utility>
 #include <vector>
-
 #include "backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"
@@ -90,6 +89,7 @@ InferenceServer::InferenceServer()
   extensions_.push_back("system_shared_memory");
   extensions_.push_back("cuda_shared_memory");
   extensions_.push_back("binary_tensor_data");
+  extensions_.push_back("parameters");
 #ifdef TRITON_ENABLE_STATS
   extensions_.push_back("statistics");
 #endif  // TRITON_ENABLE_STATS
