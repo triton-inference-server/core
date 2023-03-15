@@ -26,6 +26,7 @@
 
 #include "backend_model.h"
 
+#include <map>
 #include <vector>
 
 #include "backend_config.h"
@@ -277,45 +278,19 @@ TritonModel::ResolveBackendConfigs(
         global_itr->second;
     triton::common::BackendCmdlineConfig specific_backend_config =
         specific_itr->second;
-
-    std::sort(global_backend_config.begin(), global_backend_config.end());
-    std::sort(specific_backend_config.begin(), specific_backend_config.end());
-
-    size_t global_index = 0;
-    size_t specific_index = 0;
-    while (global_index < global_backend_config.size() &&
-           specific_index < specific_backend_config.size()) {
-      auto& current_global_setting = global_backend_config.at(global_index);
-      auto& current_specific_setting =
-          specific_backend_config.at(specific_index);
-      if (current_specific_setting.first.compare(
-              current_global_setting.first) == 0) {
-        // specific setting overrides global setting
-        config.push_back(current_specific_setting);
-        ++global_index;
-        ++specific_index;
-      } else if (
-          current_specific_setting.first.compare(current_global_setting.first) <
-          0) {
-        config.push_back(current_specific_setting);
-        ++specific_index;
-      } else {
-        config.push_back(current_global_setting);
-        ++global_index;
-      }
+    std::map<std::string, std::string> lconfig;
+    // Accumulate all global settings
+    for (auto& setting : global_backend_config){
+      lconfig[setting.first] = setting.second;
     }
-
-    // add the rest of the global configs
-    while (global_index < global_backend_config.size()) {
-      auto& current_global_setting = global_backend_config.at(global_index++);
-      config.push_back(current_global_setting);
+    // Accumulate backend specific settings and override
+    // global settings with specific configs if needed 
+    for (auto& setting : specific_backend_config){
+      lconfig[setting.first] = setting.second;
     }
-
-    // add the rest of the specific settings
-    while (specific_index < specific_backend_config.size()) {
-      auto& current_specific_setting =
-          specific_backend_config.at(specific_index++);
-      config.push_back(current_specific_setting);
+    
+    for (auto& final_setting : lconfig){
+      config.emplace_back(final_setting);
     }
   }  // else empty config
 
