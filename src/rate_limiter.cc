@@ -92,6 +92,32 @@ RateLimiter::RegisterModelInstance(
 }
 
 Status
+RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
+{
+  std::lock_guard<std::mutex> lk1(model_ctx_mtx_);
+  std::lock_guard<std::mutex> lk2(model_instance_ctx_mtx_);
+
+  // auto& model_context = model_contexts_[triton_model_instance->Model()];
+  auto& model_instances_ctx =
+      model_instance_ctxs_[triton_model_instance->Model()];
+
+  // No ordering so linear search. Instance counts are usually small
+  for (const auto& context : model_instances_ctx) {
+    if (context->RawInstance()->Name() == triton_model_instance->Name()) {
+      LOG_VERBOSE(2) << "Unregistering model instance: "
+                     << triton_model_instance->Name();
+      context->WaitForRemoval();
+      if (!ignore_resources_and_priority_) {
+        resource_manager_->RemoveModelInstance(context.get());
+      }
+      break;
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
 RateLimiter::UnregisterModel(const TritonModel* model)
 {
   {
