@@ -80,6 +80,10 @@ class TritonModel : public Model {
   {
     return instance_group_map_;
   }
+  std::unordered_map<std::string, TritonInstanceGroup>& MutableInstanceGroups()
+  {
+    return instance_group_map_;
+  }
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
   Status AddInstance(
