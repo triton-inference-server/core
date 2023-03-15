@@ -306,15 +306,15 @@ TritonModel::ResolveBackendConfigs(
     }
 
     // add the rest of the global configs
-    if (global_index < global_backend_config.size()) {
-      auto& current_global_setting = global_backend_config.at(global_index);
+    while (global_index < global_backend_config.size()) {
+      auto& current_global_setting = global_backend_config.at(global_index++);
       config.push_back(current_global_setting);
     }
 
     // add the rest of the specific settings
-    if (specific_index < specific_backend_config.size()) {
+    while (specific_index < specific_backend_config.size()) {
       auto& current_specific_setting =
-          specific_backend_config.at(specific_index);
+          specific_backend_config.at(specific_index++);
       config.push_back(current_specific_setting);
     }
   }  // else empty config
