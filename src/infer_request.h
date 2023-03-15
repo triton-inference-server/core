@@ -339,6 +339,16 @@ class InferenceRequest {
       TRITONSERVER_InferenceTraceActivity activity, const std::string& msg);
 #endif  // TRITON_ENABLE_TRACING
 
+  // Add an parameter to the request.
+  Status AddParameter(const char* name, const char* value);
+  Status AddParameter(const char* name, const int64_t value);
+  Status AddParameter(const char* name, const bool value);
+  const std::deque<InferenceParameter>& Parameters() const
+  {
+    return parameters_;
+  }
+
+
   // The original inputs are the inputs added to the request before
   // the inference execution (that is before
   // TRITONSERVER_ServerInferAsync is called). Once execution has
@@ -735,6 +745,10 @@ class InferenceRequest {
 
   // Whether the stats of the request should be collected.
   bool collect_stats_;
+
+  // The parameters of the request. Use a deque so that there is no
+  // reallocation.
+  std::deque<InferenceParameter> parameters_;
 
 #ifdef TRITON_ENABLE_STATS
   uint64_t request_start_ns_;

@@ -26,6 +26,7 @@
 
 #include <string>
 #include <vector>
+
 #include "buffer_attributes.h"
 #include "cuda_utils.h"
 #include "infer_parameter.h"
@@ -1875,6 +1876,34 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
   RETURN_IF_STATUS_ERROR(lrequest->SetResponseCallback(
       lallocator, response_allocator_userp, response_fn, response_userp));
   return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetStringParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const char* value)
+{
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetIntParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name,
+    const int64_t value)
+{
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetBoolParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name, const bool value)
+{
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
+  return nullptr;  // success
 }
 
 //

@@ -27,6 +27,7 @@
 #include "backend_model.h"
 
 #include <vector>
+
 #include "backend_config.h"
 #include "backend_model_instance.h"
 #include "dynamic_batch_scheduler.h"
@@ -1234,6 +1235,43 @@ TRITONBACKEND_ResponseSend(
   }
 
   return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_RequestParameterCount(
+    TRITONBACKEND_Request* request, uint32_t* count)
+{
+  InferenceRequest* lrequest = reinterpret_cast<InferenceRequest*>(request);
+
+  const auto& parameters = lrequest->Parameters();
+  *count = parameters.size();
+
+  return nullptr;  // Success
+}
+
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_RequestParameter(
+    TRITONBACKEND_Request* request, const uint32_t index, const char** key,
+    TRITONSERVER_ParameterType* type, const void** vvalue)
+{
+  InferenceRequest* lrequest = reinterpret_cast<InferenceRequest*>(request);
+
+  const auto& parameters = lrequest->Parameters();
+  if (index >= parameters.size()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        ("out of bounds index " + std::to_string(index) +
+            std::string(": request has ") + std::to_string(parameters.size()) +
+            " parameters").c_str());
+  }
+
+  const InferenceParameter& param = parameters[index];
+
+  *key = param.Name().c_str();
+  *type = param.Type();
+  *vvalue = param.ValuePointer();
+
+  return nullptr;  // Success
 }
 
 ///
