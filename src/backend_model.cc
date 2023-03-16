@@ -875,6 +875,19 @@ TRITONBACKEND_RequestInputByIndex(
   // both map and vector.
   uint32_t cnt = 0;
   for (const auto& pr : inputs) {
+    if (pr.second->IsInitializerTensor()) {
+      continue;
+    }
+    if (cnt++ == index) {
+      InferenceRequest::Input* in = pr.second;
+      *input = reinterpret_cast<TRITONBACKEND_Input*>(in);
+      break;
+    }
+  }
+  for (const auto& pr : inputs) {
+    if (!pr.second->IsInitializerTensor()) {
+      continue;
+    }
     if (cnt++ == index) {
       InferenceRequest::Input* in = pr.second;
       *input = reinterpret_cast<TRITONBACKEND_Input*>(in);
