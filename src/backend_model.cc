@@ -1281,7 +1281,8 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InputProperties(
     TRITONBACKEND_Input* input, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
-    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count)
+    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count,
+    bool* is_initializer_tensor)
 {
   InferenceRequest::Input* ti =
       reinterpret_cast<InferenceRequest::Input*>(input);
@@ -1302,6 +1303,9 @@ TRITONBACKEND_InputProperties(
   }
   if (buffer_count != nullptr) {
     *buffer_count = ti->DataBufferCount();
+  }
+  if (is_initializer_tensor != nullptr) {
+    *is_initializer_tensor = ti->IsInitializerTensor();
   }
   return nullptr;  // success
 }

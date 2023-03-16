@@ -116,6 +116,12 @@ class InferenceRequest {
     // Set the input to be treated as a shape tensor.
     Status SetIsShapeTensor(const bool is_shape_tensor);
 
+    // Whether or not the input is an onnx initializer tensor
+    bool IsInitializerTensor() const { return is_initializer_tensor_; }
+
+    // Set the input to be treated as an initializer tensor.
+    Status SetIsInitializerTensor(const bool is_initializer_tensor);
+
     // The data for this input.
     const std::shared_ptr<Memory>& Data() const { return data_; }
 
@@ -218,6 +224,7 @@ class InferenceRequest {
     std::vector<int64_t> shape_;
     std::vector<int64_t> shape_with_batch_dim_;
     bool is_shape_tensor_;
+    bool is_initializer_tensor_;
     std::shared_ptr<Memory> data_;
 
     bool has_host_policy_specific_data_;

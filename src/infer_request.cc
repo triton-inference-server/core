@@ -849,10 +849,26 @@ InferenceRequest::Normalize()
       RETURN_IF_ERROR(model_raw_->GetOutput(output_name, &output_config));
     }
   }
+
+  // Check if there is extra input, record if so. This could happen for models
+  // with optional but non-definable inputs like initializers in onnx.
+  std::unordered_set<std::string> extra_inputs;
+  if (original_inputs_.size() > (size_t)model_config.input_size()) {
+    std::unordered_set<std::string> expect_inputs;
+    for (const auto& config_input : model_config.input()) {
+      expect_inputs.insert(config_input.name());
+    }
+    for (auto& pr : original_inputs_) {
+      if (expect_inputs.find(pr.first) == expect_inputs.end()) {
+        pr.second.SetIsInitializerTensor(true);
+        extra_inputs.insert(pr.first);
+      }
+    }
+  }
+
   // Make sure that the request is providing the number of inputs
   // as is expected by the model.
-  if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
-      (original_inputs_.size() < model_raw_->RequiredInputCount())) {
+  if ((original_inputs_.size() < model_raw_->RequiredInputCount())) {
     // If no input is marked as optional, then use exact match error message
     // for consistency / backward compatibility
     if ((size_t)model_config.input_size() == model_raw_->RequiredInputCount()) {
@@ -890,6 +906,11 @@ InferenceRequest::Normalize()
     batch_size_ = 0;
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
+      // Skip the check for extra inputs
+      if (extra_inputs.find(pr.first) != extra_inputs.end()) {
+        *input.MutableShape() = input.OriginalShape();
+        continue;
+      }
 
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
@@ -937,11 +958,17 @@ InferenceRequest::Normalize()
   // Verify that each input shape is valid for the model, make
   // adjustments for reshapes and find the total tensor size.
   for (auto& pr : original_inputs_) {
-    const inference::ModelInput* input_config;
-    RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
-
     auto& input = pr.second;
     auto shape = input.MutableShape();
+
+    // Skip the check for extra inputs
+    if (extra_inputs.find(pr.first) != extra_inputs.end()) {
+      *input.MutableShapeWithBatchDim() = *shape;
+      continue;
+    }
+
+    const inference::ModelInput* input_config;
+    RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
 
     if (input.DType() != input_config->data_type()) {
       return Status(
@@ -1158,8 +1185,8 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
 // Input
 //
 InferenceRequest::Input::Input()
-    : is_shape_tensor_(false), data_(new MemoryReference),
-      has_host_policy_specific_data_(false)
+    : is_shape_tensor_(false), is_initializer_tensor_(false),
+      data_(new MemoryReference), has_host_policy_specific_data_(false)
 {
 }
 
@@ -1168,7 +1195,8 @@ InferenceRequest::Input::Input(
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
       original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+      is_initializer_tensor_(false), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1176,8 +1204,8 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape)
     : name_(name), datatype_(datatype), original_shape_(shape),
-      is_shape_tensor_(false), data_(new MemoryReference),
-      has_host_policy_specific_data_(false)
+      is_shape_tensor_(false), is_initializer_tensor_(false),
+      data_(new MemoryReference), has_host_policy_specific_data_(false)
 {
 }
 
@@ -1195,6 +1223,13 @@ Status
 InferenceRequest::Input::SetIsShapeTensor(const bool is_shape_tensor)
 {
   is_shape_tensor_ = is_shape_tensor;
+  return Status::Success;
+}
+
+Status
+InferenceRequest::Input::SetIsInitializerTensor(const bool is_initializer_tensor)
+{
+  is_initializer_tensor_ = is_initializer_tensor;
   return Status::Success;
 }
 

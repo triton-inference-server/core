@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 12
+#define TRITONBACKEND_API_VERSION_MINOR 13
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -205,7 +205,8 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_MemoryManagerFree(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     TRITONBACKEND_Input* input, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
-    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
+    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count,
+    bool* is_initializer_tensor);
 
 /// Get the name and properties of an input tensor associated with a given
 /// host policy. If there are no input buffers for the specified  host policy,
