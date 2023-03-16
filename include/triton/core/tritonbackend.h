@@ -208,6 +208,13 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count,
     bool* is_initializer_tensor = nullptr);
 
+/// Get extra properties of an input tensor.
+/// \param is_initializer_tensor If non-nullptr, returns if the tensor is
+/// an initializer tensor.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputPropertiesExtra(
+    TRITONBACKEND_Input* input, bool* is_initializer_tensor);
+
 /// Get the name and properties of an input tensor associated with a given
 /// host policy. If there are no input buffers for the specified  host policy,
 /// the properties of the fallback input buffers are returned. The returned
