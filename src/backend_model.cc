@@ -260,39 +260,23 @@ TritonModel::ResolveBackendConfigs(
 {
   const auto& global_itr = backend_cmdline_config_map.find(std::string());
   const auto& specific_itr = backend_cmdline_config_map.find(backend_name);
-  if (specific_itr == backend_cmdline_config_map.end() &&
-      global_itr != backend_cmdline_config_map.end()) {
-    for (auto setting : global_itr->second) {
-      config.push_back(setting);
-    }
-  } else if (
-      specific_itr != backend_cmdline_config_map.end() &&
-      global_itr == backend_cmdline_config_map.end()) {
-    for (auto setting : specific_itr->second) {
-      config.push_back(setting);
-    }
-  } else if (
-      specific_itr != backend_cmdline_config_map.end() &&
-      global_itr != backend_cmdline_config_map.end()) {
-    triton::common::BackendCmdlineConfig global_backend_config =
-        global_itr->second;
-    triton::common::BackendCmdlineConfig specific_backend_config =
-        specific_itr->second;
-    std::map<std::string, std::string> lconfig;
+  std::map<std::string, std::string> lconfig;
+  if (global_itr != backend_cmdline_config_map.end()) {
     // Accumulate all global settings
-    for (auto& setting : global_backend_config){
+    for (auto& setting : global_itr->second){
       lconfig[setting.first] = setting.second;
     }
+  }
+  if (specific_itr != backend_cmdline_config_map.end()) {
     // Accumulate backend specific settings and override
     // global settings with specific configs if needed 
-    for (auto& setting : specific_backend_config){
+    for (auto& setting : specific_itr->second){
       lconfig[setting.first] = setting.second;
     }
-    
-    for (auto& final_setting : lconfig){
+  } 
+  for (auto& final_setting : lconfig){
       config.emplace_back(final_setting);
-    }
-  }  // else empty config
+  }
 
   return Status::Success;
 }
