@@ -186,6 +186,12 @@ class ModelLifeCycle {
   // Unload model asynchronously.
   Status AsyncUnload(const ModelIdentifier& model_id);
 
+  // Using the model name and the new config, add and remove model instances
+  // for the given model.
+  Status UpdateModelInstances(
+      const ModelIdentifier& model_id,
+      const inference::ModelConfig& model_config);
+
   // Get specified version of the model. Latest ready version will
   // be retrieved if 'version' is -1. Return error if the version specified is
   // not found or it is not ready.
