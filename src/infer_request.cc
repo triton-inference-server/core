@@ -854,15 +854,24 @@ InferenceRequest::Normalize()
   // with optional but non-definable inputs like initializers in onnx.
   std::unordered_set<std::string> extra_inputs;
   if (original_inputs_.size() > (size_t)model_config.input_size()) {
-    std::unordered_set<std::string> expect_inputs;
-    for (const auto& config_input : model_config.input()) {
-      expect_inputs.insert(config_input.name());
-    }
-    for (auto& pr : original_inputs_) {
-      if (expect_inputs.find(pr.first) == expect_inputs.end()) {
-        pr.second.SetIsInitializerTensor(true);
-        extra_inputs.insert(pr.first);
+    if (model_config.extra_input_as_initializer()) {
+      std::unordered_set<std::string> expect_inputs;
+      for (const auto& config_input : model_config.input()) {
+        expect_inputs.insert(config_input.name());
       }
+      for (auto& pr : original_inputs_) {
+        if (expect_inputs.find(pr.first) == expect_inputs.end()) {
+          pr.second.SetIsInitializerTensor(true);
+          extra_inputs.insert(pr.first);
+        }
+      }
+    } else {
+      return Status(
+          Status::Code::INVALID_ARG,
+          LogRequest() + "expected " +
+              std::to_string(model_config.input_size()) + " inputs but got " +
+              std::to_string(original_inputs_.size()) + " inputs for model '" +
+              ModelName() + "'");
     }
   }
 
