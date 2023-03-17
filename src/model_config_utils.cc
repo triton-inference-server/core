@@ -1405,6 +1405,28 @@ ValidateModelConfig(
         }
       }
     }
+  
+    // If extra_input_as_initializer is specified, make sure
+    // - dynamic batching is disabled
+    // - platform is onnxruntime
+    if (config.extra_input_as_initializer()) {
+      // initializer can overwrite model weights, dangerous to use along with dynamic batching
+      if (config.has_dynamic_batching()) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "extra_input_as_initializer can not be set when dynamic batching "
+            "is enabled for " +
+                config.name());
+      }
+      // initializer as extra input is only supported by onnxruntime
+      if (config.platform() != kOnnxRuntimeOnnxPlatform) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "extra_input_as_initializer can only be set when platform is "
+            "onnxruntime_onnx for " +
+                config.name());
+      }
+    }
   }
 
   // If sequence batching is specified make sure the control is
