@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -326,14 +326,25 @@ TritonModelInstance::CreateInstance(
   // library path to point to the backend directory in case the
   // backend library attempts to load additional shared libaries.
   if (model->Backend()->ModelInstanceInitFn() != nullptr) {
+    // We must set set shared library path to point to the backend directory in
+    // case the backend library attempts to load additional shared libaries.
+    // Currently, the set and reset function is effective only on Windows, so
+    // there is no need to set path on non-Windows.
+    // However, parallel model loading will not see any speedup on Windows and
+    // the global lock inside the SharedLibrary is a WAR.
+    // [FIXME] Reduce lock WAR on SharedLibrary (DLIS-4300)
+#ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
     RETURN_IF_ERROR(slib->SetLibraryDirectory(model->Backend()->Directory()));
+#endif
 
     TRITONSERVER_Error* err =
         model->Backend()->ModelInstanceInitFn()(triton_instance);
 
+#ifdef _WIN32
     RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+#endif
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
 

@@ -38,6 +38,10 @@ struct ModelIdentifier {
   {
   }
 
+  ModelIdentifier(const ModelIdentifier&) = default;
+
+  ModelIdentifier& operator=(const ModelIdentifier&) = default;
+
   bool operator<(const ModelIdentifier& rhs) const
   {
     if (namespace_ == rhs.namespace_) {
