@@ -205,8 +205,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_MemoryManagerFree(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InputProperties(
     TRITONBACKEND_Input* input, const char** name,
     TRITONSERVER_DataType* datatype, const int64_t** shape,
-    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count,
-    bool* is_initializer_tensor = nullptr);
+    uint32_t* dims_count, uint64_t* byte_size, uint32_t* buffer_count);
 
 /// Get extra properties of an input tensor.
 /// \param is_initializer_tensor If non-nullptr, returns if the tensor is
