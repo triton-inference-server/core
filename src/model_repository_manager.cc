@@ -217,6 +217,8 @@ CreateAgentModelListWithLoadAction(
   return Status::Success;
 }
 
+// Return the latest modification time in ns for all files/folders starting
+// from the path. The modification time will be 0 if there is an error.
 int64_t
 GetModifiedTime(const std::string& path)
 {
@@ -262,15 +264,74 @@ GetModifiedTime(const std::string& path)
 
   return mtime;
 }
-// Return true if any file in the subdirectory root at 'path' has been
-// modified more recently than 'last'. Return the most-recent modified
-// time in 'last'.
-bool
-IsModified(const std::string& path, int64_t* last_ns)
+// Return the latest modification time in ns for '<config.pbtxt, model files>'
+// in a model directory path. The time for "config.pbtxt" will be 0 if not
+// found at "[model_dir_path]/config.pbtxt". The time for "model files" includes
+// the time for 'model_dir_path'.
+std::pair<int64_t, int64_t>
+GetDetailedModifiedTime(const std::string& model_dir_path)
 {
-  const int64_t repo_ns = GetModifiedTime(path);
-  bool modified = repo_ns > *last_ns;
-  *last_ns = repo_ns;
+  // Check if 'model_dir_path' is a directory.
+  bool is_dir;
+  Status status = IsDirectory(model_dir_path, &is_dir);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+              << "': " << status.AsString();
+    return std::make_pair(0, 0);
+  }
+  if (!is_dir) {
+    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+              << "': Model directory path is not a directory";
+    return std::make_pair(0, 0);
+  }
+
+  std::pair<int64_t, int64_t> mtime(0, 0);  // <config.pbtxt, model files>
+
+  // Populate 'model files' time to the model directory time
+  status = FileModificationTime(model_dir_path, &mtime.second);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+              << "': " << status.AsString();
+    return std::make_pair(0, 0);
+  }
+
+  // Get files/folders in model_dir_path.
+  std::set<std::string> contents;
+  status = GetDirectoryContents(model_dir_path, &contents);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+              << "': " << status.AsString();
+    return std::make_pair(0, 0);
+  }
+  // Get latest modification time for each files/folders, and place it at the
+  // correct category.
+  const std::string model_config_full_path(
+      JoinPath({model_dir_path, "config.pbtxt"}));
+  for (const auto& child : contents) {
+    const auto full_path = JoinPath({model_dir_path, child});
+    if (full_path == model_config_full_path) {
+      // config.pbtxt
+      mtime.first = GetModifiedTime(full_path);
+    } else {
+      // model files
+      mtime.second = std::max(mtime.second, GetModifiedTime(full_path));
+    }
+  }
+
+  return mtime;
+}
+// Return true if any file in the 'model_dir_path' has been modified more
+// recently than 'last_ns', which represents last modified time for
+// '<config.pbtxt, model files>'. Update the 'last_ns' to the most-recent
+// modified time.
+bool
+IsModified(
+    const std::string& model_dir_path, std::pair<int64_t, int64_t>* last_ns)
+{
+  auto new_ns = GetDetailedModifiedTime(model_dir_path);
+  bool modified = std::max(new_ns.first, new_ns.second) >
+                  std::max(last_ns->first, last_ns->second);
+  last_ns->swap(new_ns);
   return modified;
 }
 
@@ -538,8 +599,7 @@ ModelRepositoryManager::LoadModelByDependency(
       // ensure the next load request will attempt to load the model again
       // for operation idempotence. See comment on 'infos_'
       if (!model_state->status_.IsOk()) {
-        auto& model_info =
-            infos->Find(model_state->node_->model_id_)->second;
+        auto& model_info = infos->Find(model_state->node_->model_id_)->second;
         model_info->mtime_nsec_ = model_info->prev_mtime_ns_;
       }
     }
@@ -1280,7 +1340,7 @@ ModelRepositoryManager::InitializeModelInfo(
   if (iitr != infos_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
   } else {
-    linfo->prev_mtime_ns_ = 0;
+    linfo->prev_mtime_ns_ = std::make_pair(0, 0);
   }
 
   // Set 'mtime_nsec_' and override 'model_path_' if current path is empty
@@ -1309,13 +1369,13 @@ ModelRepositoryManager::InitializeModelInfo(
     // For file override, set 'mtime_nsec_' to minimum value so that
     // the next load without override will trigger re-load to undo
     // the override while the local files may still be unchanged.
-    linfo->mtime_nsec_ = 0;
+    linfo->mtime_nsec_ = std::make_pair(0, 0);
     linfo->model_path_ = location;
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
     if (iitr == infos_.end()) {
-      linfo->mtime_nsec_ = GetModifiedTime(std::string(linfo->model_path_));
+      linfo->mtime_nsec_ = GetDetailedModifiedTime(linfo->model_path_);
     } else {
       // Check the current timestamps to determine if model actually has been
       // modified
@@ -1334,7 +1394,7 @@ ModelRepositoryManager::InitializeModelInfo(
       // When override happens, set 'mtime_nsec_' to minimum value so that
       // the next load without override will trigger re-load to undo
       // the override while the local files may still be unchanged.
-      linfo->mtime_nsec_ = 0;
+      linfo->mtime_nsec_ = std::make_pair(0, 0);
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();
