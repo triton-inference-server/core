@@ -572,6 +572,7 @@ ModelRepositoryManager::LoadModelByDependency(
       auto status = model_life_cycle_->AsyncLoad(
           valid_model->model_id_, itr->second->model_path_,
           valid_model->model_config_, itr->second->is_config_provided_,
+          itr->second->mtime_nsec_.second > itr->second->prev_mtime_ns_.second,
           itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();

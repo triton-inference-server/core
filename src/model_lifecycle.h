@@ -180,17 +180,12 @@ class ModelLifeCycle {
   Status AsyncLoad(
       const ModelIdentifier& model_id, const std::string& model_path,
       const inference::ModelConfig& model_config, const bool is_config_provided,
+      const bool is_model_file_updated,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)>&& OnComplete);
 
   // Unload model asynchronously.
   Status AsyncUnload(const ModelIdentifier& model_id);
-
-  // Using the model name and the new config, add and remove model instances
-  // for the given model.
-  Status UpdateModelInstances(
-      const ModelIdentifier& model_id,
-      const inference::ModelConfig& model_config);
 
   // Get specified version of the model. Latest ready version will
   // be retrieved if 'version' is -1. Return error if the version specified is
@@ -296,6 +291,7 @@ class ModelLifeCycle {
         std::max(1u, options.model_load_thread_count_)));
   }
 
+  // Create a new model, the 'model_id' can either be a new or existing model.
   void CreateModel(
       const ModelIdentifier& model_id, const int64_t version,
       ModelInfo* model_info, const bool is_config_provided);
@@ -308,6 +304,13 @@ class ModelLifeCycle {
       ModelInfo* model_info, std::function<void(Status)> OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
 
+  // Update the model config to the new config. Return true if the update is
+  // successful. Otherwise, false is returned and nothing is updated/changed.
+  // Currently, only model instances can be updated. (i.e. false is returned if
+  // configs other than model instances are changed)
+  bool UpdateModelConfig(
+      const ModelIdentifier& model_id, ModelInfo* model_info,
+      const inference::ModelConfig& model_config);
 
   // Mutex for 'map_' and 'background_models_'
   std::mutex map_mtx_;
