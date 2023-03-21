@@ -904,7 +904,7 @@ InferenceRequest::Normalize()
 
       // For onnxruntime optional tensor which are initializers, keep the
       // tensor's shape.
-      if (input_config->optional() && model_config.platform() == kOnnxRuntimeBackend) {
+      if (input_config->optional() && model_config.platform() == kOnnxRuntimeOnnxPlatform) {
         *input.MutableShape() = input.OriginalShape();
         input.SetIsInitializerTensor(true);
         continue;
@@ -966,7 +966,7 @@ InferenceRequest::Normalize()
 
     // For onnxruntime optional tensor which are initializers, skip the
     // rest of the batch check & reshape.
-    if (input_config->optional() && model_config.platform() == kOnnxRuntimeBackend) {
+    if (input_config->optional() && model_config.platform() == kOnnxRuntimeOnnxPlatform) {
       *input.MutableShapeWithBatchDim() = *shape;
       continue;
     }
