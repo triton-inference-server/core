@@ -906,6 +906,7 @@ InferenceRequest::Normalize()
       // tensor's shape.
       if (input_config->optional() && model_config.platform() == kOnnxRuntimeBackend) {
         *input.MutableShape() = input.OriginalShape();
+        input.SetIsInitializerTensor(true);
         continue;
       }
 
