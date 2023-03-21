@@ -168,11 +168,12 @@ Status ValidateModelIOConfig(const inference::ModelConfig& config);
 /// \param io The model input.
 /// \param max_batch_size The max batch size specified in model configuration.
 /// \param platform The platform name
+/// \param has_dynamic_batching Whether dynamic batching is enabled
 /// \return The error status. A non-OK status indicates the input
 /// is not valid.
 Status ValidateModelInput(
     const inference::ModelInput& io, int32_t max_batch_size,
-    const std::string& platform);
+    const std::string& platform, bool has_dynamic_batching);
 
 /// Validate that an input matches one of the allowed input names.
 /// \param io The model input.
