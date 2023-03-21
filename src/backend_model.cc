@@ -873,9 +873,14 @@ TRITONBACKEND_RequestInputByIndex(
   // the inputs to be in a map and given the typical small number of
   // inputs is better than having every request maintain the inputs as
   // both map and vector.
+  // Update: assumptions were made that the first dimension of the first
+  // input is the batch size, which is not true for initializer tensors,
+  // so we make initializer tensor appear after the regular one.
   uint32_t cnt = 0;
+  std::vector<InferenceRequest::Input*> initializer_tensors;
   for (const auto& pr : inputs) {
     if (pr.second->IsInitializerTensor()) {
+      initializer_tensors.emplace_back(pr.second);
       continue;
     }
     if (cnt++ == index) {
@@ -884,15 +889,9 @@ TRITONBACKEND_RequestInputByIndex(
       break;
     }
   }
-  for (const auto& pr : inputs) {
-    if (!pr.second->IsInitializerTensor()) {
-      continue;
-    }
-    if (cnt++ == index) {
-      InferenceRequest::Input* in = pr.second;
-      *input = reinterpret_cast<TRITONBACKEND_Input*>(in);
-      break;
-    }
+  if (index - cnt < initializer_tensors.size()) {
+    InferenceRequest::Input* in = initializer_tensors[index - cnt];
+    *input = reinterpret_cast<TRITONBACKEND_Input*>(in);
   }
 
   return nullptr;  // success
