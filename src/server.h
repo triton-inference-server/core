@@ -46,6 +46,8 @@ namespace triton { namespace core {
 
 // Maps cache name -> json config string
 using CacheConfigMap = std::unordered_map<std::string, std::string>;
+using MetricsConfig = std::vector<std::pair<std::string, std::string>>;
+using MetricsConfigMap = std::unordered_map<std::string, MetricsConfig>;
 
 class Model;
 class InferenceRequest;
@@ -257,6 +259,11 @@ class InferenceServer {
     host_policy_map_ = hp;
   }
 
+  void SetMetricsConfig(const MetricsConfigMap& mc)
+  {
+    metrics_config_map_ = mc;
+  }
+
   void SetRepoAgentDir(const std::string& d) { repoagent_dir_ = d; }
 
   // Return the requested model object.
@@ -325,6 +332,7 @@ class InferenceServer {
   double min_supported_compute_capability_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+  MetricsConfigMap metrics_config_map_;
   std::string repoagent_dir_;
   RateLimitMode rate_limit_mode_;
   RateLimiter::ResourceMap rate_limit_resource_map_;
