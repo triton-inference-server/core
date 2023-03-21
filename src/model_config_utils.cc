@@ -1158,7 +1158,7 @@ ValidateModelIOConfig(const inference::ModelConfig& config)
 {
   Status status;
   for (const auto& io : config.input()) {
-    status = ValidateModelInput(io, config.max_batch_size(), config.platform());
+    status = ValidateModelInput(io, config.max_batch_size(), config.platform(), config.has_dynamic_batching());
     if (!status.IsOk()) {
       return Status(
           status.StatusCode(), status.Message() + " for " + config.name());
@@ -1405,28 +1405,6 @@ ValidateModelConfig(
         }
       }
     }
-  
-    // If extra_input_as_initializer is specified, make sure
-    // - dynamic batching is disabled
-    // - platform is onnxruntime
-    if (config.extra_input_as_initializer()) {
-      // initializer can overwrite model weights, dangerous to use along with dynamic batching
-      if (config.has_dynamic_batching()) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "extra_input_as_initializer can not be set when dynamic batching "
-            "is enabled for " +
-                config.name());
-      }
-      // initializer as extra input is only supported by onnxruntime
-      if (config.platform() != kOnnxRuntimeOnnxPlatform) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "extra_input_as_initializer can only be set when platform is "
-            "onnxruntime_onnx for " +
-                config.name());
-      }
-    }
   }
 
   // If sequence batching is specified make sure the control is
@@ -1666,7 +1644,7 @@ ValidateInstanceGroup(
 Status
 ValidateModelInput(
     const inference::ModelInput& io, int32_t max_batch_size,
-    const std::string& platform)
+    const std::string& platform, bool has_dynamic_batching)
 {
   RETURN_IF_ERROR(ValidateIOShape(io, max_batch_size, "model input "));
 
@@ -1681,6 +1659,12 @@ ValidateModelInput(
     return Status(
         Status::Code::INVALID_ARG,
         "shape tensors are only supported for TensorRT platform");
+  }
+
+  if ((platform == kOnnxRuntimeOnnxPlatform) && io.optional() && has_dynamic_batching) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "optional tensors in onnxruntime are initializers, which are not compatible with dynamic batching");
   }
 
   return Status::Success;
