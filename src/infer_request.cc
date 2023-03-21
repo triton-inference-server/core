@@ -850,34 +850,10 @@ InferenceRequest::Normalize()
     }
   }
 
-  // Check if there is extra input, record if so. This could happen for models
-  // with optional but non-definable inputs like initializers in onnx.
-  std::unordered_set<std::string> extra_inputs;
-  if (original_inputs_.size() > (size_t)model_config.input_size()) {
-    if (model_config.extra_input_as_initializer()) {
-      std::unordered_set<std::string> expect_inputs;
-      for (const auto& config_input : model_config.input()) {
-        expect_inputs.insert(config_input.name());
-      }
-      for (auto& pr : original_inputs_) {
-        if (expect_inputs.find(pr.first) == expect_inputs.end()) {
-          pr.second.SetIsInitializerTensor(true);
-          extra_inputs.insert(pr.first);
-        }
-      }
-    } else {
-      return Status(
-          Status::Code::INVALID_ARG,
-          LogRequest() + "expected " +
-              std::to_string(model_config.input_size()) + " inputs but got " +
-              std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'");
-    }
-  }
-
   // Make sure that the request is providing the number of inputs
   // as is expected by the model.
-  if ((original_inputs_.size() < model_raw_->RequiredInputCount())) {
+  if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
+      (original_inputs_.size() < model_raw_->RequiredInputCount())) {
     // If no input is marked as optional, then use exact match error message
     // for consistency / backward compatibility
     if ((size_t)model_config.input_size() == model_raw_->RequiredInputCount()) {
@@ -915,11 +891,6 @@ InferenceRequest::Normalize()
     batch_size_ = 0;
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
-      // Skip the check for extra inputs
-      if (extra_inputs.find(pr.first) != extra_inputs.end()) {
-        *input.MutableShape() = input.OriginalShape();
-        continue;
-      }
 
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
@@ -928,6 +899,13 @@ InferenceRequest::Normalize()
       if (input_config->is_shape_tensor()) {
         *input.MutableShape() = input.OriginalShape();
         input.SetIsShapeTensor(true);
+        continue;
+      }
+
+      // For onnxruntime optional tensor which are initializers, keep the
+      // tensor's shape.
+      if (input_config->optional() && model_config.platform() == kOnnxRuntimeBackend) {
+        *input.MutableShape() = input.OriginalShape();
         continue;
       }
 
@@ -970,12 +948,6 @@ InferenceRequest::Normalize()
     auto& input = pr.second;
     auto shape = input.MutableShape();
 
-    // Skip the check for extra inputs
-    if (extra_inputs.find(pr.first) != extra_inputs.end()) {
-      *input.MutableShapeWithBatchDim() = *shape;
-      continue;
-    }
-
     const inference::ModelInput* input_config;
     RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
 
@@ -989,6 +961,13 @@ InferenceRequest::Normalize()
               std::string(triton::common::DataTypeToProtocolString(
                   input_config->data_type())) +
               "' for '" + ModelName() + "'");
+    }
+
+    // For onnxruntime optional tensor which are initializers, skip the
+    // rest of the batch check & reshape.
+    if (input_config->optional() && model_config.platform() == kOnnxRuntimeBackend) {
+      *input.MutableShapeWithBatchDim() = *shape;
+      continue;
     }
 
     // Validate input shape
