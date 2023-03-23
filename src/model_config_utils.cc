@@ -27,6 +27,7 @@
 #include "model_config_utils.h"
 
 #include <google/protobuf/util/json_util.h>
+#include <google/protobuf/util/message_differencer.h>
 #include <deque>
 #include <mutex>
 #include <set>
@@ -2289,6 +2290,17 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
   }
 
   return inference::DataType::TYPE_INVALID;
+}
+
+bool
+IsModelConfigDifferOnlyInModelInstances(
+    const inference::ModelConfig& old_config,
+    const inference::ModelConfig& new_config)
+{
+  ::google::protobuf::util::MessageDifferencer pb_diff;
+  pb_diff.IgnoreField(
+      old_config.descriptor()->FindFieldByLowercaseName("instance_group"));
+  return pb_diff.Compare(old_config, new_config);
 }
 
 }}  // namespace triton::core

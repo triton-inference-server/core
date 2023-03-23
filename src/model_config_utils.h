@@ -279,4 +279,12 @@ TRITONSERVER_DataType DataTypeToTriton(const inference::DataType dtype);
 /// \return The data type.
 inference::DataType TritonToDataType(const TRITONSERVER_DataType dtype);
 
+/// Check if the model configs are only differ in model instances.
+/// \param old_config The old model config.
+/// \param new_config The new model config.
+/// \return The comparison result.
+bool IsModelConfigDifferOnlyInModelInstances(
+    const inference::ModelConfig& old_config,
+    const inference::ModelConfig& new_config);
+
 }}  // namespace triton::core

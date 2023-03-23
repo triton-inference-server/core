@@ -245,7 +245,7 @@ class ModelLifeCycle {
       model_.reset();
     }
 
-    const inference::ModelConfig model_config_;
+    inference::ModelConfig model_config_;
     const std::string model_path_;
     const bool is_ensemble_;
 
@@ -294,23 +294,29 @@ class ModelLifeCycle {
   // Create a new model, the 'model_id' can either be a new or existing model.
   void CreateModel(
       const ModelIdentifier& model_id, const int64_t version,
-      ModelInfo* model_info, const bool is_config_provided);
-  // Callback function template for model load.
-  // 'OnComplete' needs to be passed by value for now as there can be
-  // multiple versions to be loaded and each holds a copy of
-  // the 'OnComplete' callback.
+      ModelInfo* model_info, const bool is_config_provided,
+      std::shared_ptr<LoadTracker> load_tracker);
+  // Update model to the new config. It is the responsibility of the caller to
+  // ensure the model can be updated in-place without re-loading.
+  // Currently, only model instances can be updated.
+  void UpdateModel(
+      const ModelIdentifier& model_id, const int64_t version,
+      ModelInfo* model_info, const inference::ModelConfig& new_model_config,
+      std::shared_ptr<LoadTracker> load_tracker);
+  // Update 'load_tracker' to the latest info in 'model_info' after loading each
+  // model version.
   void OnLoadComplete(
       const ModelIdentifier& model_id, const int64_t version,
-      ModelInfo* model_info, std::function<void(Status)> OnComplete,
+      ModelInfo* model_info, const bool is_update,
+      const std::function<void(Status)>& OnComplete,
+      std::shared_ptr<LoadTracker> load_tracker);
+  // Helper function for 'OnLoadComplete()' to finish final operations after
+  // loading all model versions.
+  void OnLoadFinal(
+      const ModelIdentifier& model_id, ModelInfo* model_info,
+      const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
 
-  // Update the model config to the new config. Return true if the update is
-  // successful. Otherwise, false is returned and nothing is updated/changed.
-  // Currently, only model instances can be updated. (i.e. false is returned if
-  // configs other than model instances are changed)
-  bool UpdateModelConfig(
-      const ModelIdentifier& model_id, ModelInfo* model_info,
-      const inference::ModelConfig& model_config);
 
   // Mutex for 'map_' and 'background_models_'
   std::mutex map_mtx_;
