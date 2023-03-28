@@ -256,11 +256,6 @@ GetModifiedTime(const std::string& path)
   }
 
   for (const auto& child : contents) {
-    if (child.empty()) {
-      LOG_ERROR << "Failed to determine modification time for '" << path
-                << "': Directory has content with empty name";
-      return 0;
-    }
     const auto full_path = JoinPath({path, child});
     mtime = std::max(mtime, GetModifiedTime(full_path));
   }
