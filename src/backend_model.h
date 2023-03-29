@@ -64,7 +64,6 @@ class TritonModel : public Model {
       const bool is_config_provided, std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
-  using TritonInstanceGroup = std::vector<std::unique_ptr<TritonModelInstance>>;
   const std::string& LocalizedModelPath() const
   {
     return localized_model_dir_->Path();
@@ -75,19 +74,27 @@ class TritonModel : public Model {
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  const std::unordered_map<std::string, TritonInstanceGroup>& InstanceGroups()
-      const
-  {
-    return instance_group_map_;
-  }
-  std::unordered_map<std::string, TritonInstanceGroup>& MutableInstanceGroups()
-  {
-    return instance_group_map_;
-  }
+  std::vector<std::shared_ptr<TritonModelInstance>> Instances();
+  bool DeviceBlocking() const { return device_blocking_; }
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
-  Status AddInstance(
-      std::unique_ptr<TritonModelInstance>&& instance, const bool passive);
+
+  // Override base functions with its thread safe version.
+  Status Enqueue(std::unique_ptr<InferenceRequest>& request);
+  size_t InflightInferenceCount();
+  void Stop();
+
+  // Called by 'backend_model_instance' to move new instances to this object.
+  // The new instances are registered into the background.
+  Status RegisterInstance(
+      std::shared_ptr<TritonModelInstance>&& instance, const bool passive);
+
+  // Update instance group. 'caller_lock' will be released when creating new
+  // instances and re-held when returning, to allow atomic switch over to the
+  // new instances.
+  Status UpdateInstanceGroup(
+      const inference::ModelConfig& new_model_config,
+      std::unique_lock<std::mutex>* caller_lock);
 
   // Custom batching function getters.
   TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
@@ -103,10 +110,25 @@ class TritonModel : public Model {
       const std::shared_ptr<LocalizedPath>& localized_model_dir,
       const std::shared_ptr<TritonBackend>& backend,
       const double min_compute_capability, const int64_t version,
-      const inference::ModelConfig& config, const bool auto_complete_config);
+      const inference::ModelConfig& config, const bool auto_complete_config,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
 
-  // Set the scheduler based on the model configuration. The scheduler
-  // can only be set once for a backend.
+  // Replace the foreground instances with background instances. It is the
+  // caller responsibility to hold the 'update_mu_' if the scheduler is to be
+  // updated.
+  Status CommitInstances();
+
+  // Return the current scheduler thread safe.
+  std::shared_ptr<Scheduler> GetScheduler();
+
+  // Set or update the scheduler. It is the caller responsibility to hold the
+  // 'update_mu_' if the scheduler is to be updated.
+  Status SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler);
+
+  // Set the scheduler based on the model configuration and foreground
+  // 'instances'. It is the caller responsibility to hold the 'update_mu_' if
+  // the scheduler is to be updated.
   Status SetConfiguredScheduler();
 
   // Set the batching strategy, if custom functions provided by user.
@@ -138,9 +160,14 @@ class TritonModel : public Model {
 
   // The minimum supported compute capability on device.
   const double min_compute_capability_;
-
   // Whether the backend should attempt to auto-complete the model config.
   const bool auto_complete_config_;
+  // The backend cmdline config when this object is created.
+  const triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
+  // The host policy map when this object is created.
+  const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+  // The device blocking when this object is created.
+  bool device_blocking_;
 
   // The localized repo directory holding the model. If localization
   // required creation of a temporary local copy then that copy will
@@ -150,13 +177,18 @@ class TritonModel : public Model {
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;
 
-  // The model instances for this model stored by the
-  // instance groups defined in the model configuration.
-  // Passive instance groups are those instances which are
-  // loaded but not added to the scheduler.
-  std::unordered_map<std::string, TritonInstanceGroup> instance_group_map_;
-  std::unordered_map<std::string, TritonInstanceGroup>
-      passive_instance_group_map_;
+  // Protect concurrent access while updating. Currently 'scheduler_' and
+  // variation of 'instances_' vectors need to be protected.
+  std::mutex update_mu_;
+
+  // The model instances for this model. Passive instances are loaded but not
+  // added to the scheduler.
+  std::vector<std::shared_ptr<TritonModelInstance>> instances_;
+  std::vector<std::shared_ptr<TritonModelInstance>> passive_instances_;
+  // They are the background 'instances_' and 'passive_instances_', not yet
+  // effective until committed.
+  std::vector<std::shared_ptr<TritonModelInstance>> bg_instances_;
+  std::vector<std::shared_ptr<TritonModelInstance>> bg_passive_instances_;
 
   // Opaque state associated with this model.
   void* state_;

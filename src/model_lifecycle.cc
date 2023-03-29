@@ -479,15 +479,15 @@ ModelLifeCycle::AsyncLoad(
         // The model is currently being served. Check if the model load could
         // be completed with a simple config update.
         if (!is_model_file_updated && !serving_model->is_ensemble_ &&
-            IsModelConfigDifferOnlyInModelInstances(
+            IsOnlyInstanceGroupDiffers(
                 serving_model->model_config_, model_config)) {
           // Update the model
           model_info = serving_model.get();
           model_info->last_update_ns_ = now_ns;
           load_pool_->Enqueue([this, model_id, version, model_info,
                                model_config, OnComplete, load_tracker]() {
-            UpdateModel(
-                model_id, version, model_info, model_config, load_tracker);
+            UpdateModelConfig(
+                model_id, version, model_info, model_config);
             OnLoadComplete(
                 model_id, version, model_info, true /* is_update */, OnComplete,
                 load_tracker);
@@ -516,7 +516,7 @@ ModelLifeCycle::AsyncLoad(
     load_pool_->Enqueue([this, model_id, version, model_info, OnComplete,
                          load_tracker, is_config_provided]() {
       CreateModel(
-          model_id, version, model_info, is_config_provided, load_tracker);
+          model_id, version, model_info, is_config_provided);
       OnLoadComplete(
           model_id, version, model_info, false /* is_update */, OnComplete,
           load_tracker);
@@ -529,8 +529,7 @@ ModelLifeCycle::AsyncLoad(
 void
 ModelLifeCycle::CreateModel(
     const ModelIdentifier& model_id, const int64_t version,
-    ModelInfo* model_info, const bool is_config_provided,
-    std::shared_ptr<LoadTracker> load_tracker)
+    ModelInfo* model_info, const bool is_config_provided)
 {
   LOG_VERBOSE(2) << "CreateModel() '" << model_id << "' version " << version;
   const auto& model_config = model_info->model_config_;
@@ -630,16 +629,15 @@ ModelLifeCycle::CreateModel(
 }
 
 void
-ModelLifeCycle::UpdateModel(
+ModelLifeCycle::UpdateModelConfig(
     const ModelIdentifier& model_id, const int64_t version,
-    ModelInfo* model_info, const inference::ModelConfig& new_model_config,
-    std::shared_ptr<LoadTracker> load_tracker)
+    ModelInfo* model_info, const inference::ModelConfig& new_model_config)
 {
-  LOG_VERBOSE(2) << "UpdateModel() '" << model_id << "' version " << version;
+  LOG_VERBOSE(2) << "UpdateModelConfig() '" << model_id << "' version " << version;
 
-  std::lock_guard<std::mutex> model_info_lock(model_info->mtx_);
+  std::unique_lock<std::mutex> model_info_lock(model_info->mtx_);
 
-  // Downcast 'Model' to 'TritonModel'
+  // Downcast 'Model' to 'TritonModel'.
   TritonModel* model = (TritonModel*)model_info->model_.get();
   if (model == nullptr) {
     model_info->state_ = ModelReadyState::UNAVAILABLE;
@@ -649,118 +647,15 @@ ModelLifeCycle::UpdateModel(
     return;
   }
 
-  std::cerr << "\n\nReady to update model\n\n";
-  return;
-
-  /*
-
-  // Collect everything needed to create and destroy instances.
-  auto& instance_group_map = model->MutableInstanceGroups();
-  auto rate_limiter = model->Server()->GetRateLimiter();
-  bool device_blocking = false;
-  if (model->Backend()->ExecutionPolicy() ==
-      TRITONBACKEND_EXECUTION_DEVICE_BLOCKING) {
-    if (new_model_config.has_sequence_batching()) {
-      LOG_VERBOSE(2)
-          << "Overriding execution policy to "
-              "'TRITONBACKEND_EXECUTION_BLOCKING' for sequence model '"
-          << new_model_config.name() << "'";
-    } else {
-      device_blocking = true;
-    }
+  // Update model instance group.
+  Status status = model->UpdateInstanceGroup(new_model_config, &model_info_lock);
+  if (!status.IsOk()) {
+    model_info->state_ = ModelReadyState::UNAVAILABLE;
+    model_info->state_reason_ = status.AsString();
   }
 
-  // Set the new model configuration.
-  model->SetModelConfig(new_model_config);
-
-  // Need to rebuild the device_id to BackendThread map since that work was
-  // thrown away after loading the model.
-  std::map<
-      uint32_t,
-      std::shared_ptr<triton::core::TritonModelInstance::TritonBackendThread>>
-      device_to_thread_map;
-  for (const auto& pair : instance_group_map) {
-    for (auto& instance : pair.second) {
-      // Add to the device_id map
-      int32_t device_id = instance->DeviceId();
-      auto backend_thread_ptr = instance->BackendThread();
-      device_to_thread_map[device_id] = backend_thread_ptr;
-    }
-  }
-
-  // For each instance group we must add or remove instances.
-  // It is assumed the instance groups are in the exact same order between
-  // the old config and the new config, so the names of the groups can be
-  // picked out from the instance_group_map_.
-  for (int32_t instance_group_index = 0;
-        instance_group_index < new_model_config.instance_group().size();
-        ++instance_group_index) {
-    const inference::ModelInstanceGroup& instance_group =
-        new_model_config.instance_group()[instance_group_index];
-
-    std::vector<std::unique_ptr<triton::core::TritonModelInstance>>&
-        triton_instance_group =
-            instance_group_map[instance_group.name()];
-
-    if ((size_t)instance_group.count() > triton_instance_group.size()) {
-      size_t difference =
-          instance_group.count() - triton_instance_group.size();
-
-      // Add instances to the model
-      for (size_t i = 0; i < difference; ++i) {
-        size_t instance_index = triton_instance_group.size() + i;
-
-        // Create the model instance.
-        // The BackendThread is created in creation of the instance.
-        // This instance gets registered with the rate limiter on creation.
-        // Instance gets added to the model on creation.
-        TritonModelInstance::CreateInstance(
-            model,
-            new_model_config.instance_group()[instance_group_index],
-            cmdline_config_map_, host_policy_map_, device_to_thread_map,
-            device_blocking, instance_index);
-      }
-    } else if (
-        (size_t)instance_group.count() < triton_instance_group.size()) {
-      size_t difference =
-          triton_instance_group.size() - instance_group.count();
-
-      // Remove instances from the model, but leave minimum of 1.
-      if (instance_group.count() == 0) {
-        // Leave a minimum of 1 instance, which difference is the number of
-        // instance(s) to remove.
-        difference = triton_instance_group.size() - 1;
-
-        // Need to update the config as well.
-        // INCONSISTENT: The model config on the model_infos is const and
-        // apparently at this point we have already updated the model
-        // config on the TritonModel, so modifying here works.
-        inference::ModelConfig& triton_model_config =
-            model->MutableConfig();
-        google::protobuf::RepeatedPtrField<inference::ModelInstanceGroup>*
-            group_repeated_ptr_ptr =
-                triton_model_config.mutable_instance_group();
-        inference::ModelInstanceGroup* triton_model_instance_group =
-            group_repeated_ptr_ptr->Mutable(instance_group_index);
-        triton_model_instance_group->set_count(1);
-      }
-      for (size_t i = 0; i < difference; i++) {
-        // BackendThread stops when the TritonModelInstance desturctor is
-        // called.
-        auto& triton_model_instance = triton_instance_group.back();
-
-        // Unregister the TritonModelInstance with the rate_limiter.
-        LOG_INFO << "Unregistering model instance from rate_limiter";
-        rate_limiter->UnregisterModelInstance(triton_model_instance.get());
-
-        // remove the last one in the list for no reason.
-        // Remove the instance from the model.
-        // Backend Thread gets stopped on destruction of the instance.
-        triton_instance_group.erase(triton_instance_group.end() - 1);
-      }
-    }  // Do nothing if equal
-  }
-  */
+  // Write new config into 'model_info'.
+  model_info->model_config_ = new_model_config;
 }
 
 void

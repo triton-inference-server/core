@@ -132,7 +132,6 @@ class Model {
 
   // Get the configuration of model being served.
   const inference::ModelConfig& Config() const { return config_; }
-  inference::ModelConfig& MutableConfig() { return config_; }
 
   // Get the number of required inputs
   size_t RequiredInputCount() const { return required_input_count_; }
@@ -186,16 +185,16 @@ class Model {
 
   uint32_t MaxPriorityLevel() const { return max_priority_level_; }
 
+ protected:
   // Set the configuration of the model being served.
   Status SetModelConfig(const inference::ModelConfig& config);
 
- protected:
   // Explicitly set the scheduler to use for inference requests to the
   // model. The scheduler can only be set once for a model.
   Status SetScheduler(std::unique_ptr<Scheduler> scheduler);
 
-  // The scheduler to use for this model.
-  std::unique_ptr<Scheduler> scheduler_;
+  // The scheduler to use for this model. The shared_ptr is for shallow copy.
+  std::shared_ptr<Scheduler> scheduler_;
 
   // Configuration of the model.
   inference::ModelConfig config_;

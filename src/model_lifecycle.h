@@ -294,24 +294,22 @@ class ModelLifeCycle {
   // Create a new model, the 'model_id' can either be a new or existing model.
   void CreateModel(
       const ModelIdentifier& model_id, const int64_t version,
-      ModelInfo* model_info, const bool is_config_provided,
-      std::shared_ptr<LoadTracker> load_tracker);
+      ModelInfo* model_info, const bool is_config_provided);
   // Update model to the new config. It is the responsibility of the caller to
-  // ensure the model can be updated in-place without re-loading.
+  // ensure the model can be updated in-place without a complete reload.
   // Currently, only model instances can be updated.
-  void UpdateModel(
+  void UpdateModelConfig(
       const ModelIdentifier& model_id, const int64_t version,
-      ModelInfo* model_info, const inference::ModelConfig& new_model_config,
-      std::shared_ptr<LoadTracker> load_tracker);
-  // Update 'load_tracker' to the latest info in 'model_info' after loading each
-  // model version.
+      ModelInfo* model_info, const inference::ModelConfig& new_model_config);
+  // Update 'load_tracker' to the latest info in 'model_info' after loading
+  // **each** model version.
   void OnLoadComplete(
       const ModelIdentifier& model_id, const int64_t version,
       ModelInfo* model_info, const bool is_update,
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
   // Helper function for 'OnLoadComplete()' to finish final operations after
-  // loading all model versions.
+  // loading **all** model versions.
   void OnLoadFinal(
       const ModelIdentifier& model_id, ModelInfo* model_info,
       const std::function<void(Status)>& OnComplete,

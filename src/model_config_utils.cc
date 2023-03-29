@@ -2293,7 +2293,7 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
 }
 
 bool
-IsModelConfigDifferOnlyInModelInstances(
+IsOnlyInstanceGroupDiffers(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config)
 {

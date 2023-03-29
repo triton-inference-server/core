@@ -48,6 +48,55 @@ class InferenceRequest;
 //
 class TritonModelInstance {
  public:
+  struct SecondaryDevice {
+    SecondaryDevice(const std::string kind, const int64_t id)
+        : kind_(kind), id_(id)
+    {
+    }
+    const std::string kind_;
+    const int64_t id_;
+  };
+
+  static Status CreateInstances(
+      TritonModel* model,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      const inference::ModelConfig& model_config);
+  ~TritonModelInstance();
+
+  const std::string& Name() const { return name_; }
+  size_t Index() const { return index_; }
+  TRITONSERVER_InstanceGroupKind Kind() const { return kind_; }
+  int32_t DeviceId() const { return device_id_; }
+  const triton::common::HostPolicyCmdlineConfig& HostPolicy() const
+  {
+    return host_policy_;
+  }
+  const TritonServerMessage& HostPolicyMessage() const
+  {
+    return host_policy_message_;
+  }
+  bool IsPassive() const { return passive_; }
+  const std::vector<std::string>& Profiles() const { return profile_names_; }
+
+  const std::vector<SecondaryDevice>& SecondaryDevices() const
+  {
+    return secondary_devices_;
+  }
+
+  Status Initialize();
+  Status WarmUp();
+  void Schedule(
+      std::vector<std::unique_ptr<InferenceRequest>>&& requests,
+      const std::function<void()>& OnCompletion);
+
+  TritonModel* Model() const { return model_; }
+  void* State() { return state_; }
+  void SetState(void* state) { state_ = state; }
+
+  MetricModelReporter* MetricReporter() const { return reporter_.get(); }
+
+ private:
   class TritonBackendThread {
    public:
     static Status CreateBackendThread(
@@ -72,68 +121,6 @@ class TritonModelInstance {
     std::atomic<bool> backend_thread_exit_;
   };
 
-  struct SecondaryDevice {
-    SecondaryDevice(const std::string kind, const int64_t id)
-        : kind_(kind), id_(id)
-    {
-    }
-    const std::string kind_;
-    const int64_t id_;
-  };
-
-  static Status CreateInstances(
-      TritonModel* model,
-      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const inference::ModelConfig& model_config, const bool device_blocking);
-  static Status CreateInstance(
-      TritonModel* model, const inference::ModelInstanceGroup& group,
-      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      std::map<uint32_t, std::shared_ptr<TritonBackendThread>>&
-          device_to_thread_map,
-      const bool device_blocking, const int32_t c);
-  ~TritonModelInstance();
-
-  const std::string& GroupName() const { return group_name_; }
-  const std::string& Name() const { return name_; }
-  size_t Index() const { return index_; }
-  TRITONSERVER_InstanceGroupKind Kind() const { return kind_; }
-  int32_t DeviceId() const { return device_id_; }
-  const triton::common::HostPolicyCmdlineConfig& HostPolicy() const
-  {
-    return host_policy_;
-  }
-  const TritonServerMessage& HostPolicyMessage() const
-  {
-    return host_policy_message_;
-  }
-  bool IsPassive() const { return passive_; }
-  const std::vector<std::string>& Profiles() const { return profile_names_; }
-
-  std::shared_ptr<TritonBackendThread> BackendThread()
-  {
-    return triton_backend_thread_;
-  }
-
-  const std::vector<SecondaryDevice>& SecondaryDevices() const
-  {
-    return secondary_devices_;
-  }
-
-  Status Initialize();
-  Status WarmUp();
-  void Schedule(
-      std::vector<std::unique_ptr<InferenceRequest>>&& requests,
-      const std::function<void()>& OnCompletion);
-
-  TritonModel* Model() const { return model_; }
-  void* State() { return state_; }
-  void SetState(void* state) { state_ = state; }
-
-  MetricModelReporter* MetricReporter() const { return reporter_.get(); }
-
- private:
   struct WarmupData {
     WarmupData(const std::string& sample_name, const size_t count)
         : sample_name_(sample_name), count_(std::max(count, size_t{1}))
@@ -155,22 +142,19 @@ class TritonModelInstance {
 
   DISALLOW_COPY_AND_ASSIGN(TritonModelInstance);
   TritonModelInstance(
-      TritonModel* model, const std::string& name,
-      const std::string& group_name, const size_t index,
+      TritonModel* model, const std::string& name, const size_t index,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const TritonServerMessage& host_policy_message,
       const std::vector<SecondaryDevice>& secondary_devices);
   static Status CreateInstance(
-      TritonModel* model, const std::string& name,
-      const std::string& group_name, const size_t index,
+      TritonModel* model, const std::string& name, const size_t index,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
       const std::string& host_policy_name,
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const inference::ModelRateLimiter& rate_limiter_config,
-      const bool device_blocking,
       std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
           device_to_thread_map,
       const std::vector<SecondaryDevice>& secondary_devices);
@@ -194,7 +178,6 @@ class TritonModelInstance {
   TritonModel* model_;
 
   std::string name_;
-  std::string group_name_;
   size_t index_;
 
   // For CPU device_id_ is always 0. For GPU device_id_ indicates the
