@@ -29,6 +29,7 @@
 #include <condition_variable>
 #include <deque>
 #include <future>
+#include <limits>
 #include <mutex>
 #include <queue>
 #include <thread>
@@ -156,16 +157,24 @@ class SequenceBatchScheduler : public Scheduler {
       std::unordered_map<InferenceRequest::SequenceId, BatcherSequenceSlot>;
   BatcherSequenceSlotMap sequence_to_batcherseqslot_map_;
 
+  // The ordered backlog of sequences waiting for a free sequence slot.
+  // The backlog queue keep track of the closest expiration timestamp among
+  // the request of the corresponding sequence. Reaper thread will
+  // sweep the queues on wake up and clear all timed out sequence.
+  // See ReaperThread() for detail implementation.
+  struct BacklogQueue {
+    // Default to max value so it is not possible to time out unless specified.
+    uint64_t expiration_timestamp_{std::numeric_limits<uint64_t>::max()};
+    std::shared_ptr<std::deque<std::unique_ptr<InferenceRequest>>> queue_{
+        std::make_shared<std::deque<std::unique_ptr<InferenceRequest>>>()};
+  };
+  std::deque<std::shared_ptr<BacklogQueue>> backlog_queues_;
+
   // Map from a request's correlation ID to the backlog queue
   // collecting requests for that correlation ID.
   using BacklogMap = std::unordered_map<
-      InferenceRequest::SequenceId,
-      std::shared_ptr<std::deque<std::unique_ptr<InferenceRequest>>>>;
+      InferenceRequest::SequenceId, std::shared_ptr<BacklogQueue>>;
   BacklogMap sequence_to_backlog_map_;
-
-  // The ordered backlog of sequences waiting for a free sequenceslot.
-  std::deque<std::shared_ptr<std::deque<std::unique_ptr<InferenceRequest>>>>
-      backlog_queues_;
 
   // The batcher/sequence-slot locations ready to accept a new
   // sequence. Ordered from lowest sequence-slot-number to highest so
