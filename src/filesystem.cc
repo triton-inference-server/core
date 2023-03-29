@@ -721,6 +721,13 @@ GCSFileSystem::GetDirectoryContents(
     // Let set take care of subdirectory contents
     std::string item = name.substr(item_start, item_end - item_start);
     contents->insert(item);
+
+    // Fail-safe check to ensure the item name is not empty
+    if (item.empty()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Cannot handle item with empty name at " + path);
+    }
   }
   return Status::Success;
 }
@@ -1135,6 +1142,12 @@ ASFileSystem::GetDirectoryContents(
   auto func = [&](const as::list_blobs_segmented_item& item,
                   const std::string& dir) {
     contents->insert(dir);
+    // Fail-safe check to ensure the item name is not empty
+    if (dir.empty()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Cannot handle item with empty name at " + path);
+    }
     return Status::Success;
   };
   std::string container, dir_path;
@@ -1777,6 +1790,13 @@ S3FileSystem::GetDirectoryContents(
       // Let set take care of subdirectory contents
       std::string item = name.substr(item_start, item_end - item_start);
       contents->insert(item);
+
+      // Fail-safe check to ensure the item name is not empty
+      if (item.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Cannot handle item with empty name at " + true_path);
+      }
     }
   } else {
     return Status(
