@@ -147,9 +147,6 @@ class TritonModel : public Model {
   static Status SetBackendConfigDefaults(
       triton::common::BackendCmdlineConfig& config);
 
-  Status Initialize();
-  Status WarmUp();
-
   // Clear library handles.
   void ClearHandles();
 

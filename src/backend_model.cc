@@ -533,26 +533,6 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
   return Status::Success;
 }
 
-Status
-TritonModel::Initialize()
-{
-  for (const auto& instance : instances_) {
-    RETURN_IF_ERROR(instance->Initialize());
-  }
-
-  return Status::Success;
-}
-
-Status
-TritonModel::WarmUp()
-{
-  for (const auto& instance : instances_) {
-    RETURN_IF_ERROR(instance->WarmUp());
-  }
-
-  return Status::Success;
-}
-
 TritonModel::TritonModel(
     InferenceServer* server,
     const std::shared_ptr<LocalizedPath>& localized_model_dir,
