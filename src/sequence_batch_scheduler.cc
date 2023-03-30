@@ -580,6 +580,7 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
         "inference requests");
   }
 
+  bool wake_reaper_thread = false;
   std::unique_lock<std::mutex> lock(mu_);
 
   auto sb_itr = sequence_to_batcherseqslot_map_.find(correlation_id);
@@ -648,6 +649,10 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
       backlog->expiration_timestamp_ = std::min(
           backlog->expiration_timestamp_,
           now_us + irequest->TimeoutMicroseconds());
+      if (backlog->expiration_timestamp_ < timeout_timestamp_) {
+        timeout_timestamp_ = backlog->expiration_timestamp_;
+        wake_reaper_thread = true;
+      }
     }
     backlog->queue_->emplace_back(std::move(irequest));
 
@@ -657,6 +662,12 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
     // backlog queue.
     if (seq_end) {
       sequence_to_backlog_map_.erase(bl_itr);
+    }
+
+    // Waking up reaper so it received latest timeout to be waited for,
+    // shouldn't incur actual reaper work.
+    if (wake_reaper_thread) {
+      reaper_cv_.notify_all();
     }
     return Status::Success;
   }
@@ -676,11 +687,21 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
     auto backlog = std::make_shared<BacklogQueue>();
     if (irequest->TimeoutMicroseconds() != 0) {
       backlog->expiration_timestamp_ = now_us + irequest->TimeoutMicroseconds();
+      if (backlog->expiration_timestamp_ < timeout_timestamp_) {
+        timeout_timestamp_ = backlog->expiration_timestamp_;
+        wake_reaper_thread = true;
+      }
     }
     backlog_queues_.push_back(backlog);
     backlog->queue_->emplace_back(std::move(irequest));
     if (!seq_end) {
       sequence_to_backlog_map_[correlation_id] = std::move(backlog);
+    }
+
+    // Waking up reaper so it received latest timeout to be waited for,
+    // shouldn't incur actual reaper work.
+    if (wake_reaper_thread) {
+      reaper_cv_.notify_all();
     }
     return Status::Success;
   }
@@ -706,7 +727,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
                  << irequest->ModelName();
 
   batchers_[batcher_idx]->Enqueue(seq_slot, correlation_id, irequest);
-
   return Status::Success;
 }
 
@@ -817,7 +837,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 
   uint64_t idle_timestamp =
       Now<std::chrono::microseconds>() + max_sequence_idle_microseconds_;
-  uint64_t timeout_timestamp = std::numeric_limits<uint64_t>::max();
+  timeout_timestamp_ = std::numeric_limits<uint64_t>::max();
 
   while (!reaper_thread_exit_) {
     uint64_t now_us = Now<std::chrono::microseconds>();
@@ -902,8 +922,8 @@ SequenceBatchScheduler::ReaperThread(const int nice)
     }
 
     // Reap timed out backlog sequence
-    if (now_us >= timeout_timestamp) {
-      timeout_timestamp = std::numeric_limits<uint64_t>::max();
+    if (now_us >= timeout_timestamp_) {
+      timeout_timestamp_ = std::numeric_limits<uint64_t>::max();
       std::deque<std::shared_ptr<BacklogQueue>> expired_backlogs;
       {
         std::unique_lock<std::mutex> lock(mu_);
@@ -912,7 +932,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
         while (it != backlog_queues_.end()) {
           const auto queue_timestamp = (*it)->expiration_timestamp_;
           if (queue_timestamp > now_us) {
-            timeout_timestamp = std::min(timeout_timestamp, queue_timestamp);
+            timeout_timestamp_ = std::min(timeout_timestamp_, queue_timestamp);
             ++it;
           } else {
             // The queue expired, clear the records and reject the request
@@ -935,13 +955,19 @@ SequenceBatchScheduler::ReaperThread(const int nice)
         }
       }
 
-      // [WIP] rejecting requests
+      // Reject timeout requests
+      static Status rejected_status = Status(
+          Status::Code::UNAVAILABLE,
+          "timeout of the corresponding sequence has been expired");
       for (auto& backlog : expired_backlogs) {
+        for (auto& req : *backlog->queue_) {
+          InferenceRequest::RespondIfError(req, rejected_status, true);
+        }
       }
     }
 
     const auto wait_microseconds =
-        std::min(idle_timestamp, timeout_timestamp) - now_us;
+        std::min(idle_timestamp, timeout_timestamp_) - now_us;
     // Wait until the next timeout needs to be checked
     if (wait_microseconds > 0) {
       std::unique_lock<std::mutex> lock(mu_);

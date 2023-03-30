@@ -147,6 +147,9 @@ class SequenceBatchScheduler : public Scheduler {
   std::unique_ptr<std::thread> reaper_thread_;
   std::condition_variable reaper_cv_;
   bool reaper_thread_exit_;
+  // Need to share between enqueue thread and reaper thread because
+  // the timeout may be shorten by new request
+  uint64_t timeout_timestamp_;
 
   // The SequenceBatchs being managed by this scheduler.
   std::vector<std::unique_ptr<SequenceBatch>> batchers_;
