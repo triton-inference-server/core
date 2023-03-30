@@ -174,6 +174,10 @@ TritonModelInstance::~TritonModelInstance()
     triton_backend_thread_->StopBackendThread();
   }
 
+  LOG_STATUS_ERROR(
+      model_->Server()->GetRateLimiter()->UnregisterModelInstance(this),
+      "failed unregistering model instance");
+
   // Model finalization is optional...
   if (model_->Backend()->ModelInstanceFiniFn() != nullptr) {
     LOG_TRITONSERVER_ERROR(
