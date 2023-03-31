@@ -2214,6 +2214,7 @@ TRITONSERVER_ServerNew(
   if (loptions->Metrics()) {
     tc::Metrics::EnableMetrics();
     tc::Metrics::SetMetricsInterval(loptions->MetricsInterval());
+    tc::Metrics::SetConfig(loptions->MetricsConfigMap());
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -2259,7 +2260,6 @@ TRITONSERVER_ServerNew(
   tc::Status status = lserver->Init();
 
 #ifdef TRITON_ENABLE_METRICS
-  lserver->SetMetricsConfig(loptions->MetricsConfigMap());
 #ifdef TRITON_ENABLE_METRICS_GPU
   if (loptions->Metrics() && loptions->GpuMetrics()) {
     tc::Metrics::EnableGPUMetrics();

@@ -44,6 +44,9 @@
 
 namespace triton { namespace core {
 
+using MetricsConfig = std::vector<std::pair<std::string, std::string>>;
+using MetricsConfigMap = std::unordered_map<std::string, MetricsConfig>;
+
 #ifdef TRITON_ENABLE_METRICS_CPU
 using MemInfo = std::unordered_map<std::string, uint64_t>;
 
@@ -122,6 +125,9 @@ class Metrics {
 
   // Set the time interval in secs at which metrics are collected
   static void SetMetricsInterval(uint64_t metrics_interval_ms);
+
+  // Set the config for Metrics to control various options generically
+  static void SetConfig(MetricsConfigMap cfg);
 
   // Get the prometheus registry
   static std::shared_ptr<prometheus::Registry> GetRegistry();
@@ -295,6 +301,7 @@ class Metrics {
   std::mutex metrics_enabling_;
   std::mutex poll_thread_starting_;
   uint64_t metrics_interval_ms_;
+  MetricsConfigMap config_;
 };
 
 }}  // namespace triton::core
