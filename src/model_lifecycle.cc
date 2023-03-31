@@ -486,8 +486,7 @@ ModelLifeCycle::AsyncLoad(
           model_info->last_update_ns_ = now_ns;
           load_pool_->Enqueue([this, model_id, version, model_info,
                                model_config, OnComplete, load_tracker]() {
-            UpdateModelConfig(
-                model_id, version, model_info, model_config);
+            UpdateModelConfig(model_id, version, model_info, model_config);
             OnLoadComplete(
                 model_id, version, model_info, true /* is_update */, OnComplete,
                 load_tracker);
@@ -515,8 +514,7 @@ ModelLifeCycle::AsyncLoad(
     // Load model asynchronously via thread pool
     load_pool_->Enqueue([this, model_id, version, model_info, OnComplete,
                          load_tracker, is_config_provided]() {
-      CreateModel(
-          model_id, version, model_info, is_config_provided);
+      CreateModel(model_id, version, model_info, is_config_provided);
       OnLoadComplete(
           model_id, version, model_info, false /* is_update */, OnComplete,
           load_tracker);
@@ -633,7 +631,8 @@ ModelLifeCycle::UpdateModelConfig(
     const ModelIdentifier& model_id, const int64_t version,
     ModelInfo* model_info, const inference::ModelConfig& new_model_config)
 {
-  LOG_VERBOSE(2) << "UpdateModelConfig() '" << model_id << "' version " << version;
+  LOG_VERBOSE(2) << "UpdateModelConfig() '" << model_id << "' version "
+                 << version;
 
   std::unique_lock<std::mutex> model_info_lock(model_info->mtx_);
 
@@ -648,7 +647,8 @@ ModelLifeCycle::UpdateModelConfig(
   }
 
   // Update model instance group.
-  Status status = model->UpdateInstanceGroup(new_model_config, &model_info_lock);
+  Status status =
+      model->UpdateInstanceGroup(new_model_config, &model_info_lock);
   if (!status.IsOk()) {
     model_info->state_ = ModelReadyState::UNAVAILABLE;
     model_info->state_reason_ = status.AsString();

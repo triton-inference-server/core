@@ -272,11 +272,12 @@ TritonModel::UpdateInstanceGroup(
   inference::ModelConfig model_config = config_;
   model_config.clear_instance_group();
   model_config.mutable_instance_group()->Add(
-      new_model_config.instance_group().begin(), new_model_config.instance_group().end());
+      new_model_config.instance_group().begin(),
+      new_model_config.instance_group().end());
   RETURN_IF_ERROR(NormalizeInstanceGroup(
-      min_compute_capability_, backend_->BackendAttributes().preferred_groups_, &model_config));
-  RETURN_IF_ERROR(
-      ValidateInstanceGroup(model_config, min_compute_capability_));
+      min_compute_capability_, backend_->BackendAttributes().preferred_groups_,
+      &model_config));
+  RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
 
   // Create new instances if needed.
   caller_lock->unlock();  // allow inference while creating instances

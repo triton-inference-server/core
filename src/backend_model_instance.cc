@@ -301,8 +301,8 @@ Status
 TritonModelInstance::CreateInstance(
     TritonModel* model, const std::string& name, const size_t index,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-    const std::vector<std::string>& profile_names,
-    const bool passive, const std::string& host_policy_name,
+    const std::vector<std::string>& profile_names, const bool passive,
+    const std::string& host_policy_name,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const inference::ModelRateLimiter& rate_limiter_config,
     std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
