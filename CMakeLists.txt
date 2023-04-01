@@ -269,6 +269,9 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   if(${TRITON_ENABLE_GPU})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} cnmem)
   endif() # TRITON_ENABLE_GPU
+  if(${TRITON_ENABLE_TRACING})
+    set(TRITON_DEPENDS ${TRITON_DEPENDS} opentelemetry-cpp)
+  endif() # TRITON_ENABLE_TRACING
 
   ExternalProject_Add(triton-core
     PREFIX triton-core
@@ -297,6 +300,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-c-common_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib/aws-c-common/cmake
       -Daws-checksums_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib/aws-checksums/cmake
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
+      -Dopentelemetry-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/opentelemetry-cpp/lib/cmake/opentelemetry-cpp
       -DTRITON_COMMON_REPO_TAG:STRING=${TRITON_COMMON_REPO_TAG}
       -DTRITON_EXTRA_LIB_PATHS:PATH=${TRITON_EXTRA_LIB_PATHS}
       -DTRITON_ENABLE_NVTX:BOOL=${TRITON_ENABLE_NVTX}

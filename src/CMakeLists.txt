@@ -99,6 +99,14 @@ if(${TRITON_ENABLE_S3})
   message(STATUS "Using aws-sdk-cpp ${AWSSDK_VERSION}")
 endif()
 
+#
+# OpenTelemetry
+#
+if(${TRITON_ENABLE_TRACING})
+  find_package(opentelemetry-cpp CONFIG REQUIRED)
+  message(STATUS "Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
+endif()
+
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
@@ -317,6 +325,13 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
+if(${TRITON_ENABLE_TRACING})
+  target_include_directories(
+    triton-core 
+    PRIVATE ${OPENTELEMETRY_CPP_INCLUDE_DIRS}
+  )
+endif()
+
 target_compile_definitions(
   triton-core
   PRIVATE TRITON_VERSION="${TRITON_VERSION}"
@@ -507,6 +522,14 @@ if(${TRITON_ENABLE_METRICS_GPU})
       dcgm
   )
 endif() # TRITON_ENABLE_METRICS_GPU
+
+if(${TRITON_ENABLE_TRACING})
+  target_link_libraries(
+    triton-core
+    PRIVATE
+      ${OPENTELEMETRY_CPP_LIBRARIES}
+  )
+endif()
 
 install(
   TARGETS
