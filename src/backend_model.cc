@@ -26,7 +26,9 @@
 
 #include "backend_model.h"
 
+#include <map>
 #include <vector>
+
 #include "backend_config.h"
 #include "backend_model_instance.h"
 #include "dynamic_batch_scheduler.h"
@@ -167,19 +169,28 @@ TritonModel::Create(
 
   TritonModel* raw_local_model = local_model.get();
 
-  // Model initialization is optional... The TRITONBACKEND_Model
-  // object is this TritonModel object. We must set set shared library
-  // path to point to the backend directory in case the backend
-  // library attempts to load additional shared libaries.
+  // Model initialization is optional... The TRITONBACKEND_Model object is this
+  // TritonModel object.
   if (backend->ModelInitFn() != nullptr) {
+    // We must set set shared library path to point to the backend directory in
+    // case the backend library attempts to load additional shared libaries.
+    // Currently, the set and reset function is effective only on Windows, so
+    // there is no need to set path on non-Windows.
+    // However, parallel model loading will not see any speedup on Windows and
+    // the global lock inside the SharedLibrary is a WAR.
+    // [FIXME] Reduce lock WAR on SharedLibrary (DLIS-4300)
+#ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
     RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
+#endif
 
     TRITONSERVER_Error* err = backend->ModelInitFn()(
         reinterpret_cast<TRITONBACKEND_Model*>(raw_local_model));
 
+#ifdef _WIN32
     RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+#endif
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
 
@@ -258,65 +269,23 @@ TritonModel::ResolveBackendConfigs(
 {
   const auto& global_itr = backend_cmdline_config_map.find(std::string());
   const auto& specific_itr = backend_cmdline_config_map.find(backend_name);
-  if (specific_itr == backend_cmdline_config_map.end() &&
-      global_itr != backend_cmdline_config_map.end()) {
-    for (auto setting : global_itr->second) {
-      config.push_back(setting);
+  std::map<std::string, std::string> lconfig;
+  if (global_itr != backend_cmdline_config_map.end()) {
+    // Accumulate all global settings
+    for (auto& setting : global_itr->second){
+      lconfig[setting.first] = setting.second;
     }
-  } else if (
-      specific_itr != backend_cmdline_config_map.end() &&
-      global_itr == backend_cmdline_config_map.end()) {
-    for (auto setting : specific_itr->second) {
-      config.push_back(setting);
+  }
+  if (specific_itr != backend_cmdline_config_map.end()) {
+    // Accumulate backend specific settings and override
+    // global settings with specific configs if needed 
+    for (auto& setting : specific_itr->second){
+      lconfig[setting.first] = setting.second;
     }
-  } else if (
-      specific_itr != backend_cmdline_config_map.end() &&
-      global_itr != backend_cmdline_config_map.end()) {
-    triton::common::BackendCmdlineConfig global_backend_config =
-        global_itr->second;
-    triton::common::BackendCmdlineConfig specific_backend_config =
-        specific_itr->second;
-
-    std::sort(global_backend_config.begin(), global_backend_config.end());
-    std::sort(specific_backend_config.begin(), specific_backend_config.end());
-
-    size_t global_index = 0;
-    size_t specific_index = 0;
-    while (global_index < global_backend_config.size() &&
-           specific_index < specific_backend_config.size()) {
-      auto& current_global_setting = global_backend_config.at(global_index);
-      auto& current_specific_setting =
-          specific_backend_config.at(specific_index);
-      if (current_specific_setting.first.compare(
-              current_global_setting.first) == 0) {
-        // specific setting overrides global setting
-        config.push_back(current_specific_setting);
-        ++global_index;
-        ++specific_index;
-      } else if (
-          current_specific_setting.first.compare(current_global_setting.first) <
-          0) {
-        config.push_back(current_specific_setting);
-        ++specific_index;
-      } else {
-        config.push_back(current_global_setting);
-        ++global_index;
-      }
-    }
-
-    // add the rest of the global configs
-    if (global_index < global_backend_config.size()) {
-      auto& current_global_setting = global_backend_config.at(global_index);
-      config.push_back(current_global_setting);
-    }
-
-    // add the rest of the specific settings
-    if (specific_index < specific_backend_config.size()) {
-      auto& current_specific_setting =
-          specific_backend_config.at(specific_index);
-      config.push_back(current_specific_setting);
-    }
-  }  // else empty config
+  } 
+  for (auto& final_setting : lconfig){
+      config.emplace_back(final_setting);
+  }
 
   return Status::Success;
 }
@@ -1236,6 +1205,43 @@ TRITONBACKEND_ResponseSend(
   return nullptr;  // success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_RequestParameterCount(
+    TRITONBACKEND_Request* request, uint32_t* count)
+{
+  InferenceRequest* lrequest = reinterpret_cast<InferenceRequest*>(request);
+
+  const auto& parameters = lrequest->Parameters();
+  *count = parameters.size();
+
+  return nullptr;  // Success
+}
+
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_RequestParameter(
+    TRITONBACKEND_Request* request, const uint32_t index, const char** key,
+    TRITONSERVER_ParameterType* type, const void** vvalue)
+{
+  InferenceRequest* lrequest = reinterpret_cast<InferenceRequest*>(request);
+
+  const auto& parameters = lrequest->Parameters();
+  if (index >= parameters.size()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        ("out of bounds index " + std::to_string(index) +
+            std::string(": request has ") + std::to_string(parameters.size()) +
+            " parameters").c_str());
+  }
+
+  const InferenceParameter& param = parameters[index];
+
+  *key = param.Name().c_str();
+  *type = param.Type();
+  *vvalue = param.ValuePointer();
+
+  return nullptr;  // Success
+}
+
 ///
 /// TRITONBACKEND_Input
 ///
@@ -1316,7 +1322,7 @@ TRITONBACKEND_InputBuffer(
   InferenceRequest::Input* ti =
       reinterpret_cast<InferenceRequest::Input*>(input);
   Status status = ti->DataBuffer(
-      index, buffer, buffer_byte_size, memory_type, memory_type_id);
+      index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id);
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
@@ -1356,9 +1362,9 @@ TRITONBACKEND_InputBufferForHostPolicy(
   Status status =
       (host_policy_name == nullptr)
           ? ti->DataBuffer(
-                index, buffer, buffer_byte_size, memory_type, memory_type_id)
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id)
           : ti->DataBufferForHostPolicy(
-                index, buffer, buffer_byte_size, memory_type, memory_type_id,
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id,
                 host_policy_name);
   if (!status.IsOk()) {
     *buffer = nullptr;

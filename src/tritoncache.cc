@@ -129,7 +129,7 @@ TRITONCACHE_CacheEntryAddBuffer(
   // This will add a short-lived reference to the corresponding cache
   // buffer of this entry. It should be copied into the target buffer either
   // directly or through a callback.
-  lentry->AddBuffer({static_cast<std::byte*>(base), byte_size});
+  lentry->AddBuffer({static_cast<Byte*>(base), byte_size});
   return nullptr;  // success
 }
 
@@ -151,7 +151,8 @@ TRITONCACHE_CacheEntryGetBuffer(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  const auto& [buffer, buffer_size] = lbuffers[index];
+  const auto& buffer = lbuffers[index].first;
+  const auto& buffer_size = lbuffers[index].second;
   // No copy, this buffer needs to stay alive until it is copied into the cache
   *base = buffer;
   // Set buffer attributes
@@ -180,7 +181,8 @@ TRITONCACHE_CacheEntrySetBuffer(
         TRITONSERVER_ERROR_INVALID_ARG, "index was greater than count");
   }
 
-  auto& [base, buffer_size] = lbuffers[index];
+  auto& base = lbuffers[index].first;
+  auto& buffer_size = lbuffers[index].second;
   base = new_base;
 
   // Only overwrite attributes if provided, buffer may already have some and

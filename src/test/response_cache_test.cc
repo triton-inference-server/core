@@ -438,8 +438,7 @@ GenerateRequest(
 tc::Status
 InsertLookupCompare(
     std::shared_ptr<tc::TritonCache> cache,
-    std::vector<boost::span<std::byte>> expected_buffers,
-    const std::string& key)
+    std::vector<boost::span<tc::Byte>> expected_buffers, const std::string& key)
 {
   if (!cache) {
     return tc::Status(tc::Status::Code::INTERNAL, "cache was nullptr");
@@ -448,14 +447,14 @@ InsertLookupCompare(
   }
 
   helpers::CheckStatus(cache->Insert(expected_buffers, key));
-  auto lookup_entry = tc::CacheEntry();
-  auto status = cache->Lookup(key, &lookup_entry);
+  auto lookup_entry = std::make_unique<tc::CacheEntry>();
+  auto status = cache->Lookup(key, lookup_entry.get());
   if (!status.IsOk()) {
     return tc::Status(
         tc::Status::Code::INTERNAL, "Lookup failed: " + status.Message());
   }
 
-  auto lookup_buffers = lookup_entry.Buffers();
+  auto lookup_buffers = lookup_entry->Buffers();
   if (lookup_buffers.size() != expected_buffers.size()) {
     return tc::Status(
         tc::Status::Code::INTERNAL,
@@ -464,10 +463,10 @@ InsertLookupCompare(
   }
 
   for (size_t b = 0; b < expected_buffers.size(); b++) {
-    boost::span<std::byte> lookup = {
-        static_cast<std::byte*>(lookup_buffers[b].first),
+    boost::span<tc::Byte> lookup = {
+        static_cast<tc::Byte*>(lookup_buffers[b].first),
         lookup_buffers[b].second};
-    boost::span<std::byte> expected = expected_buffers[b];
+    boost::span<tc::Byte> expected = expected_buffers[b];
     if (!std::equal(
             lookup.begin(), lookup.end(), expected.begin(), expected.end())) {
       return tc::Status(
@@ -656,9 +655,9 @@ TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
   ASSERT_NE(cache, nullptr);
 
   // Setup byte buffer larger than cache size
-  std::vector<std::byte> large_data(cache_size + 1);
+  std::vector<tc::Byte> large_data(cache_size + 1);
   // Setup entry
-  std::vector<boost::span<std::byte>> entry;
+  std::vector<boost::span<tc::Byte>> entry;
   entry.push_back(large_data);
 
   auto status = cache->Insert(entry, "large_bytes");
@@ -724,13 +723,13 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
   auto cache = helpers::CreateCache(1024);
   ASSERT_NE(cache, nullptr);
   // Setup byte buffers
-  std::vector<std::byte> buffer1{1, std::byte{0x01}};
-  std::vector<std::byte> buffer2{2, std::byte{0x02}};
-  std::vector<std::byte> buffer3{4, std::byte{0x04}};
-  std::vector<std::byte> buffer4{8, std::byte{0x08}};
-  std::vector<std::byte> buffer5{16, std::byte{0xFF}};
+  std::vector<tc::Byte> buffer1{1, tc::Byte{1}};
+  std::vector<tc::Byte> buffer2{2, tc::Byte{2}};
+  std::vector<tc::Byte> buffer3{4, tc::Byte{4}};
+  std::vector<tc::Byte> buffer4{8, tc::Byte{8}};
+  std::vector<tc::Byte> buffer5{16, tc::Byte{16}};
   // Setup entry
-  std::vector<boost::span<std::byte>> entry;
+  std::vector<boost::span<tc::Byte>> entry;
   // Add buffers to entry
   entry.push_back(buffer1);
   entry.push_back(buffer2);
@@ -788,8 +787,8 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
   size_t cache_misses = 0;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    auto entry = tc::CacheEntry();
-    auto status = cache->Lookup(key, &entry);
+    auto entry = std::make_unique<tc::CacheEntry>();
+    auto status = cache->Lookup(key, entry.get());
     if (status.IsOk()) {
       cache_hits++;
     } else {
@@ -828,9 +827,10 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   size_t cache_hits = 0;
   size_t cache_misses = 0;
   for (size_t idx = 0; idx < thread_count; idx++) {
-    auto entry = tc::CacheEntry();
     auto key = std::to_string(idx);
-    auto status = cache->Lookup(key, &entry);
+    auto entry = std::make_unique<tc::CacheEntry>();
+    auto status = cache->Lookup(key, entry.get());
+
     if (status.IsOk()) {
       cache_hits++;
     } else {

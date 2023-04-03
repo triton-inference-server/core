@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -92,6 +92,9 @@ constexpr size_t CUDA_IPC_STRUCT_SIZE = 64;
 constexpr int METRIC_REPORTER_ID_CPU = -1;
 constexpr int METRIC_REPORTER_ID_RESPONSE_CACHE = -2;
 #endif
+
+// Note: This can be replaced with std::byte starting in c++17
+using Byte = unsigned char;
 
 #define TIMESPEC_TO_NANOS(TS) \
   ((TS).tv_sec * triton::core::NANOS_PER_SECOND + (TS).tv_nsec)

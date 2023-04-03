@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 20
+#define TRITONSERVER_API_VERSION_MINOR 22
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1283,6 +1283,37 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp);
 
+/// Set a string parameter in the request.
+///
+/// \param request The request.
+/// \param key The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetStringParameter(
+    TRITONSERVER_InferenceRequest* request, const char* key, const char* value);
+
+/// Set an integer parameter in the request.
+///
+/// \param request The request.
+/// \param key The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetIntParameter(
+    TRITONSERVER_InferenceRequest* request, const char* key,
+    const int64_t value);
+
+/// Set a boolean parameter in the request.
+///
+/// \param request The request.
+/// \param key The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetBoolParameter(
+    TRITONSERVER_InferenceRequest* request, const char* key, const bool value);
+
 /// TRITONSERVER_InferenceResponse
 ///
 /// Object representing an inference response. The inference response
@@ -1980,6 +2011,19 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetHostPolicy(
     TRITONSERVER_ServerOptions* options, const char* policy_name,
     const char* setting, const char* value);
+
+/// Set a configuration setting for metrics in server options.
+///
+/// \param options The server options object.
+/// \param name The name of the configuration group. An empty string indicates
+///             a global configuration option.
+/// \param setting The name of the setting.
+/// \param value The setting value.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetMetricsConfig(
+    TRITONSERVER_ServerOptions* options, const char* name, const char* setting,
+    const char* value);
 
 /// TRITONSERVER_Server
 ///

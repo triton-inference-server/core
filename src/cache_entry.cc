@@ -34,26 +34,26 @@ namespace triton { namespace core {
 size_t
 CacheEntry::BufferCount()
 {
-  std::unique_lock lk(buffer_mu_);
+  std::unique_lock<std::mutex> lk(buffer_mu_);
   return buffers_.size();
 }
 
 const std::vector<Buffer>&
 CacheEntry::Buffers()
 {
-  std::unique_lock lk(buffer_mu_);
+  std::unique_lock<std::mutex> lk(buffer_mu_);
   return buffers_;
 }
 
 std::vector<Buffer>&
 CacheEntry::MutableBuffers()
 {
-  std::unique_lock lk(buffer_mu_);
+  std::unique_lock<std::mutex> lk(buffer_mu_);
   return buffers_;
 }
 
 void
-CacheEntry::AddBuffer(boost::span<std::byte> byte_span)
+CacheEntry::AddBuffer(boost::span<Byte> byte_span)
 {
   void* base = static_cast<void*>(byte_span.data());
   AddBuffer(base, byte_span.size());
@@ -62,18 +62,19 @@ CacheEntry::AddBuffer(boost::span<std::byte> byte_span)
 void
 CacheEntry::AddBuffer(void* base, size_t byte_size)
 {
-  std::unique_lock lk(buffer_mu_);
+  std::unique_lock<std::mutex> lk(buffer_mu_);
   buffers_.emplace_back(std::make_pair(base, byte_size));
 }
 
 CacheEntry::~CacheEntry()
 {
-  std::unique_lock lk(buffer_mu_);
+  std::unique_lock<std::mutex> lk(buffer_mu_);
   if (!free_buffers_) {
     return;
   }
 
-  for (auto& [base, _] : buffers_) {
+  for (auto& iter : buffers_) {
+    auto& base = iter.first;
     if (base) {
       free(base);
       base = nullptr;
@@ -90,7 +91,7 @@ CacheEntry::AddPlaceholderBuffer(size_t byte_size)
 // Set the size of each buffer in the CacheEntry object so the cache knows
 // how much to allocate for each entry before insertion.
 Status
-CacheEntry::SetBufferSizes(std::vector<boost::span<std::byte>> buffers)
+CacheEntry::SetBufferSizes(std::vector<boost::span<Byte>> buffers)
 {
   for (const auto buffer : buffers) {
     AddPlaceholderBuffer(buffer.size());
@@ -163,7 +164,7 @@ CacheEntry::SerializeResponse(InferenceResponse* response, Buffer& buffer)
   // The packed_response buffer will look like:
   //   [num_outputs, sizeof(output1), output1, ..., sizeof(outputN), outputN]
   size_t position = 0;
-  std::byte* base = static_cast<std::byte*>(buffer.first);
+  Byte* base = static_cast<Byte*>(buffer.first);
   // 1. First the packed buffer will hold the number of outputs as a uint32_t
   uint32_t num_outputs = response->Outputs().size();
   std::memcpy(base, &num_outputs, sizeof(uint32_t));
@@ -193,8 +194,7 @@ CacheEntry::SerializeResponse(InferenceResponse* response, Buffer& buffer)
 
 Status
 CacheEntry::SerializeResponseOutput(
-    const InferenceResponse::Output& output, std::byte* buffer,
-    size_t* output_size)
+    const InferenceResponse::Output& output, Byte* buffer, size_t* output_size)
 {
   if (!buffer) {
     return Status(Status::Code::INVALID_ARG, "buffer arg was nullptr");
@@ -312,7 +312,7 @@ CacheEntry::DeserializeBuffer(InferenceResponse* response, const Buffer& buffer)
   }
 
 
-  const std::byte* base = static_cast<std::byte*>(buffer.first);
+  const Byte* base = static_cast<Byte*>(buffer.first);
   if (!base) {
     return Status(Status::Code::INTERNAL, "buffer was nullptr");
   }
@@ -441,7 +441,7 @@ CacheEntry::GetByteSize(
 
 Status
 CacheEntry::DeserializeResponseOutput(
-    boost::span<const std::byte> packed_bytes, CacheOutput* output)
+    boost::span<const Byte> packed_bytes, CacheOutput* output)
 {
   if (!output) {
     return Status(Status::Code::INVALID_ARG, "output arg was nullptr");
@@ -453,8 +453,8 @@ CacheEntry::DeserializeResponseOutput(
   memcpy(&name_byte_size, packed_bytes.begin() + position, sizeof(uint32_t));
   position += sizeof(uint32_t);
 
-  std::string name(name_byte_size, 'x');
-  memcpy(name.data(), packed_bytes.begin() + position, name_byte_size);
+  auto name_start = packed_bytes.begin() + position;
+  std::string name(name_start, name_start + name_byte_size);
   position += name_byte_size;
 
   // Dtype
@@ -462,8 +462,8 @@ CacheEntry::DeserializeResponseOutput(
   memcpy(&dtype_byte_size, packed_bytes.begin() + position, sizeof(uint32_t));
   position += sizeof(uint32_t);
 
-  std::string dtype(dtype_byte_size, 'x');
-  memcpy(dtype.data(), packed_bytes.begin() + position, dtype_byte_size);
+  auto dtype_start = packed_bytes.begin() + position;
+  std::string dtype(dtype_start, dtype_start + dtype_byte_size);
   position += dtype_byte_size;
 
   // Shape

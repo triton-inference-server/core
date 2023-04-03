@@ -86,7 +86,10 @@ CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 
   // NOTE: If the same entry object is re-used for multiple lookups and the
   // entry buffers are not freed between uses, this will leak memory.
-  for (auto& [base, byte_size] : buffers) {
+  for (auto& iter : buffers) {
+    auto& base = iter.first;
+    const auto& byte_size = iter.second;
+
     void* new_base = malloc(byte_size);
     std::memcpy(new_base, base, byte_size);
     base = new_base;
@@ -98,7 +101,7 @@ CacheToBytesAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
 }
 
 BytesToCacheAllocator::BytesToCacheAllocator(
-    std::vector<boost::span<std::byte>> buffers)
+    std::vector<boost::span<Byte>> buffers)
 {
   // Span is a read-only view of the underlying buffer, this should only
   // perform a shallow copy of base pointer and size of each span.
@@ -126,7 +129,8 @@ BytesToCacheAllocator::Allocate(TRITONCACHE_CacheEntry* entry)
   // Copy from allocator provided buffers into cache-allocated buffers
   // that were setup in 'entry' by cache implementation.
   for (size_t i = 0; i < buffers_.size(); i++) {
-    auto [cache_buffer, cache_buffer_size] = cache_buffers[i];
+    auto cache_buffer = cache_buffers[i].first;
+    auto cache_buffer_size = cache_buffers[i].second;
     if (buffers_[i].size() != cache_buffer_size) {
       return Status(
           Status::Code::INTERNAL,
@@ -363,7 +367,7 @@ TritonCache::Insert(
 
 Status
 TritonCache::Insert(
-    std::vector<boost::span<std::byte>> buffers, const std::string& key)
+    std::vector<boost::span<Byte>> buffers, const std::string& key)
 {
   std::unique_ptr<CacheEntry> entry = std::make_unique<CacheEntry>();
   RETURN_IF_ERROR(entry->SetBufferSizes(buffers));

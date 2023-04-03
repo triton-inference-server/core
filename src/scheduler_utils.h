@@ -160,8 +160,9 @@ class PriorityQueue {
     }
 
     // Construct a policy queue with given 'policy'.
-    PolicyQueue(const inference::ModelQueuePolicy& policy,
-                bool keep_instantiated = false)
+    PolicyQueue(
+        const inference::ModelQueuePolicy& policy,
+        bool keep_instantiated = false)
         : timeout_action_(policy.timeout_action()),
           default_timeout_us_(policy.default_timeout_microseconds()),
           allow_timeout_override_(policy.allow_timeout_override()),
@@ -254,7 +255,6 @@ class PriorityQueue {
   // Keep track of the priority level that the first request in the queue
   // is at to avoid traversing 'queues_'
   uint32_t front_priority_level_;
-  uint32_t last_priority_level_;
   inference::ModelQueuePolicy default_policy_;
 
   Cursor pending_cursor_;

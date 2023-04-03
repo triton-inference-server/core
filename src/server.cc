@@ -34,7 +34,6 @@
 #include <memory>
 #include <utility>
 #include <vector>
-
 #include "backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"
@@ -90,6 +89,7 @@ InferenceServer::InferenceServer()
   extensions_.push_back("system_shared_memory");
   extensions_.push_back("cuda_shared_memory");
   extensions_.push_back("binary_tensor_data");
+  extensions_.push_back("parameters");
 #ifdef TRITON_ENABLE_STATS
   extensions_.push_back("statistics");
 #endif  // TRITON_ENABLE_STATS
@@ -167,7 +167,9 @@ InferenceServer::Init()
   }
 
   // Initialize each cache with its respective config
-  for (const auto& [name, config] : cache_config_map_) {
+  for (const auto& iter : cache_config_map_) {
+    const auto& name = iter.first;
+    const auto& config = iter.second;
     std::shared_ptr<TritonCache> cache;
     status = cache_manager_->CreateCache(name, config, &cache);
     if (!status.IsOk()) {
