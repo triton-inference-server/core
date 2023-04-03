@@ -40,6 +40,19 @@
 
 namespace triton { namespace core {
 
+namespace {
+
+template <typename TimeUnit>
+inline uint64_t
+Now()
+{
+  return std::chrono::duration_cast<TimeUnit>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+}  // namespace
+
 Status
 SequenceBatchScheduler::Create(
     TritonModel* model,
@@ -567,6 +580,7 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
         "inference requests");
   }
 
+  bool wake_reaper_thread = false;
   std::unique_lock<std::mutex> lock(mu_);
 
   auto sb_itr = sequence_to_batcherseqslot_map_.find(correlation_id);
@@ -601,12 +615,8 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   // max_sequence_idle_microseconds value is not exceed for any
   // sequence, and if it is it will release the sequence slot (if any)
   // allocated to that sequence.
-  {
-    uint64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                          std::chrono::steady_clock::now().time_since_epoch())
-                          .count();
-    correlation_id_timestamps_[correlation_id] = now_us;
-  }
+  uint64_t now_us = Now<std::chrono::microseconds>();
+  correlation_id_timestamps_[correlation_id] = now_us;
 
   // If this request starts a new sequence but the correlation ID
   // already has an in-progress sequence then that previous sequence
@@ -634,7 +644,17 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
     LOG_VERBOSE(1) << "Enqueuing CORRID " << correlation_id
                    << " into existing backlog: " << irequest->ModelName();
 
-    bl_itr->second->emplace_back(std::move(irequest));
+    auto& backlog = bl_itr->second;
+    if (irequest->TimeoutMicroseconds() != 0) {
+      backlog->expiration_timestamp_ = std::min(
+          backlog->expiration_timestamp_,
+          now_us + irequest->TimeoutMicroseconds());
+      if (backlog->expiration_timestamp_ < timeout_timestamp_) {
+        timeout_timestamp_ = backlog->expiration_timestamp_;
+        wake_reaper_thread = true;
+      }
+    }
+    backlog->queue_->emplace_back(std::move(irequest));
 
     // If the sequence is ending then forget correlation ID
     // connection to this backlog queue. If another sequence starts
@@ -642,6 +662,12 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
     // backlog queue.
     if (seq_end) {
       sequence_to_backlog_map_.erase(bl_itr);
+    }
+
+    // Waking up reaper so it received latest timeout to be waited for,
+    // shouldn't incur actual reaper work.
+    if (wake_reaper_thread) {
+      reaper_cv_.notify_all();
     }
     return Status::Success;
   }
@@ -658,12 +684,24 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
     LOG_VERBOSE(1) << "Enqueuing CORRID " << correlation_id
                    << " into new backlog: " << irequest->ModelName();
 
-    auto backlog =
-        std::make_shared<std::deque<std::unique_ptr<InferenceRequest>>>();
+    auto backlog = std::make_shared<BacklogQueue>();
+    if (irequest->TimeoutMicroseconds() != 0) {
+      backlog->expiration_timestamp_ = now_us + irequest->TimeoutMicroseconds();
+      if (backlog->expiration_timestamp_ < timeout_timestamp_) {
+        timeout_timestamp_ = backlog->expiration_timestamp_;
+        wake_reaper_thread = true;
+      }
+    }
     backlog_queues_.push_back(backlog);
-    backlog->emplace_back(std::move(irequest));
+    backlog->queue_->emplace_back(std::move(irequest));
     if (!seq_end) {
       sequence_to_backlog_map_[correlation_id] = std::move(backlog);
+    }
+
+    // Waking up reaper so it received latest timeout to be waited for,
+    // shouldn't incur actual reaper work.
+    if (wake_reaper_thread) {
+      reaper_cv_.notify_all();
     }
     return Status::Success;
   }
@@ -689,7 +727,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
                  << irequest->ModelName();
 
   batchers_[batcher_idx]->Enqueue(seq_slot, correlation_id, irequest);
-
   return Status::Success;
 }
 
@@ -703,7 +740,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
   // If there is a backlogged sequence and it is requested, return it
   // so that it can use the newly available sequence slot.
   if (!backlog_queues_.empty()) {
-    auto& backlog = backlog_queues_.front();
+    auto& backlog = backlog_queues_.front()->queue_;
     *requests = std::move(*backlog);
     backlog_queues_.pop_front();
     if (!requests->empty()) {  // should never be empty...
@@ -769,7 +806,7 @@ SequenceBatchScheduler::DelayScheduler(
   if (backlog_delay_cnt_ > 0) {
     size_t backlog_seen = 0;
     for (const auto& q : backlog_queues_) {
-      backlog_seen += q->size();
+      backlog_seen += q->queue_->size();
     }
 
     if (backlog_seen < backlog_delay_cnt_) {
@@ -798,85 +835,140 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 
   const uint64_t backlog_idle_wait_microseconds = 50 * 1000;
 
+  uint64_t idle_timestamp =
+      Now<std::chrono::microseconds>() + max_sequence_idle_microseconds_;
+  timeout_timestamp_ = std::numeric_limits<uint64_t>::max();
+
   while (!reaper_thread_exit_) {
-    uint64_t wait_microseconds = max_sequence_idle_microseconds_;
-    BatcherSequenceSlotMap force_end_sequences;
+    uint64_t now_us = Now<std::chrono::microseconds>();
 
-    {
-      std::unique_lock<std::mutex> lock(mu_);
-
-      uint64_t now_us = std::chrono::duration_cast<std::chrono::microseconds>(
-                            std::chrono::steady_clock::now().time_since_epoch())
-                            .count();
-
-      for (auto cid_itr = correlation_id_timestamps_.cbegin();
-           cid_itr != correlation_id_timestamps_.cend();) {
-        int64_t remaining_microseconds =
-            (int64_t)max_sequence_idle_microseconds_ -
-            (now_us - cid_itr->second);
-        if (remaining_microseconds > 0) {
-          wait_microseconds =
-              std::min(wait_microseconds, (uint64_t)remaining_microseconds + 1);
-          ++cid_itr;
-          continue;
-        }
-
-        const InferenceRequest::SequenceId& idle_correlation_id =
-            cid_itr->first;
-        LOG_VERBOSE(1) << "Reaper: CORRID " << idle_correlation_id
-                       << ": max sequence idle exceeded";
-
-        auto idle_sb_itr =
-            sequence_to_batcherseqslot_map_.find(idle_correlation_id);
-
-        // If the idle correlation ID has an assigned sequence slot,
-        // then release that assignment so it becomes available for
-        // another sequence. Release is done by enqueuing and must be
-        // done outside the lock, so just collect needed info here.
-        if (idle_sb_itr != sequence_to_batcherseqslot_map_.end()) {
-          force_end_sequences[idle_correlation_id] = idle_sb_itr->second;
-
-          sequence_to_batcherseqslot_map_.erase(idle_correlation_id);
-          cid_itr = correlation_id_timestamps_.erase(cid_itr);
-        } else {
-          // If the idle correlation ID is in the backlog, then just
-          // need to increase the timeout so that we revisit it again in
-          // the future to check if it is assigned to a sequence slot.
-          auto idle_bl_itr = sequence_to_backlog_map_.find(idle_correlation_id);
-          if (idle_bl_itr != sequence_to_backlog_map_.end()) {
-            LOG_VERBOSE(1) << "Reaper: found idle CORRID "
-                           << idle_correlation_id;
-            wait_microseconds =
-                std::min(wait_microseconds, backlog_idle_wait_microseconds);
+    // Reap idle assigned sequence
+    if (now_us >= idle_timestamp) {
+      uint64_t wait_microseconds = max_sequence_idle_microseconds_;
+      BatcherSequenceSlotMap force_end_sequences;
+      {
+        std::unique_lock<std::mutex> lock(mu_);
+        for (auto cid_itr = correlation_id_timestamps_.cbegin();
+             cid_itr != correlation_id_timestamps_.cend();) {
+          int64_t remaining_microseconds =
+              (int64_t)max_sequence_idle_microseconds_ -
+              (now_us - cid_itr->second);
+          if (remaining_microseconds > 0) {
+            wait_microseconds = std::min(
+                wait_microseconds, (uint64_t)remaining_microseconds + 1);
             ++cid_itr;
-          } else {
-            LOG_VERBOSE(1) << "Reaper: ignoring stale idle CORRID "
-                           << idle_correlation_id;
-            cid_itr = correlation_id_timestamps_.erase(cid_itr);
+            continue;
           }
+
+          const InferenceRequest::SequenceId& idle_correlation_id =
+              cid_itr->first;
+          LOG_VERBOSE(1) << "Reaper: CORRID " << idle_correlation_id
+                         << ": max sequence idle exceeded";
+
+          auto idle_sb_itr =
+              sequence_to_batcherseqslot_map_.find(idle_correlation_id);
+
+          // If the idle correlation ID has an assigned sequence slot,
+          // then release that assignment so it becomes available for
+          // another sequence. Release is done by enqueuing and must be
+          // done outside the lock, so just collect needed info here.
+          if (idle_sb_itr != sequence_to_batcherseqslot_map_.end()) {
+            force_end_sequences[idle_correlation_id] = idle_sb_itr->second;
+
+            sequence_to_batcherseqslot_map_.erase(idle_correlation_id);
+            cid_itr = correlation_id_timestamps_.erase(cid_itr);
+          } else {
+            // If the idle correlation ID is in the backlog, then just
+            // need to increase the timeout so that we revisit it again in
+            // the future to check if it is assigned to a sequence slot.
+            auto idle_bl_itr =
+                sequence_to_backlog_map_.find(idle_correlation_id);
+            if (idle_bl_itr != sequence_to_backlog_map_.end()) {
+              LOG_VERBOSE(1)
+                  << "Reaper: found idle CORRID " << idle_correlation_id;
+              wait_microseconds =
+                  std::min(wait_microseconds, backlog_idle_wait_microseconds);
+              ++cid_itr;
+            } else {
+              LOG_VERBOSE(1) << "Reaper: ignoring stale idle CORRID "
+                             << idle_correlation_id;
+              cid_itr = correlation_id_timestamps_.erase(cid_itr);
+            }
+          }
+        }
+      }
+
+      // Enqueue force-ends outside of the lock.
+      for (const auto& pr : force_end_sequences) {
+        const InferenceRequest::SequenceId& idle_correlation_id = pr.first;
+        const size_t batcher_idx = pr.second.batcher_idx_;
+        const uint32_t seq_slot = pr.second.seq_slot_;
+
+        LOG_VERBOSE(1) << "Reaper: force-ending CORRID " << idle_correlation_id
+                       << " in batcher " << batcher_idx << ", slot "
+                       << seq_slot;
+
+        // A slot assignment is released by enqueuing a request with a
+        // null request. The scheduler thread will interpret the null
+        // request as meaning it should release the sequence slot but
+        // otherwise do nothing with the request.
+        std::unique_ptr<InferenceRequest> null_request;
+        batchers_[batcher_idx]->Enqueue(
+            seq_slot, idle_correlation_id, null_request);
+      }
+
+      // Update timestamp for next idle check
+      idle_timestamp = now_us + wait_microseconds;
+    }
+
+    // Reap timed out backlog sequence
+    if (now_us >= timeout_timestamp_) {
+      timeout_timestamp_ = std::numeric_limits<uint64_t>::max();
+      std::deque<std::shared_ptr<BacklogQueue>> expired_backlogs;
+      {
+        std::unique_lock<std::mutex> lock(mu_);
+        // Remove expired backlog from 'backlog_queues_'
+        auto it = backlog_queues_.begin();
+        while (it != backlog_queues_.end()) {
+          const auto queue_timestamp = (*it)->expiration_timestamp_;
+          if (queue_timestamp > now_us) {
+            timeout_timestamp_ = std::min(timeout_timestamp_, queue_timestamp);
+            ++it;
+          } else {
+            // The queue expired, clear the records and reject the request
+            // outside lock
+            const auto& correlation_id =
+                (*it)->queue_->front()->CorrelationId();
+            expired_backlogs.emplace_back(std::move(*it));
+
+            // Need to double check on 'sequence_to_backlog_map_', it may
+            // be tracking a new sequence with the same ID which may not be
+            // timing out.
+            const auto& mit = sequence_to_backlog_map_.find(correlation_id);
+            if ((mit != sequence_to_backlog_map_.end()) &&
+                (mit->second->expiration_timestamp_ <= now_us)) {
+              sequence_to_backlog_map_.erase(mit);
+            }
+
+            it = backlog_queues_.erase(it);
+          }
+        }
+      }
+
+      // Reject timeout requests
+      static Status rejected_status = Status(
+          Status::Code::UNAVAILABLE,
+          "timeout of the corresponding sequence has been expired");
+      for (auto& backlog : expired_backlogs) {
+        for (auto& req : *backlog->queue_) {
+          InferenceRequest::RespondIfError(req, rejected_status, true);
         }
       }
     }
 
-    // Enqueue force-ends outside of the lock.
-    for (const auto& pr : force_end_sequences) {
-      const InferenceRequest::SequenceId& idle_correlation_id = pr.first;
-      const size_t batcher_idx = pr.second.batcher_idx_;
-      const uint32_t seq_slot = pr.second.seq_slot_;
-
-      LOG_VERBOSE(1) << "Reaper: force-ending CORRID " << idle_correlation_id
-                     << " in batcher " << batcher_idx << ", slot " << seq_slot;
-
-      // A slot assignment is released by enqueuing a request with a
-      // null request. The scheduler thread will interpret the null
-      // request as meaning it should release the sequence slot but
-      // otherwise do nothing with the request.
-      std::unique_ptr<InferenceRequest> null_request;
-      batchers_[batcher_idx]->Enqueue(
-          seq_slot, idle_correlation_id, null_request);
-    }
-
-    // Wait until the next idle timeout needs to be checked
+    const auto wait_microseconds =
+        std::min(idle_timestamp, timeout_timestamp_) - now_us;
+    // Wait until the next timeout needs to be checked
     if (wait_microseconds > 0) {
       std::unique_lock<std::mutex> lock(mu_);
       LOG_VERBOSE(2) << "Reaper: sleeping for " << wait_microseconds << "us...";
@@ -1330,10 +1422,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
             // batch, execute now if queuing delay is exceeded or the batch
             // size is large enough. Otherwise create a timer to wakeup a
             // thread to check again at the maximum allowed delay.
-            uint64_t now_ns =
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch())
-                    .count();
+            uint64_t now_ns = Now<std::chrono::nanoseconds>();
             uint64_t current_batch_delay_ns =
                 (now_ns - earliest_enqueue_time_ns);
             if ((current_batch_delay_ns > pending_batch_delay_ns_) ||

@@ -1322,7 +1322,7 @@ TRITONBACKEND_InputBuffer(
   InferenceRequest::Input* ti =
       reinterpret_cast<InferenceRequest::Input*>(input);
   Status status = ti->DataBuffer(
-      index, buffer, buffer_byte_size, memory_type, memory_type_id);
+      index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id);
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
@@ -1362,9 +1362,9 @@ TRITONBACKEND_InputBufferForHostPolicy(
   Status status =
       (host_policy_name == nullptr)
           ? ti->DataBuffer(
-                index, buffer, buffer_byte_size, memory_type, memory_type_id)
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id)
           : ti->DataBufferForHostPolicy(
-                index, buffer, buffer_byte_size, memory_type, memory_type_id,
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id,
                 host_policy_name);
   if (!status.IsOk()) {
     *buffer = nullptr;
