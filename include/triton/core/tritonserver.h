@@ -2012,6 +2012,19 @@ TRITONSERVER_ServerOptionsSetHostPolicy(
     TRITONSERVER_ServerOptions* options, const char* policy_name,
     const char* setting, const char* value);
 
+/// Set a configuration setting for metrics in server options.
+///
+/// \param options The server options object.
+/// \param name The name of the configuration group. An empty string indicates
+///             a global configuration option.
+/// \param setting The name of the setting.
+/// \param value The setting value.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetMetricsConfig(
+    TRITONSERVER_ServerOptions* options, const char* name, const char* setting,
+    const char* value);
+
 /// TRITONSERVER_Server
 ///
 /// An inference server.
@@ -2445,18 +2458,6 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_MetricSet(
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_GetMetricKind(
     TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind);
 
-/// Set a configuration setting for metrics in server options.
-///
-/// \param options The server options object.
-/// \param name The name of the configuration group. An empty string indicates
-///             a global configuration option.
-/// \param setting The name of the setting.
-/// \param value The setting value.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetMetricsConfig(
-    TRITONSERVER_ServerOptions* options, const char* name, const char* setting,
-    const char* value);
 #ifdef __cplusplus
 }
 #endif

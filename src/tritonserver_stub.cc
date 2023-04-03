@@ -990,6 +990,11 @@ TRITONSERVER_GetMetricKind()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetMetricsConfig()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 {
 }
