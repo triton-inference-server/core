@@ -335,7 +335,7 @@ RateLimiter::RateLimiter(
 void
 RateLimiter::InitializePayloadQueues(const TritonModelInstance* instance)
 {
-  auto config = instance->Model()->Config();
+  auto& config = instance->Model()->Config();
   uint64_t max_queue_delay_microseconds;
   if (config.has_sequence_batching()) {
     const auto& batcher_config = config.sequence_batching();

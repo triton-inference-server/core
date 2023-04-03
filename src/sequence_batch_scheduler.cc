@@ -73,7 +73,7 @@ SequenceBatchScheduler::Create(
   auto instance_count = model->Instances().size();
   sched->queue_request_cnts_.resize(instance_count, 0);
 
-  auto config = model->Config();
+  auto& config = model->Config();
 
   // Max sequence idle...
   sched->max_sequence_idle_microseconds_ =
