@@ -84,6 +84,29 @@ class MetricModelReporter {
   {
     return *metric_inf_compute_output_duration_us_;
   }
+
+  // Summaries
+  prometheus::Summary& MetricInferenceRequestSummary() const
+  {
+    return *metric_inf_request_summary_us_;
+  }
+  prometheus::Summary& MetricInferenceQueueSummary() const
+  {
+    return *metric_inf_queue_summary_us_;
+  }
+  prometheus::Summary& MetricInferenceComputeInputSummary() const
+  {
+    return *metric_inf_compute_input_summary_us_;
+  }
+  prometheus::Summary& MetricInferenceComputeInferSummary() const
+  {
+    return *metric_inf_compute_infer_summary_us_;
+  }
+  prometheus::Summary& MetricInferenceComputeOutputSummary() const
+  {
+    return *metric_inf_compute_output_summary_us_;
+  }
+
   // Per-model cache stats
   prometheus::Counter& MetricCacheHitCount() const
   {
@@ -111,9 +134,11 @@ class MetricModelReporter {
       std::map<std::string, std::string>* labels, const std::string& model_name,
       const int64_t model_version, const int device,
       const triton::common::MetricTagsMap& model_tags);
-  prometheus::Counter* CreateCounterMetric(
-      prometheus::Family<prometheus::Counter>& family,
-      const std::map<std::string, std::string>& labels);
+
+  template <typename T, typename... Args>
+  T* CreateMetric(
+      prometheus::Family<T>& family,
+      const std::map<std::string, std::string>& labels, Args&&... args);
 
   prometheus::Counter* metric_inf_success_;
   prometheus::Counter* metric_inf_failure_;
@@ -124,6 +149,15 @@ class MetricModelReporter {
   prometheus::Counter* metric_inf_compute_input_duration_us_;
   prometheus::Counter* metric_inf_compute_infer_duration_us_;
   prometheus::Counter* metric_inf_compute_output_duration_us_;
+
+  // Summaries
+  prometheus::Summary* metric_inf_request_summary_us_;
+  prometheus::Summary* metric_inf_queue_summary_us_;
+  prometheus::Summary* metric_inf_compute_input_summary_us_;
+  prometheus::Summary* metric_inf_compute_infer_summary_us_;
+  prometheus::Summary* metric_inf_compute_output_summary_us_;
+
+  // Cache
   prometheus::Counter* metric_cache_hit_count_;
   prometheus::Counter* metric_cache_hit_duration_us_;
   prometheus::Counter* metric_cache_miss_count_;

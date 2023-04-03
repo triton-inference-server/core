@@ -79,6 +79,7 @@ Metrics::Metrics()
               .Help("Cumulative inference queuing duration in microseconds "
                     "(includes cached requests)")
               .Register(*registry_)),
+
       inf_compute_input_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_compute_input_duration_us")
@@ -97,6 +98,39 @@ Metrics::Metrics()
               .Help("Cumulative inference compute output duration in "
                     "microseconds (does not include cached requests)")
               .Register(*registry_)),
+
+      //=============== Summaries ==================//
+      inf_request_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_request_summary_us")
+              .Help("Summary of inference request duration in microseconds "
+                    "(includes cached requests)")
+              .Register(*registry_)),
+      inf_queue_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_queue_summary_us")
+              .Help("Summary of inference queuing duration in microseconds "
+                    "(includes cached requests)")
+              .Register(*registry_)),
+      inf_compute_input_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_compute_input_summary_us")
+              .Help("Cumulative compute input duration in microseconds (does "
+                    "not include cached requests)")
+              .Register(*registry_)),
+      inf_compute_infer_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_compute_infer_summary_us")
+              .Help("Cumulative compute inference duration in microseconds "
+                    "(does not include cached requests)")
+              .Register(*registry_)),
+      inf_compute_output_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_compute_output_summary_us")
+              .Help("Cumulative inference compute output duration in "
+                    "microseconds (does not include cached requests)")
+              .Register(*registry_)),
+      //===========================================//
 
       // Per-model cache metric families
       // NOTE: These are used in infer_stats for perf_analyzer

@@ -31,6 +31,27 @@
 #include "metrics.h"
 #include "triton/common/logging.h"
 
+// TODO
+std::string
+GetEnvironmentVariableOrDefault(
+    const std::string& variable_name, const std::string& default_value)
+{
+  const char* value = std::getenv(variable_name.c_str());
+  return value ? value : default_value;
+}
+
+const std::string env =
+    GetEnvironmentVariableOrDefault("TRITON_ENABLE_SUMMARIES", "0");
+const bool enable_summaries_ = (env == "1");
+
+uint64_t
+CaptureTimeUs()
+{
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
 namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_STATS
@@ -81,6 +102,9 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
     const uint64_t compute_infer_duration_ns,
     const uint64_t compute_output_duration_ns)
 {
+  // TODO
+  const auto metric_start = CaptureTimeUs();
+
   const uint64_t request_duration_ns = request_end_ns - request_start_ns;
   const uint64_t queue_duration_ns = compute_start_ns - queue_start_ns;
 
@@ -109,8 +133,25 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
         compute_infer_duration_ns / 1000);
     metric_reporter->MetricInferenceComputeOutputDuration().Increment(
         compute_output_duration_ns / 1000);
+
+    if (enable_summaries_) {
+      metric_reporter->MetricInferenceRequestSummary().Observe(
+          request_duration_ns / 1000);
+      metric_reporter->MetricInferenceQueueSummary().Observe(
+          queue_duration_ns / 1000);
+      metric_reporter->MetricInferenceComputeInputSummary().Observe(
+          compute_input_duration_ns / 1000);
+      metric_reporter->MetricInferenceComputeInferSummary().Observe(
+          compute_infer_duration_ns / 1000);
+      metric_reporter->MetricInferenceComputeOutputSummary().Observe(
+          compute_output_duration_ns / 1000);
+    }
   }
 #endif  // TRITON_ENABLE_METRICS
+
+  // TODO
+  const auto metric_end = CaptureTimeUs();
+  LOG_INFO << "METRIC UPDATE TOOK: " << metric_end - metric_start << "us";
 }
 
 // Currently cache hits will not go to the inference backend where metrics
@@ -141,6 +182,16 @@ InferenceStatsAggregator::UpdateSuccessCacheHit(
         request_duration_ns / 1000);
     metric_reporter->MetricInferenceQueueDuration().Increment(
         queue_duration_ns / 1000);
+
+    if (enable_summaries_) {
+      // TODO: seconds, account for adding cache time on top of existing time,
+      // etc.
+      metric_reporter->MetricInferenceRequestSummary().Observe(
+          request_duration_ns / 1000);
+      metric_reporter->MetricInferenceQueueSummary().Observe(
+          queue_duration_ns / 1000);
+    }
+
     metric_reporter->MetricCacheHitCount().Increment(1);
     metric_reporter->MetricCacheHitDuration().Increment(
         cache_hit_duration_ns / 1000);
@@ -170,6 +221,13 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
     // was called
     metric_reporter->MetricInferenceRequestDuration().Increment(
         cache_miss_duration_ns / 1000);
+
+    if (enable_summaries_) {
+      // TODO: How to observe sum total of infer request time + cache miss time
+      metric_reporter->MetricInferenceRequestSummary().Observe(
+          cache_miss_duration_ns / 1000);
+    }
+
     metric_reporter->MetricCacheMissCount().Increment(1);
     metric_reporter->MetricCacheMissDuration().Increment(
         cache_miss_duration_ns / 1000);

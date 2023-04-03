@@ -36,6 +36,7 @@
 #include "prometheus/gauge.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
+#include "prometheus/summary.h"
 #include "prometheus/text_serializer.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
@@ -211,6 +212,32 @@ class Metrics {
     return GetSingleton()->cache_miss_duration_us_model_family_;
   }
 
+  // Summaries
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceRequestSummary()
+  {
+    return GetSingleton()->inf_request_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>& FamilyInferenceQueueSummary()
+  {
+    return GetSingleton()->inf_queue_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceComputeInputSummary()
+  {
+    return GetSingleton()->inf_compute_input_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceComputeInferSummary()
+  {
+    return GetSingleton()->inf_compute_infer_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceComputeOutputSummary()
+  {
+    return GetSingleton()->inf_compute_output_summary_us_family_;
+  }
+
  private:
   Metrics();
   virtual ~Metrics();
@@ -239,6 +266,14 @@ class Metrics {
       inf_compute_infer_duration_us_family_;
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
+
+  // Summaries
+  prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_queue_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_compute_input_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_compute_infer_summary_us_family_;
+  prometheus::Family<prometheus::Summary>&
+      inf_compute_output_summary_us_family_;
 
   // Per-model Response Cache metrics
   // NOTE: Per-model metrics are used in infer_stats for perf_analyzer. Global
