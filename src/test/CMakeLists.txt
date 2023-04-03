@@ -198,6 +198,7 @@ target_link_libraries(
     triton-core
     GTest::gtest
     GTest::gtest_main
+    GTest::gmock
 )
 
 install(
@@ -483,6 +484,7 @@ if(${TRITON_ENABLE_METRICS})
       triton-core
       GTest::gtest
       GTest::gtest_main
+      GTest::gmock
       prometheus-cpp::core
       protobuf::libprotobuf
   )
