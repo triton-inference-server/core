@@ -97,9 +97,10 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
   std::lock_guard<std::mutex> lk1(model_ctx_mtx_);
   std::lock_guard<std::mutex> lk2(model_instance_ctx_mtx_);
 
-  auto& model_instances =
-      model_instance_ctxs_[triton_model_instance->Model()];
+  const TritonModel* model = triton_model_instance->Model();
 
+  auto& model_context = model_contexts_[model];
+  auto& model_instances = model_instance_ctxs_[model];
   for (auto it = model_instances.begin(); it != model_instances.end(); ++it) {
     // Compare pointer to ensure they are the exact same instance.
     if ((*it)->RawInstance() == triton_model_instance) {
@@ -107,6 +108,7 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
       if (!ignore_resources_and_priority_) {
         resource_manager_->RemoveModelInstance(it->get());
       }
+      model_context.RemoveInstance(it->get());
       model_instances.erase(it);
       break;
     }
@@ -114,6 +116,17 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
 
   if (!ignore_resources_and_priority_) {
     RETURN_IF_ERROR(resource_manager_->UpdateResourceLimits());
+  }
+
+  {
+    std::lock_guard<std::mutex> lk(payload_queues_mu_);
+    auto p_it = payload_queues_.find(model);
+    if (p_it != payload_queues_.end()) {
+      auto s_it = p_it->second->specific_queues_.find(triton_model_instance);
+      if (s_it != p_it->second->specific_queues_.end()) {
+        p_it->second->specific_queues_.erase(s_it);
+      }
+    }
   }
 
   return Status::Success;
@@ -590,9 +603,23 @@ RateLimiter::ModelContext::ContainsPendingRequests(int index)
 }
 
 void
-RateLimiter::ModelContext::RequestRemoval()
+RateLimiter::ModelContext::RemoveInstance(ModelInstanceContext* instance)
 {
-  removal_in_progress_ = true;
+  std::lock_guard<std::recursive_mutex> lk1(sched_request_queue_mtx_);
+  std::lock_guard<std::recursive_mutex> lk2(avbl_instances_mtx_);
+
+  PriorityQueue new_avbl_instances;
+  while (!avbl_instances_.empty()) {
+    ModelInstanceContext* curr_instance = avbl_instances_.top();
+    if (curr_instance != instance) {
+      new_avbl_instances.push(curr_instance);
+    }
+    avbl_instances_.pop();
+  }
+  avbl_instances_.swap(new_avbl_instances);
+
+  std::queue<StandardScheduleFunc> empty_queue;
+  specific_sched_request_queues_[instance->GetIndex()].swap(empty_queue);
 }
 
 
@@ -609,7 +636,8 @@ RateLimiter::ModelInstanceContext::ModelInstanceContext(
     : triton_model_instance_(triton_model_instance),
       index_(triton_model_instance->Index()), model_context_(model_context),
       rate_limiter_config_(rate_limiter_config), OnStage_(OnStage),
-      OnRelease_(OnRelease), exec_count_(0), state_(AVAILABLE)
+      OnRelease_(OnRelease), exec_count_(0), state_(AVAILABLE),
+      removal_in_progress_(false)
 {
 }
 
@@ -689,42 +717,29 @@ RateLimiter::ModelInstanceContext::Release()
 
   OnRelease_(this);
 
-  {
-    std::lock_guard<std::mutex> lk(state_mtx_);
-    if ((model_context_->isRemovalInProgress()) && (state_ == AVAILABLE) &&
-        (!model_context_->ContainsPendingRequests(index_))) {
-      state_ = REMOVED;
-    }
-  }
+  std::lock_guard<std::mutex> lk(state_mtx_);
 
+  if ((removal_in_progress_) && (state_ == AVAILABLE) &&
+      (!model_context_->ContainsPendingRequests(index_))) {
+    state_ = REMOVED;
+  }
   if (state_ == REMOVED) {
     cv_.notify_all();
   }
 }
 
 void
-RateLimiter::ModelInstanceContext::RequestRemoval()
+RateLimiter::ModelInstanceContext::WaitForRemoval()
 {
-  std::lock_guard<std::mutex> lk(state_mtx_);
+  std::unique_lock<std::mutex> lk(state_mtx_);
+
+  removal_in_progress_ = true;
 
   if ((state_ == AVAILABLE) &&
       (!model_context_->ContainsPendingRequests(index_))) {
     state_ = REMOVED;
   }
-}
-
-void
-RateLimiter::ModelInstanceContext::WaitForRemoval()
-{
-  if (!model_context_->isRemovalInProgress()) {
-    model_context_->RequestRemoval();
-  }
-
-  RequestRemoval();
-
-  // Wait for the instance to be removed
-  {
-    std::unique_lock<std::mutex> lk(state_mtx_);
+  if (state_ != REMOVED) {
     cv_.wait(lk, [this] { return state_ == REMOVED; });
   }
 }

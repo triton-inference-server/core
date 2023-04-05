@@ -162,8 +162,8 @@ class RateLimiter {
     Status Stage(StandardScheduleFunc OnSchedule);
     Status Allocate();
     Status DirectAllocate(StandardScheduleFunc OnSchedule);
-    void RequestRemoval();
     void WaitForRemoval();
+    size_t GetIndex() { return index_; }
 
     TritonModelInstance* triton_model_instance_;
     size_t index_;
@@ -218,9 +218,12 @@ class RateLimiter {
     // Whether or not there are any requests waiting for execution on
     // indexed model instance.
     bool ContainsPendingRequests(int32_t index);
+    // Remove the given instance of the model. `WaitForRemoval()` on the
+    // instance should have been called and returned.
+    void RemoveInstance(ModelInstanceContext* instance);
     // Starts the removal of the model context from scheduling purposes.
     // Will wait for all enqueued model instance requests to complete.
-    void RequestRemoval();
+    void RequestRemoval() { removal_in_progress_ = true; }
     // Whether or not model context is decommissioned
     bool isRemovalInProgress() { return removal_in_progress_; }
 
