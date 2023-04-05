@@ -288,6 +288,11 @@ class TritonServerOptions {
   uint64_t MetricsInterval() const { return metrics_interval_; }
   void SetMetricsInterval(uint64_t m) { metrics_interval_ = m; }
 
+  const tc::MetricsConfigMap& MetricsConfigMap() { return metrics_config_map_; }
+  TRITONSERVER_Error* AddMetricsConfig(
+      const std::string& name, const std::string& setting,
+      const std::string& value);
+
   const std::string& BackendDir() const { return backend_dir_; }
   void SetBackendDir(const std::string& bd) { backend_dir_ = bd; }
 
@@ -348,6 +353,7 @@ class TritonServerOptions {
   tc::CacheConfigMap cache_config_map_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+  tc::MetricsConfigMap metrics_config_map_;
 };
 
 TritonServerOptions::TritonServerOptions()
@@ -425,6 +431,16 @@ TritonServerOptions::AddCacheConfig(
     const std::string& cache_name, const std::string& config_json)
 {
   cache_config_map_[cache_name] = config_json;
+  return nullptr;  // success
+}
+
+TRITONSERVER_Error*
+TritonServerOptions::AddMetricsConfig(
+    const std::string& name, const std::string& setting,
+    const std::string& value)
+{
+  tc::MetricsConfig& mc = metrics_config_map_[name];
+  mc.push_back(std::make_pair(setting, value));
   return nullptr;  // success
 }
 
@@ -2198,6 +2214,7 @@ TRITONSERVER_ServerNew(
   if (loptions->Metrics()) {
     tc::Metrics::EnableMetrics();
     tc::Metrics::SetMetricsInterval(loptions->MetricsInterval());
+    tc::Metrics::SetConfig(loptions->MetricsConfigMap());
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -3160,6 +3177,16 @@ TRITONSERVER_GetMetricKind(
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetMetricsConfig(
+    TRITONSERVER_ServerOptions* options, const char* name, const char* setting,
+    const char* value)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  return loptions->AddMetricsConfig(name, setting, value);
 }
 
 }  // extern C

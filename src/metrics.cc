@@ -213,6 +213,13 @@ Metrics::~Metrics()
   }
 }
 
+void
+Metrics::SetConfig(MetricsConfigMap cfg)
+{
+  auto singleton = GetSingleton();
+  singleton->config_ = cfg;
+}
+
 bool
 Metrics::Enabled()
 {
