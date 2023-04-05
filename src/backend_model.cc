@@ -258,11 +258,11 @@ TritonModel::Create(
               << ", byte size: " << mem_usage.second;
   }
   for (const auto& mem_usage : usage.pinned_byte_size_) {
-    LOG_ERROR << "System mem id: " << mem_usage.first
+    LOG_ERROR << "Pinned mem id: " << mem_usage.first
               << ", byte size: " << mem_usage.second;
   }
   for (const auto& mem_usage : usage.cuda_byte_size_) {
-    LOG_ERROR << "System mem id: " << mem_usage.first
+    LOG_ERROR << "Cuda mem id: " << mem_usage.first
               << ", byte size: " << mem_usage.second;
   }
 
