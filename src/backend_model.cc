@@ -161,6 +161,8 @@ TritonModel::Create(
         ValidateInstanceGroup(model_config, min_compute_capability));
   }
 
+  DeviceMemoryTracker::ScopedMemoryUsage usage;
+  DeviceMemoryTracker::TrackThreadMemoryUsage(&usage);
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
@@ -247,6 +249,22 @@ TritonModel::Create(
   RETURN_IF_ERROR(local_model->CommitInstances());
 
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
+
+  DeviceMemoryTracker::UntrackThreadMemoryUsage(&usage);
+  LOG_ERROR << "Finished tracking memory usage of model "
+            << model_config.name();
+  for (const auto& mem_usage : usage.system_byte_size_) {
+    LOG_ERROR << "System mem id: " << mem_usage.first
+              << ", byte size: " << mem_usage.second;
+  }
+  for (const auto& mem_usage : usage.pinned_byte_size_) {
+    LOG_ERROR << "System mem id: " << mem_usage.first
+              << ", byte size: " << mem_usage.second;
+  }
+  for (const auto& mem_usage : usage.cuda_byte_size_) {
+    LOG_ERROR << "System mem id: " << mem_usage.first
+              << ", byte size: " << mem_usage.second;
+  }
 
   *model = std::move(local_model);
   return Status::Success;
