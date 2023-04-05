@@ -20,8 +20,6 @@ namespace triton { namespace core {
 // Specialize on getting device memory allocation
 class DeviceMemoryTracker {
  public:
-  // [FIXME] reuse buffer attributes
-  // [FIXME] allocation can happen on multiple devices
   struct ScopedMemoryUsage {
     ~ScopedMemoryUsage()
     {
