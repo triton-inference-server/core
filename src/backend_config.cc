@@ -35,9 +35,8 @@ namespace triton { namespace core {
 namespace {
 
 Status
-GetTFSpecializedBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map,
-    std::string* specialized_name)
+CheckTFSpecializedBackendName(
+    const triton::common::BackendCmdlineConfigMap& config_map)
 {
   std::string tf_version_str = "2";
   const auto& itr = config_map.find("tensorflow");
@@ -57,8 +56,6 @@ GetTFSpecializedBackendName(
       }
     }
   }
-
-  *specialized_name += tf_version_str;
 
   return Status::Success;
 }
@@ -183,7 +180,7 @@ BackendConfigurationSpecializeBackendName(
 {
   *specialized_name = backend_name;
   if (backend_name == "tensorflow") {
-    RETURN_IF_ERROR(GetTFSpecializedBackendName(config_map, specialized_name));
+    RETURN_IF_ERROR(CheckTFSpecializedBackendName(config_map));
   }
 
   return Status::Success;
