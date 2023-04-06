@@ -159,11 +159,11 @@ class TritonModel : public Model {
   const double min_compute_capability_;
   // Whether the backend should attempt to auto-complete the model config.
   const bool auto_complete_config_;
-  // The backend cmdline config when this object is created.
+  // The backend cmdline config.
   const triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
-  // The host policy map when this object is created.
+  // The host policy map.
   const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
-  // The device blocking when this object is created.
+  // The device blocking. It should not be changed after the model is created.
   bool device_blocking_;
 
   // The localized repo directory holding the model. If localization

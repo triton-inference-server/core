@@ -137,13 +137,13 @@ WarmupRequestComplete(
 }  // namespace
 
 TritonModelInstance::TritonModelInstance(
-    TritonModel* model, const std::string& name, const size_t index,
+    TritonModel* model, const std::string& name,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const TritonServerMessage& host_policy_message,
     const std::vector<SecondaryDevice>& secondary_devices)
-    : model_(model), name_(name), index_(index), kind_(kind),
+    : model_(model), name_(name), kind_(kind),
       device_id_(device_id), host_policy_(host_policy),
       host_policy_message_(host_policy_message), profile_names_(profile_names),
       passive_(passive), secondary_devices_(secondary_devices), state_(nullptr)
@@ -260,7 +260,7 @@ TritonModelInstance::CreateInstances(
         }
         RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         auto err = CreateInstance(
-            model, instance_name, c, kind, id, profile_names, passive,
+            model, instance_name, kind, id, profile_names, passive,
             policy_name, *host_policy, *(std::get<3>(is)),
             &device_to_thread_map, secondary_devices);
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
@@ -299,7 +299,7 @@ TritonModelInstance::CreateInstances(
 
 Status
 TritonModelInstance::CreateInstance(
-    TritonModel* model, const std::string& name, const size_t index,
+    TritonModel* model, const std::string& name,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,
     const std::string& host_policy_name,
@@ -323,7 +323,7 @@ TritonModelInstance::CreateInstance(
   TritonServerMessage host_policy_message(host_policy_json);
 
   std::shared_ptr<TritonModelInstance> local_instance(new TritonModelInstance(
-      model, name, index, kind, device_id, profile_names, passive, host_policy,
+      model, name, kind, device_id, profile_names, passive, host_policy,
       host_policy_message, secondary_devices));
 
   TRITONBACKEND_ModelInstance* triton_instance =
