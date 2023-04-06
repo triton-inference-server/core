@@ -128,7 +128,10 @@ class Metrics {
   static void SetMetricsInterval(uint64_t metrics_interval_ms);
 
   // Set the config for Metrics to control various options generically
-  static void SetConfig(MetricsConfigMap cfg);
+  static void SetConfigMap(MetricsConfigMap cfg);
+
+  // Get the config for Metrics
+  static const MetricsConfigMap& ConfigMap();
 
   // Get the prometheus registry
   static std::shared_ptr<prometheus::Registry> GetRegistry();
@@ -243,6 +246,14 @@ class Metrics {
   {
     return GetSingleton()->inf_compute_output_summary_us_family_;
   }
+  static prometheus::Family<prometheus::Summary>& FamilyCacheHitSummary()
+  {
+    return GetSingleton()->cache_hit_summary_us_model_family_;
+  }
+  static prometheus::Family<prometheus::Summary>& FamilyCacheMissSummary()
+  {
+    return GetSingleton()->cache_miss_summary_us_model_family_;
+  }
 
  private:
   Metrics();
@@ -260,6 +271,7 @@ class Metrics {
   std::shared_ptr<prometheus::Registry> registry_;
   std::unique_ptr<prometheus::Serializer> serializer_;
 
+  // DLIS-4761: Refactor into groups of families
   prometheus::Family<prometheus::Counter>& inf_success_family_;
   prometheus::Family<prometheus::Counter>& inf_failure_family_;
   prometheus::Family<prometheus::Counter>& inf_count_family_;
@@ -273,14 +285,6 @@ class Metrics {
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
 
-  // Summaries
-  prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;
-  prometheus::Family<prometheus::Summary>& inf_queue_summary_us_family_;
-  prometheus::Family<prometheus::Summary>& inf_compute_input_summary_us_family_;
-  prometheus::Family<prometheus::Summary>& inf_compute_infer_summary_us_family_;
-  prometheus::Family<prometheus::Summary>&
-      inf_compute_output_summary_us_family_;
-
   // Per-model Response Cache metrics
   // NOTE: Per-model metrics are used in infer_stats for perf_analyzer. Global
   // cache metrics will be implemented by cache and published through
@@ -289,6 +293,16 @@ class Metrics {
   prometheus::Family<prometheus::Counter>& cache_hit_duration_us_model_family_;
   prometheus::Family<prometheus::Counter>& cache_num_misses_model_family_;
   prometheus::Family<prometheus::Counter>& cache_miss_duration_us_model_family_;
+
+  // Summaries
+  prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_queue_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_compute_input_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_compute_infer_summary_us_family_;
+  prometheus::Family<prometheus::Summary>&
+      inf_compute_output_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& cache_hit_summary_us_model_family_;
+  prometheus::Family<prometheus::Summary>& cache_miss_summary_us_model_family_;
 
 #ifdef TRITON_ENABLE_METRICS_GPU
   prometheus::Family<prometheus::Gauge>& gpu_utilization_family_;

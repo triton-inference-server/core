@@ -2214,7 +2214,7 @@ TRITONSERVER_ServerNew(
   if (loptions->Metrics()) {
     tc::Metrics::EnableMetrics();
     tc::Metrics::SetMetricsInterval(loptions->MetricsInterval());
-    tc::Metrics::SetConfig(loptions->MetricsConfigMap());
+    tc::Metrics::SetConfigMap(loptions->MetricsConfigMap());
   }
 #endif  // TRITON_ENABLE_METRICS
 

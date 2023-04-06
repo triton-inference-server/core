@@ -46,84 +46,8 @@ class MetricModelReporter {
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
-
-  // Get a metric for the given model, version and GPU index.
-  prometheus::Counter& MetricInferenceSuccess() const
-  {
-    return *metric_inf_success_;
-  }
-  prometheus::Counter& MetricInferenceFailure() const
-  {
-    return *metric_inf_failure_;
-  }
-  prometheus::Counter& MetricInferenceCount() const
-  {
-    return *metric_inf_count_;
-  }
-  prometheus::Counter& MetricInferenceExecutionCount() const
-  {
-    return *metric_inf_exec_count_;
-  }
-  prometheus::Counter& MetricInferenceRequestDuration() const
-  {
-    return *metric_inf_request_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceQueueDuration() const
-  {
-    return *metric_inf_queue_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceComputeInputDuration() const
-  {
-    return *metric_inf_compute_input_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceComputeInferDuration() const
-  {
-    return *metric_inf_compute_infer_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceComputeOutputDuration() const
-  {
-    return *metric_inf_compute_output_duration_us_;
-  }
-
-  // Summaries
-  prometheus::Summary& MetricInferenceRequestSummary() const
-  {
-    return *metric_inf_request_summary_us_;
-  }
-  prometheus::Summary& MetricInferenceQueueSummary() const
-  {
-    return *metric_inf_queue_summary_us_;
-  }
-  prometheus::Summary& MetricInferenceComputeInputSummary() const
-  {
-    return *metric_inf_compute_input_summary_us_;
-  }
-  prometheus::Summary& MetricInferenceComputeInferSummary() const
-  {
-    return *metric_inf_compute_infer_summary_us_;
-  }
-  prometheus::Summary& MetricInferenceComputeOutputSummary() const
-  {
-    return *metric_inf_compute_output_summary_us_;
-  }
-
-  // Per-model cache stats
-  prometheus::Counter& MetricCacheHitCount() const
-  {
-    return *metric_cache_hit_count_;
-  }
-  prometheus::Counter& MetricCacheHitDuration() const
-  {
-    return *metric_cache_hit_duration_us_;
-  }
-  prometheus::Counter& MetricCacheMissCount() const
-  {
-    return *metric_cache_miss_count_;
-  }
-  prometheus::Counter& MetricCacheMissDuration() const
-  {
-    return *metric_cache_miss_duration_us_;
-  }
+  void IncrementCounter(const std::string& name, double value);
+  void ObserveSummary(const std::string& name, double value);
 
  private:
   MetricModelReporter(
@@ -140,28 +64,18 @@ class MetricModelReporter {
       prometheus::Family<T>& family,
       const std::map<std::string, std::string>& labels, Args&&... args);
 
-  prometheus::Counter* metric_inf_success_;
-  prometheus::Counter* metric_inf_failure_;
-  prometheus::Counter* metric_inf_count_;
-  prometheus::Counter* metric_inf_exec_count_;
-  prometheus::Counter* metric_inf_request_duration_us_;
-  prometheus::Counter* metric_inf_queue_duration_us_;
-  prometheus::Counter* metric_inf_compute_input_duration_us_;
-  prometheus::Counter* metric_inf_compute_infer_duration_us_;
-  prometheus::Counter* metric_inf_compute_output_duration_us_;
+  void InitializeCounters(const std::map<std::string, std::string>& labels);
+  void InitializeSummaries(const std::map<std::string, std::string>& labels);
 
-  // Summaries
-  prometheus::Summary* metric_inf_request_summary_us_;
-  prometheus::Summary* metric_inf_queue_summary_us_;
-  prometheus::Summary* metric_inf_compute_input_summary_us_;
-  prometheus::Summary* metric_inf_compute_infer_summary_us_;
-  prometheus::Summary* metric_inf_compute_output_summary_us_;
+  // Metric Families
+  std::unordered_map<std::string, prometheus::Family<prometheus::Counter>*>
+      counter_families_;
+  std::unordered_map<std::string, prometheus::Family<prometheus::Summary>*>
+      summary_families_;
 
-  // Cache
-  prometheus::Counter* metric_cache_hit_count_;
-  prometheus::Counter* metric_cache_hit_duration_us_;
-  prometheus::Counter* metric_cache_miss_count_;
-  prometheus::Counter* metric_cache_miss_duration_us_;
+  // Metrics
+  std::unordered_map<std::string, prometheus::Counter*> counters_;
+  std::unordered_map<std::string, prometheus::Summary*> summaries_;
 #endif  // TRITON_ENABLE_METRICS
 };
 

@@ -99,7 +99,30 @@ Metrics::Metrics()
                     "microseconds (does not include cached requests)")
               .Register(*registry_)),
 
-      //=============== Summaries ==================//
+      // Per-model cache metric families
+      // NOTE: These are used in infer_stats for perf_analyzer
+      cache_num_hits_model_family_(prometheus::BuildCounter()
+                                       .Name("nv_cache_num_hits_per_model")
+                                       .Help("Number of cache hits per model")
+                                       .Register(*registry_)),
+      cache_hit_duration_us_model_family_(
+          prometheus::BuildCounter()
+              .Name("nv_cache_hit_duration_per_model")
+              .Help("Total cache hit duration per model, in microseconds")
+              .Register(*registry_)),
+      cache_num_misses_model_family_(
+          prometheus::BuildCounter()
+              .Name("nv_cache_num_misses_per_model")
+              .Help("Number of cache misses per model")
+              .Register(*registry_)),
+      cache_miss_duration_us_model_family_(
+          prometheus::BuildCounter()
+              .Name("nv_cache_miss_duration_per_model")
+              .Help("Total cache miss (insert+lookup) duration per model, in "
+                    "microseconds")
+              .Register(*registry_)),
+
+      // Summaries
       inf_request_summary_us_family_(
           prometheus::BuildSummary()
               .Name("nv_inference_request_summary_us")
@@ -130,29 +153,19 @@ Metrics::Metrics()
               .Help("Cumulative inference compute output duration in "
                     "microseconds (does not include cached requests)")
               .Register(*registry_)),
-      //===========================================//
 
-      // Per-model cache metric families
-      // NOTE: These are used in infer_stats for perf_analyzer
-      cache_num_hits_model_family_(prometheus::BuildCounter()
-                                       .Name("nv_cache_num_hits_per_model")
-                                       .Help("Number of cache hits per model")
-                                       .Register(*registry_)),
-      cache_hit_duration_us_model_family_(
-          prometheus::BuildCounter()
-              .Name("nv_cache_hit_duration_per_model")
-              .Help("Total cache hit duration per model, in microseconds")
+      cache_hit_summary_us_model_family_(
+          prometheus::BuildSummary()
+              .Name("nv_cache_hit_summary_per_model")
+              .Help("Summary of cache hit counts/durations per model, in "
+                    "microseconds.")
               .Register(*registry_)),
-      cache_num_misses_model_family_(
-          prometheus::BuildCounter()
-              .Name("nv_cache_num_misses_per_model")
-              .Help("Number of cache misses per model")
-              .Register(*registry_)),
-      cache_miss_duration_us_model_family_(
-          prometheus::BuildCounter()
-              .Name("nv_cache_miss_duration_per_model")
-              .Help("Total cache miss (insert+lookup) duration per model, in "
-                    "microseconds")
+
+      cache_miss_summary_us_model_family_(
+          prometheus::BuildSummary()
+              .Name("nv_cache_miss_summary_per_model")
+              .Help("Summary of cache miss counts/durations per model, in "
+                    "microseconds.")
               .Register(*registry_)),
 
 #ifdef TRITON_ENABLE_METRICS_GPU
@@ -247,8 +260,15 @@ Metrics::~Metrics()
   }
 }
 
+const MetricsConfigMap&
+Metrics::ConfigMap()
+{
+  auto singleton = GetSingleton();
+  return singleton->config_;
+}
+
 void
-Metrics::SetConfig(MetricsConfigMap cfg)
+Metrics::SetConfigMap(MetricsConfigMap cfg)
 {
   auto singleton = GetSingleton();
   singleton->config_ = cfg;
