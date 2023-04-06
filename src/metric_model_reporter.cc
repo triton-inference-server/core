@@ -80,12 +80,15 @@ MetricModelReporter::MetricModelReporter(
   auto metrics_config_map_ = Metrics::ConfigMap();
   const auto& metrics_config_ = metrics_config_map_[""];
 
-  bool enable_counters = false;
+  // Default behavior is counters for most latency metrics if no types specified
+  bool enable_counters = true;
   bool enable_summaries = false;
   for (const auto& pair : metrics_config_) {
-    if (pair.first == "counters") {
-      enable_counters = true;
-    } else if (pair.first == "summaries") {
+    if (pair.first == "counters" && pair.second == "false") {
+      enable_counters = false;
+    }
+
+    if (pair.first == "summaries" && pair.second == "true") {
       enable_summaries = true;
     }
   }
@@ -96,11 +99,6 @@ MetricModelReporter::MetricModelReporter(
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
   counter_families_["inf_exec_count"] =
       &Metrics::FamilyInferenceExecutionCount();
-
-  // Default behavior is counters for most metrics if no types specified
-  if (!enable_counters && !enable_summaries) {
-    enable_counters = true;
-  }
 
   if (enable_counters) {
     InitializeCounters(labels);
