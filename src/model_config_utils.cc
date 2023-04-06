@@ -2041,7 +2041,7 @@ ModelConfigToJson(
   // dynamic_batching::priority_levels,
   // dynamic_batching::default_priority_level,
   // dynamic_batching::default_queue_policy::default_timeout_microseconds,
-  // dynamic_batching::priority_queue_policy::key (TODO!!!)
+  // dynamic_batching::priority_queue_policy::key (not necessary)
   // dynamic_batching::priority_queue_policy::value::default_timeout_microseconds
   {
     triton::common::TritonJson::Value db;
