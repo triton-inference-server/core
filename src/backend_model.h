@@ -74,15 +74,13 @@ class TritonModel : public Model {
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  std::vector<std::shared_ptr<TritonModelInstance>> Instances();
+  const std::vector<std::shared_ptr<TritonModelInstance>>& Instances() const
+  {
+    return instances_;
+  }
   bool DeviceBlocking() const { return device_blocking_; }
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
-
-  // Override base functions with its thread safe version.
-  Status Enqueue(std::unique_ptr<InferenceRequest>& request);
-  size_t InflightInferenceCount();
-  void Stop();
 
   // Called by 'backend_model_instance' to move new instances to this object.
   // The new instances are registered into the background.
@@ -114,21 +112,14 @@ class TritonModel : public Model {
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
 
-  // Replace the foreground instances with background instances. It is the
-  // caller responsibility to hold the 'update_mu_' if the scheduler is to be
-  // updated.
+  // Replace the foreground instances with background instances.
   Status CommitInstances();
 
-  // Return the current scheduler thread safe.
-  std::shared_ptr<Scheduler> GetScheduler();
-
-  // Set or update the scheduler. It is the caller responsibility to hold the
-  // 'update_mu_' if the scheduler is to be updated.
+  // Set or update the scheduler.
   Status SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler);
 
   // Set the scheduler based on the model configuration and foreground
-  // 'instances'. It is the caller responsibility to hold the 'update_mu_' if
-  // the scheduler is to be updated.
+  // 'instances'.
   Status SetConfiguredScheduler();
 
   // Set the batching strategy, if custom functions provided by user.
@@ -173,10 +164,6 @@ class TritonModel : public Model {
 
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;
-
-  // Protect concurrent access while updating. Currently 'scheduler_' and
-  // variation of 'instances_' vectors need to be protected.
-  std::mutex update_mu_;
 
   // The model instances for this model. Passive instances are loaded but not
   // added to the scheduler.

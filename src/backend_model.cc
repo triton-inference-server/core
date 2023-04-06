@@ -288,9 +288,9 @@ TritonModel::UpdateInstanceGroup(
     return status;
   }
 
-  std::lock_guard<std::mutex> update_lock(update_mu_);
-
-  // Commit the update.
+  // At this point, the new model config is ready but not yet written into this
+  // object. The 'caller_lock' is held, so 'model_lifecycle' will pause any new
+  // inference request. It is safe to move forward and commit the update.
   RETURN_IF_ERROR(SetModelConfig(model_config));
   RETURN_IF_ERROR(CommitInstances());
   RETURN_IF_ERROR(SetConfiguredScheduler());
@@ -623,47 +623,15 @@ TritonModel::CommitInstances()
   return Status::Success;
 }
 
-std::vector<std::shared_ptr<TritonModelInstance>>
-TritonModel::Instances()
-{
-  std::lock_guard<std::mutex> lock(update_mu_);
-  return instances_;
-}
-
 Status
 TritonModel::SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler)
 {
   if (scheduler_ != nullptr) {
     LOG_VERBOSE(1) << "Replacing scheduler for model '" + config_.name() + "'";
   }
-  scheduler_ = std::shared_ptr<Scheduler>(std::move(scheduler));
+  scheduler_ = std::move(scheduler);
 
   return Status::Success;
-}
-
-std::shared_ptr<Scheduler>
-TritonModel::GetScheduler()
-{
-  std::lock_guard<std::mutex> lock(update_mu_);
-  return scheduler_;
-}
-
-Status
-TritonModel::Enqueue(std::unique_ptr<InferenceRequest>& request)
-{
-  return GetScheduler()->Enqueue(request);
-}
-
-size_t
-TritonModel::InflightInferenceCount()
-{
-  return GetScheduler()->InflightInferenceCount();
-}
-
-void
-TritonModel::Stop()
-{
-  GetScheduler()->Stop();
 }
 
 extern "C" {

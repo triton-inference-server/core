@@ -193,8 +193,8 @@ class Model {
   // model. The scheduler can only be set once for a model.
   Status SetScheduler(std::unique_ptr<Scheduler> scheduler);
 
-  // The scheduler to use for this model. The shared_ptr is for shallow copy.
-  std::shared_ptr<Scheduler> scheduler_;
+  // The scheduler to use for this model.
+  std::unique_ptr<Scheduler> scheduler_;
 
   // Configuration of the model.
   inference::ModelConfig config_;

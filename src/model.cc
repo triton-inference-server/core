@@ -83,7 +83,7 @@ Model::SetScheduler(std::unique_ptr<Scheduler> scheduler)
         Status::Code::INTERNAL, "Attempt to change scheduler not allowed");
   }
 
-  scheduler_ = std::shared_ptr<Scheduler>(std::move(scheduler));
+  scheduler_ = std::move(scheduler);
   return Status::Success;
 }
 
