@@ -103,15 +103,20 @@ class TritonModelInstance {
         const int32_t device_id,
         std::unique_ptr<TritonBackendThread>* triton_backend_thread);
     void AddModelInstance(TritonModelInstance* model_instance);
+    int32_t DeviceId();
     Status InitAndWarmUpModelInstance(TritonModelInstance* model_instance);
     void StopBackendThread();
     ~TritonBackendThread();
 
    private:
-    TritonBackendThread(const std::string& name, TritonModel* model);
-    void BackendThread(const int nice, const int32_t device_id);
+    TritonBackendThread(
+        const std::string& name, TritonModel* model, const int nice,
+        const int32_t device_id);
+    void BackendThread();
 
-    std::string name_;
+    const std::string name_;
+    const int nice_;
+    const int32_t device_id_;
 
     TritonModel* model_;
     std::deque<TritonModelInstance*> model_instances_;

@@ -143,10 +143,10 @@ TritonModelInstance::TritonModelInstance(
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const TritonServerMessage& host_policy_message,
     const std::vector<SecondaryDevice>& secondary_devices)
-    : model_(model), name_(name), kind_(kind),
-      device_id_(device_id), host_policy_(host_policy),
-      host_policy_message_(host_policy_message), profile_names_(profile_names),
-      passive_(passive), secondary_devices_(secondary_devices), state_(nullptr)
+    : model_(model), name_(name), kind_(kind), device_id_(device_id),
+      host_policy_(host_policy), host_policy_message_(host_policy_message),
+      profile_names_(profile_names), passive_(passive),
+      secondary_devices_(secondary_devices), state_(nullptr)
 {
 #ifdef TRITON_ENABLE_METRICS
   if (Metrics::Enabled()) {
@@ -260,9 +260,9 @@ TritonModelInstance::CreateInstances(
         }
         RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         auto err = CreateInstance(
-            model, instance_name, kind, id, profile_names, passive,
-            policy_name, *host_policy, *(std::get<3>(is)),
-            &device_to_thread_map, secondary_devices);
+            model, instance_name, kind, id, profile_names, passive, policy_name,
+            *host_policy, *(std::get<3>(is)), &device_to_thread_map,
+            secondary_devices);
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
         RETURN_IF_ERROR(err);
 
@@ -711,14 +711,13 @@ TritonModelInstance::TritonBackendThread::CreateBackendThread(
     std::unique_ptr<TritonBackendThread>* triton_backend_thread)
 {
   TritonBackendThread* raw_triton_backend_thread =
-      new TritonBackendThread(name, model_instance->Model());
+      new TritonBackendThread(name, model_instance->Model(), nice, device_id);
   std::unique_ptr<TritonBackendThread> runner(raw_triton_backend_thread);
 
   runner->AddModelInstance(model_instance);
-  runner->backend_thread_ =
-      std::thread([raw_triton_backend_thread, nice, device_id]() {
-        raw_triton_backend_thread->BackendThread(nice, device_id);
-      });
+  runner->backend_thread_ = std::thread([raw_triton_backend_thread]() {
+    raw_triton_backend_thread->BackendThread();
+  });
 
   triton_backend_thread->reset(runner.release());
 
@@ -730,6 +729,12 @@ TritonModelInstance::TritonBackendThread::AddModelInstance(
     TritonModelInstance* model_instance)
 {
   model_instances_.push_back(model_instance);
+}
+
+int32_t
+TritonModelInstance::TritonBackendThread::DeviceId()
+{
+  return device_id_;
 }
 
 Status
@@ -754,8 +759,9 @@ TritonModelInstance::TritonBackendThread::InitAndWarmUpModelInstance(
 }
 
 TritonModelInstance::TritonBackendThread::TritonBackendThread(
-    const std::string& name, TritonModel* model)
-    : name_(name), model_(model)
+    const std::string& name, TritonModel* model, const int nice,
+    const int32_t device_id)
+    : name_(name), nice_(nice), device_id_(device_id), model_(model)
 {
 }
 
@@ -777,21 +783,20 @@ TritonModelInstance::TritonBackendThread::StopBackendThread()
 }
 
 void
-TritonModelInstance::TritonBackendThread::BackendThread(
-    const int nice, const int32_t device_id)
+TritonModelInstance::TritonBackendThread::BackendThread()
 {
 #ifndef _WIN32
-  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
+  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice_) == 0) {
     LOG_VERBOSE(1) << "Starting backend thread for " << name_ << " at nice "
-                   << nice << " on device " << device_id << "...";
+                   << nice_ << " on device " << device_id_ << "...";
   } else {
     LOG_VERBOSE(1) << "Starting backend thread for " << name_
-                   << " at default nice (requested nice " << nice << " failed)"
-                   << " on device " << device_id << "...";
+                   << " at default nice (requested nice " << nice_ << " failed)"
+                   << " on device " << device_id_ << "...";
   }
 #else
   LOG_VERBOSE(1) << "Starting backend thread for " << name_
-                 << " at default nice on device " << device_id << "...";
+                 << " at default nice on device " << device_id_ << "...";
 #endif
 
   bool should_exit = false;
