@@ -252,7 +252,7 @@ TritonModel::Create(
   }
 
   // Create and initialize the model instances for this model.
-  RETURN_IF_ERROR(TritonModelInstance::CreateInstances(
+  RETURN_IF_ERROR(TritonModelInstance::SetInstances(
       raw_local_model, backend_cmdline_config_map, host_policy_map,
       model_config));
   RETURN_IF_ERROR(local_model->CommitInstances());
@@ -279,9 +279,9 @@ TritonModel::UpdateInstanceGroup(
       &model_config));
   RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
 
-  // Create new instances if needed.
+  // Update the instances to the new config.
   caller_lock->unlock();  // allow inference while creating instances
-  Status status = TritonModelInstance::CreateInstances(
+  Status status = TritonModelInstance::SetInstances(
       this, backend_cmdline_config_map_, host_policy_map_, model_config);
   caller_lock->lock();
   if (!status.IsOk()) {
@@ -290,7 +290,7 @@ TritonModel::UpdateInstanceGroup(
 
   // At this point, the new model config is ready but not yet written into this
   // object. The 'caller_lock' is held, so 'model_lifecycle' will pause any new
-  // inference request. It is safe to move forward and commit the update.
+  // inference request. It is safe to move forward and commit the change.
   RETURN_IF_ERROR(SetModelConfig(model_config));
   RETURN_IF_ERROR(CommitInstances());
   RETURN_IF_ERROR(SetConfiguredScheduler());
@@ -632,6 +632,20 @@ TritonModel::SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler)
   scheduler_ = std::move(scheduler);
 
   return Status::Success;
+}
+
+std::vector<std::shared_ptr<TritonModelInstance>>
+TritonModel::GetInstancesByDevice(int32_t device_id) const
+{
+  std::vector<std::shared_ptr<TritonModelInstance>> result;
+  for (auto* instances : {&instances_, &bg_instances_}) {
+    for (auto& instance : (*instances)) {
+      if (instance->DeviceId() == device_id) {
+        result.push_back(instance);
+      }
+    }
+  }
+  return result;
 }
 
 extern "C" {

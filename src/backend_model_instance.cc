@@ -188,17 +188,13 @@ TritonModelInstance::~TritonModelInstance()
 }
 
 Status
-TritonModelInstance::CreateInstances(
+TritonModelInstance::SetInstances(
     TritonModel* model,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const inference::ModelConfig& model_config)
 {
   static triton::common::HostPolicyCmdlineConfig empty_host_policy;
-
-  // This structure is used to allocate TritonBackendThread to instances on same
-  // device for device blocking execution policy.
-  std::map<uint32_t, std::shared_ptr<TritonBackendThread>> device_to_thread_map;
 
   for (const auto& group : model_config.instance_group()) {
     std::vector<std::string> profile_names;
@@ -261,8 +257,7 @@ TritonModelInstance::CreateInstances(
         RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         auto err = CreateInstance(
             model, instance_name, kind, id, profile_names, passive, policy_name,
-            *host_policy, *(std::get<3>(is)), &device_to_thread_map,
-            secondary_devices);
+            *host_policy, *(std::get<3>(is)), secondary_devices);
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
         RETURN_IF_ERROR(err);
 
@@ -305,8 +300,6 @@ TritonModelInstance::CreateInstance(
     const std::string& host_policy_name,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const inference::ModelRateLimiter& rate_limiter_config,
-    std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
-        device_to_thread_map,
     const std::vector<SecondaryDevice>& secondary_devices)
 {
   // Create the JSON representation of the backend configuration.
@@ -360,7 +353,7 @@ TritonModelInstance::CreateInstance(
     RETURN_IF_ERROR(model->Server()->GetRateLimiter()->RegisterModelInstance(
         local_instance.get(), rate_limiter_config));
     RETURN_IF_ERROR(local_instance->SetBackendThread(
-        kind, device_id, model->DeviceBlocking(), device_to_thread_map));
+        kind, device_id, model->DeviceBlocking()));
   }
 
   RETURN_IF_ERROR(model->RegisterInstance(std::move(local_instance), passive));
@@ -371,16 +364,14 @@ TritonModelInstance::CreateInstance(
 Status
 TritonModelInstance::SetBackendThread(
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-    const bool device_blocking,
-    std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
-        device_to_thread_map)
+    const bool device_blocking)
 {
   if (device_blocking && (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU)) {
-    auto thread_it = device_to_thread_map->find(device_id);
-    if (thread_it != device_to_thread_map->end()) {
+    auto device_instances = model_->GetInstancesByDevice(device_id);
+    if (!device_instances.empty()) {
       LOG_VERBOSE(1) << "Using already started backend thread for " << Name()
                      << " on device " << device_id;
-      triton_backend_thread_ = thread_it->second;
+      triton_backend_thread_ = device_instances[0]->triton_backend_thread_;
     }
   }
   if (triton_backend_thread_.get() == nullptr) {
@@ -388,7 +379,6 @@ TritonModelInstance::SetBackendThread(
     RETURN_IF_ERROR(TritonBackendThread::CreateBackendThread(
         Name(), this, 0 /* nice */, device_id, &local_backend_thread));
     triton_backend_thread_ = std::move(local_backend_thread);
-    device_to_thread_map->insert({device_id, triton_backend_thread_});
   } else {
     triton_backend_thread_->AddModelInstance(this);
   }
@@ -729,12 +719,6 @@ TritonModelInstance::TritonBackendThread::AddModelInstance(
     TritonModelInstance* model_instance)
 {
   model_instances_.push_back(model_instance);
-}
-
-int32_t
-TritonModelInstance::TritonBackendThread::DeviceId()
-{
-  return device_id_;
 }
 
 Status

@@ -78,7 +78,11 @@ class TritonModel : public Model {
   {
     return instances_;
   }
+
   bool DeviceBlocking() const { return device_blocking_; }
+  std::vector<std::shared_ptr<TritonModelInstance>> GetInstancesByDevice(
+      int32_t device_id) const;
+
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
 

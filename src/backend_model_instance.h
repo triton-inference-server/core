@@ -57,7 +57,7 @@ class TritonModelInstance {
     const int64_t id_;
   };
 
-  static Status CreateInstances(
+  static Status SetInstances(
       TritonModel* model,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
@@ -103,7 +103,6 @@ class TritonModelInstance {
         const int32_t device_id,
         std::unique_ptr<TritonBackendThread>* triton_backend_thread);
     void AddModelInstance(TritonModelInstance* model_instance);
-    int32_t DeviceId();
     Status InitAndWarmUpModelInstance(TritonModelInstance* model_instance);
     void StopBackendThread();
     ~TritonBackendThread();
@@ -159,14 +158,10 @@ class TritonModelInstance {
       const std::string& host_policy_name,
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const inference::ModelRateLimiter& rate_limiter_config,
-      std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
-          device_to_thread_map,
       const std::vector<SecondaryDevice>& secondary_devices);
   Status SetBackendThread(
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-      const bool device_blocking,
-      std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
-          device_to_thread_map);
+      const bool device_blocking);
   Status GenerateWarmupData();
 
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
