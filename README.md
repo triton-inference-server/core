@@ -84,12 +84,12 @@ but the listed CMake argument can be used to override.
 * triton-inference-server/common: -DTRITON_COMMON_REPO_TAG=[tag]
 
 You will need to override if you are building from a release
-branch. For example, if you are building the r22.03 version of Triton,
-you would clone the r22.03 branch of the core repo and use the
+branch. For example, if you are building the r23.04 version of Triton,
+you would clone the r23.04 branch of the core repo and use the
 following cmake command.
 
 ```
-$ cmake -DTRITON_THIRD_PARTY_REPO_TAG=r22.03 -DTRITON_COMMON_REPO_TAG=r22.03 -DTRITON_CORE_HEADERS_ONLY=OFF ..
+$ cmake -DTRITON_THIRD_PARTY_REPO_TAG=r23.04 -DTRITON_COMMON_REPO_TAG=r23.04 -DTRITON_CORE_HEADERS_ONLY=OFF ..
 ```
 
 ### Build Options
