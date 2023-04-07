@@ -29,6 +29,7 @@
 #include "triton/common/model_config.h"
 
 #ifdef TRITON_ENABLE_METRICS
+#include "metrics.h"
 #include "prometheus/registry.h"
 #endif  // TRITON_ENABLE_METRICS
 
@@ -40,11 +41,20 @@ namespace triton { namespace core {
 struct MetricReporterConfig {
   // Parses Metrics::ConfigMap and sets fields if specified
   void ParseConfig();
+  // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
+  // and overwrites quantiles_ field if successful.
+  prometheus::Summary::Quantiles ParseQuantiles(std::string options);
 
   // Create and use Counters for per-model latency related metrics
   bool enable_latency_counters_ = true;
   // Create and use Summaries for per-model latency related metrics
   bool enable_latency_summaries_ = false;
+  // Quantiles used for any summary metrics. Each pair of values represents
+  // { quantile, error }. For example, {0.90, 0.01} means to compute the
+  // 90th percentile with 1% error on either side, so the approximate 90th
+  // percentile value will be between the 89th and 91st percentiles.
+  prometheus::Summary::Quantiles quantiles_ = {
+      {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
 };
 
 //

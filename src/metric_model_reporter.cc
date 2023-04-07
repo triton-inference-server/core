@@ -29,7 +29,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include "constants.h"
-#include "metrics.h"
+#include "triton/common/logging.h"
 
 // Global config group has 'name' of empty string.
 constexpr char GLOBAL_CONFIG_GROUP[] = "";
@@ -48,14 +48,51 @@ MetricReporterConfig::ParseConfig()
 
   // Default behavior is counters for most latency metrics if no types specified
   for (const auto& pair : metrics_config) {
-    if (pair.first == "latency_counters" && pair.second == "false") {
+    if (pair.first == "counter_latencies" && pair.second == "false") {
       enable_latency_counters_ = false;
     }
 
-    if (pair.first == "latency_summaries" && pair.second == "true") {
+    if (pair.first == "summary_latencies" && pair.second == "true") {
       enable_latency_summaries_ = true;
     }
+
+    // ex: summary_quantiles="0.5:0.05 0.9:0.01 0.99:0.001"
+    if (pair.first == "summary_quantiles") {
+      const auto& quantiles = ParseQuantiles(pair.second);
+      if (!quantiles.empty()) {
+        quantiles_ = quantiles;
+      }
+    }
   }
+}
+
+prometheus::Summary::Quantiles
+MetricReporterConfig::ParseQuantiles(std::string options)
+{
+  prometheus::Summary::Quantiles qpairs;
+  std::stringstream ss(options);
+  std::string pairStr;
+  while (std::getline(ss, pairStr, ' ')) {
+    size_t colonPos = pairStr.find(':');
+    if (colonPos == std::string::npos) {
+      LOG_ERROR
+          << "Invalid option: [" << pairStr
+          << "]. No ':' delimiter found. Expected format is <quantile>:<error>";
+      continue;
+    }
+
+    try {
+      double quantile = std::stod(pairStr.substr(0, colonPos));
+      double error = std::stod(pairStr.substr(colonPos + 1));
+      qpairs.push_back({quantile, error});
+    }
+    catch (const std::invalid_argument& e) {
+      LOG_ERROR << "Invalid option: [" << pairStr << "]. Error: " << e.what();
+      continue;
+    }
+  }
+
+  return qpairs;
 }
 
 //
@@ -199,17 +236,14 @@ MetricModelReporter::InitializeSummaries(
         &Metrics::FamilyCacheMissSummary();
   }
 
-  // FIXME: Expose quantiles in --metrics-config
-  const auto quantiles = prometheus::Summary::Quantiles{
-      {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
 
   // Create metrics for each family
   for (auto& iter : summary_families_) {
     const auto& name = iter.first;
     auto family_ptr = iter.second;
     if (family_ptr) {
-      summaries_[name] =
-          CreateMetric<prometheus::Summary>(*family_ptr, labels, quantiles);
+      summaries_[name] = CreateMetric<prometheus::Summary>(
+          *family_ptr, labels, config_.quantiles_);
     }
   }
 }
