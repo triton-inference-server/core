@@ -31,8 +31,36 @@
 #include "constants.h"
 #include "metrics.h"
 
+// Global config group has 'name' of empty string.
+constexpr char GLOBAL_CONFIG_GROUP[] = "";
+
 namespace triton { namespace core {
 
+//
+// MetricReporterConfig
+//
+void
+MetricReporterConfig::ParseConfig()
+{
+  // Global config only for now in config map
+  auto metrics_config_map = Metrics::ConfigMap();
+  const auto& metrics_config = metrics_config_map[GLOBAL_CONFIG_GROUP];
+
+  // Default behavior is counters for most latency metrics if no types specified
+  for (const auto& pair : metrics_config) {
+    if (pair.first == "latency_counters" && pair.second == "false") {
+      enable_latency_counters_ = false;
+    }
+
+    if (pair.first == "latency_summaries" && pair.second == "true") {
+      enable_latency_summaries_ = true;
+    }
+  }
+}
+
+//
+// MetricModelReporter
+//
 Status
 MetricModelReporter::Create(
     const std::string& model_name, const int64_t model_version,
@@ -76,37 +104,11 @@ MetricModelReporter::MetricModelReporter(
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_name, model_version, device, model_tags);
 
-  // Global config only for now in config map
-  auto metrics_config_map_ = Metrics::ConfigMap();
-  const auto& metrics_config_ = metrics_config_map_[""];
-
-  // Default behavior is counters for most latency metrics if no types specified
-  bool enable_counters = true;
-  bool enable_summaries = false;
-  for (const auto& pair : metrics_config_) {
-    if (pair.first == "counters" && pair.second == "false") {
-      enable_counters = false;
-    }
-
-    if (pair.first == "summaries" && pair.second == "true") {
-      enable_summaries = true;
-    }
-  }
-
-  // Always setup these counters, regardless of config
-  counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
-  counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
-  counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
-  counter_families_["inf_exec_count"] =
-      &Metrics::FamilyInferenceExecutionCount();
-
-  if (enable_counters) {
-    InitializeCounters(labels);
-  }
-
-  if (enable_summaries) {
-    InitializeSummaries(labels);
-  }
+  // Parse metrics config to control metric setup and behavior
+  config_.ParseConfig();
+  // Initialize families and metrics
+  InitializeCounters(labels);
+  InitializeSummaries(labels);
 }
 
 MetricModelReporter::~MetricModelReporter()
@@ -133,24 +135,35 @@ void
 MetricModelReporter::InitializeCounters(
     const std::map<std::string, std::string>& labels)
 {
-  // Request
-  counter_families_["request_duration"] =
-      &Metrics::FamilyInferenceRequestDuration();
-  counter_families_["queue_duration"] =
-      &Metrics::FamilyInferenceQueueDuration();
-  // Compute
-  counter_families_["compute_input_duration"] =
-      &Metrics::FamilyInferenceComputeInputDuration();
-  counter_families_["compute_infer_duration"] =
-      &Metrics::FamilyInferenceComputeInferDuration();
-  counter_families_["compute_output_duration"] =
-      &Metrics::FamilyInferenceComputeOutputDuration();
-  // Cache
-  counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
-  counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
-  counter_families_["cache_hit_duration"] = &Metrics::FamilyCacheHitDuration();
-  counter_families_["cache_miss_duration"] =
-      &Metrics::FamilyCacheMissDuration();
+  // Always setup these counters, regardless of config
+  counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
+  counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
+  counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
+  counter_families_["inf_exec_count"] =
+      &Metrics::FamilyInferenceExecutionCount();
+
+  // Latency metrics will be initialized based on config
+  if (config_.enable_latency_counters_) {
+    // Request
+    counter_families_["request_duration"] =
+        &Metrics::FamilyInferenceRequestDuration();
+    counter_families_["queue_duration"] =
+        &Metrics::FamilyInferenceQueueDuration();
+    // Compute
+    counter_families_["compute_input_duration"] =
+        &Metrics::FamilyInferenceComputeInputDuration();
+    counter_families_["compute_infer_duration"] =
+        &Metrics::FamilyInferenceComputeInferDuration();
+    counter_families_["compute_output_duration"] =
+        &Metrics::FamilyInferenceComputeOutputDuration();
+    // Cache
+    counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
+    counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
+    counter_families_["cache_hit_duration"] =
+        &Metrics::FamilyCacheHitDuration();
+    counter_families_["cache_miss_duration"] =
+        &Metrics::FamilyCacheMissDuration();
+  }
 
   // Create metrics for each family
   for (auto& iter : counter_families_) {
@@ -166,23 +179,29 @@ void
 MetricModelReporter::InitializeSummaries(
     const std::map<std::string, std::string>& labels)
 {
+  // Latency metrics will be initialized based on config
+  if (config_.enable_latency_summaries_) {
+    // Request
+    summary_families_["request_duration"] =
+        &Metrics::FamilyInferenceRequestSummary();
+    summary_families_["queue_duration"] =
+        &Metrics::FamilyInferenceQueueSummary();
+    // Compute
+    summary_families_["compute_input_duration"] =
+        &Metrics::FamilyInferenceComputeInputSummary();
+    summary_families_["compute_infer_duration"] =
+        &Metrics::FamilyInferenceComputeInferSummary();
+    summary_families_["compute_output_duration"] =
+        &Metrics::FamilyInferenceComputeOutputSummary();
+    // Cache: Note that counts are included in summary
+    summary_families_["cache_hit_duration"] = &Metrics::FamilyCacheHitSummary();
+    summary_families_["cache_miss_duration"] =
+        &Metrics::FamilyCacheMissSummary();
+  }
+
   // FIXME: Expose quantiles in --metrics-config
   const auto quantiles = prometheus::Summary::Quantiles{
       {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
-  // Request
-  summary_families_["request_duration"] =
-      &Metrics::FamilyInferenceRequestSummary();
-  summary_families_["queue_duration"] = &Metrics::FamilyInferenceQueueSummary();
-  // Compute
-  summary_families_["compute_input_duration"] =
-      &Metrics::FamilyInferenceComputeInputSummary();
-  summary_families_["compute_infer_duration"] =
-      &Metrics::FamilyInferenceComputeInferSummary();
-  summary_families_["compute_output_duration"] =
-      &Metrics::FamilyInferenceComputeOutputSummary();
-  // Cache: Note that counts are included in summary
-  summary_families_["cache_hit_duration"] = &Metrics::FamilyCacheHitSummary();
-  summary_families_["cache_miss_duration"] = &Metrics::FamilyCacheMissSummary();
 
   // Create metrics for each family
   for (auto& iter : summary_families_) {

@@ -35,6 +35,19 @@
 namespace triton { namespace core {
 
 //
+// MetricReporterConfig
+//
+struct MetricReporterConfig {
+  // Parses Metrics::ConfigMap and sets fields if specified
+  void ParseConfig();
+
+  // Create and use Counters for per-model latency related metrics
+  bool enable_latency_counters_ = true;
+  // Create and use Summaries for per-model latency related metrics
+  bool enable_latency_summaries_ = false;
+};
+
+//
 // Interface for a metric reporter for a given version of a model.
 //
 class MetricModelReporter {
@@ -46,7 +59,9 @@ class MetricModelReporter {
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
+  // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
+  // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
 
  private:
@@ -76,6 +91,9 @@ class MetricModelReporter {
   // Metrics
   std::unordered_map<std::string, prometheus::Counter*> counters_;
   std::unordered_map<std::string, prometheus::Summary*> summaries_;
+
+  // Config
+  MetricReporterConfig config_;
 #endif  // TRITON_ENABLE_METRICS
 };
 
