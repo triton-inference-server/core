@@ -103,6 +103,9 @@ endif()
 # OpenTelemetry
 #
 if(${TRITON_ENABLE_TRACING})
+  find_package(absl CONFIG REQUIRED)
+  find_package(CURL CONFIG REQUIRED)
+  find_package(nlohmann_json CONFIG REQUIRED)
   find_package(opentelemetry-cpp CONFIG REQUIRED)
   message(STATUS "Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
 endif()
