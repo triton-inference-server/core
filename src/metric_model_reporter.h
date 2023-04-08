@@ -46,15 +46,19 @@ struct MetricReporterConfig {
   prometheus::Summary::Quantiles ParseQuantiles(std::string options);
 
   // Create and use Counters for per-model latency related metrics
-  bool enable_latency_counters_ = true;
+  bool latency_counters_enabled_ = true;
   // Create and use Summaries for per-model latency related metrics
-  bool enable_latency_summaries_ = false;
+  bool latency_summaries_enabled_ = false;
   // Quantiles used for any summary metrics. Each pair of values represents
   // { quantile, error }. For example, {0.90, 0.01} means to compute the
   // 90th percentile with 1% error on either side, so the approximate 90th
   // percentile value will be between the 89th and 91st percentiles.
   prometheus::Summary::Quantiles quantiles_ = {
       {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
+
+  // Whether this reporter's model has caching enabled or not.
+  // This helps handle infer_stats aggregation for summaries on cache misses.
+  bool cache_enabled_ = false;
 };
 
 //
@@ -69,6 +73,9 @@ class MetricModelReporter {
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
+
+  // Get this reporter's config
+  const MetricReporterConfig& Config();
   // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
   // Lookup summary metric by name, and observe the value if it exists.

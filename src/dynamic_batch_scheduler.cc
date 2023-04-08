@@ -88,6 +88,7 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   if (response_cache_enabled_) {
     MetricModelReporter::Create(
         model_name_, model_->Version(), METRIC_REPORTER_ID_RESPONSE_CACHE,
+        response_cache_enable,
         model_->Config().metric_tags(), &reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS

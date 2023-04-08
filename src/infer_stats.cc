@@ -111,8 +111,15 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
     metric_reporter->IncrementCounter(
         "compute_output_duration", compute_output_duration_ns / 1000);
     // Summary Latencies
-    metric_reporter->ObserveSummary(
-        "request_duration", request_duration_ns / 1000);
+    const auto& reporter_config = metric_reporter->Config();
+    // NOTE: If caching is enabled for this model, don't update request duration
+    // summary with the duration reported from the backend. Instead, the
+    // UpdateSuccessCacheMiss() will add the extra time spent on cache miss
+    // into the request duration and report it there.
+    if (!reporter_config.cache_enabled_) {
+      metric_reporter->ObserveSummary(
+          "request_duration", request_duration_ns / 1000);
+    } 
     metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
     metric_reporter->ObserveSummary(
         "compute_input_duration", compute_input_duration_ns / 1000);
@@ -177,9 +184,14 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
 {
   std::lock_guard<std::mutex> lock(mu_);
 
+  std::cout << "DEBUG: cache_miss_duration_ns: " << cache_miss_duration_ns << std::endl;
+  std::cout << "DEBUG: BEFORE infer_stats_.request_duration_ns_: " << infer_stats_.request_duration_ns_ << std::endl;
   infer_stats_.request_duration_ns_ += cache_miss_duration_ns;
+  std::cout << "DEBUG: AFTER infer_stats_.request_duration_ns_: " << infer_stats_.request_duration_ns_ << std::endl;
   infer_stats_.cache_miss_count_++;
+  std::cout << "DEBUG: BEFORE infer_stats_.cache_miss_duration_ns_: " << infer_stats_.cache_miss_duration_ns_ << std::endl;
   infer_stats_.cache_miss_duration_ns_ += cache_miss_duration_ns;
+  std::cout << "DEBUG: AFTER infer_stats_.cache_miss_duration_ns_: " << infer_stats_.cache_miss_duration_ns_ << std::endl;
 
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {

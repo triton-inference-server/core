@@ -158,7 +158,9 @@ TritonModelInstance::TritonModelInstance(
                        ? device_id_
                        : METRIC_REPORTER_ID_CPU;
     MetricModelReporter::Create(
-        model_->Name(), model_->Version(), id, model_->Config().metric_tags(),
+        model_->Name(), model_->Version(), id, 
+        model_->Config().response_cache().enable(), 
+        model_->Config().metric_tags(),
         &reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS

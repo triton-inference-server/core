@@ -40,7 +40,7 @@ namespace triton { namespace core {
 // MetricReporterConfig
 //
 void
-MetricReporterConfig::ParseConfig()
+MetricReporterConfig::ParseConfig(const int id)
 {
   // Global config only for now in config map
   auto metrics_config_map = Metrics::ConfigMap();
@@ -49,11 +49,11 @@ MetricReporterConfig::ParseConfig()
   // Default behavior is counters for most latency metrics if no types specified
   for (const auto& pair : metrics_config) {
     if (pair.first == "counter_latencies" && pair.second == "false") {
-      enable_latency_counters_ = false;
+      latency_counters_enabled_ = false;
     }
 
     if (pair.first == "summary_latencies" && pair.second == "true") {
-      enable_latency_summaries_ = true;
+      latency_summaries_enabled_ = true;
     }
 
     // ex: summary_quantiles="0.5:0.05 0.9:0.01 0.99:0.001"
@@ -63,6 +63,11 @@ MetricReporterConfig::ParseConfig()
         quantiles_ = quantiles;
       }
     }
+  }
+
+  // Set flag to signal to stats aggregator if caching is enabled or not
+  if (id == METRIC_REPORTER_ID_RESPONSE_CACHE) {
+    config_.cache_enabled_ = true;
   }
 }
 
@@ -101,7 +106,8 @@ MetricReporterConfig::ParseQuantiles(std::string options)
 Status
 MetricModelReporter::Create(
     const std::string& model_name, const int64_t model_version,
-    const int device, const triton::common::MetricTagsMap& model_tags,
+    const int device, bool response_cache_enabled,
+    const triton::common::MetricTagsMap& model_tags,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
   static std::mutex mtx;
@@ -142,7 +148,8 @@ MetricModelReporter::MetricModelReporter(
   GetMetricLabels(&labels, model_name, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
-  config_.ParseConfig();
+  config_.ParseConfig(device);
+
   // Initialize families and metrics
   InitializeCounters(labels);
   InitializeSummaries(labels);
@@ -180,7 +187,7 @@ MetricModelReporter::InitializeCounters(
       &Metrics::FamilyInferenceExecutionCount();
 
   // Latency metrics will be initialized based on config
-  if (config_.enable_latency_counters_) {
+  if (config_.latency_counters_enabled_) {
     // Request
     counter_families_["request_duration"] =
         &Metrics::FamilyInferenceRequestDuration();
@@ -217,7 +224,7 @@ MetricModelReporter::InitializeSummaries(
     const std::map<std::string, std::string>& labels)
 {
   // Latency metrics will be initialized based on config
-  if (config_.enable_latency_summaries_) {
+  if (config_.latency_summaries_enabled_) {
     // Request
     summary_families_["request_duration"] =
         &Metrics::FamilyInferenceRequestSummary();
@@ -283,9 +290,19 @@ MetricModelReporter::CreateMetric(
   return &family.Add(labels, args...);
 }
 
+const MetricReporterConfig&
+MetricModelReporter::Config()
+{
+  return config_;
+}
+
 void
 MetricModelReporter::IncrementCounter(const std::string& name, double value)
 {
+  if (!config_.latency_counters_enabled_) {
+    return;
+  }
+
   auto iter = counters_.find(name);
   if (iter == counters_.end()) {
     // No counter metric exists with this name
@@ -303,6 +320,10 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
 void
 MetricModelReporter::ObserveSummary(const std::string& name, double value)
 {
+  if (!config_.latency_summaries_enabled_) {
+    return;
+  }
+
   auto iter = summaries_.find(name);
   if (iter == summaries_.end()) {
     // No summary metric exists with this name
