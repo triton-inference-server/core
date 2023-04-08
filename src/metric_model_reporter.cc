@@ -40,7 +40,7 @@ namespace triton { namespace core {
 // MetricReporterConfig
 //
 void
-MetricReporterConfig::ParseConfig(const int id)
+MetricReporterConfig::ParseConfig(bool response_cache_enabled)
 {
   // Global config only for now in config map
   auto metrics_config_map = Metrics::ConfigMap();
@@ -66,9 +66,7 @@ MetricReporterConfig::ParseConfig(const int id)
   }
 
   // Set flag to signal to stats aggregator if caching is enabled or not
-  if (id == METRIC_REPORTER_ID_RESPONSE_CACHE) {
-    config_.cache_enabled_ = true;
-  }
+  cache_enabled_ = response_cache_enabled;
 }
 
 prometheus::Summary::Quantiles
@@ -134,21 +132,22 @@ MetricModelReporter::Create(
     reporter_map.erase(itr);
   }
 
-  metric_model_reporter->reset(
-      new MetricModelReporter(model_name, model_version, device, model_tags));
+  metric_model_reporter->reset(new MetricModelReporter(
+      model_name, model_version, device, response_cache_enabled, model_tags));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
 
 MetricModelReporter::MetricModelReporter(
     const std::string& model_name, const int64_t model_version,
-    const int device, const triton::common::MetricTagsMap& model_tags)
+    const int device, bool response_cache_enabled,
+    const triton::common::MetricTagsMap& model_tags)
 {
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_name, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
-  config_.ParseConfig(device);
+  config_.ParseConfig(response_cache_enabled);
 
   // Initialize families and metrics
   InitializeCounters(labels);
@@ -200,13 +199,15 @@ MetricModelReporter::InitializeCounters(
         &Metrics::FamilyInferenceComputeInferDuration();
     counter_families_["compute_output_duration"] =
         &Metrics::FamilyInferenceComputeOutputDuration();
-    // Cache
-    counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
-    counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
-    counter_families_["cache_hit_duration"] =
-        &Metrics::FamilyCacheHitDuration();
-    counter_families_["cache_miss_duration"] =
-        &Metrics::FamilyCacheMissDuration();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
+      counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
+      counter_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitDuration();
+      counter_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissDuration();
+    }
   }
 
   // Create metrics for each family
@@ -226,8 +227,12 @@ MetricModelReporter::InitializeSummaries(
   // Latency metrics will be initialized based on config
   if (config_.latency_summaries_enabled_) {
     // Request
-    summary_families_["request_duration"] =
-        &Metrics::FamilyInferenceRequestSummary();
+    if (!config_.cache_enabled_) {
+      // FIXME: request_duration summary is currently disabled when cache is
+      // enabled to avoid publishing misleading metrics.
+      summary_families_["request_duration"] =
+          &Metrics::FamilyInferenceRequestSummary();
+    }
     summary_families_["queue_duration"] =
         &Metrics::FamilyInferenceQueueSummary();
     // Compute
@@ -237,12 +242,15 @@ MetricModelReporter::InitializeSummaries(
         &Metrics::FamilyInferenceComputeInferSummary();
     summary_families_["compute_output_duration"] =
         &Metrics::FamilyInferenceComputeOutputSummary();
-    // Cache: Note that counts are included in summary
-    summary_families_["cache_hit_duration"] = &Metrics::FamilyCacheHitSummary();
-    summary_families_["cache_miss_duration"] =
-        &Metrics::FamilyCacheMissSummary();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      // Note that counts and sums are included in summaries
+      summary_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitSummary();
+      summary_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissSummary();
+    }
   }
-
 
   // Create metrics for each family
   for (auto& iter : summary_families_) {

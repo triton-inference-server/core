@@ -40,7 +40,7 @@ namespace triton { namespace core {
 //
 struct MetricReporterConfig {
   // Parses Metrics::ConfigMap and sets fields if specified
-  void ParseConfig();
+  void ParseConfig(bool response_cache_enabled);
   // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
   // and overwrites quantiles_ field if successful.
   prometheus::Summary::Quantiles ParseQuantiles(std::string options);
@@ -69,7 +69,8 @@ class MetricModelReporter {
 #ifdef TRITON_ENABLE_METRICS
   static Status Create(
       const std::string& model_name, const int64_t model_version,
-      const int device, const triton::common::MetricTagsMap& model_tags,
+      const int device, bool response_cache_enabled,
+      const triton::common::MetricTagsMap& model_tags,
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
@@ -84,7 +85,8 @@ class MetricModelReporter {
  private:
   MetricModelReporter(
       const std::string& model_name, const int64_t model_version,
-      const int device, const triton::common::MetricTagsMap& model_tags);
+      const int device, bool response_cache_enabled,
+      const triton::common::MetricTagsMap& model_tags);
 
   static void GetMetricLabels(
       std::map<std::string, std::string>* labels, const std::string& model_name,
