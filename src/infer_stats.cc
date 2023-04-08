@@ -193,8 +193,11 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
     metric_reporter->IncrementCounter(
         "cache_miss_duration", cache_miss_duration_ns / 1000);
 
-    // FIXME/TODO: account for adding cache time on top of existing time
-    //             within a single observation
+    // FIXME [DLIS-4762]: When caching is enabled for a given model, and summary
+    // metrics are enabled, the request_duration summary will not reflect the
+    // additional time spent on inserting response into cache. However, the
+    // cache_miss_duration summary or the counter version of request_duration
+    // can be used for more accurate results.
     // metric_reporter->ObserveSummary(
     //    "request_duration", cache_miss_duration_ns / 1000);
     metric_reporter->ObserveSummary(
