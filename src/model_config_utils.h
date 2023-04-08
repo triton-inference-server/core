@@ -287,4 +287,12 @@ bool IsOnlyInstanceGroupDiffers(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config);
 
+/// Check if both model instance config are equivalent.
+/// \param instance_config_lhs The left hand side instance config.
+/// \param instance_config_rhs The right hand side instance config.
+/// \return True if they are equivalent. False if otherwise.
+bool IsInstanceEquivalent(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs);
+
 }}  // namespace triton::core

@@ -2303,4 +2303,17 @@ IsOnlyInstanceGroupDiffers(
   return pb_diff.Compare(old_config, new_config);
 }
 
+bool
+IsInstanceEquivalent(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs)
+{
+  ::google::protobuf::util::MessageDifferencer pb_diff;
+  pb_diff.IgnoreField(
+      instance_config_lhs.descriptor()->FindFieldByLowercaseName("name"));
+  pb_diff.IgnoreField(
+      instance_config_lhs.descriptor()->FindFieldByLowercaseName("count"));
+  return pb_diff.Compare(instance_config_lhs, instance_config_rhs);
+}
+
 }}  // namespace triton::core
