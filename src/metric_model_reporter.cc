@@ -72,7 +72,7 @@ MetricReporterConfig::ParseQuantiles(std::string options)
   prometheus::Summary::Quantiles qpairs;
   std::stringstream ss(options);
   std::string pairStr;
-  while (std::getline(ss, pairStr, ' ')) {
+  while (std::getline(ss, pairStr, ',')) {
     size_t colonPos = pairStr.find(':');
     if (colonPos == std::string::npos) {
       LOG_ERROR
