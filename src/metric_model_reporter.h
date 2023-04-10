@@ -29,10 +29,37 @@
 #include "triton/common/model_config.h"
 
 #ifdef TRITON_ENABLE_METRICS
+#include "metrics.h"
 #include "prometheus/registry.h"
 #endif  // TRITON_ENABLE_METRICS
 
 namespace triton { namespace core {
+
+//
+// MetricReporterConfig
+//
+struct MetricReporterConfig {
+  // Parses Metrics::ConfigMap and sets fields if specified
+  void ParseConfig(bool response_cache_enabled);
+  // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
+  // and overwrites quantiles_ field if successful.
+  prometheus::Summary::Quantiles ParseQuantiles(std::string options);
+
+  // Create and use Counters for per-model latency related metrics
+  bool latency_counters_enabled_ = true;
+  // Create and use Summaries for per-model latency related metrics
+  bool latency_summaries_enabled_ = false;
+  // Quantiles used for any summary metrics. Each pair of values represents
+  // { quantile, error }. For example, {0.90, 0.01} means to compute the
+  // 90th percentile with 1% error on either side, so the approximate 90th
+  // percentile value will be between the 89th and 91st percentiles.
+  prometheus::Summary::Quantiles quantiles_ = {
+      {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
+
+  // Whether this reporter's model has caching enabled or not.
+  // This helps handle infer_stats aggregation for summaries on cache misses.
+  bool cache_enabled_ = false;
+};
 
 //
 // Interface for a metric reporter for a given version of a model.
@@ -42,92 +69,50 @@ class MetricModelReporter {
 #ifdef TRITON_ENABLE_METRICS
   static Status Create(
       const std::string& model_name, const int64_t model_version,
-      const int device, const triton::common::MetricTagsMap& model_tags,
+      const int device, bool response_cache_enabled,
+      const triton::common::MetricTagsMap& model_tags,
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
 
-  // Get a metric for the given model, version and GPU index.
-  prometheus::Counter& MetricInferenceSuccess() const
-  {
-    return *metric_inf_success_;
-  }
-  prometheus::Counter& MetricInferenceFailure() const
-  {
-    return *metric_inf_failure_;
-  }
-  prometheus::Counter& MetricInferenceCount() const
-  {
-    return *metric_inf_count_;
-  }
-  prometheus::Counter& MetricInferenceExecutionCount() const
-  {
-    return *metric_inf_exec_count_;
-  }
-  prometheus::Counter& MetricInferenceRequestDuration() const
-  {
-    return *metric_inf_request_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceQueueDuration() const
-  {
-    return *metric_inf_queue_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceComputeInputDuration() const
-  {
-    return *metric_inf_compute_input_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceComputeInferDuration() const
-  {
-    return *metric_inf_compute_infer_duration_us_;
-  }
-  prometheus::Counter& MetricInferenceComputeOutputDuration() const
-  {
-    return *metric_inf_compute_output_duration_us_;
-  }
-  // Per-model cache stats
-  prometheus::Counter& MetricCacheHitCount() const
-  {
-    return *metric_cache_hit_count_;
-  }
-  prometheus::Counter& MetricCacheHitDuration() const
-  {
-    return *metric_cache_hit_duration_us_;
-  }
-  prometheus::Counter& MetricCacheMissCount() const
-  {
-    return *metric_cache_miss_count_;
-  }
-  prometheus::Counter& MetricCacheMissDuration() const
-  {
-    return *metric_cache_miss_duration_us_;
-  }
+  // Get this reporter's config
+  const MetricReporterConfig& Config();
+  // Lookup counter metric by name, and increment it by value if it exists.
+  void IncrementCounter(const std::string& name, double value);
+  // Lookup summary metric by name, and observe the value if it exists.
+  void ObserveSummary(const std::string& name, double value);
 
  private:
   MetricModelReporter(
       const std::string& model_name, const int64_t model_version,
-      const int device, const triton::common::MetricTagsMap& model_tags);
+      const int device, bool response_cache_enabled,
+      const triton::common::MetricTagsMap& model_tags);
 
   static void GetMetricLabels(
       std::map<std::string, std::string>* labels, const std::string& model_name,
       const int64_t model_version, const int device,
       const triton::common::MetricTagsMap& model_tags);
-  prometheus::Counter* CreateCounterMetric(
-      prometheus::Family<prometheus::Counter>& family,
-      const std::map<std::string, std::string>& labels);
 
-  prometheus::Counter* metric_inf_success_;
-  prometheus::Counter* metric_inf_failure_;
-  prometheus::Counter* metric_inf_count_;
-  prometheus::Counter* metric_inf_exec_count_;
-  prometheus::Counter* metric_inf_request_duration_us_;
-  prometheus::Counter* metric_inf_queue_duration_us_;
-  prometheus::Counter* metric_inf_compute_input_duration_us_;
-  prometheus::Counter* metric_inf_compute_infer_duration_us_;
-  prometheus::Counter* metric_inf_compute_output_duration_us_;
-  prometheus::Counter* metric_cache_hit_count_;
-  prometheus::Counter* metric_cache_hit_duration_us_;
-  prometheus::Counter* metric_cache_miss_count_;
-  prometheus::Counter* metric_cache_miss_duration_us_;
+  template <typename T, typename... Args>
+  T* CreateMetric(
+      prometheus::Family<T>& family,
+      const std::map<std::string, std::string>& labels, Args&&... args);
+
+  void InitializeCounters(const std::map<std::string, std::string>& labels);
+  void InitializeSummaries(const std::map<std::string, std::string>& labels);
+
+  // Metric Families
+  std::unordered_map<std::string, prometheus::Family<prometheus::Counter>*>
+      counter_families_;
+  std::unordered_map<std::string, prometheus::Family<prometheus::Summary>*>
+      summary_families_;
+
+  // Metrics
+  std::unordered_map<std::string, prometheus::Counter*> counters_;
+  std::unordered_map<std::string, prometheus::Summary*> summaries_;
+
+  // Config
+  MetricReporterConfig config_;
 #endif  // TRITON_ENABLE_METRICS
 };
 

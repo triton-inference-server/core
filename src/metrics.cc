@@ -79,6 +79,7 @@ Metrics::Metrics()
               .Help("Cumulative inference queuing duration in microseconds "
                     "(includes cached requests)")
               .Register(*registry_)),
+
       inf_compute_input_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_compute_input_duration_us")
@@ -119,6 +120,52 @@ Metrics::Metrics()
               .Name("nv_cache_miss_duration_per_model")
               .Help("Total cache miss (insert+lookup) duration per model, in "
                     "microseconds")
+              .Register(*registry_)),
+
+      // Summaries
+      inf_request_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_request_summary_us")
+              .Help("Summary of inference request duration in microseconds "
+                    "(includes cached requests)")
+              .Register(*registry_)),
+      inf_queue_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_queue_summary_us")
+              .Help("Summary of inference queuing duration in microseconds "
+                    "(includes cached requests)")
+              .Register(*registry_)),
+      inf_compute_input_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_compute_input_summary_us")
+              .Help("Cumulative compute input duration in microseconds (does "
+                    "not include cached requests)")
+              .Register(*registry_)),
+      inf_compute_infer_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_compute_infer_summary_us")
+              .Help("Cumulative compute inference duration in microseconds "
+                    "(does not include cached requests)")
+              .Register(*registry_)),
+      inf_compute_output_summary_us_family_(
+          prometheus::BuildSummary()
+              .Name("nv_inference_compute_output_summary_us")
+              .Help("Cumulative inference compute output duration in "
+                    "microseconds (does not include cached requests)")
+              .Register(*registry_)),
+
+      cache_hit_summary_us_model_family_(
+          prometheus::BuildSummary()
+              .Name("nv_cache_hit_summary_per_model")
+              .Help("Summary of cache hit counts/durations per model, in "
+                    "microseconds.")
+              .Register(*registry_)),
+
+      cache_miss_summary_us_model_family_(
+          prometheus::BuildSummary()
+              .Name("nv_cache_miss_summary_per_model")
+              .Help("Summary of cache miss counts/durations per model, in "
+                    "microseconds.")
               .Register(*registry_)),
 
 #ifdef TRITON_ENABLE_METRICS_GPU
@@ -213,8 +260,15 @@ Metrics::~Metrics()
   }
 }
 
+const MetricsConfigMap&
+Metrics::ConfigMap()
+{
+  auto singleton = GetSingleton();
+  return singleton->config_;
+}
+
 void
-Metrics::SetConfig(MetricsConfigMap cfg)
+Metrics::SetConfigMap(MetricsConfigMap cfg)
 {
   auto singleton = GetSingleton();
   singleton->config_ = cfg;
