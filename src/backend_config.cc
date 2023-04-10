@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -35,24 +35,27 @@ namespace triton { namespace core {
 namespace {
 
 Status
-GetTFSpecializedBackendName(
-    const triton::common::BackendCmdlineConfigMap& config_map,
-    std::string* specialized_name)
+CheckTFSpecializedBackendName(
+    const triton::common::BackendCmdlineConfigMap& config_map)
 {
   std::string tf_version_str = "2";
   const auto& itr = config_map.find("tensorflow");
   if (itr != config_map.end()) {
     if (BackendConfiguration(itr->second, "version", &tf_version_str).IsOk()) {
-      if ((tf_version_str != "1") && (tf_version_str != "2")) {
+      if (tf_version_str == "1") {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "starting from 23.04, Triton no longer supports Tensorflow 1. "
+            "Please switch to Tensorflow 2.");
+      }
+      if (tf_version_str != "2") {
         return Status(
             Status::Code::INVALID_ARG,
             "unexpected TensorFlow library version '" + tf_version_str +
-                "', expects 1 or 2.");
+                "', expects 2.");
       }
     }
   }
-
-  *specialized_name += tf_version_str;
 
   return Status::Success;
 }
@@ -177,7 +180,7 @@ BackendConfigurationSpecializeBackendName(
 {
   *specialized_name = backend_name;
   if (backend_name == "tensorflow") {
-    RETURN_IF_ERROR(GetTFSpecializedBackendName(config_map, specialized_name));
+    RETURN_IF_ERROR(CheckTFSpecializedBackendName(config_map));
   }
 
   return Status::Success;
