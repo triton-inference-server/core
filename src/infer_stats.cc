@@ -111,8 +111,12 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
     metric_reporter->IncrementCounter(
         "compute_output_duration", compute_output_duration_ns / 1000);
     // Summary Latencies
-    metric_reporter->ObserveSummary(
-        "request_duration", request_duration_ns / 1000);
+    const auto& reporter_config = metric_reporter->Config();
+    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+    if (!reporter_config.cache_enabled_) {
+      metric_reporter->ObserveSummary(
+          "request_duration", request_duration_ns / 1000);
+    }
     metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
     metric_reporter->ObserveSummary(
         "compute_input_duration", compute_input_duration_ns / 1000);
@@ -158,8 +162,9 @@ InferenceStatsAggregator::UpdateSuccessCacheHit(
     metric_reporter->IncrementCounter(
         "cache_hit_duration", cache_hit_duration_ns / 1000);
     // Summary Latencies
-    metric_reporter->ObserveSummary(
-        "request_duration", request_duration_ns / 1000);
+    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+    // metric_reporter->ObserveSummary(
+    //    "request_duration", request_duration_ns / 1000);
     metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
     metric_reporter->ObserveSummary(
         "cache_hit_duration", cache_hit_duration_ns / 1000);
@@ -193,11 +198,9 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
     metric_reporter->IncrementCounter(
         "cache_miss_duration", cache_miss_duration_ns / 1000);
 
-    // FIXME [DLIS-4762]: When caching is enabled for a given model, and summary
-    // metrics are enabled, the request_duration summary will not reflect the
-    // additional time spent on inserting response into cache. However, the
-    // cache_miss_duration summary or the counter version of request_duration
-    // can be used for more accurate results.
+    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+    //       Need to account for adding cache miss duration on top of
+    //       request_duration from backend within a single observation.
     // metric_reporter->ObserveSummary(
     //    "request_duration", cache_miss_duration_ns / 1000);
     metric_reporter->ObserveSummary(

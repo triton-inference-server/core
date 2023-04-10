@@ -40,7 +40,7 @@ namespace triton { namespace core {
 // MetricReporterConfig
 //
 void
-MetricReporterConfig::ParseConfig()
+MetricReporterConfig::ParseConfig(bool response_cache_enabled)
 {
   // Global config only for now in config map
   auto metrics_config_map = Metrics::ConfigMap();
@@ -49,11 +49,11 @@ MetricReporterConfig::ParseConfig()
   // Default behavior is counters for most latency metrics if no types specified
   for (const auto& pair : metrics_config) {
     if (pair.first == "counter_latencies" && pair.second == "false") {
-      enable_latency_counters_ = false;
+      latency_counters_enabled_ = false;
     }
 
     if (pair.first == "summary_latencies" && pair.second == "true") {
-      enable_latency_summaries_ = true;
+      latency_summaries_enabled_ = true;
     }
 
     // ex: summary_quantiles="0.5:0.05 0.9:0.01 0.99:0.001"
@@ -64,6 +64,9 @@ MetricReporterConfig::ParseConfig()
       }
     }
   }
+
+  // Set flag to signal to stats aggregator if caching is enabled or not
+  cache_enabled_ = response_cache_enabled;
 }
 
 prometheus::Summary::Quantiles
@@ -101,7 +104,8 @@ MetricReporterConfig::ParseQuantiles(std::string options)
 Status
 MetricModelReporter::Create(
     const std::string& model_name, const int64_t model_version,
-    const int device, const triton::common::MetricTagsMap& model_tags,
+    const int device, bool response_cache_enabled,
+    const triton::common::MetricTagsMap& model_tags,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
   static std::mutex mtx;
@@ -128,21 +132,23 @@ MetricModelReporter::Create(
     reporter_map.erase(itr);
   }
 
-  metric_model_reporter->reset(
-      new MetricModelReporter(model_name, model_version, device, model_tags));
+  metric_model_reporter->reset(new MetricModelReporter(
+      model_name, model_version, device, response_cache_enabled, model_tags));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
 
 MetricModelReporter::MetricModelReporter(
     const std::string& model_name, const int64_t model_version,
-    const int device, const triton::common::MetricTagsMap& model_tags)
+    const int device, bool response_cache_enabled,
+    const triton::common::MetricTagsMap& model_tags)
 {
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_name, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
-  config_.ParseConfig();
+  config_.ParseConfig(response_cache_enabled);
+
   // Initialize families and metrics
   InitializeCounters(labels);
   InitializeSummaries(labels);
@@ -180,7 +186,7 @@ MetricModelReporter::InitializeCounters(
       &Metrics::FamilyInferenceExecutionCount();
 
   // Latency metrics will be initialized based on config
-  if (config_.enable_latency_counters_) {
+  if (config_.latency_counters_enabled_) {
     // Request
     counter_families_["request_duration"] =
         &Metrics::FamilyInferenceRequestDuration();
@@ -193,13 +199,15 @@ MetricModelReporter::InitializeCounters(
         &Metrics::FamilyInferenceComputeInferDuration();
     counter_families_["compute_output_duration"] =
         &Metrics::FamilyInferenceComputeOutputDuration();
-    // Cache
-    counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
-    counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
-    counter_families_["cache_hit_duration"] =
-        &Metrics::FamilyCacheHitDuration();
-    counter_families_["cache_miss_duration"] =
-        &Metrics::FamilyCacheMissDuration();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
+      counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
+      counter_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitDuration();
+      counter_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissDuration();
+    }
   }
 
   // Create metrics for each family
@@ -217,10 +225,14 @@ MetricModelReporter::InitializeSummaries(
     const std::map<std::string, std::string>& labels)
 {
   // Latency metrics will be initialized based on config
-  if (config_.enable_latency_summaries_) {
+  if (config_.latency_summaries_enabled_) {
     // Request
-    summary_families_["request_duration"] =
-        &Metrics::FamilyInferenceRequestSummary();
+    if (!config_.cache_enabled_) {
+      // FIXME: request_duration summary is currently disabled when cache is
+      // enabled to avoid publishing misleading metrics.
+      summary_families_["request_duration"] =
+          &Metrics::FamilyInferenceRequestSummary();
+    }
     summary_families_["queue_duration"] =
         &Metrics::FamilyInferenceQueueSummary();
     // Compute
@@ -230,12 +242,15 @@ MetricModelReporter::InitializeSummaries(
         &Metrics::FamilyInferenceComputeInferSummary();
     summary_families_["compute_output_duration"] =
         &Metrics::FamilyInferenceComputeOutputSummary();
-    // Cache: Note that counts are included in summary
-    summary_families_["cache_hit_duration"] = &Metrics::FamilyCacheHitSummary();
-    summary_families_["cache_miss_duration"] =
-        &Metrics::FamilyCacheMissSummary();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      // Note that counts and sums are included in summaries
+      summary_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitSummary();
+      summary_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissSummary();
+    }
   }
-
 
   // Create metrics for each family
   for (auto& iter : summary_families_) {
@@ -283,9 +298,19 @@ MetricModelReporter::CreateMetric(
   return &family.Add(labels, args...);
 }
 
+const MetricReporterConfig&
+MetricModelReporter::Config()
+{
+  return config_;
+}
+
 void
 MetricModelReporter::IncrementCounter(const std::string& name, double value)
 {
+  if (!config_.latency_counters_enabled_) {
+    return;
+  }
+
   auto iter = counters_.find(name);
   if (iter == counters_.end()) {
     // No counter metric exists with this name
@@ -303,6 +328,10 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
 void
 MetricModelReporter::ObserveSummary(const std::string& name, double value)
 {
+  if (!config_.latency_summaries_enabled_) {
+    return;
+  }
+
   auto iter = summaries_.find(name);
   if (iter == summaries_.end()) {
     // No summary metric exists with this name
