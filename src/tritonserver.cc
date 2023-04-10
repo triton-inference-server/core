@@ -922,6 +922,20 @@ TRITONSERVER_InferenceTraceActivityString(
   return "<unknown>";
 }
 
+TRITONAPI_DECLSPEC const char*
+TRITONSERVER_InferenceTraceModeString(
+    TRITONSERVER_InferenceTraceMode mode)
+{
+  switch (mode) {
+    case TRITONSERVER_TRACE_MODE_TRITON:
+      return "TRITON";
+    case TRITONSERVER_TRACE_MODE_OPENTELEMETRY:
+      return "OPENTELEMETRY";
+  }
+
+  return "<unknown>";
+}
+
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,

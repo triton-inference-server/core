@@ -719,6 +719,23 @@ typedef enum tritonserver_traceactivity_enum {
 TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceActivityString(
     TRITONSERVER_InferenceTraceActivity activity);
 
+/// Trace modes. 
+typedef enum tritonserver_tracemode_enum {
+  /// Default is Triton tracing API
+  TRITONSERVER_TRACE_MODE_TRITON = 0,
+  /// OpenTelemetry API for tracing
+  TRITONSERVER_TRACE_MODE_OPENTELEMETRY = 1
+} TRITONSERVER_InferenceTraceMode;
+
+/// Get the string representation of a trace mode. The returned
+/// string is not owned by the caller and so should not be modified or
+/// freed.
+///
+/// \param mode The trace mode.
+/// \return The string representation of the trace mode.
+TRITONSERVER_DECLSPEC const char* TRITONSERVER_InferenceTraceModeString(
+    TRITONSERVER_InferenceTraceMode mode);
+
 /// Type for trace timeline activity callback function. This callback function
 /// is used to report activity occurring for a trace. This function
 /// does not take ownership of 'trace' and so any information needed
