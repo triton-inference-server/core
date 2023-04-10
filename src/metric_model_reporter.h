@@ -39,6 +39,7 @@ namespace triton { namespace core {
 // MetricReporterConfig
 //
 struct MetricReporterConfig {
+#ifdef TRITON_ENABLE_METRICS
   // Parses Metrics::ConfigMap and sets fields if specified
   void ParseConfig(bool response_cache_enabled);
   // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
@@ -59,6 +60,7 @@ struct MetricReporterConfig {
   // Whether this reporter's model has caching enabled or not.
   // This helps handle infer_stats aggregation for summaries on cache misses.
   bool cache_enabled_ = false;
+#endif  // TRITON_ENABLE_METRICS
 };
 
 //
