@@ -29,14 +29,83 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include "constants.h"
-#include "metrics.h"
+#include "triton/common/logging.h"
+
+// Global config group has 'name' of empty string.
+constexpr char GLOBAL_CONFIG_GROUP[] = "";
 
 namespace triton { namespace core {
 
+//
+// MetricReporterConfig
+//
+void
+MetricReporterConfig::ParseConfig(bool response_cache_enabled)
+{
+  // Global config only for now in config map
+  auto metrics_config_map = Metrics::ConfigMap();
+  const auto& metrics_config = metrics_config_map[GLOBAL_CONFIG_GROUP];
+
+  // Default behavior is counters for most latency metrics if no types specified
+  for (const auto& pair : metrics_config) {
+    if (pair.first == "counter_latencies" && pair.second == "false") {
+      latency_counters_enabled_ = false;
+    }
+
+    if (pair.first == "summary_latencies" && pair.second == "true") {
+      latency_summaries_enabled_ = true;
+    }
+
+    // ex: summary_quantiles="0.5:0.05 0.9:0.01 0.99:0.001"
+    if (pair.first == "summary_quantiles") {
+      const auto& quantiles = ParseQuantiles(pair.second);
+      if (!quantiles.empty()) {
+        quantiles_ = quantiles;
+      }
+    }
+  }
+
+  // Set flag to signal to stats aggregator if caching is enabled or not
+  cache_enabled_ = response_cache_enabled;
+}
+
+prometheus::Summary::Quantiles
+MetricReporterConfig::ParseQuantiles(std::string options)
+{
+  prometheus::Summary::Quantiles qpairs;
+  std::stringstream ss(options);
+  std::string pairStr;
+  while (std::getline(ss, pairStr, ',')) {
+    size_t colonPos = pairStr.find(':');
+    if (colonPos == std::string::npos) {
+      LOG_ERROR
+          << "Invalid option: [" << pairStr
+          << "]. No ':' delimiter found. Expected format is <quantile>:<error>";
+      continue;
+    }
+
+    try {
+      double quantile = std::stod(pairStr.substr(0, colonPos));
+      double error = std::stod(pairStr.substr(colonPos + 1));
+      qpairs.push_back({quantile, error});
+    }
+    catch (const std::invalid_argument& e) {
+      LOG_ERROR << "Invalid option: [" << pairStr << "]. Error: " << e.what();
+      continue;
+    }
+  }
+
+  return qpairs;
+}
+
+//
+// MetricModelReporter
+//
 Status
 MetricModelReporter::Create(
     const std::string& model_name, const int64_t model_version,
-    const int device, const triton::common::MetricTagsMap& model_tags,
+    const int device, bool response_cache_enabled,
+    const triton::common::MetricTagsMap& model_tags,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
   static std::mutex mtx;
@@ -63,66 +132,135 @@ MetricModelReporter::Create(
     reporter_map.erase(itr);
   }
 
-  metric_model_reporter->reset(
-      new MetricModelReporter(model_name, model_version, device, model_tags));
+  metric_model_reporter->reset(new MetricModelReporter(
+      model_name, model_version, device, response_cache_enabled, model_tags));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
 
 MetricModelReporter::MetricModelReporter(
     const std::string& model_name, const int64_t model_version,
-    const int device, const triton::common::MetricTagsMap& model_tags)
+    const int device, bool response_cache_enabled,
+    const triton::common::MetricTagsMap& model_tags)
 {
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_name, model_version, device, model_tags);
 
-  metric_inf_success_ =
-      CreateCounterMetric(Metrics::FamilyInferenceSuccess(), labels);
-  metric_inf_failure_ =
-      CreateCounterMetric(Metrics::FamilyInferenceFailure(), labels);
-  metric_inf_count_ =
-      CreateCounterMetric(Metrics::FamilyInferenceCount(), labels);
-  metric_inf_exec_count_ =
-      CreateCounterMetric(Metrics::FamilyInferenceExecutionCount(), labels);
-  metric_inf_request_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyInferenceRequestDuration(), labels);
-  metric_inf_queue_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyInferenceQueueDuration(), labels);
-  metric_inf_compute_input_duration_us_ = CreateCounterMetric(
-      Metrics::FamilyInferenceComputeInputDuration(), labels);
-  metric_inf_compute_infer_duration_us_ = CreateCounterMetric(
-      Metrics::FamilyInferenceComputeInferDuration(), labels);
-  metric_inf_compute_output_duration_us_ = CreateCounterMetric(
-      Metrics::FamilyInferenceComputeOutputDuration(), labels);
-  metric_cache_hit_count_ =
-      CreateCounterMetric(Metrics::FamilyCacheHitCount(), labels);
-  metric_cache_hit_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyCacheHitDuration(), labels);
-  metric_cache_miss_count_ =
-      CreateCounterMetric(Metrics::FamilyCacheMissCount(), labels);
-  metric_cache_miss_duration_us_ =
-      CreateCounterMetric(Metrics::FamilyCacheMissDuration(), labels);
+  // Parse metrics config to control metric setup and behavior
+  config_.ParseConfig(response_cache_enabled);
+
+  // Initialize families and metrics
+  InitializeCounters(labels);
+  InitializeSummaries(labels);
 }
 
 MetricModelReporter::~MetricModelReporter()
 {
-  Metrics::FamilyInferenceSuccess().Remove(metric_inf_success_);
-  Metrics::FamilyInferenceFailure().Remove(metric_inf_failure_);
-  Metrics::FamilyInferenceCount().Remove(metric_inf_count_);
-  Metrics::FamilyInferenceExecutionCount().Remove(metric_inf_exec_count_);
-  Metrics::FamilyInferenceRequestDuration().Remove(
-      metric_inf_request_duration_us_);
-  Metrics::FamilyInferenceQueueDuration().Remove(metric_inf_queue_duration_us_);
-  Metrics::FamilyInferenceComputeInputDuration().Remove(
-      metric_inf_compute_input_duration_us_);
-  Metrics::FamilyInferenceComputeInferDuration().Remove(
-      metric_inf_compute_infer_duration_us_);
-  Metrics::FamilyInferenceComputeOutputDuration().Remove(
-      metric_inf_compute_output_duration_us_);
-  Metrics::FamilyCacheHitCount().Remove(metric_cache_hit_count_);
-  Metrics::FamilyCacheHitDuration().Remove(metric_cache_hit_duration_us_);
-  Metrics::FamilyCacheMissCount().Remove(metric_cache_miss_count_);
-  Metrics::FamilyCacheMissDuration().Remove(metric_cache_miss_duration_us_);
+  // Cleanup metrics for each family
+  for (auto& iter : counter_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      family_ptr->Remove(counters_[name]);
+    }
+  }
+
+  for (auto& iter : summary_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      family_ptr->Remove(summaries_[name]);
+    }
+  }
+}
+
+void
+MetricModelReporter::InitializeCounters(
+    const std::map<std::string, std::string>& labels)
+{
+  // Always setup these counters, regardless of config
+  counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
+  counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
+  counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
+  counter_families_["inf_exec_count"] =
+      &Metrics::FamilyInferenceExecutionCount();
+
+  // Latency metrics will be initialized based on config
+  if (config_.latency_counters_enabled_) {
+    // Request
+    counter_families_["request_duration"] =
+        &Metrics::FamilyInferenceRequestDuration();
+    counter_families_["queue_duration"] =
+        &Metrics::FamilyInferenceQueueDuration();
+    // Compute
+    counter_families_["compute_input_duration"] =
+        &Metrics::FamilyInferenceComputeInputDuration();
+    counter_families_["compute_infer_duration"] =
+        &Metrics::FamilyInferenceComputeInferDuration();
+    counter_families_["compute_output_duration"] =
+        &Metrics::FamilyInferenceComputeOutputDuration();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      counter_families_["cache_hit_count"] = &Metrics::FamilyCacheHitCount();
+      counter_families_["cache_miss_count"] = &Metrics::FamilyCacheMissCount();
+      counter_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitDuration();
+      counter_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissDuration();
+    }
+  }
+
+  // Create metrics for each family
+  for (auto& iter : counter_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      counters_[name] = CreateMetric<prometheus::Counter>(*family_ptr, labels);
+    }
+  }
+}
+
+void
+MetricModelReporter::InitializeSummaries(
+    const std::map<std::string, std::string>& labels)
+{
+  // Latency metrics will be initialized based on config
+  if (config_.latency_summaries_enabled_) {
+    // Request
+    if (!config_.cache_enabled_) {
+      // FIXME: request_duration summary is currently disabled when cache is
+      // enabled to avoid publishing misleading metrics.
+      summary_families_["request_duration"] =
+          &Metrics::FamilyInferenceRequestSummary();
+    }
+    summary_families_["queue_duration"] =
+        &Metrics::FamilyInferenceQueueSummary();
+    // Compute
+    summary_families_["compute_input_duration"] =
+        &Metrics::FamilyInferenceComputeInputSummary();
+    summary_families_["compute_infer_duration"] =
+        &Metrics::FamilyInferenceComputeInferSummary();
+    summary_families_["compute_output_duration"] =
+        &Metrics::FamilyInferenceComputeOutputSummary();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      // Note that counts and sums are included in summaries
+      summary_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitSummary();
+      summary_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissSummary();
+    }
+  }
+
+  // Create metrics for each family
+  for (auto& iter : summary_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      summaries_[name] = CreateMetric<prometheus::Summary>(
+          *family_ptr, labels, config_.quantiles_);
+    }
+  }
 }
 
 void
@@ -151,12 +289,61 @@ MetricModelReporter::GetMetricLabels(
   }
 }
 
-prometheus::Counter*
-MetricModelReporter::CreateCounterMetric(
-    prometheus::Family<prometheus::Counter>& family,
-    const std::map<std::string, std::string>& labels)
+template <typename T, typename... Args>
+T*
+MetricModelReporter::CreateMetric(
+    prometheus::Family<T>& family,
+    const std::map<std::string, std::string>& labels, Args&&... args)
 {
-  return &family.Add(labels);
+  return &family.Add(labels, args...);
+}
+
+const MetricReporterConfig&
+MetricModelReporter::Config()
+{
+  return config_;
+}
+
+void
+MetricModelReporter::IncrementCounter(const std::string& name, double value)
+{
+  if (!config_.latency_counters_enabled_) {
+    return;
+  }
+
+  auto iter = counters_.find(name);
+  if (iter == counters_.end()) {
+    // No counter metric exists with this name
+    return;
+  }
+
+  auto counter = iter->second;
+  if (!counter) {
+    // Counter is uninitialized/nullptr
+    return;
+  }
+  counter->Increment(value);
+}
+
+void
+MetricModelReporter::ObserveSummary(const std::string& name, double value)
+{
+  if (!config_.latency_summaries_enabled_) {
+    return;
+  }
+
+  auto iter = summaries_.find(name);
+  if (iter == summaries_.end()) {
+    // No summary metric exists with this name
+    return;
+  }
+
+  auto summary = iter->second;
+  if (!summary) {
+    // Summary is uninitialized/nullptr
+    return;
+  }
+  summary->Observe(value);
 }
 
 }}  // namespace triton::core

@@ -197,7 +197,11 @@ class InferenceServer {
 
   // Get / set whether response cache will be enabled server-wide.
   // NOTE: Models still need caching enabled in individual model configs.
-  bool ResponseCacheEnabled() const { return response_cache_enabled_; }
+  bool ResponseCacheEnabled()
+  {
+    // Only return true if cache was enabled, and has been initialized
+    return response_cache_enabled_ && CacheManager() && CacheManager()->Cache();
+  }
   void SetResponseCacheEnabled(bool e) { response_cache_enabled_ = e; }
   void SetCacheConfig(CacheConfigMap cfg) { cache_config_map_ = cfg; }
   std::string CacheDir() const { return cache_dir_; }
