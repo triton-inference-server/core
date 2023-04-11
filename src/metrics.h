@@ -36,6 +36,7 @@
 #include "prometheus/gauge.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
+#include "prometheus/summary.h"
 #include "prometheus/text_serializer.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
@@ -43,6 +44,9 @@
 #endif  // TRITON_ENABLE_METRICS_GPU
 
 namespace triton { namespace core {
+
+using MetricsConfig = std::vector<std::pair<std::string, std::string>>;
+using MetricsConfigMap = std::unordered_map<std::string, MetricsConfig>;
 
 #ifdef TRITON_ENABLE_METRICS_CPU
 using MemInfo = std::unordered_map<std::string, uint64_t>;
@@ -122,6 +126,12 @@ class Metrics {
 
   // Set the time interval in secs at which metrics are collected
   static void SetMetricsInterval(uint64_t metrics_interval_ms);
+
+  // Set the config for Metrics to control various options generically
+  static void SetConfigMap(MetricsConfigMap cfg);
+
+  // Get the config for Metrics
+  static const MetricsConfigMap& ConfigMap();
 
   // Get the prometheus registry
   static std::shared_ptr<prometheus::Registry> GetRegistry();
@@ -211,6 +221,40 @@ class Metrics {
     return GetSingleton()->cache_miss_duration_us_model_family_;
   }
 
+  // Summaries
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceRequestSummary()
+  {
+    return GetSingleton()->inf_request_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>& FamilyInferenceQueueSummary()
+  {
+    return GetSingleton()->inf_queue_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceComputeInputSummary()
+  {
+    return GetSingleton()->inf_compute_input_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceComputeInferSummary()
+  {
+    return GetSingleton()->inf_compute_infer_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>&
+  FamilyInferenceComputeOutputSummary()
+  {
+    return GetSingleton()->inf_compute_output_summary_us_family_;
+  }
+  static prometheus::Family<prometheus::Summary>& FamilyCacheHitSummary()
+  {
+    return GetSingleton()->cache_hit_summary_us_model_family_;
+  }
+  static prometheus::Family<prometheus::Summary>& FamilyCacheMissSummary()
+  {
+    return GetSingleton()->cache_miss_summary_us_model_family_;
+  }
+
  private:
   Metrics();
   virtual ~Metrics();
@@ -227,6 +271,7 @@ class Metrics {
   std::shared_ptr<prometheus::Registry> registry_;
   std::unique_ptr<prometheus::Serializer> serializer_;
 
+  // DLIS-4761: Refactor into groups of families
   prometheus::Family<prometheus::Counter>& inf_success_family_;
   prometheus::Family<prometheus::Counter>& inf_failure_family_;
   prometheus::Family<prometheus::Counter>& inf_count_family_;
@@ -248,6 +293,16 @@ class Metrics {
   prometheus::Family<prometheus::Counter>& cache_hit_duration_us_model_family_;
   prometheus::Family<prometheus::Counter>& cache_num_misses_model_family_;
   prometheus::Family<prometheus::Counter>& cache_miss_duration_us_model_family_;
+
+  // Summaries
+  prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_queue_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_compute_input_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& inf_compute_infer_summary_us_family_;
+  prometheus::Family<prometheus::Summary>&
+      inf_compute_output_summary_us_family_;
+  prometheus::Family<prometheus::Summary>& cache_hit_summary_us_model_family_;
+  prometheus::Family<prometheus::Summary>& cache_miss_summary_us_model_family_;
 
 #ifdef TRITON_ENABLE_METRICS_GPU
   prometheus::Family<prometheus::Gauge>& gpu_utilization_family_;
@@ -295,6 +350,7 @@ class Metrics {
   std::mutex metrics_enabling_;
   std::mutex poll_thread_starting_;
   uint64_t metrics_interval_ms_;
+  MetricsConfigMap config_;
 };
 
 }}  // namespace triton::core

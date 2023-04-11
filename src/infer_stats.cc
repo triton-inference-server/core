@@ -47,7 +47,7 @@ InferenceStatsAggregator::UpdateFailure(
 
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {
-    metric_reporter->MetricInferenceFailure().Increment(1);
+    metric_reporter->IncrementCounter("inf_failure", 1);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
@@ -97,18 +97,33 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
 
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {
-    metric_reporter->MetricInferenceSuccess().Increment(1);
-    metric_reporter->MetricInferenceCount().Increment(batch_size);
-    metric_reporter->MetricInferenceRequestDuration().Increment(
-        request_duration_ns / 1000);
-    metric_reporter->MetricInferenceQueueDuration().Increment(
-        queue_duration_ns / 1000);
-    metric_reporter->MetricInferenceComputeInputDuration().Increment(
-        compute_input_duration_ns / 1000);
-    metric_reporter->MetricInferenceComputeInferDuration().Increment(
-        compute_infer_duration_ns / 1000);
-    metric_reporter->MetricInferenceComputeOutputDuration().Increment(
-        compute_output_duration_ns / 1000);
+    metric_reporter->IncrementCounter("inf_success", 1);
+    metric_reporter->IncrementCounter("inf_count", batch_size);
+    // Counter Latencies
+    metric_reporter->IncrementCounter(
+        "request_duration", request_duration_ns / 1000);
+    metric_reporter->IncrementCounter(
+        "queue_duration", queue_duration_ns / 1000);
+    metric_reporter->IncrementCounter(
+        "compute_input_duration", compute_input_duration_ns / 1000);
+    metric_reporter->IncrementCounter(
+        "compute_infer_duration", compute_infer_duration_ns / 1000);
+    metric_reporter->IncrementCounter(
+        "compute_output_duration", compute_output_duration_ns / 1000);
+    // Summary Latencies
+    const auto& reporter_config = metric_reporter->Config();
+    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+    if (!reporter_config.cache_enabled_) {
+      metric_reporter->ObserveSummary(
+          "request_duration", request_duration_ns / 1000);
+    }
+    metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
+    metric_reporter->ObserveSummary(
+        "compute_input_duration", compute_input_duration_ns / 1000);
+    metric_reporter->ObserveSummary(
+        "compute_infer_duration", compute_infer_duration_ns / 1000);
+    metric_reporter->ObserveSummary(
+        "compute_output_duration", compute_output_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
@@ -136,14 +151,23 @@ InferenceStatsAggregator::UpdateSuccessCacheHit(
 
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {
-    metric_reporter->MetricInferenceSuccess().Increment(1);
-    metric_reporter->MetricInferenceRequestDuration().Increment(
-        request_duration_ns / 1000);
-    metric_reporter->MetricInferenceQueueDuration().Increment(
-        queue_duration_ns / 1000);
-    metric_reporter->MetricCacheHitCount().Increment(1);
-    metric_reporter->MetricCacheHitDuration().Increment(
-        cache_hit_duration_ns / 1000);
+    // inf_count not recorded on a cache hit
+    metric_reporter->IncrementCounter("inf_success", 1);
+    // Counter Latencies
+    metric_reporter->IncrementCounter(
+        "request_duration", request_duration_ns / 1000);
+    metric_reporter->IncrementCounter(
+        "queue_duration", queue_duration_ns / 1000);
+    metric_reporter->IncrementCounter("cache_hit_count", 1);
+    metric_reporter->IncrementCounter(
+        "cache_hit_duration", cache_hit_duration_ns / 1000);
+    // Summary Latencies
+    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+    // metric_reporter->ObserveSummary(
+    //    "request_duration", request_duration_ns / 1000);
+    metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
+    metric_reporter->ObserveSummary(
+        "cache_hit_duration", cache_hit_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
@@ -168,11 +192,19 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
     // happens after inference backend sets the request duration, and
     // cache lookup time was already included before the inference backend
     // was called
-    metric_reporter->MetricInferenceRequestDuration().Increment(
-        cache_miss_duration_ns / 1000);
-    metric_reporter->MetricCacheMissCount().Increment(1);
-    metric_reporter->MetricCacheMissDuration().Increment(
-        cache_miss_duration_ns / 1000);
+    metric_reporter->IncrementCounter(
+        "request_duration", cache_miss_duration_ns / 1000);
+    metric_reporter->IncrementCounter("cache_miss_count", 1);
+    metric_reporter->IncrementCounter(
+        "cache_miss_duration", cache_miss_duration_ns / 1000);
+
+    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+    //       Need to account for adding cache miss duration on top of
+    //       request_duration from backend within a single observation.
+    // metric_reporter->ObserveSummary(
+    //    "request_duration", cache_miss_duration_ns / 1000);
+    metric_reporter->ObserveSummary(
+        "cache_miss_duration", cache_miss_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
@@ -223,7 +255,7 @@ InferenceStatsAggregator::UpdateInferBatchStatsWithDuration(
 
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {
-    metric_reporter->MetricInferenceExecutionCount().Increment(1);
+    metric_reporter->IncrementCounter("inf_exec_count", 1);
   }
 #endif  // TRITON_ENABLE_METRICS
 }

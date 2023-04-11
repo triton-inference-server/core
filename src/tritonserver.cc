@@ -288,6 +288,13 @@ class TritonServerOptions {
   uint64_t MetricsInterval() const { return metrics_interval_; }
   void SetMetricsInterval(uint64_t m) { metrics_interval_ = m; }
 
+#ifdef TRITON_ENABLE_METRICS
+  const tc::MetricsConfigMap& MetricsConfigMap() { return metrics_config_map_; }
+  TRITONSERVER_Error* AddMetricsConfig(
+      const std::string& name, const std::string& setting,
+      const std::string& value);
+#endif  // TRITON_ENABLE_METRICS
+
   const std::string& BackendDir() const { return backend_dir_; }
   void SetBackendDir(const std::string& bd) { backend_dir_ = bd; }
 
@@ -348,6 +355,9 @@ class TritonServerOptions {
   tc::CacheConfigMap cache_config_map_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+#ifdef TRITON_ENABLE_METRICS
+  tc::MetricsConfigMap metrics_config_map_;
+#endif  // TRITON_ENABLE_METRICS
 };
 
 TritonServerOptions::TritonServerOptions()
@@ -427,6 +437,18 @@ TritonServerOptions::AddCacheConfig(
   cache_config_map_[cache_name] = config_json;
   return nullptr;  // success
 }
+
+#ifdef TRITON_ENABLE_METRICS
+TRITONSERVER_Error*
+TritonServerOptions::AddMetricsConfig(
+    const std::string& name, const std::string& setting,
+    const std::string& value)
+{
+  tc::MetricsConfig& mc = metrics_config_map_[name];
+  mc.push_back(std::make_pair(setting, value));
+  return nullptr;  // success
+}
+#endif  // TRITON_ENABLE_METRICS
 
 TRITONSERVER_Error*
 TritonServerOptions::SetHostPolicy(
@@ -2198,6 +2220,7 @@ TRITONSERVER_ServerNew(
   if (loptions->Metrics()) {
     tc::Metrics::EnableMetrics();
     tc::Metrics::SetMetricsInterval(loptions->MetricsInterval());
+    tc::Metrics::SetConfigMap(loptions->MetricsConfigMap());
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -3156,6 +3179,21 @@ TRITONSERVER_GetMetricKind(
 #ifdef TRITON_ENABLE_METRICS
   *kind = reinterpret_cast<tc::Metric*>(metric)->Kind();
   return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetMetricsConfig(
+    TRITONSERVER_ServerOptions* options, const char* name, const char* setting,
+    const char* value)
+{
+#ifdef TRITON_ENABLE_METRICS
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  return loptions->AddMetricsConfig(name, setting, value);
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
