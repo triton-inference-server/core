@@ -58,13 +58,8 @@
 namespace triton { namespace core {
 
 // Condition when a backend thread is shared.
-#define SHARE_BACKEND_THREAD(B, K)                         \
-  do {                                                     \
-    const bool device_blocking__ = (B);                    \
-    const TRITONSERVER_InstanceGroupKind kind__ = (K);     \
-    return device_blocking__ &&                            \
-           (kind__ == TRITONSERVER_INSTANCEGROUPKIND_GPU); \
-  } while (false)
+#define SHARE_BACKEND_THREAD(DEVICE_BLOCKING, KIND) \
+  (DEVICE_BLOCKING && (KIND == TRITONSERVER_INSTANCEGROUPKIND_GPU))
 
 namespace {
 // Utilities for warmup feature
