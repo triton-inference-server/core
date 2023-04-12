@@ -57,6 +57,15 @@
 
 namespace triton { namespace core {
 
+// Condition when a backend thread is shared.
+#define SHARE_BACKEND_THREAD(B, K)                         \
+  do {                                                     \
+    const bool device_blocking__ = (B);                    \
+    const TRITONSERVER_InstanceGroupKind kind__ = (K);     \
+    return device_blocking__ &&                            \
+           (kind__ == TRITONSERVER_INSTANCEGROUPKIND_GPU); \
+  } while (false)
+
 namespace {
 // Utilities for warmup feature
 TRITONSERVER_Error*
@@ -248,13 +257,15 @@ TritonModelInstance::SetInstances(
 
         const Signature signature(group, id);
         // Check if an existing instance can be re-used.
-        auto existing_instance = model->FindInstance(signature);
-        if (existing_instance) {
-          LOG_VERBOSE(2) << "Re-using model instance named '"
-                         << existing_instance->Name() << "' with device id '"
-                         << existing_instance->DeviceId() << "'";
-          model->RegisterInstance(std::move(existing_instance), passive);
-          continue;
+        if (!SHARE_BACKEND_THREAD(model->DeviceBlocking(), kind)) {
+          auto existing_instance = model->FindInstance(signature);
+          if (existing_instance) {
+            LOG_VERBOSE(2) << "Re-using model instance named '"
+                           << existing_instance->Name() << "' with device id '"
+                           << existing_instance->DeviceId() << "'";
+            model->RegisterInstance(std::move(existing_instance), passive);
+            continue;
+          }
         }
 
         // No matching instance for re-using, so create the instance.
@@ -378,7 +389,7 @@ TritonModelInstance::SetBackendThread(
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const bool device_blocking)
 {
-  if (device_blocking && (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU)) {
+  if (SHARE_BACKEND_THREAD(device_blocking, kind)) {
     auto device_instances = model_->GetInstancesByDevice(device_id);
     if (!device_instances.empty()) {
       LOG_VERBOSE(1) << "Using already started backend thread for " << Name()
