@@ -137,14 +137,13 @@ WarmupRequestComplete(
 }  // namespace
 
 TritonModelInstance::TritonModelInstance(
-    TritonModel* model, const std::string& name,
-    const inference::ModelInstanceGroup& config,
+    TritonModel* model, const std::string& name, const Signature& signature,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const TritonServerMessage& host_policy_message,
     const std::vector<SecondaryDevice>& secondary_devices)
-    : model_(model), name_(name), config_(config), kind_(kind),
+    : model_(model), name_(name), signature_(signature), kind_(kind),
       device_id_(device_id), host_policy_(host_policy),
       host_policy_message_(host_policy_message), profile_names_(profile_names),
       passive_(passive), secondary_devices_(secondary_devices), state_(nullptr)
@@ -247,6 +246,18 @@ TritonModelInstance::SetInstances(
         const auto& kind = std::get<1>(is);
         const auto& id = std::get<2>(is);
 
+        const Signature signature(group, id);
+        // Check if an existing instance can be re-used.
+        auto existing_instance = model->FindInstance(signature);
+        if (existing_instance) {
+          LOG_VERBOSE(2) << "Re-using model instance named '"
+                         << existing_instance->Name() << "' with device id '"
+                         << existing_instance->DeviceId() << "'";
+          model->RegisterInstance(std::move(existing_instance), passive);
+          continue;
+        }
+
+        // No matching instance for re-using, so create the instance.
         const std::string& policy_name = std::get<0>(is);
         const triton::common::HostPolicyCmdlineConfig* host_policy;
         const auto policy_it = host_policy_map.find(policy_name);
@@ -257,7 +268,7 @@ TritonModelInstance::SetInstances(
         }
         RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         auto err = CreateInstance(
-            model, instance_name, group, kind, id, profile_names, passive,
+            model, instance_name, signature, kind, id, profile_names, passive,
             policy_name, *host_policy, *(std::get<3>(is)), secondary_devices);
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
         RETURN_IF_ERROR(err);
@@ -295,8 +306,7 @@ TritonModelInstance::SetInstances(
 
 Status
 TritonModelInstance::CreateInstance(
-    TritonModel* model, const std::string& name,
-    const inference::ModelInstanceGroup& config,
+    TritonModel* model, const std::string& name, const Signature& signature,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,
     const std::string& host_policy_name,
@@ -318,8 +328,8 @@ TritonModelInstance::CreateInstance(
   TritonServerMessage host_policy_message(host_policy_json);
 
   std::shared_ptr<TritonModelInstance> local_instance(new TritonModelInstance(
-      model, name, config, kind, device_id, profile_names, passive, host_policy,
-      host_policy_message, secondary_devices));
+      model, name, signature, kind, device_id, profile_names, passive,
+      host_policy, host_policy_message, secondary_devices));
 
   TRITONBACKEND_ModelInstance* triton_instance =
       reinterpret_cast<TRITONBACKEND_ModelInstance*>(local_instance.get());

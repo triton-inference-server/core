@@ -28,6 +28,7 @@
 #include <memory>
 #include <string>
 #include "backend_manager.h"
+#include "backend_model_instance.h"
 #include "filesystem.h"
 #include "infer_request.h"
 #include "model.h"
@@ -37,7 +38,6 @@
 namespace triton { namespace core {
 
 class InferenceServer;
-class TritonModelInstance;
 
 //
 // Represents a model.
@@ -78,6 +78,8 @@ class TritonModel : public Model {
   {
     return instances_;
   }
+  std::shared_ptr<TritonModelInstance> FindInstance(
+      const TritonModelInstance::Signature& signature) const;
 
   bool DeviceBlocking() const { return device_blocking_; }
   std::vector<std::shared_ptr<TritonModelInstance>> GetInstancesByDevice(
