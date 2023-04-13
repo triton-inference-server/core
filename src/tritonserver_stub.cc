@@ -146,10 +146,6 @@ TRITONSERVER_InferenceTraceActivityString()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceTraceModeString()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceNew()
 {
 }
