@@ -2755,6 +2755,36 @@ TRITONSERVER_ServerModelStatistics(
     for (const auto& version : mv_pair.second) {
       std::shared_ptr<tc::Model> model;
       RETURN_IF_STATUS_ERROR(lserver->GetModel(mv_pair.first, version, &model));
+
+      // Add memory usage
+      triton::common::TritonJson::Value memory_usage(
+          metadata, triton::common::TritonJson::ValueType::ARRAY);
+      const std::vector<BufferAttributes>& usages = model->MemoryUsage();
+      for (const auto& usage : usages) {
+        triton::common::TritonJson::Value usage_json(
+            metadata, triton::common::TritonJson::ValueType::OBJECT);
+        std::string type;
+        switch (usage.MemoryType()) {
+          case TRITONSERVER_MEMORY_CPU: {
+            type = "CPU";
+            break;
+          }
+          case TRITONSERVER_MEMORY_CPU_PINNED: {
+            type = "CPU_PINNED";
+            break;
+          }
+          case TRITONSERVER_MEMORY_GPU: {
+            type = "GPU";
+            break;
+          }
+        }
+        RETURN_IF_STATUS_ERROR(usage_json.AddString("type", std::move(type)));
+        RETURN_IF_STATUS_ERROR(usage_json.AddUInt("id", usage.MemoryTypeId()));
+        RETURN_IF_STATUS_ERROR(usage_json.AddUInt("byte_size", usage.ByteSize()));
+        RETURN_IF_STATUS_ERROR(memory_usage.Append(std::move(usage_json)));
+      }
+
+      // Add infer statistic
       const auto& infer_stats = model->StatsAggregator().ImmutableInferStats();
       const auto& infer_batch_stats =
           model->StatsAggregator().ImmutableInferBatchStats();
@@ -2828,6 +2858,8 @@ TRITONSERVER_ServerModelStatistics(
           model_stat.Add("inference_stats", std::move(inference_stats)));
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("batch_stats", std::move(batch_stats)));
+      RETURN_IF_STATUS_ERROR(
+          model_stat.Add("memory_usage", std::move(memory_usage)));
 
       RETURN_IF_STATUS_ERROR(model_stats_json.Append(std::move(model_stat)));
     }

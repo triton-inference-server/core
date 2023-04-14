@@ -146,6 +146,14 @@ class Model {
     return stats_aggregator_;
   }
 
+  void SetMemoryUsage(const std::vector<BufferAttributes>& memory_usage) {
+    memory_usage_ = memory_usage;
+  }
+
+  const std::vector<BufferAttributes>& MemoryUsage() const {
+    return memory_usage_;
+  }
+
   // Get the model configuration for a named input.
   Status GetInput(
       const std::string& name, const inference::ModelInput** input) const;
@@ -208,6 +216,9 @@ class Model {
 
   // The stats collector for the model.
   InferenceStatsAggregator stats_aggregator_;
+
+  // Records of memory used for loading the model
+  std::vector<BufferAttributes> memory_usage_;
 
   // Label provider for this model.
   std::shared_ptr<LabelProvider> label_provider_;

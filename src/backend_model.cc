@@ -251,20 +251,7 @@ TritonModel::Create(
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
 
   DeviceMemoryTracker::UntrackThreadMemoryUsage(&usage);
-  LOG_ERROR << "Finished tracking memory usage of model "
-            << model_config.name();
-  for (const auto& mem_usage : usage.system_byte_size_) {
-    LOG_ERROR << "System mem id: " << mem_usage.first
-              << ", byte size: " << mem_usage.second;
-  }
-  for (const auto& mem_usage : usage.pinned_byte_size_) {
-    LOG_ERROR << "Pinned mem id: " << mem_usage.first
-              << ", byte size: " << mem_usage.second;
-  }
-  for (const auto& mem_usage : usage.cuda_byte_size_) {
-    LOG_ERROR << "Cuda mem id: " << mem_usage.first
-              << ", byte size: " << mem_usage.second;
-  }
+  local_model->SetMemoryUsage(usage.SerializeToBufferAttributes());
 
   *model = std::move(local_model);
   return Status::Success;

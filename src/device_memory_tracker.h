@@ -27,6 +27,21 @@ class DeviceMemoryTracker {
         UntrackThreadMemoryUsage(this);
       }
     }
+
+    std::vector<BufferAttributes> SerializeToBufferAttributes() {
+      std::vector<BufferAttributes> res;
+      for (const auto& usage : system_byte_size_) {
+        res.emplace_back(usage.second, TRITONSERVER_MEMORY_CPU, usage.first, nullptr);
+      }
+      for (const auto& usage : pinned_byte_size_) {
+        res.emplace_back(usage.second, TRITONSERVER_MEMORY_CPU_PINNED, usage.first, nullptr);
+      }
+      for (const auto& usage : cuda_byte_size_) {
+        res.emplace_back(usage.second, TRITONSERVER_MEMORY_GPU, usage.first, nullptr);
+      }
+      return res;
+    }
+
     // Byte size of allocated memory tracked,
     // 'system_byte_size_' is likely to be empty as system memory allocation
     // is not controlled by CUDA driver. But keeping it for completeness.
