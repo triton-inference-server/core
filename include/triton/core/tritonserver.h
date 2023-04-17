@@ -329,7 +329,7 @@ TRITONSERVER_DECLSPEC void TRITONSERVER_ErrorDelete(struct TRITONSERVER_Error* e
 ///
 /// \param error The error object.
 /// \return The error code.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error_Code
+TRITONSERVER_DECLSPEC TRITONSERVER_Error_Code
 TRITONSERVER_ErrorCode(struct TRITONSERVER_Error* error);
 
 /// Get the string representation of an error code. The returned
