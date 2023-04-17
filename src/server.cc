@@ -104,8 +104,7 @@ InferenceServer::InferenceServer()
   exit_timeout_secs_ = 30;
   pinned_memory_pool_size_ = 1 << 28;
   buffer_manager_thread_count_ = 0;
-  model_load_thread_count_ =
-      std::max(2u, 2 * std::thread::hardware_concurrency());
+  model_load_thread_count_ = 4;
   enable_model_namespacing_ = false;
 
 #ifdef TRITON_ENABLE_GPU
