@@ -279,23 +279,23 @@ TRITONSERVER_DataType DataTypeToTriton(const inference::DataType dtype);
 /// \return The data type.
 inference::DataType TritonToDataType(const TRITONSERVER_DataType dtype);
 
-/// Check if the model configs may only differ in instance group.
+/// Check if non instance group settings on the model configs are equivalent.
 /// \param old_config The old model config.
 /// \param new_config The new model config.
-/// \return True if the model configs are the same without checking instance
-/// group. False if they are different without checking instance group.
-bool IsOnlyInstanceGroupMayDiffers(
+/// \return True if the model configs are equivalent in all non instance group
+/// settings. False if they differ in non instance group settings.
+bool EquivalentInNonInstanceGroupConfig(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config);
 
-/// Check if both model instance config are equivalent. 'name' and 'count'
+/// Check if both model instance configs are equivalent. 'name' and 'count'
 /// fields do not alter the functionality of the instance and hence excluded
 /// from checking.
 /// \param instance_config_lhs The left hand side instance config.
 /// \param instance_config_rhs The right hand side instance config.
 /// \return True if instance configs are the same without checking 'name' and
 /// 'count' fields. False if they are different without checking the fields.
-bool IsInstanceEquivalent(
+bool EquivalentInInstanceConfig(
     const inference::ModelInstanceGroup& instance_config_lhs,
     const inference::ModelInstanceGroup& instance_config_rhs);
 

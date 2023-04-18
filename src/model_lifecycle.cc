@@ -479,7 +479,7 @@ ModelLifeCycle::AsyncLoad(
         // The model is currently being served. Check if the model load could
         // be completed with a simple config update.
         if (!is_model_file_updated && !serving_model->is_ensemble_ &&
-            IsOnlyInstanceGroupMayDiffers(
+            EquivalentInNonInstanceGroupConfig(
                 serving_model->model_config_, model_config)) {
           // Update the model
           model_info = serving_model.get();

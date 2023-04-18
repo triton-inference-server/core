@@ -68,7 +68,7 @@ class TritonModelInstance {
     bool operator==(const Signature& rhs) const
     {
       return can_match_ && rhs.can_match_ && device_id_ == rhs.device_id_ &&
-             IsInstanceEquivalent(group_config_, rhs.group_config_);
+             EquivalentInInstanceConfig(group_config_, rhs.group_config_);
     }
     bool operator!=(const Signature& rhs) const { return !(*this == rhs); }
     void EnableMatching() { can_match_ = true; }
