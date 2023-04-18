@@ -306,7 +306,7 @@ GetDetailedModifiedTime(const std::string& model_dir_path)
   // Get latest modification time for each files/folders, and place it at the
   // correct category.
   const std::string model_config_full_path(
-      JoinPath({model_dir_path, "config.pbtxt"}));
+      JoinPath({model_dir_path, kModelConfigPbTxt}));
   for (const auto& child : contents) {
     const auto full_path = JoinPath({model_dir_path, child});
     if (full_path == model_config_full_path) {
