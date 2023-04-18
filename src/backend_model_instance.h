@@ -65,12 +65,18 @@ class TritonModelInstance {
         : group_config_(group_config), device_id_(device_id), can_match_(true)
     {
     }
+    // Check if the lhs signature is equivalent to the rhs, if matching is
+    // enabled. If matching is disabled, lhs != rhs under all scenarios.
     bool operator==(const Signature& rhs) const
     {
       return can_match_ && rhs.can_match_ && device_id_ == rhs.device_id_ &&
              EquivalentInInstanceConfig(group_config_, rhs.group_config_);
     }
     bool operator!=(const Signature& rhs) const { return !(*this == rhs); }
+    // Enable/Disable matching. If disabled, on either lhs or rhs or both, then
+    // lhs != rhs under all scenarios, including if they are equivalent.
+    // This feature is intended to filter out signatures that have already been
+    // matched, by disabling matching.
     void EnableMatching() { can_match_ = true; }
     void DisableMatching() { can_match_ = false; }
 
