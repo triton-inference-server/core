@@ -250,7 +250,7 @@ TritonModel::Create(
     }
   }
 
-  // Create and initialize the model instances for this model.
+  // Create or update the model instances for this model.
   RETURN_IF_ERROR(TritonModelInstance::SetInstances(
       raw_local_model, backend_cmdline_config_map, host_policy_map,
       model_config));
