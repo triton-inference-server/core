@@ -182,7 +182,8 @@ class TritonModelInstance {
       const std::string& host_policy_name,
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const inference::ModelRateLimiter& rate_limiter_config,
-      const std::vector<SecondaryDevice>& secondary_devices);
+      const std::vector<SecondaryDevice>& secondary_devices,
+      std::shared_ptr<TritonModelInstance>* triton_model_instance);
   Status SetBackendThread(
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const bool device_blocking);

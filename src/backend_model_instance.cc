@@ -258,7 +258,8 @@ TritonModelInstance::SetInstances(
             LOG_VERBOSE(2) << "Re-using model instance named '"
                            << existing_instance->Name() << "' with device id '"
                            << existing_instance->DeviceId() << "'";
-            model->RegisterInstance(std::move(existing_instance), passive);
+            RETURN_IF_ERROR(
+                model->RegisterInstance(std::move(existing_instance), passive));
             continue;
           }
         }
@@ -273,9 +274,13 @@ TritonModelInstance::SetInstances(
           host_policy = &empty_host_policy;
         }
         RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
+        std::shared_ptr<TritonModelInstance> new_instance;
         auto err = CreateInstance(
             model, instance_name, signature, kind, id, profile_names, passive,
-            policy_name, *host_policy, *(std::get<3>(is)), secondary_devices);
+            policy_name, *host_policy, *(std::get<3>(is)), secondary_devices,
+            &new_instance);
+        RETURN_IF_ERROR(
+            model->RegisterInstance(std::move(new_instance), passive));
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
         RETURN_IF_ERROR(err);
 
@@ -318,7 +323,8 @@ TritonModelInstance::CreateInstance(
     const std::string& host_policy_name,
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const inference::ModelRateLimiter& rate_limiter_config,
-    const std::vector<SecondaryDevice>& secondary_devices)
+    const std::vector<SecondaryDevice>& secondary_devices,
+    std::shared_ptr<TritonModelInstance>* triton_model_instance)
 {
   // Create the JSON representation of the backend configuration.
   triton::common::TritonJson::Value host_policy_json(
@@ -333,7 +339,7 @@ TritonModelInstance::CreateInstance(
       host_policy_name.c_str(), std::move(policy_setting_json)));
   TritonServerMessage host_policy_message(host_policy_json);
 
-  std::shared_ptr<TritonModelInstance> local_instance(new TritonModelInstance(
+  std::unique_ptr<TritonModelInstance> local_instance(new TritonModelInstance(
       model, name, signature, kind, device_id, profile_names, passive,
       host_policy, host_policy_message, secondary_devices));
 
@@ -374,7 +380,7 @@ TritonModelInstance::CreateInstance(
         kind, device_id, model->DeviceBlocking()));
   }
 
-  RETURN_IF_ERROR(model->RegisterInstance(std::move(local_instance), passive));
+  triton_model_instance->reset(local_instance.release());
 
   return Status::Success;
 }
