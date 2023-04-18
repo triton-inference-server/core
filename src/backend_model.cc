@@ -197,17 +197,8 @@ TritonModel::Create(
   // Initialize the model for Triton core usage
   RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
-  // Set 'device_blocking_', it is initialized to false.
-  if (local_model->backend_->ExecutionPolicy() ==
-      TRITONBACKEND_EXECUTION_DEVICE_BLOCKING) {
-    if (model_config.has_sequence_batching()) {
-      LOG_INFO << "Overriding execution policy to "
-                  "\"TRITONBACKEND_EXECUTION_BLOCKING\" for sequence model \""
-               << model_config.name() << "\"";
-    } else {
-      local_model->device_blocking_ = true;
-    }
-  }
+  // Set 'device_blocking_'.
+  RETURN_IF_ERROR(local_model->SetExecutionPolicy(model_config));
 
   // Initalize the custom batching library for the model, if provided.
   if (model_config.has_sequence_batching()) {
@@ -293,6 +284,24 @@ TritonModel::UpdateInstanceGroup(
   RETURN_IF_ERROR(SetModelConfig(model_config));
   RETURN_IF_ERROR(CommitInstances());
   RETURN_IF_ERROR(SetConfiguredScheduler());
+
+  return Status::Success;
+}
+
+Status
+TritonModel::SetExecutionPolicy(const inference::ModelConfig& model_config)
+{
+  // Set 'device_blocking_'
+  device_blocking_ = false;
+  if (backend_->ExecutionPolicy() == TRITONBACKEND_EXECUTION_DEVICE_BLOCKING) {
+    if (model_config.has_sequence_batching()) {
+      LOG_INFO << "Overriding execution policy to "
+                  "\"TRITONBACKEND_EXECUTION_BLOCKING\" for sequence model \""
+               << model_config.name() << "\"";
+    } else {
+      device_blocking_ = true;
+    }
+  }
 
   return Status::Success;
 }
