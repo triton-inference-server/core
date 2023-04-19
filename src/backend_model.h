@@ -64,27 +64,37 @@ class TritonModel : public Model {
       const bool is_config_provided, std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
+  // Return path to the localized model directory.
   const std::string& LocalizedModelPath() const
   {
     return localized_model_dir_->Path();
   }
+  // Return pointer to the underlying server.
   InferenceServer* Server() { return server_; }
+  // Return whether the backend should attempt to auto-complete the model config
   bool AutoCompleteConfig() const { return auto_complete_config_; }
+  // Called by TRITONBACKEND_ModelSetConfig() C-API.
   Status UpdateModelConfig(
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
+  // Return the underlying backend.
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
+  // Return the foreground instances, excluding passive instances.
   const std::vector<std::shared_ptr<TritonModelInstance>>& Instances() const
   {
     return instances_;
   }
+  // Find a foreground instance, if any, that matched the signature.
   std::shared_ptr<TritonModelInstance> FindInstance(
       const TritonModelInstance::Signature& signature) const;
 
+  // True if different instances should be grouped by device; false otherwise.
   bool DeviceBlocking() const { return device_blocking_; }
+  // Get a vector of non-passive background instances that share the device id.
   std::vector<std::shared_ptr<TritonModelInstance>> GetInstancesByDevice(
       int32_t device_id) const;
 
+  // Manipulate the opaque state associated with this model.
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
 
