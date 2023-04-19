@@ -57,10 +57,6 @@
 
 namespace triton { namespace core {
 
-// Condition when a backend thread is shared.
-#define SHARE_BACKEND_THREAD(DEVICE_BLOCKING, KIND) \
-  (DEVICE_BLOCKING && (KIND == TRITONSERVER_INSTANCEGROUPKIND_GPU))
-
 namespace {
 // Utilities for warmup feature
 TRITONSERVER_Error*
@@ -136,6 +132,13 @@ WarmupRequestComplete(
       warmup_promise->set_value();
     }
   }
+}
+
+bool
+ShareBackendThread(
+    const bool device_blocking, const TRITONSERVER_InstanceGroupKind kind)
+{
+  return device_blocking && (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU);
 }
 
 }  // namespace
@@ -252,7 +255,7 @@ TritonModelInstance::SetInstances(
 
         const Signature signature(group, id);
         // Check if an existing instance can be re-used.
-        if (!SHARE_BACKEND_THREAD(model->DeviceBlocking(), kind)) {
+        if (!ShareBackendThread(model->DeviceBlocking(), kind)) {
           auto existing_instance = model->FindInstance(signature);
           if (existing_instance) {
             LOG_VERBOSE(2) << "Re-using model instance named '"
@@ -390,7 +393,7 @@ TritonModelInstance::SetBackendThread(
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const bool device_blocking)
 {
-  if (SHARE_BACKEND_THREAD(device_blocking, kind)) {
+  if (ShareBackendThread(device_blocking, kind)) {
     auto device_instances = model_->GetInstancesByDevice(device_id);
     if (!device_instances.empty()) {
       LOG_VERBOSE(1) << "Using already started backend thread for " << Name()
