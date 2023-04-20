@@ -314,6 +314,7 @@ class RateLimiter {
 
   // Manager to keep track of the resource allocations
   std::unique_ptr<ResourceManager> resource_manager_;
+  std::mutex resource_manager_mtx_;
 
   // Mutex to serialize Payload [de]allocation
   std::mutex payload_mu_;
