@@ -75,13 +75,13 @@ RateLimiter::RegisterModelInstance(
       // As there can be mulitple models being loaded concurrently, need
       // to hold a lock to protect the resource counts.
       // Without this serialization instances of other models might fail
-      // to load because of the resource constraints in other models.
+      // to load because of the resource constraints in this instance.
       std::lock_guard<std::mutex> lk(resource_manager_mtx_);
       resource_manager_->AddModelInstance(model_instances.back().get());
       const auto& status = resource_manager_->UpdateResourceLimits();
-      if(!status.IsOk()) {
+      if (!status.IsOk()) {
         resource_manager_->RemoveModelInstance(model_instances.back().get());
-	return status;
+        return status;
       }
     }
   }
