@@ -276,16 +276,16 @@ TritonModelInstance::SetInstances(
         } else {
           host_policy = &empty_host_policy;
         }
-        RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         std::shared_ptr<TritonModelInstance> new_instance;
+        RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
         auto err = CreateInstance(
             model, instance_name, signature, kind, id, profile_names, passive,
             policy_name, *host_policy, *(std::get<3>(is)), secondary_devices,
             &new_instance);
-        RETURN_IF_ERROR(
-            model->RegisterInstance(std::move(new_instance), passive));
         RETURN_IF_ERROR(ResetNumaMemoryPolicy());
         RETURN_IF_ERROR(err);
+        RETURN_IF_ERROR(
+            model->RegisterInstance(std::move(new_instance), passive));
 
         // When deploying on GPU, we want to make sure the GPU memory usage
         // is within allowed range, otherwise, stop the creation to ensure
