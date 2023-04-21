@@ -131,8 +131,8 @@ class TritonModel : public Model {
   // Replace the foreground instances with background instances.
   Status CommitInstances();
 
-  // Set the 'device_blocking_' flag.
-  Status SetExecutionPolicy(const inference::ModelConfig& model_config);
+  // Gets the execution policy setting from the backend.
+  Status GetExecutionPolicy(const inference::ModelConfig& model_config);
 
   // Set or update the scheduler.
   Status SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler);

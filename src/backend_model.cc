@@ -197,8 +197,7 @@ TritonModel::Create(
   // Initialize the model for Triton core usage
   RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
-  // Set 'device_blocking_'.
-  RETURN_IF_ERROR(local_model->SetExecutionPolicy(model_config));
+  RETURN_IF_ERROR(local_model->GetExecutionPolicy(model_config));
 
   // Initalize the custom batching library for the model, if provided.
   if (model_config.has_sequence_batching()) {
@@ -289,7 +288,7 @@ TritonModel::UpdateInstanceGroup(
 }
 
 Status
-TritonModel::SetExecutionPolicy(const inference::ModelConfig& model_config)
+TritonModel::GetExecutionPolicy(const inference::ModelConfig& model_config)
 {
   // Set 'device_blocking_'
   device_blocking_ = false;
