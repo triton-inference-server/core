@@ -370,6 +370,8 @@ TritonModel::SetBackendConfigDefaults(
 std::shared_ptr<TritonModelInstance>
 TritonModel::FindInstance(const TritonModelInstance::Signature& signature) const
 {
+  // The search can be improved by introducing some gradient into comparing
+  // signatures. One solution could be to use hash key. [FIXME: DLIS-4822]
   for (auto* instances : {&instances_, &passive_instances_}) {
     for (auto& instance : (*instances)) {
       if (instance->GetSignature() == signature) {

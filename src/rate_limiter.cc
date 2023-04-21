@@ -113,6 +113,8 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
   }
 
   if (!ignore_resources_and_priority_) {
+    // The update can be skipped if there is only model instance count update,
+    // which new results will not be generated in such case. [FIXME: DLIS-4821]
     RETURN_IF_ERROR(resource_manager_->UpdateResourceLimits());
   }
 
