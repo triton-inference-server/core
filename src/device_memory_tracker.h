@@ -28,16 +28,20 @@ class DeviceMemoryTracker {
       }
     }
 
-    std::vector<BufferAttributes> SerializeToBufferAttributes() {
+    std::vector<BufferAttributes> SerializeToBufferAttributes()
+    {
       std::vector<BufferAttributes> res;
       for (const auto& usage : system_byte_size_) {
-        res.emplace_back(usage.second, TRITONSERVER_MEMORY_CPU, usage.first, nullptr);
+        res.emplace_back(
+            usage.second, TRITONSERVER_MEMORY_CPU, usage.first, nullptr);
       }
       for (const auto& usage : pinned_byte_size_) {
-        res.emplace_back(usage.second, TRITONSERVER_MEMORY_CPU_PINNED, usage.first, nullptr);
+        res.emplace_back(
+            usage.second, TRITONSERVER_MEMORY_CPU_PINNED, usage.first, nullptr);
       }
       for (const auto& usage : cuda_byte_size_) {
-        res.emplace_back(usage.second, TRITONSERVER_MEMORY_GPU, usage.first, nullptr);
+        res.emplace_back(
+            usage.second, TRITONSERVER_MEMORY_GPU, usage.first, nullptr);
       }
       return res;
     }
@@ -52,12 +56,11 @@ class DeviceMemoryTracker {
   };
   static void InitTrace();
 
-  // Currently can distinguish activity by correlation id which is
-  // thread specific, which implies that switching threads to handle
-  // activities may not be tracked?
-  // The memory usage will be updated until it's untracked, usage must
-  // be valid until untrack is called.
-  // [WIP] Document thread-local nature..
+  // The memory usage will be tracked and modified until it's untracked, 'usage'
+  // must be valid and not to be modified externally until untrack is called.
+  // Currently can distinguish activity by correlation id which is thread
+  // specific, which implies that there will be mssing records if tracking
+  // region switching threads to handle other activities.
   static void TrackThreadMemoryUsage(ScopedMemoryUsage* usage);
   static void UntrackThreadMemoryUsage(ScopedMemoryUsage* usage);
 
@@ -196,14 +199,16 @@ DeviceMemoryTracker::TrackActivityInternal(CUpti_Activity* record)
           activity_to_memory_usage_.erase(it);
         }
       }
-      // Igore memory record that is not associated with a ScopedMemoryUsage
+      // Ignore memory record that is not associated with a ScopedMemoryUsage
       // object
       if (usage != nullptr) {
         const bool is_allocation =
             (memory_record->memoryOperationType ==
              CUPTI_ACTIVITY_MEMORY_OPERATION_TYPE_ALLOCATION);
-        if (is_allocation || (memory_record->memoryOperationType ==
-                              CUPTI_ACTIVITY_MEMORY_OPERATION_TYPE_RELEASE)) {
+        const bool is_release =
+            (memory_record->memoryOperationType ==
+             CUPTI_ACTIVITY_MEMORY_OPERATION_TYPE_RELEASE);
+        if (is_allocation || is_release) {
           switch (memory_record->memoryKind) {
             case CUPTI_ACTIVITY_MEMORY_KIND_DEVICE: {
               if (is_allocation) {
