@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -27,6 +27,7 @@
 #include "model_config_utils.h"
 
 #include <google/protobuf/util/json_util.h>
+#include <google/protobuf/util/message_differencer.h>
 #include <deque>
 #include <mutex>
 #include <set>
@@ -2289,6 +2290,30 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
   }
 
   return inference::DataType::TYPE_INVALID;
+}
+
+bool
+EquivalentInNonInstanceGroupConfig(
+    const inference::ModelConfig& old_config,
+    const inference::ModelConfig& new_config)
+{
+  ::google::protobuf::util::MessageDifferencer pb_diff;
+  pb_diff.IgnoreField(
+      old_config.descriptor()->FindFieldByLowercaseName("instance_group"));
+  return pb_diff.Compare(old_config, new_config);
+}
+
+bool
+EquivalentInInstanceConfig(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs)
+{
+  ::google::protobuf::util::MessageDifferencer pb_diff;
+  pb_diff.IgnoreField(
+      instance_config_lhs.descriptor()->FindFieldByLowercaseName("name"));
+  pb_diff.IgnoreField(
+      instance_config_lhs.descriptor()->FindFieldByLowercaseName("count"));
+  return pb_diff.Compare(instance_config_lhs, instance_config_rhs);
 }
 
 }}  // namespace triton::core

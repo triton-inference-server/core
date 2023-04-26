@@ -81,6 +81,12 @@ class RateLimiter {
       TritonModelInstance* instance,
       const RateLimiterConfig& rate_limiter_config);
 
+  /// Unregisters the model instance with the rate limiter.
+  /// \param instance The pointer to the TritonModelInstance object to
+  /// unregister with the rate limiter.
+  /// \return Status object indicating success or failure.
+  Status UnregisterModelInstance(TritonModelInstance* instance);
+
   /// Remove model from the set of models being managed by the rate limiter.
   /// \param model The pointer to TritonModel object to be removed.
   /// \return Status object indicating success or failure.
@@ -156,11 +162,9 @@ class RateLimiter {
     Status Stage(StandardScheduleFunc OnSchedule);
     Status Allocate();
     Status DirectAllocate(StandardScheduleFunc OnSchedule);
-    void RequestRemoval();
     void WaitForRemoval();
 
     TritonModelInstance* triton_model_instance_;
-    size_t index_;
     ModelContext* model_context_;
     RateLimiterConfig rate_limiter_config_;
     StandardStageFunc OnStage_;
@@ -191,7 +195,7 @@ class RateLimiter {
   // Holds the active context to a model
   class ModelContext {
    public:
-    ModelContext();
+    ModelContext() : removal_in_progress_(false) {}
 
     // Enqueue request for obtaining a model instance for scheduling
     // a inference payload execution.
@@ -207,14 +211,17 @@ class RateLimiter {
     // are available in the system.
     void AllocateInstanceIfAvailable();
     // Adds a queue in the model context for holding requests meant for
-    // running on specific instance.
-    void AddSpecificRequestQueue();
-    // Whether or not there are any requests waiting for execution on
-    // indexed model instance.
-    bool ContainsPendingRequests(int32_t index);
+    // running on the given instance.
+    void AddSpecificRequestQueue(ModelInstanceContext* instance);
+    // Whether or not there are any requests waiting for execution on the given
+    // model instance.
+    bool ContainsPendingRequests(ModelInstanceContext* instance);
+    // Remove the given instance of the model. `WaitForRemoval()` on the
+    // instance should have been called and returned.
+    void RemoveInstance(ModelInstanceContext* instance);
     // Starts the removal of the model context from scheduling purposes.
     // Will wait for all enqueued model instance requests to complete.
-    void RequestRemoval();
+    void RequestRemoval() { removal_in_progress_ = true; }
     // Whether or not model context is decommissioned
     bool isRemovalInProgress() { return removal_in_progress_; }
 
@@ -223,7 +230,7 @@ class RateLimiter {
 
     // Queue holding pending scheduling request
     std::queue<StandardScheduleFunc> generic_sched_request_queue_;
-    std::vector<std::queue<StandardScheduleFunc>>
+    std::map<const TritonModelInstance*, std::queue<StandardScheduleFunc>>
         specific_sched_request_queues_;
     std::recursive_mutex sched_request_queue_mtx_;
 
@@ -300,7 +307,9 @@ class RateLimiter {
 
   // Instance context for the models
   std::map<
-      const TritonModel*, std::vector<std::shared_ptr<ModelInstanceContext>>>
+      const TritonModel*,
+      std::map<
+          const TritonModelInstance*, std::unique_ptr<ModelInstanceContext>>>
       model_instance_ctxs_;
   std::mutex model_instance_ctx_mtx_;
 

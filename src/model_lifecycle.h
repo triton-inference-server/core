@@ -180,6 +180,7 @@ class ModelLifeCycle {
   Status AsyncLoad(
       const ModelIdentifier& model_id, const std::string& model_path,
       const inference::ModelConfig& model_config, const bool is_config_provided,
+      const bool is_model_file_updated,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)>&& OnComplete);
 
@@ -244,7 +245,7 @@ class ModelLifeCycle {
       model_.reset();
     }
 
-    const inference::ModelConfig model_config_;
+    inference::ModelConfig model_config_;
     const std::string model_path_;
     const bool is_ensemble_;
 
@@ -290,16 +291,28 @@ class ModelLifeCycle {
         std::max(1u, options.model_load_thread_count_)));
   }
 
+  // Create a new model, the 'model_id' can either be a new or existing model.
   void CreateModel(
       const ModelIdentifier& model_id, const int64_t version,
       ModelInfo* model_info, const bool is_config_provided);
-  // Callback function template for model load.
-  // 'OnComplete' needs to be passed by value for now as there can be
-  // multiple versions to be loaded and each holds a copy of
-  // the 'OnComplete' callback.
+  // Update model to the new config. It is the responsibility of the caller to
+  // ensure the model can be updated in-place without a complete reload.
+  // Currently, only model instances can be updated.
+  void UpdateModelConfig(
+      const ModelIdentifier& model_id, const int64_t version,
+      ModelInfo* model_info, const inference::ModelConfig& new_model_config);
+  // Update 'load_tracker' to the latest info in 'model_info' after loading
+  // **each** model version.
   void OnLoadComplete(
       const ModelIdentifier& model_id, const int64_t version,
-      ModelInfo* model_info, std::function<void(Status)> OnComplete,
+      ModelInfo* model_info, const bool is_update,
+      const std::function<void(Status)>& OnComplete,
+      std::shared_ptr<LoadTracker> load_tracker);
+  // Helper function for 'OnLoadComplete()' to finish final operations after
+  // loading **all** model versions.
+  void OnLoadFinal(
+      const ModelIdentifier& model_id, ModelInfo* model_info,
+      const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
 
 

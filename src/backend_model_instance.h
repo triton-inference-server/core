@@ -34,6 +34,7 @@
 #include "memory.h"
 #include "metric_model_reporter.h"
 #include "model_config.pb.h"
+#include "model_config_utils.h"
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/sync_queue.h"
@@ -48,16 +49,52 @@ class InferenceRequest;
 //
 class TritonModelInstance {
  public:
-  static Status CreateInstances(
+  struct SecondaryDevice {
+    SecondaryDevice(const std::string kind, const int64_t id)
+        : kind_(kind), id_(id)
+    {
+    }
+    const std::string kind_;
+    const int64_t id_;
+  };
+
+  class Signature {
+   public:
+    Signature(
+        const inference::ModelInstanceGroup& group_config, int32_t device_id)
+        : group_config_(group_config), device_id_(device_id), can_match_(true)
+    {
+    }
+    // Check if the lhs signature is equivalent to the rhs, if matching is
+    // enabled. If matching is disabled, lhs != rhs under all scenarios.
+    bool operator==(const Signature& rhs) const
+    {
+      return can_match_ && rhs.can_match_ && device_id_ == rhs.device_id_ &&
+             EquivalentInInstanceConfig(group_config_, rhs.group_config_);
+    }
+    bool operator!=(const Signature& rhs) const { return !(*this == rhs); }
+    // Enable/Disable matching. If disabled, on either lhs or rhs or both, then
+    // lhs != rhs under all scenarios, including if they are equivalent.
+    // This feature is intended to filter out signatures that have already been
+    // matched, by disabling matching.
+    void EnableMatching() { can_match_ = true; }
+    void DisableMatching() { can_match_ = false; }
+
+   private:
+    const inference::ModelInstanceGroup group_config_;
+    const int32_t device_id_;
+    bool can_match_;  // cannot match another signature if false
+  };
+
+  static Status SetInstances(
       TritonModel* model,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const inference::ModelConfig& model_config, const bool device_blocking);
+      const inference::ModelConfig& model_config);
   ~TritonModelInstance();
 
-  const std::string& GroupName() const { return group_name_; }
   const std::string& Name() const { return name_; }
-  size_t Index() const { return index_; }
+  Signature& GetSignature() { return signature_; }
   TRITONSERVER_InstanceGroupKind Kind() const { return kind_; }
   int32_t DeviceId() const { return device_id_; }
   const triton::common::HostPolicyCmdlineConfig& HostPolicy() const
@@ -71,14 +108,6 @@ class TritonModelInstance {
   bool IsPassive() const { return passive_; }
   const std::vector<std::string>& Profiles() const { return profile_names_; }
 
-  struct SecondaryDevice {
-    SecondaryDevice(const std::string kind, const int64_t id)
-        : kind_(kind), id_(id)
-    {
-    }
-    const std::string kind_;
-    const int64_t id_;
-  };
   const std::vector<SecondaryDevice>& SecondaryDevices() const
   {
     return secondary_devices_;
@@ -97,37 +126,6 @@ class TritonModelInstance {
   MetricModelReporter* MetricReporter() const { return reporter_.get(); }
 
  private:
-  DISALLOW_COPY_AND_ASSIGN(TritonModelInstance);
-  class TritonBackendThread;
-  TritonModelInstance(
-      TritonModel* model, const std::string& name,
-      const std::string& group_name, const size_t index,
-      const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-      const std::vector<std::string>& profile_names, const bool passive,
-      const triton::common::HostPolicyCmdlineConfig& host_policy,
-      const TritonServerMessage& host_policy_message,
-      const std::vector<SecondaryDevice>& secondary_devices);
-  static Status CreateInstance(
-      TritonModel* model, const std::string& name,
-      const std::string& group_name, const size_t index,
-      const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-      const std::vector<std::string>& profile_names, const bool passive,
-      const std::string& host_policy_name,
-      const triton::common::HostPolicyCmdlineConfig& host_policy,
-      const inference::ModelRateLimiter& rate_limiter_config,
-      const bool device_blocking,
-      std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
-          device_to_thread_map,
-      const std::vector<SecondaryDevice>& secondary_devices);
-  Status SetBackendThread(
-      const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
-      const bool device_blocking,
-      std::map<uint32_t, std::shared_ptr<TritonBackendThread>>*
-          device_to_thread_map);
-  Status GenerateWarmupData();
-
-  void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
-
   class TritonBackendThread {
    public:
     static Status CreateBackendThread(
@@ -140,10 +138,14 @@ class TritonModelInstance {
     ~TritonBackendThread();
 
    private:
-    TritonBackendThread(const std::string& name, TritonModel* model);
-    void BackendThread(const int nice, const int32_t device_id);
+    TritonBackendThread(
+        const std::string& name, TritonModel* model, const int nice,
+        const int32_t device_id);
+    void BackendThread();
 
-    std::string name_;
+    const std::string name_;
+    const int nice_;
+    const int32_t device_id_;
 
     TritonModel* model_;
     std::deque<TritonModelInstance*> model_instances_;
@@ -151,7 +153,6 @@ class TritonModelInstance {
     std::thread backend_thread_;
     std::atomic<bool> backend_thread_exit_;
   };
-  std::shared_ptr<TritonBackendThread> triton_backend_thread_;
 
   struct WarmupData {
     WarmupData(const std::string& sample_name, const size_t count)
@@ -171,6 +172,33 @@ class TritonModelInstance {
     std::unique_ptr<AllocatedMemory> random_data_;
     std::vector<std::unique_ptr<std::string>> provided_data_;
   };
+
+  DISALLOW_COPY_AND_ASSIGN(TritonModelInstance);
+  TritonModelInstance(
+      TritonModel* model, const std::string& name, const Signature& signature,
+      const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
+      const std::vector<std::string>& profile_names, const bool passive,
+      const triton::common::HostPolicyCmdlineConfig& host_policy,
+      const TritonServerMessage& host_policy_message,
+      const std::vector<SecondaryDevice>& secondary_devices);
+  static Status CreateInstance(
+      TritonModel* model, const std::string& name, const Signature& signature,
+      const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
+      const std::vector<std::string>& profile_names, const bool passive,
+      const std::string& host_policy_name,
+      const triton::common::HostPolicyCmdlineConfig& host_policy,
+      const inference::ModelRateLimiter& rate_limiter_config,
+      const std::vector<SecondaryDevice>& secondary_devices,
+      std::shared_ptr<TritonModelInstance>* triton_model_instance);
+  Status SetBackendThread(
+      const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
+      const bool device_blocking);
+  Status GenerateWarmupData();
+
+  void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
+
+  std::shared_ptr<TritonBackendThread> triton_backend_thread_;
+
   std::vector<WarmupData> warmup_samples_;
 
   // The TritonModel object that owns this instance. The instance
@@ -180,13 +208,12 @@ class TritonModelInstance {
   TritonModel* model_;
 
   std::string name_;
-  std::string group_name_;
-  size_t index_;
+  Signature signature_;
 
   // For CPU device_id_ is always 0. For GPU device_id_ indicates the
   // GPU device to be used by the instance.
   TRITONSERVER_InstanceGroupKind kind_;
-  int32_t device_id_;
+  const int32_t device_id_;
   const triton::common::HostPolicyCmdlineConfig host_policy_;
   TritonServerMessage host_policy_message_;
   std::vector<std::string> profile_names_;

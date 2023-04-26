@@ -76,7 +76,8 @@ class ModelRepositoryManager {
   // Information about the model.
   struct ModelInfo {
     ModelInfo(
-        const int64_t mtime_nsec, const int64_t prev_mtime_ns,
+        const std::pair<int64_t, int64_t>& mtime_nsec,
+        const std::pair<int64_t, int64_t>& prev_mtime_ns,
         const std::string& model_path)
         : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
           explicitly_load_(true), model_path_(model_path),
@@ -84,12 +85,14 @@ class ModelRepositoryManager {
     {
     }
     ModelInfo()
-        : mtime_nsec_(0), prev_mtime_ns_(0), explicitly_load_(true),
+        : mtime_nsec_(0, 0), prev_mtime_ns_(0, 0), explicitly_load_(true),
           is_config_provided_(false)
     {
     }
-    int64_t mtime_nsec_;
-    int64_t prev_mtime_ns_;
+    // Current last modified time in ns, for '<config.pbtxt, model files>'
+    std::pair<int64_t, int64_t> mtime_nsec_;
+    // Previous last modified time in ns, for '<config.pbtxt, model files>'
+    std::pair<int64_t, int64_t> prev_mtime_ns_;
     bool explicitly_load_;
     inference::ModelConfig model_config_;
     std::string model_path_;

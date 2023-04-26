@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -278,5 +278,25 @@ TRITONSERVER_DataType DataTypeToTriton(const inference::DataType dtype);
 /// \param dtype The Triton server data type.
 /// \return The data type.
 inference::DataType TritonToDataType(const TRITONSERVER_DataType dtype);
+
+/// Check if non instance group settings on the model configs are equivalent.
+/// \param old_config The old model config.
+/// \param new_config The new model config.
+/// \return True if the model configs are equivalent in all non instance group
+/// settings. False if they differ in non instance group settings.
+bool EquivalentInNonInstanceGroupConfig(
+    const inference::ModelConfig& old_config,
+    const inference::ModelConfig& new_config);
+
+/// Check if both model instance configs are equivalent. 'name' and 'count'
+/// fields do not alter the functionality of the instance and hence excluded
+/// from checking.
+/// \param instance_config_lhs The left hand side instance config.
+/// \param instance_config_rhs The right hand side instance config.
+/// \return True if instance configs are the same without checking 'name' and
+/// 'count' fields. False if they are different without checking the fields.
+bool EquivalentInInstanceConfig(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs);
 
 }}  // namespace triton::core

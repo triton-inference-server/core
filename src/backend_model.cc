@@ -30,7 +30,6 @@
 #include <vector>
 
 #include "backend_config.h"
-#include "backend_model_instance.h"
 #include "dynamic_batch_scheduler.h"
 #include "filesystem.h"
 #include "model_config_utils.h"
@@ -165,7 +164,8 @@ TritonModel::Create(
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
-      model_config, auto_complete_config));
+      model_config, auto_complete_config, backend_cmdline_config_map,
+      host_policy_map));
 
   TritonModel* raw_local_model = local_model.get();
 
@@ -197,17 +197,7 @@ TritonModel::Create(
   // Initialize the model for Triton core usage
   RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
-  bool device_blocking = false;
-  if (local_model->backend_->ExecutionPolicy() ==
-      TRITONBACKEND_EXECUTION_DEVICE_BLOCKING) {
-    if (model_config.has_sequence_batching()) {
-      LOG_INFO << "Overriding execution policy to "
-                  "\"TRITONBACKEND_EXECUTION_BLOCKING\" for sequence model \""
-               << model_config.name() << "\"";
-    } else {
-      device_blocking = true;
-    }
-  }
+  RETURN_IF_ERROR(local_model->GetExecutionPolicy(model_config));
 
   // Initalize the custom batching library for the model, if provided.
   if (model_config.has_sequence_batching()) {
@@ -250,14 +240,68 @@ TritonModel::Create(
     }
   }
 
-  // Create and initialize the model instances for this model.
-  RETURN_IF_ERROR(TritonModelInstance::CreateInstances(
+  // Create or update the model instances for this model.
+  RETURN_IF_ERROR(TritonModelInstance::SetInstances(
       raw_local_model, backend_cmdline_config_map, host_policy_map,
-      model_config, device_blocking));
+      model_config));
+  RETURN_IF_ERROR(local_model->CommitInstances());
 
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
 
   *model = std::move(local_model);
+  return Status::Success;
+}
+
+Status
+TritonModel::UpdateInstanceGroup(
+    const inference::ModelConfig& new_model_config,
+    std::unique_lock<std::mutex>* caller_lock)
+{
+  // Generate normalized model config with new instance group.
+  inference::ModelConfig model_config = config_;
+  model_config.clear_instance_group();
+  model_config.mutable_instance_group()->Add(
+      new_model_config.instance_group().begin(),
+      new_model_config.instance_group().end());
+  RETURN_IF_ERROR(NormalizeInstanceGroup(
+      min_compute_capability_, backend_->BackendAttributes().preferred_groups_,
+      &model_config));
+  RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
+
+  // Update the instances to the new config.
+  caller_lock->unlock();  // allow inference while creating instances
+  Status status = TritonModelInstance::SetInstances(
+      this, backend_cmdline_config_map_, host_policy_map_, model_config);
+  caller_lock->lock();
+  if (!status.IsOk()) {
+    return status;
+  }
+
+  // At this point, the new model config is ready but not yet written into this
+  // object. The 'caller_lock' is held, so 'model_lifecycle' will pause any new
+  // inference request. It is safe to move forward and commit the change.
+  RETURN_IF_ERROR(SetModelConfig(model_config));
+  RETURN_IF_ERROR(CommitInstances());
+  RETURN_IF_ERROR(SetConfiguredScheduler());
+
+  return Status::Success;
+}
+
+Status
+TritonModel::GetExecutionPolicy(const inference::ModelConfig& model_config)
+{
+  // Set 'device_blocking_'
+  device_blocking_ = false;
+  if (backend_->ExecutionPolicy() == TRITONBACKEND_EXECUTION_DEVICE_BLOCKING) {
+    if (model_config.has_sequence_batching()) {
+      LOG_INFO << "Overriding execution policy to "
+                  "\"TRITONBACKEND_EXECUTION_BLOCKING\" for sequence model \""
+               << model_config.name() << "\"";
+    } else {
+      device_blocking_ = true;
+    }
+  }
+
   return Status::Success;
 }
 
@@ -323,17 +367,74 @@ TritonModel::SetBackendConfigDefaults(
   return Status::Success;
 }
 
-Status
-TritonModel::AddInstance(
-    std::unique_ptr<TritonModelInstance>&& instance, const bool passive)
+std::shared_ptr<TritonModelInstance>
+TritonModel::FindInstance(const TritonModelInstance::Signature& signature) const
 {
-  if (passive) {
-    passive_instance_group_map_[instance->GroupName()].emplace_back(
-        std::move(instance));
-  } else {
-    instance_group_map_[instance->GroupName()].emplace_back(
-        std::move(instance));
+  // The search can be improved by introducing some gradient into comparing
+  // signatures. One solution could be to use hash key. [FIXME: DLIS-4822]
+  for (auto* instances : {&instances_, &passive_instances_}) {
+    for (auto& instance : (*instances)) {
+      if (instance->GetSignature() == signature) {
+        return instance;
+      }
+    }
   }
+  return std::shared_ptr<TritonModelInstance>();
+}
+
+Status
+TritonModel::RegisterInstance(
+    std::shared_ptr<TritonModelInstance>&& instance, const bool passive)
+{
+  instance->GetSignature().DisableMatching();
+
+  if (passive) {
+    bg_passive_instances_.emplace_back(std::move(instance));
+  } else {
+    bg_instances_.emplace_back(std::move(instance));
+  }
+
+  return Status::Success;
+}
+
+Status
+TritonModel::CommitInstances()
+{
+  instances_.swap(bg_instances_);
+  passive_instances_.swap(bg_passive_instances_);
+  bg_instances_.clear();
+  bg_passive_instances_.clear();
+
+  for (auto* instances : {&instances_, &passive_instances_}) {
+    for (auto& instance : (*instances)) {
+      instance->GetSignature().EnableMatching();
+    }
+  }
+
+  return Status::Success;
+}
+
+std::vector<std::shared_ptr<TritonModelInstance>>
+TritonModel::GetInstancesByDevice(int32_t device_id) const
+{
+  std::vector<std::shared_ptr<TritonModelInstance>> result;
+  // Do not match passive instances, as they do not have a backend thread.
+  // Do not match foreground instances, as backend threads cannot be updated.
+  for (auto& instance : bg_instances_) {
+    if (instance->DeviceId() == device_id) {
+      result.push_back(instance);
+    }
+  }
+  return result;
+}
+
+Status
+TritonModel::SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler)
+{
+  if (scheduler_ != nullptr) {
+    LOG_VERBOSE(1) << "Replacing scheduler for model '" + config_.name() + "'";
+  }
+  scheduler_ = std::move(scheduler);
 
   return Status::Success;
 }
@@ -443,7 +544,7 @@ TritonModel::SetConfiguredScheduler()
         0 /* max_queue_delay_microseconds */, &scheduler));
   }
 
-  return SetScheduler(std::move(scheduler));
+  return SetSchedulerMutable(std::move(scheduler));
 }
 
 Status
@@ -499,40 +600,20 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
   return Status::Success;
 }
 
-Status
-TritonModel::Initialize()
-{
-  for (const auto& pair : instance_group_map_) {
-    for (const auto& instance : pair.second) {
-      RETURN_IF_ERROR(instance->Initialize());
-    }
-  }
-
-  return Status::Success;
-}
-
-Status
-TritonModel::WarmUp()
-{
-  for (const auto& pair : instance_group_map_) {
-    for (const auto& instance : pair.second) {
-      RETURN_IF_ERROR(instance->WarmUp());
-    }
-  }
-
-  return Status::Success;
-}
-
 TritonModel::TritonModel(
     InferenceServer* server,
     const std::shared_ptr<LocalizedPath>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
     const double min_compute_capability, const int64_t version,
-    const inference::ModelConfig& config, const bool auto_complete_config)
+    const inference::ModelConfig& config, const bool auto_complete_config,
+    const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
     : Model(
           min_compute_capability, localized_model_dir->Path(), version, config),
       server_(server), min_compute_capability_(min_compute_capability),
       auto_complete_config_(auto_complete_config),
+      backend_cmdline_config_map_(backend_cmdline_config_map),
+      host_policy_map_(host_policy_map), device_blocking_(false),
       localized_model_dir_(localized_model_dir), backend_(backend),
       state_(nullptr)
 {
@@ -556,8 +637,10 @@ TritonModel::~TritonModel()
 
   // Explicitly delete/finalize all model instances before finalizing
   // the model itself.
-  instance_group_map_.clear();
-  passive_instance_group_map_.clear();
+  instances_.clear();
+  passive_instances_.clear();
+  bg_instances_.clear();
+  bg_passive_instances_.clear();
 
   // Unregister itself from the rate limiter. Note this should happen
   // after all instances are destructed. Destrucing instances ensures

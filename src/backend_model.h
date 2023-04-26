@@ -28,6 +28,7 @@
 #include <memory>
 #include <string>
 #include "backend_manager.h"
+#include "backend_model_instance.h"
 #include "filesystem.h"
 #include "infer_request.h"
 #include "model.h"
@@ -37,7 +38,6 @@
 namespace triton { namespace core {
 
 class InferenceServer;
-class TritonModelInstance;
 
 //
 // Represents a model.
@@ -64,26 +64,51 @@ class TritonModel : public Model {
       const bool is_config_provided, std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
-  using TritonInstanceGroup = std::vector<std::unique_ptr<TritonModelInstance>>;
+  // Return path to the localized model directory.
   const std::string& LocalizedModelPath() const
   {
     return localized_model_dir_->Path();
   }
+  // Return pointer to the underlying server.
   InferenceServer* Server() { return server_; }
+  // Return whether the backend should attempt to auto-complete the model config
   bool AutoCompleteConfig() const { return auto_complete_config_; }
+  // Called by TRITONBACKEND_ModelSetConfig() C-API.
   Status UpdateModelConfig(
       const uint32_t config_version,
       TRITONSERVER_Message* updated_config_message);
+  // Return the underlying backend.
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  const std::unordered_map<std::string, TritonInstanceGroup>& InstanceGroups()
-      const
+  // Return the foreground instances, excluding passive instances.
+  const std::vector<std::shared_ptr<TritonModelInstance>>& Instances() const
   {
-    return instance_group_map_;
+    return instances_;
   }
+  // Find a foreground instance, if any, that matched the signature.
+  std::shared_ptr<TritonModelInstance> FindInstance(
+      const TritonModelInstance::Signature& signature) const;
+
+  // True if different instances should be grouped by device; false otherwise.
+  bool DeviceBlocking() const { return device_blocking_; }
+  // Get a vector of non-passive background instances that share the device id.
+  std::vector<std::shared_ptr<TritonModelInstance>> GetInstancesByDevice(
+      int32_t device_id) const;
+
+  // Manipulate the opaque state associated with this model.
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
-  Status AddInstance(
-      std::unique_ptr<TritonModelInstance>&& instance, const bool passive);
+
+  // Called by 'backend_model_instance' to move new instances to this object.
+  // The new instances are registered into the background.
+  Status RegisterInstance(
+      std::shared_ptr<TritonModelInstance>&& instance, const bool passive);
+
+  // Update instance group. 'caller_lock' will be released when creating new
+  // instances and re-held when returning, to allow atomic switch over to the
+  // new instances.
+  Status UpdateInstanceGroup(
+      const inference::ModelConfig& new_model_config,
+      std::unique_lock<std::mutex>* caller_lock);
 
   // Custom batching function getters.
   TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
@@ -99,10 +124,21 @@ class TritonModel : public Model {
       const std::shared_ptr<LocalizedPath>& localized_model_dir,
       const std::shared_ptr<TritonBackend>& backend,
       const double min_compute_capability, const int64_t version,
-      const inference::ModelConfig& config, const bool auto_complete_config);
+      const inference::ModelConfig& config, const bool auto_complete_config,
+      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
 
-  // Set the scheduler based on the model configuration. The scheduler
-  // can only be set once for a backend.
+  // Replace the foreground instances with background instances.
+  Status CommitInstances();
+
+  // Gets the execution policy setting from the backend.
+  Status GetExecutionPolicy(const inference::ModelConfig& model_config);
+
+  // Set or update the scheduler.
+  Status SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler);
+
+  // Set the scheduler based on the model configuration and foreground
+  // 'instances'.
   Status SetConfiguredScheduler();
 
   // Set the batching strategy, if custom functions provided by user.
@@ -121,9 +157,6 @@ class TritonModel : public Model {
   static Status SetBackendConfigDefaults(
       triton::common::BackendCmdlineConfig& config);
 
-  Status Initialize();
-  Status WarmUp();
-
   // Clear library handles.
   void ClearHandles();
 
@@ -134,9 +167,14 @@ class TritonModel : public Model {
 
   // The minimum supported compute capability on device.
   const double min_compute_capability_;
-
   // Whether the backend should attempt to auto-complete the model config.
   const bool auto_complete_config_;
+  // The backend cmdline config.
+  const triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
+  // The host policy map.
+  const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+  // The device blocking. It should not be changed after the model is created.
+  bool device_blocking_;
 
   // The localized repo directory holding the model. If localization
   // required creation of a temporary local copy then that copy will
@@ -146,13 +184,14 @@ class TritonModel : public Model {
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;
 
-  // The model instances for this model stored by the
-  // instance groups defined in the model configuration.
-  // Passive instance groups are those instances which are
-  // loaded but not added to the scheduler.
-  std::unordered_map<std::string, TritonInstanceGroup> instance_group_map_;
-  std::unordered_map<std::string, TritonInstanceGroup>
-      passive_instance_group_map_;
+  // The model instances for this model. Passive instances are loaded but not
+  // added to the scheduler.
+  std::vector<std::shared_ptr<TritonModelInstance>> instances_;
+  std::vector<std::shared_ptr<TritonModelInstance>> passive_instances_;
+  // They are the background 'instances_' and 'passive_instances_', not yet
+  // effective until committed.
+  std::vector<std::shared_ptr<TritonModelInstance>> bg_instances_;
+  std::vector<std::shared_ptr<TritonModelInstance>> bg_passive_instances_;
 
   // Opaque state associated with this model.
   void* state_;
