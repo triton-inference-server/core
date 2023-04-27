@@ -1411,6 +1411,36 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_GetBackendAttribute(
     TRITONBACKEND_Backend* backend,
     TRITONBACKEND_BackendAttribute* backend_attributes);
 
+/// Query the total memory usage of the model and its associated model
+/// instances. Unless TRITONBACKEND_BackendAttributeSetEnableMemoryTracker is
+/// explicitly set to true, this function is optional, a backend is not required
+/// to implement it. This function is called when changes are made to the model
+/// and Triton wants to retrieve the latest memory usage. This function may be
+/// called multiple times within the lifetime of the model (between
+/// TRITONBACKEND_ModelInitialize and TRITONBACKEND_ModelFinalize).
+/// The backend may return error to indicate failure to get the latest memory
+/// usage.
+///
+/// \param model The model.
+/// \param usage The list of buffer attributes that the backend can record the
+/// memory usage, each entry should record the total memory usage of a given
+/// memory type and id. For example, if the model itself occupies 64 bytes on
+/// CUDA device 0 and it has two model instances that each instance occupies
+/// 128 bytes on CUDA device 1. Then 'usage' should have first two entries set,
+/// one has the buffer attributes of "type GPU, id 0, 64 bytes" and the
+/// other has "type GPU, id 1, 256 bytes". The list and the list entries are
+/// owned by Triton.
+/// \param usage_size This parameter is both input and output of the function.
+/// As input, it represents the number of entries in the list that the backend
+/// may write memory usage into. As output, it returns the number of entries
+/// that the backend has written the memory usage into. If the backend needs
+/// more entries to write the memory info, -1 should be set for 'usage_size' and
+/// error should be returned with TRITONSERVER_ERROR_INVALID_ARG.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelMemoryUsage(
+    TRITONBACKEND_Model* model, TRITONSERVER_BufferAttributes** usage,
+    int32_t* usage_size);
+
 /// TRITONBACKEND_BackendAttribute
 ///
 /// API to modify attributes associated with a backend.
@@ -1436,6 +1466,25 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
     TRITONBACKEND_BackendAttribute* backend_attributes,
     const TRITONSERVER_InstanceGroupKind kind, const uint64_t count,
     const uint64_t* device_ids, const uint64_t id_count);
+
+/// Set whether the backend enables memory tracker. If set to true, Triton
+/// will expect the backend to track the memory allocated for individual model
+/// and assoicated model instances, and the backend must implement
+/// TRITONBACKEND_ModelMemoryUsage callback to report total memory usage of the
+/// model. Triton will invoke the callabck after model memory usage may have
+/// changed, for example, after instance initialization or finalization.
+///
+/// \param backend_attributes The backend attributes object.
+/// \param kind The kind of the instance group.
+/// \param count The number of instances per device. Triton default will be used
+/// if 0 is provided.
+/// \param device_ids The devices where instances should be available. Triton
+/// default will be used if 'nullptr' is provided.
+/// \param id_count The number of devices in 'device_ids'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BackendAttributeSetEnableMemoryTracker(
+    TRITONBACKEND_BackendAttribute* backend_attributes, const bool enable);
 
 /// TRITONBACKEND Batching
 ///
