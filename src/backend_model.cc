@@ -316,19 +316,19 @@ TritonModel::ResolveBackendConfigs(
   std::map<std::string, std::string> lconfig;
   if (global_itr != backend_cmdline_config_map.end()) {
     // Accumulate all global settings
-    for (auto& setting : global_itr->second){
+    for (auto& setting : global_itr->second) {
       lconfig[setting.first] = setting.second;
     }
   }
   if (specific_itr != backend_cmdline_config_map.end()) {
     // Accumulate backend specific settings and override
-    // global settings with specific configs if needed 
-    for (auto& setting : specific_itr->second){
+    // global settings with specific configs if needed
+    for (auto& setting : specific_itr->second) {
       lconfig[setting.first] = setting.second;
     }
-  } 
-  for (auto& final_setting : lconfig){
-      config.emplace_back(final_setting);
+  }
+  for (auto& final_setting : lconfig) {
+    config.emplace_back(final_setting);
   }
 
   return Status::Success;
@@ -591,9 +591,11 @@ TritonModel::SetBatchingStrategy(const std::string& batch_libpath)
     TRITONSERVER_Error* err = batcher_init_fn_(
         Batcher(), reinterpret_cast<TRITONBACKEND_Model*>(this));
     if (err) {
-      auto err_message = TRITONSERVER_ErrorMessage(err);
+      auto status = Status(
+          TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
+          TRITONSERVER_ErrorMessage(err));
       TRITONSERVER_ErrorDelete(err);
-      return Status(Status::Code::INVALID_ARG, err_message);
+      return status;
     }
   }
 
@@ -1312,8 +1314,9 @@ TRITONBACKEND_RequestParameter(
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
         ("out of bounds index " + std::to_string(index) +
-            std::string(": request has ") + std::to_string(parameters.size()) +
-            " parameters").c_str());
+         std::string(": request has ") + std::to_string(parameters.size()) +
+         " parameters")
+            .c_str());
   }
 
   const InferenceParameter& param = parameters[index];
@@ -1405,7 +1408,8 @@ TRITONBACKEND_InputBuffer(
   InferenceRequest::Input* ti =
       reinterpret_cast<InferenceRequest::Input*>(input);
   Status status = ti->DataBuffer(
-      index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id);
+      index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type,
+      memory_type_id);
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
@@ -1445,10 +1449,11 @@ TRITONBACKEND_InputBufferForHostPolicy(
   Status status =
       (host_policy_name == nullptr)
           ? ti->DataBuffer(
-                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id)
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size),
+                memory_type, memory_type_id)
           : ti->DataBufferForHostPolicy(
-                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size), memory_type, memory_type_id,
-                host_policy_name);
+                index, buffer, reinterpret_cast<size_t*>(buffer_byte_size),
+                memory_type, memory_type_id, host_policy_name);
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
