@@ -56,8 +56,8 @@ RateLimiter::RegisterModelInstance(
     const RateLimiterConfig& rate_limiter_config)
 {
   {
-    std::lock_guard<std::mutex> lk1(model_ctx_mtx_);
-    std::lock_guard<std::mutex> lk2(model_instance_ctx_mtx_);
+    std::lock_guard<std::mutex> lk1(model_instance_ctx_mtx_);
+    std::lock_guard<std::mutex> lk2(model_ctx_mtx_);
 
     auto& model_context = model_contexts_[triton_model_instance->Model()];
     auto& model_instances =
@@ -95,21 +95,24 @@ RateLimiter::RegisterModelInstance(
 Status
 RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
 {
-  std::lock_guard<std::mutex> lk1(model_ctx_mtx_);
-  std::lock_guard<std::mutex> lk2(model_instance_ctx_mtx_);
-
   const TritonModel* model = triton_model_instance->Model();
+  {
+    std::lock_guard<std::mutex> lk1(model_instance_ctx_mtx_);
 
-  auto& model_context = model_contexts_[model];
-  auto& model_instances = model_instance_ctxs_[model];
-  auto i_it = model_instances.find(triton_model_instance);
-  if (i_it != model_instances.end()) {
-    i_it->second->WaitForRemoval();
-    if (!ignore_resources_and_priority_) {
-      resource_manager_->RemoveModelInstance(i_it->second.get());
+    auto& model_instances = model_instance_ctxs_[model];
+    auto i_it = model_instances.find(triton_model_instance);
+    if (i_it != model_instances.end()) {
+      i_it->second->WaitForRemoval();
+      if (!ignore_resources_and_priority_) {
+        resource_manager_->RemoveModelInstance(i_it->second.get());
+      }
+
+      {
+        std::lock_guard<std::mutex> lk2(model_ctx_mtx_);
+        model_contexts_[model].RemoveInstance(i_it->second.get());
+      }
+      model_instances.erase(i_it);
     }
-    model_context.RemoveInstance(i_it->second.get());
-    model_instances.erase(i_it);
   }
 
   if (!ignore_resources_and_priority_) {
@@ -136,12 +139,12 @@ Status
 RateLimiter::UnregisterModel(const TritonModel* model)
 {
   {
-    std::lock_guard<std::mutex> lk1(model_ctx_mtx_);
-    std::lock_guard<std::mutex> lk2(model_instance_ctx_mtx_);
+    std::lock_guard<std::mutex> lk1(model_instance_ctx_mtx_);
+    {
+      std::lock_guard<std::mutex> lk2(model_ctx_mtx_);
+      model_contexts_[model].RequestRemoval();
+    }
 
-    auto& model_context = model_contexts_[model];
-
-    model_context.RequestRemoval();
     for (const auto& instance : model_instance_ctxs_[model]) {
       instance.second->WaitForRemoval();
       if (!ignore_resources_and_priority_) {
@@ -150,7 +153,10 @@ RateLimiter::UnregisterModel(const TritonModel* model)
     }
 
     model_instance_ctxs_.erase(model);
-    model_contexts_.erase(model);
+    {
+      std::lock_guard<std::mutex> lk2(model_ctx_mtx_);
+      model_contexts_.erase(model);
+    }
   }
 
   if (!ignore_resources_and_priority_) {
