@@ -821,7 +821,7 @@ EnsembleContext::GetNextSteps(
 
   std::set<std::pair<size_t, IterationCount>> next_step_idx;
   // Get steps whose tensors used for input are set
-  for (const auto updated_tensor : updated_tensors) {
+  for (const auto& updated_tensor : updated_tensors) {
     const auto& step_idx = (*tensor_to_step_)[updated_tensor.first];
     for (const auto& idx : step_idx) {
       bool ready = true;
@@ -1077,7 +1077,7 @@ EnsembleContext::CheckAndSetEnsembleOutput(
   bool ready = false;
   auto& lrequest = request_tracker_->Request();
   const auto& requested_outputs = lrequest->ImmutableRequestedOutputs();
-  for (const auto updated_tensor : updated_tensors) {
+  for (const auto& updated_tensor : updated_tensors) {
     if (requested_outputs.find(updated_tensor.first) ==
         requested_outputs.end()) {
       continue;
@@ -1318,9 +1318,8 @@ EnsembleScheduler::EnsembleScheduler(
   if (Metrics::Enabled()) {
     // Ensemble scheduler doesn't currently support response cache at top level.
     MetricModelReporter::Create(
-        config.name(), 1, METRIC_REPORTER_ID_CPU, 
-        false /* response_cache_enabled */,
-        config.metric_tags(),
+        config.name(), 1, METRIC_REPORTER_ID_CPU,
+        false /* response_cache_enabled */, config.metric_tags(),
         &metric_reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS

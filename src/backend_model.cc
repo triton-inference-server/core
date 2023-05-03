@@ -502,7 +502,7 @@ TritonModel::SetConfiguredScheduler()
   // non-variable and if there are no shape tensors... so we don't
   // enable it in that case for efficiency reasons.
   std::unordered_map<std::string, bool> enforce_equal_shape_tensors;
-  for (const auto input : config_.input()) {
+  for (const auto& input : config_.input()) {
     if (input.is_shape_tensor()) {
       enforce_equal_shape_tensors.insert({input.name(), true});
     } else if (
