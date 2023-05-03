@@ -1210,7 +1210,7 @@ ModelRepositoryManager::Poll(
           exists = false;
         }
       } else {
-        for (const auto repository_path : repository_paths_) {
+        for (const auto& repository_path : repository_paths_) {
           bool exists_in_this_repo = false;
           const auto full_path = JoinPath({repository_path, model.first});
           Status status = FileExists(full_path, &exists_in_this_repo);
