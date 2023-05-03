@@ -161,8 +161,6 @@ TritonModel::Create(
         ValidateInstanceGroup(model_config, min_compute_capability));
   }
 
-  DeviceMemoryTracker::ScopedMemoryUsage usage;
-  DeviceMemoryTracker::TrackThreadMemoryUsage(&usage);
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, version,
@@ -249,9 +247,6 @@ TritonModel::Create(
   RETURN_IF_ERROR(local_model->CommitInstances());
 
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
-
-  DeviceMemoryTracker::UntrackThreadMemoryUsage(&usage);
-  local_model->SetMemoryUsage(usage.SerializeToBufferAttributes());
 
   *model = std::move(local_model);
   return Status::Success;
@@ -783,6 +778,16 @@ TRITONBACKEND_ModelSetState(TRITONBACKEND_Model* model, void* state)
 {
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
   tm->SetState(state);
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelReportMemoryUsage(
+    TRITONBACKEND_Model* model, TRITONSERVER_BufferAttributes** usage,
+    uint32_t usage_size)
+{
+  TritonModel* tm = reinterpret_cast<TritonModel*>(model);
+  tm->SetMemoryUsage(reinterpret_cast<BufferAttributes**>(usage), usage_size);
   return nullptr;  // success
 }
 

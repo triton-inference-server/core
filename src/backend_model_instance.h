@@ -125,6 +125,27 @@ class TritonModelInstance {
 
   MetricModelReporter* MetricReporter() const { return reporter_.get(); }
 
+  // Directly call from C API, so arguments are in the same style
+  void SetMemoryUsage(BufferAttributes** memory_usage, uint32_t usage_size)
+  {
+    std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> lusage;
+    for (uint32_t idx = 0; idx < usage_size; ++idx) {
+      const auto mem_type = memory_usage[idx]->MemoryType();
+      const auto mem_id = memory_usage[idx]->MemoryTypeId();
+      const auto byte_size = memory_usage[idx]->ByteSize();
+      lusage[mem_type][mem_id] = byte_size;
+    }
+    std::lock_guard<std::mutex> lk(usage_mtx_);
+    memory_usage_.swap(lusage);
+  }
+
+  std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> MemoryUsage()
+      const
+  {
+    std::lock_guard<std::mutex> lk(usage_mtx_);
+    return memory_usage_;
+  }
+
  private:
   class TritonBackendThread {
    public:
@@ -223,6 +244,10 @@ class TritonModelInstance {
 
   // Reporter for metrics, or nullptr if no metrics should be reported
   std::shared_ptr<MetricModelReporter> reporter_;
+
+  // Records of memory used for the model instance
+  std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> memory_usage_;
+  mutable std::mutex usage_mtx_;
 
   // Opaque state associated with this model instance.
   void* state_;

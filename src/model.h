@@ -146,12 +146,46 @@ class Model {
     return stats_aggregator_;
   }
 
-  void SetMemoryUsage(const std::vector<BufferAttributes>& memory_usage) {
-    memory_usage_ = memory_usage;
+  // Directly call from C API, so arguments are in the same style
+  void SetMemoryUsage(BufferAttributes** memory_usage, uint32_t usage_size)
+  {
+    std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> lusage;
+    for (uint32_t idx = 0; idx < usage_size; ++idx) {
+      const auto& mem_type = memory_usage[idx]->MemoryType();
+      const auto& mem_id = memory_usage[idx]->MemoryTypeId();
+      const auto& byte_size = memory_usage[idx]->ByteSize();
+      lusage[mem_type][mem_id] = byte_size;
+    }
+    std::lock_guard<std::mutex> lk(usage_mtx_);
+    memory_usage_.swap(lusage);
   }
 
-  const std::vector<BufferAttributes>& MemoryUsage() const {
-    return memory_usage_;
+  std::vector<BufferAttributes> AccumulatedMemoryUsage() const
+  {
+    auto lusage = AccumulatedInstanceMemoryUsage();
+    // accumulate model memory usage
+    {
+      std::lock_guard<std::mutex> lk(usage_mtx_);
+      for (const auto& mem_type_map : memory_usage_) {
+        const auto& mem_type = mem_type_map.first;
+        for (const auto& mem_id_map : mem_type_map.second) {
+          const auto& mem_id = mem_id_map.first;
+          const auto& byte_size = mem_id_map.second;
+          lusage[mem_type][mem_id] = byte_size;
+        }
+      }
+    }
+    // Convert to buffer attribute
+    std::vector<BufferAttributes> res;
+    for (const auto& mem_type_map : lusage) {
+      const auto& mem_type = mem_type_map.first;
+      for (const auto& mem_id_map : mem_type_map.second) {
+        const auto& mem_id = mem_id_map.first;
+        const auto& byte_size = mem_id_map.second;
+        res.emplace_back(byte_size, mem_type, mem_id, nullptr);
+      }
+    }
+    return res;
   }
 
   // Get the model configuration for a named input.
@@ -194,6 +228,12 @@ class Model {
   uint32_t MaxPriorityLevel() const { return max_priority_level_; }
 
  protected:
+  virtual std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>>
+  AccumulatedInstanceMemoryUsage() const
+  {
+    return {};
+  }
+
   // Set the configuration of the model being served.
   Status SetModelConfig(const inference::ModelConfig& config);
 
@@ -218,7 +258,8 @@ class Model {
   InferenceStatsAggregator stats_aggregator_;
 
   // Records of memory used for loading the model
-  std::vector<BufferAttributes> memory_usage_;
+  std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> memory_usage_;
+  mutable std::mutex usage_mtx_;
 
   // Label provider for this model.
   std::shared_ptr<LabelProvider> label_provider_;

@@ -2759,7 +2759,8 @@ TRITONSERVER_ServerModelStatistics(
       // Add memory usage
       triton::common::TritonJson::Value memory_usage(
           metadata, triton::common::TritonJson::ValueType::ARRAY);
-      const std::vector<tc::BufferAttributes>& usages = model->MemoryUsage();
+      const std::vector<tc::BufferAttributes>& usages =
+          model->AccumulatedMemoryUsage();
       for (const auto& usage : usages) {
         triton::common::TritonJson::Value usage_json(
             metadata, triton::common::TritonJson::ValueType::OBJECT);

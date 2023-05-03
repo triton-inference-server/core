@@ -1085,7 +1085,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelReportMemoryUsage(
     TRITONBACKEND_Model* model, TRITONSERVER_BufferAttributes** usage,
-    int32_t usage_size);
+    uint32_t usage_size);
 
 ///
 /// TRITONBACKEND_ModelInstance
@@ -1247,7 +1247,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportMemoryUsage(
     TRITONBACKEND_ModelInstance* instance,
-    TRITONSERVER_BufferAttributes** usage, int32_t usage_size);
+    TRITONSERVER_BufferAttributes** usage, uint32_t usage_size);
 
 /// Record statistics for an inference request.
 ///

@@ -95,6 +95,7 @@ endif() # TRITON_ENABLE_GCS
 # S3
 #
 if(${TRITON_ENABLE_S3})
+  find_package(ZLIB REQUIRED)
   find_package(AWSSDK REQUIRED COMPONENTS s3)
   message(STATUS "Using aws-sdk-cpp ${AWSSDK_VERSION}")
 endif()
