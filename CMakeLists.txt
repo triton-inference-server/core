@@ -272,6 +272,10 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   endif() # TRITON_ENABLE_GCS
   if(${TRITON_ENABLE_S3})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} aws-sdk-cpp)
+    # Add where to find all S3 dependencies to CMAKE_PREFIX_PATH
+    set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH}
+      ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib/cmake
+      ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib)
   endif() # TRITON_ENABLE_S3
   if(${TRITON_ENABLE_AZURE_STORAGE})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} azure-storage-cpplite)
@@ -309,6 +313,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-c-event-stream_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-event-stream/cmake
       -Daws-c-common_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-common/cmake
       -Daws-checksums_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-checksums/cmake
+      -DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
       -DTRITON_COMMON_REPO_TAG:STRING=${TRITON_COMMON_REPO_TAG}
       -DTRITON_EXTRA_LIB_PATHS:PATH=${TRITON_EXTRA_LIB_PATHS}
