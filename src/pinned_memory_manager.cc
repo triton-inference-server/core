@@ -259,7 +259,7 @@ PinnedMemoryManager::Create(const Options& options)
     // Create only one buffer / manager should be created for one node,
     // and all associated devices should request memory from the shared manager
     std::map<int32_t, std::string> numa_map;
-    for (const auto host_policy : options.host_policy_map_) {
+    for (const auto& host_policy : options.host_policy_map_) {
       const auto numa_it = host_policy.second.find("numa-node");
       if (numa_it != host_policy.second.end()) {
         int32_t numa_id;
@@ -269,7 +269,7 @@ PinnedMemoryManager::Create(const Options& options)
         }
       }
     }
-    for (const auto node_policy : numa_map) {
+    for (const auto& node_policy : numa_map) {
       auto status =
           SetNumaMemoryPolicy(options.host_policy_map_.at(node_policy.second));
       if (!status.IsOk()) {

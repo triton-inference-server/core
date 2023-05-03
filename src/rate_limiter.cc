@@ -808,7 +808,7 @@ RateLimiter::ResourceManager::UpdateResourceLimits()
                 .emplace(resource_device_map.first, resource_device_map.second)
                 .first;
       } else {
-        for (const auto resource : resource_device_map.second) {
+        for (const auto& resource : resource_device_map.second) {
           auto ritr = ditr->second.find(resource.first);
           if (ritr == ditr->second.end()) {
             ritr = ditr->second.emplace(resource.first, resource.second).first;
