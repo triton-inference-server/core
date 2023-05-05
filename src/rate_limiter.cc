@@ -27,6 +27,7 @@
 #include "rate_limiter.h"
 
 #include <limits>
+#include "server.h"
 #include "triton/common/logging.h"
 
 namespace triton { namespace core {
@@ -736,7 +737,27 @@ RateLimiter::ModelInstanceContext::WaitForRemoval()
       (!model_context_->ContainsPendingRequests(this))) {
     state_ = REMOVED;
   }
-  if (state_ != REMOVED) {
+  while (state_ != REMOVED) {
+    // While there are payload assigned to this model instance, dequeue the
+    // payload and return error status, because they will not be executed after
+    // the backend thread for this instance stops. This temporary mechanism and
+    // the condition variable will not be needed after the scheduler can pause
+    // and flush requests into the rate limiter. [FIXME: DLIS-4820]
+    lk.unlock();
+    std::deque<TritonModelInstance*> model_instances({triton_model_instance_});
+    std::shared_ptr<Payload> payload;
+    triton_model_instance_->Model()->Server()->GetRateLimiter()->DequeuePayload(
+        model_instances, &payload);
+    Status status = Status(
+        Status::Code::INTERNAL,
+        "Cannot inference the request after its backend instance thread is "
+        "removed. This issue will be fixed on future releases.");
+    InferenceRequest::RespondIfError(
+        payload->Requests(), status, true /* release_requests */);
+    triton_model_instance_->Model()->Server()->GetRateLimiter()->PayloadRelease(
+        payload);
+    lk.lock();
+
     cv_.wait(lk, [this] { return state_ == REMOVED; });
   }
 }
