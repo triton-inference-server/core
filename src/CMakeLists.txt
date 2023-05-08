@@ -498,7 +498,6 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CNMEM_LIBRARY}
       CUDA::cudart
-      CUDA::cupti
   )
 endif() # TRITON_ENABLE_GPU
 
