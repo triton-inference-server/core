@@ -147,7 +147,7 @@ class TritonModel : public Model {
           for (const auto& mem_id_map : mem_type_map.second) {
             const auto& mem_id = mem_id_map.first;
             const auto& byte_size = mem_id_map.second;
-            res[mem_type][mem_id] = byte_size;
+            res[mem_type][mem_id] += byte_size;
           }
         }
       }

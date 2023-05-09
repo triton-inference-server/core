@@ -1068,7 +1068,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
 
 /// Report the memory usage of the model that will be released on
 /// TRITONBACKEND_ModelFinalize. The backend may call this function within the
-/// lifecyle of the TRITONBACKEND_Model object (between
+/// lifecycle of the TRITONBACKEND_Model object (between
 /// TRITONBACKEND_ModelInitialize and TRITONBACKEND_ModelFinalize) to report the
 /// latest usage. To report the memory usage of a model instance,
 /// see TRITONBACKEND_ModelInstanceReportMemoryUsage.
@@ -1227,9 +1227,9 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceState(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
     TRITONBACKEND_ModelInstance* instance, void* state);
 
-/// Report the memory usage of the model instnace that will be released on
+/// Report the memory usage of the model instance that will be released on
 /// TRITONBACKEND_ModelInstanceFinalize. The backend may call this function
-/// within the lifecyle of the TRITONBACKEND_Model object (between
+/// within the lifecycle of the TRITONBACKEND_Model object (between
 /// TRITONBACKEND_ModelInstanceInitialize and
 /// TRITONBACKEND_ModelInstanceFinalize) to report the latest usage. To report
 /// the memory usage of the model, see TRITONBACKEND_ModelReportMemoryUsage.

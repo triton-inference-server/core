@@ -1003,7 +1003,7 @@ TRITONBACKEND_ModelInstanceReportMemoryUsage(
     TRITONSERVER_BufferAttributes** usage, uint32_t usage_size)
 {
   TritonModelInstance* ti = reinterpret_cast<TritonModelInstance*>(instance);
-  ti->SetMemoryUsage(reinterpret_cast<BufferAttributes**>(usage), usage_size);
+  ti->SetMemoryUsage({reinterpret_cast<BufferAttributes**>(usage), usage_size});
   return nullptr;  // success
 }
 

@@ -126,10 +126,10 @@ class TritonModelInstance {
   MetricModelReporter* MetricReporter() const { return reporter_.get(); }
 
   // Directly call from C API, so arguments are in the same style
-  void SetMemoryUsage(BufferAttributes** memory_usage, uint32_t usage_size)
+  void SetMemoryUsage(boost::span<BufferAttributes*> memory_usage)
   {
     std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> lusage;
-    for (uint32_t idx = 0; idx < usage_size; ++idx) {
+    for (uint32_t idx = 0; idx < memory_usage.size(); ++idx) {
       const auto mem_type = memory_usage[idx]->MemoryType();
       const auto mem_id = memory_usage[idx]->MemoryTypeId();
       const auto byte_size = memory_usage[idx]->ByteSize();

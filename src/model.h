@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <boost/core/span.hpp>
 #include "infer_stats.h"
 #include "label_provider.h"
 #include "model_config.pb.h"
@@ -146,11 +147,10 @@ class Model {
     return stats_aggregator_;
   }
 
-  // Directly call from C API, so arguments are in the same style
-  void SetMemoryUsage(BufferAttributes** memory_usage, uint32_t usage_size)
+  void SetMemoryUsage(boost::span<BufferAttributes*> memory_usage)
   {
     std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> lusage;
-    for (uint32_t idx = 0; idx < usage_size; ++idx) {
+    for (uint32_t idx = 0; idx < memory_usage.size(); ++idx) {
       const auto& mem_type = memory_usage[idx]->MemoryType();
       const auto& mem_id = memory_usage[idx]->MemoryTypeId();
       const auto& byte_size = memory_usage[idx]->ByteSize();
@@ -171,7 +171,7 @@ class Model {
         for (const auto& mem_id_map : mem_type_map.second) {
           const auto& mem_id = mem_id_map.first;
           const auto& byte_size = mem_id_map.second;
-          lusage[mem_type][mem_id] = byte_size;
+          lusage[mem_type][mem_id] += byte_size;
         }
       }
     }

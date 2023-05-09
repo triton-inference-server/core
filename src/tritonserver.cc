@@ -2764,23 +2764,9 @@ TRITONSERVER_ServerModelStatistics(
       for (const auto& usage : usages) {
         triton::common::TritonJson::Value usage_json(
             metadata, triton::common::TritonJson::ValueType::OBJECT);
-        std::string type;
-        switch (usage.MemoryType()) {
-          case TRITONSERVER_MEMORY_CPU: {
-            type = "CPU";
-            break;
-          }
-          case TRITONSERVER_MEMORY_CPU_PINNED: {
-            type = "CPU_PINNED";
-            break;
-          }
-          case TRITONSERVER_MEMORY_GPU: {
-            type = "GPU";
-            break;
-          }
-        }
+        std::string type = TRITONSERVER_MemoryTypeString(usage.MemoryType());
         RETURN_IF_STATUS_ERROR(usage_json.AddString("type", std::move(type)));
-        RETURN_IF_STATUS_ERROR(usage_json.AddUInt("id", usage.MemoryTypeId()));
+        RETURN_IF_STATUS_ERROR(usage_json.AddInt("id", usage.MemoryTypeId()));
         RETURN_IF_STATUS_ERROR(
             usage_json.AddUInt("byte_size", usage.ByteSize()));
         RETURN_IF_STATUS_ERROR(memory_usage.Append(std::move(usage_json)));
