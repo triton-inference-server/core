@@ -129,11 +129,8 @@ class TritonModelInstance {
   void SetMemoryUsage(boost::span<BufferAttributes*> memory_usage)
   {
     std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> lusage;
-    for (uint32_t idx = 0; idx < memory_usage.size(); ++idx) {
-      const auto mem_type = memory_usage[idx]->MemoryType();
-      const auto mem_id = memory_usage[idx]->MemoryTypeId();
-      const auto byte_size = memory_usage[idx]->ByteSize();
-      lusage[mem_type][mem_id] = byte_size;
+    for (const auto& mu : memory_usage) {
+      lusage[mu->MemoryType()][mu->MemoryTypeId()] = mu->ByteSize();
     }
     std::lock_guard<std::mutex> lk(usage_mtx_);
     memory_usage_.swap(lusage);
