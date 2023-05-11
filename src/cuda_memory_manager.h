@@ -61,6 +61,10 @@ class CudaMemoryManager {
   // Return Status object indicating success or failure.
   static Status Create(const Options& options);
 
+  // Provide explicit control on ending the memory manager lifecycle,
+  // CUDA resource must be cleaned up before CUDA context is destroyed.
+  static void Reset();
+
   // Allocate CUDA memory on GPU 'device_id' with
   // the requested 'size' and return the pointer in 'ptr'.
   // Return Status object indicating success or failure.
@@ -69,11 +73,6 @@ class CudaMemoryManager {
   // Free the memory allocated by the memory manager on 'device_id'.
   // Return Status object indicating success or failure.
   static Status Free(void* ptr, int64_t device_id);
-
- protected:
-  // Provide explicit control on the lifecycle of the CUDA memory manager,
-  // for testing only.
-  static void Reset();
 
  private:
   CudaMemoryManager(bool has_allocation) : has_allocation_(has_allocation) {}

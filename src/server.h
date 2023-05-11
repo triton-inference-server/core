@@ -79,6 +79,8 @@ class InferenceServer {
   // Construct an inference server.
   InferenceServer();
 
+  ~InferenceServer();
+
   // Initialize the server. Return true on success, false otherwise.
   Status Init();
 

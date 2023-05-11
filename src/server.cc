@@ -267,6 +267,12 @@ InferenceServer::Init()
   return status;
 }
 
+InferenceServer::~InferenceServer()
+{
+  PinnedMemoryManager::Reset();
+  CudaMemoryManager::Reset();
+}
+
 Status
 InferenceServer::Stop(const bool force)
 {
