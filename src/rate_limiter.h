@@ -162,7 +162,8 @@ class RateLimiter {
     Status Stage(StandardScheduleFunc OnSchedule);
     Status Allocate();
     Status DirectAllocate(StandardScheduleFunc OnSchedule);
-    void WaitForRemoval();
+    void RequestRemoval();
+    bool IsRemovalInProgress();
 
     TritonModelInstance* triton_model_instance_;
     ModelContext* model_context_;
@@ -176,8 +177,6 @@ class RateLimiter {
     std::mutex state_mtx_;
 
     StandardScheduleFunc OnSchedule_;
-
-    std::condition_variable cv_;
   };
 
   class ScaledPriorityComparator {
@@ -223,7 +222,7 @@ class RateLimiter {
     // Will wait for all enqueued model instance requests to complete.
     void RequestRemoval() { removal_in_progress_ = true; }
     // Whether or not model context is decommissioned
-    bool isRemovalInProgress() { return removal_in_progress_; }
+    bool IsRemovalInProgress() { return removal_in_progress_; }
 
    private:
     bool removal_in_progress_;
