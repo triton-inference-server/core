@@ -146,6 +146,9 @@ class Model {
     return stats_aggregator_;
   }
 
+  // Get the model card for the model being served.
+  Status GetCard(std::string* contents) const;
+
   // Get the model configuration for a named input.
   Status GetInput(
       const std::string& name, const inference::ModelInput** input) const;

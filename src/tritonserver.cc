@@ -2634,6 +2634,13 @@ TRITONSERVER_ServerModelMetadata(
         metadata.AddStringRef("platform", model_config.backend().c_str()));
   }
 
+  std::string card;
+  model->GetCard(&card);
+  if (!card.empty()) {
+      RETURN_IF_STATUS_ERROR(
+        metadata.AddStringRef("card", card.c_str()));
+  }
+
   triton::common::TritonJson::Value inputs(
       metadata, triton::common::TritonJson::ValueType::ARRAY);
   for (const auto& io : model_config.input()) {

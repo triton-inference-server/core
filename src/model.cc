@@ -37,6 +37,15 @@
 namespace triton { namespace core {
 
 Status
+Model::GetCard(std::string* contents) const
+{
+  const auto card_path = JoinPath({model_dir_, kModelCard});
+  RETURN_IF_ERROR(ReadTextFile(card_path, contents));
+
+  return Status::Success;
+}
+
+Status
 Model::GetInput(
     const std::string& name, const inference::ModelInput** input) const
 {
