@@ -105,12 +105,8 @@ class TritonModel : public Model {
   Status RegisterInstance(
       std::shared_ptr<TritonModelInstance>&& instance, const bool passive);
 
-  // Update instance group. 'caller_lock' will be released when creating new
-  // instances and re-held when returning, to allow atomic switch over to the
-  // new instances.
-  Status UpdateInstanceGroup(
-      const inference::ModelConfig& new_model_config,
-      std::unique_lock<std::mutex>* caller_lock);
+  // Update instance group.
+  Status UpdateInstanceGroup(const inference::ModelConfig& new_model_config);
 
   // Custom batching function getters.
   TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }

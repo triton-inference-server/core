@@ -75,6 +75,9 @@ class SequenceBatchScheduler : public Scheduler {
     return sequence_to_batcherseqslot_map_.size();
   }
 
+  // \see Scheduler::Update()
+  Status Update(std::unique_ptr<std::lock_guard<std::mutex>>* lock) override;
+
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
 

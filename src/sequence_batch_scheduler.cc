@@ -323,6 +323,14 @@ SequenceBatchScheduler::GenerateInitialStateData(
   return Status::Success;
 }
 
+Status
+SequenceBatchScheduler::Update(
+    std::unique_ptr<std::lock_guard<std::mutex>>* lock)
+{
+  return Status(
+      Status::Code::INTERNAL, "sequence batch scheduler cannot be updated");
+}
+
 SequenceBatchScheduler::~SequenceBatchScheduler()
 {
   // Signal the reaper thread to exit...

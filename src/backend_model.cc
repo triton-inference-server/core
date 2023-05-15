@@ -253,9 +253,7 @@ TritonModel::Create(
 }
 
 Status
-TritonModel::UpdateInstanceGroup(
-    const inference::ModelConfig& new_model_config,
-    std::unique_lock<std::mutex>* caller_lock)
+TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
 {
   // Generate normalized model config with new instance group.
   inference::ModelConfig model_config = config_;
@@ -268,25 +266,17 @@ TritonModel::UpdateInstanceGroup(
       &model_config));
   RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
 
-  // Update the instances to the new config.
-  caller_lock->unlock();  // allow inference while creating instances
-  Status status = TritonModelInstance::SetInstances(
-      this, backend_cmdline_config_map_, host_policy_map_, model_config);
-  caller_lock->lock();
-  if (!status.IsOk()) {
-    // Remove any pending instances if created.
-    bg_instances_.clear();
-    bg_passive_instances_.clear();
-    return status;
-  }
+  // Prepare the new instances on the new config.
+  RETURN_IF_ERROR(TritonModelInstance::SetInstances(
+      this, backend_cmdline_config_map_, host_policy_map_, model_config));
 
-  // At this point, the new model config is ready but not yet written into this
-  // object. The 'caller_lock' is held, so 'model_lifecycle' will pause any new
-  // inference request. It is safe to move forward and commit the change.
+  // At this point, the new model config and instances are ready but not yet
+  // written into this object. Update the scheduler and retrieve the lock
+  // holding off new inference requests, and then commit the changes.
+  std::unique_ptr<std::lock_guard<std::mutex>> lock;
+  RETURN_IF_ERROR(scheduler_->Update(&lock));
   config_.mutable_instance_group()->Swap(model_config.mutable_instance_group());
   RETURN_IF_ERROR(CommitInstances());
-  // Only model owned dynamic batch scheduler can be updated currently, so there
-  // is no need to update the scheduler.
 
   return Status::Success;
 }

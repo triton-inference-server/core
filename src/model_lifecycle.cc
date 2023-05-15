@@ -652,9 +652,12 @@ ModelLifeCycle::UpdateModelConfig(
     return;
   }
 
-  // Update model instance group.
-  Status status =
-      model->UpdateInstanceGroup(new_model_config, &model_info_lock);
+  // Update model instance group. It is the responsibility of the model to
+  // safeguard the update process, so the 'model_info_lock' is released during
+  // update to allow concurrent inference.
+  model_info_lock.unlock();
+  Status status = model->UpdateInstanceGroup(new_model_config);
+  model_info_lock.lock();
   if (!status.IsOk()) {
     model_info->state_reason_ = status.AsString();
     return;

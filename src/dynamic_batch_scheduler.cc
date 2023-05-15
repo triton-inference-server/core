@@ -171,8 +171,27 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
 }
 
 Status
+DynamicBatchScheduler::Update(
+    std::unique_ptr<std::lock_guard<std::mutex>>* lock)
+{
+  if (model_instance_ != nullptr) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Cannot update dynamic batch scheduler specific to a model instance");
+  }
+  if (lock != nullptr) {
+    lock->reset(new std::lock_guard<std::mutex>(update_mu_));
+  }
+  return Status::Success;
+}
+
+Status
 DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
+  // Pause if the scheduler is updating.
+  {
+    std::lock_guard<std::mutex> update_lock(update_mu_);
+  }
   if (stop_) {
     return Status(
         Status::Code::UNAVAILABLE,
