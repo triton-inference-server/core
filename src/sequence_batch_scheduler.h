@@ -55,7 +55,6 @@ class SequenceBatchScheduler : public Scheduler {
  public:
   using ControlInputs = std::vector<std::shared_ptr<InferenceRequest::Input>>;
 
-  SequenceBatchScheduler() = default;
   ~SequenceBatchScheduler();
 
   // Create a scheduler to support a given number of runners and a run
@@ -117,6 +116,8 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
  private:
+  SequenceBatchScheduler(TritonModel* model, const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors) : model_(model), enforce_equal_shape_tensors_(enforce_equal_shape_tensors), updating_(false), stop_(false) {}
+
   void ReaperThread(const int nice);
 
   Status CreateBooleanControlTensors(
@@ -139,13 +140,21 @@ class SequenceBatchScheduler : public Scheduler {
     }
   };
 
+  TritonModel* model_;
+  std::unordered_map<std::string, bool> enforce_equal_shape_tensors_;
+
   // The max_sequence_idle_microseconds value for this scheduler.
   uint64_t max_sequence_idle_microseconds_;
 
-  bool stop_;
+  bool updating_, stop_;
 
   // Mutex
   std::mutex mu_;
+
+  // Signal an update is complete.
+  std::condition_variable update_complete_cv_;
+  // Signal all in-flight or backlog sequence are enqueued.
+  std::condition_variable update_enqueued_cv_;
 
   // The reaper thread
   std::unique_ptr<std::thread> reaper_thread_;

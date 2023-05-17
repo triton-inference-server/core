@@ -85,6 +85,12 @@ class TritonModel : public Model {
   {
     return instances_;
   }
+  // Return the background instances, excluding passive instances.
+  const std::vector<std::shared_ptr<TritonModelInstance>>& BackgroundInstances()
+      const
+  {
+    return bg_instances_;
+  }
 
   // True if different instances should be grouped by device; false otherwise.
   bool DeviceBlocking() const { return device_blocking_; }
