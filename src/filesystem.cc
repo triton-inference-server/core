@@ -1542,7 +1542,6 @@ S3FileSystem::CleanPath(const std::string& s3_path, std::string* clean_path)
 
   // Remove extra internal slashes
   std::string true_path = path.substr(ltrim_length, rtrim_length + 1);
-  std::vector<int> slash_locations;
   bool previous_slash = false;
   for (size_t i = 0; i < true_path.size(); i++) {
     if (true_path[i] == '/') {
