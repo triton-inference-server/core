@@ -478,11 +478,7 @@ ModelLifeCycle::AsyncLoad(
       if (serving_model->state_ == ModelReadyState::READY) {
         // The model is currently being served. Check if the model load could
         // be completed with a simple config update.
-        // Models with sequence batching is currently disabled from model
-        // update, because a solution on preventing update in the middle of an
-        // in-flight sequence is currently being developed. [FIXME: DLIS-4829]
         if (!is_model_file_updated && !serving_model->is_ensemble_ &&
-            !model_config.has_sequence_batching() &&
             EquivalentInNonInstanceGroupConfig(
                 serving_model->model_config_, model_config)) {
           // Update the model
