@@ -342,7 +342,9 @@ SequenceBatchScheduler::Update(
   }
 
   // Flush all pending requests to the rate limiter.
+  lk.unlock();
   batchers_.clear();
+  lk.lock();
 
   // Re-construct the scheduler with new instances.
   auto instance_count = model_->BackgroundInstances().size();
