@@ -1626,10 +1626,14 @@ S3FileSystem::CheckClient(const std::string& s3_path)
   // check if can connect to the bucket
   s3::Model::HeadBucketRequest head_request;
   head_request.WithBucket(bucket.c_str());
-  if (!client_->HeadBucket(head_request).IsSuccess()) {
+  auto head_object_outcome = client_->HeadBucket(head_request);
+  if (!head_object_outcome.IsSuccess()) {
+    auto err = head_object_outcome.GetError();
     return Status(
         Status::Code::INTERNAL,
-        "Unable to create S3 filesystem client. Check account credentials.");
+        "Unable to create S3 filesystem client. Check account credentials. "
+        "Exception: '" +
+            err.GetExceptionName() + "' Message: '" + err.GetMessage() + "'");
   }
   return Status::Success;
 }
