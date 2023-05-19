@@ -280,9 +280,10 @@ TritonModel::UpdateInstanceGroup(
   // At this point, the new model config is ready but not yet written into this
   // object. The 'caller_lock' is held, so 'model_lifecycle' will pause any new
   // inference request. It is safe to move forward and commit the change.
-  RETURN_IF_ERROR(SetModelConfig(model_config));
+  config_.mutable_instance_group()->Swap(model_config.mutable_instance_group());
   RETURN_IF_ERROR(CommitInstances());
-  RETURN_IF_ERROR(SetConfiguredScheduler());
+  // Only model owned dynamic batch scheduler can be updated currently, so there
+  // is no need to update the scheduler.
 
   return Status::Success;
 }
@@ -429,17 +430,6 @@ TritonModel::GetInstancesByDevice(int32_t device_id) const
 }
 
 Status
-TritonModel::SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler)
-{
-  if (scheduler_ != nullptr) {
-    LOG_VERBOSE(1) << "Replacing scheduler for model '" + config_.name() + "'";
-  }
-  scheduler_ = std::move(scheduler);
-
-  return Status::Success;
-}
-
-Status
 TritonModel::UpdateModelConfig(
     const uint32_t config_version, TRITONSERVER_Message* updated_config_message)
 {
@@ -544,7 +534,7 @@ TritonModel::SetConfiguredScheduler()
         0 /* max_queue_delay_microseconds */, &scheduler));
   }
 
-  return SetSchedulerMutable(std::move(scheduler));
+  return SetScheduler(std::move(scheduler));
 }
 
 Status

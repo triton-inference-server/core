@@ -104,7 +104,6 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
   auto& model_instances = model_instance_ctxs_[model];
   auto i_it = model_instances.find(triton_model_instance);
   if (i_it != model_instances.end()) {
-    i_it->second->WaitForRemoval();
     if (!ignore_resources_and_priority_) {
       resource_manager_->RemoveModelInstance(i_it->second.get());
     }
@@ -143,7 +142,6 @@ RateLimiter::UnregisterModel(const TritonModel* model)
 
     model_context.RequestRemoval();
     for (const auto& instance : model_instance_ctxs_[model]) {
-      instance.second->WaitForRemoval();
       if (!ignore_resources_and_priority_) {
         resource_manager_->RemoveModelInstance(instance.second.get());
       }
@@ -319,6 +317,19 @@ RateLimiter::GetPayload(
 void
 RateLimiter::PayloadRelease(std::shared_ptr<Payload>& payload)
 {
+  // If this is an exit payload, the instance must not be staged once marked as
+  // available, so mark the instance as removing.
+  if (payload->GetOpType() == Payload::Operation::EXIT) {
+    std::lock_guard<std::mutex> lk(model_instance_ctx_mtx_);
+    auto& instances = model_instance_ctxs_[payload->GetInstance()->Model()];
+    auto it = instances.find(payload->GetInstance());
+    if (it == instances.end()) {
+      LOG_INFO << "Should not print this ";
+      return;
+    }
+    it->second->RequestRemoval();  // mark the instance as removing
+  }
+
   payload->OnRelease();
   if (max_payload_bucket_count_ > 0) {
     std::lock_guard<std::mutex> lock(payload_mu_);
@@ -398,7 +409,7 @@ RateLimiter::DeferPayloadSchedule(
         "Requested model is not yet registered with rate limiter");
   }
 
-  if (itr->second.isRemovalInProgress()) {
+  if (itr->second.IsRemovalInProgress()) {
     return Status(
         Status::Code::INTERNAL,
         "New model requests can not be made to a model that is being "
@@ -508,8 +519,10 @@ RateLimiter::ModelContext::StageInstanceIfAvailable(
 
   while (!avbl_instances_.empty()) {
     ModelInstanceContext* instance = avbl_instances_.top();
-    if ((req_instance != nullptr) &&
-        (instance->RawInstance() != req_instance)) {
+    if (instance->IsRemovalInProgress() ||
+        (req_instance != nullptr && instance->RawInstance() != req_instance)) {
+      // Skip staging the available instance if either it is being removed or it
+      // is not the requested instance (if specified).
       backup_queue.push(instance);
       avbl_instances_.pop();
       continue;
@@ -705,34 +718,7 @@ void
 RateLimiter::ModelInstanceContext::Release()
 {
   exec_count_++;
-
   OnRelease_(this);
-
-  std::lock_guard<std::mutex> lk(state_mtx_);
-
-  if ((removal_in_progress_) && (state_ == AVAILABLE) &&
-      (!model_context_->ContainsPendingRequests(this))) {
-    state_ = REMOVED;
-  }
-  if (state_ == REMOVED) {
-    cv_.notify_all();
-  }
-}
-
-void
-RateLimiter::ModelInstanceContext::WaitForRemoval()
-{
-  std::unique_lock<std::mutex> lk(state_mtx_);
-
-  removal_in_progress_ = true;
-
-  if ((state_ == AVAILABLE) &&
-      (!model_context_->ContainsPendingRequests(this))) {
-    state_ = REMOVED;
-  }
-  if (state_ != REMOVED) {
-    cv_.wait(lk, [this] { return state_ == REMOVED; });
-  }
 }
 
 double
@@ -744,6 +730,18 @@ RateLimiter::ModelInstanceContext::ScaledPriority()
   // as 0, the priority is still treated as 1.
   auto priority = std::max(rate_limiter_config_.priority(), 1u);
   return (exec_count_ * priority);
+}
+
+void
+RateLimiter::ModelInstanceContext::RequestRemoval() {
+  std::unique_lock<std::mutex> lk(state_mtx_);
+  removal_in_progress_ = true;
+}
+
+bool
+RateLimiter::ModelInstanceContext::IsRemovalInProgress() {
+  std::unique_lock<std::mutex> lk(state_mtx_);
+  return removal_in_progress_;
 }
 
 

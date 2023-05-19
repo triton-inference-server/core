@@ -134,9 +134,6 @@ class TritonModel : public Model {
   // Gets the execution policy setting from the backend.
   Status GetExecutionPolicy(const inference::ModelConfig& model_config);
 
-  // Set or update the scheduler.
-  Status SetSchedulerMutable(std::unique_ptr<Scheduler> scheduler);
-
   // Set the scheduler based on the model configuration and foreground
   // 'instances'.
   Status SetConfiguredScheduler();
