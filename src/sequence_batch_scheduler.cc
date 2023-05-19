@@ -1679,9 +1679,8 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
       // the sequence slot should be released but otherwise do
       // nothing.
       if (irequest == nullptr) {
-        LOG_VERBOSE(1) << irequest->LogRequest()
-                       << "force-end sequence in batcher " << batcher_idx_
-                       << ", slot " << seq_slot;
+        LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
+                       << batcher_idx_ << ", slot " << seq_slot;
         release_seq_slot = true;
       } else {
         const InferenceRequest::SequenceId& correlation_id =
