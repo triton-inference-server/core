@@ -410,6 +410,9 @@ class OldestSequenceBatch : public SequenceBatch {
   // Mutex protecting queues, etc.
   std::mutex mu_;
 
+  // Condition variable notifying request queueing and/or in-flight completion.
+  std::condition_variable cv_;
+
   // For each sequence slot, true if there is a request for that
   // sequence in-flight in the dynamic batcher. Used to ensure that at
   // most one request from each sequence can be scheduled at a time.

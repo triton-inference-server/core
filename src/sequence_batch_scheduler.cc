@@ -1767,109 +1767,126 @@ OldestSequenceBatch::OldestSequenceBatch(
 
   *is_initialized = true;
 }
-OldestSequenceBatch::~OldestSequenceBatch() {}
+
+OldestSequenceBatch::~OldestSequenceBatch()
+{
+  std::unique_lock<std::mutex> lock(mu_);
+
+  // Flush all queued requests onto the dynamic batcher.
+  for (uint32_t seq_slot = 0; seq_slot < queues_.size(); seq_slot++) {
+    while (in_flight_[seq_slot] || !queues_[seq_slot].empty()) {
+      LOG_VERBOSE(1) << "Waiting for slot " << seq_slot << " with " << (in_flight_[seq_slot] ? "an" : "no") << " in-flight request and " << queues_[seq_slot].size() << " pending requests before exiting";
+      cv_.wait(lock);
+    }
+  }
+}
 
 void
 OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
 {
-  std::lock_guard<std::mutex> lock(mu_);
+  {
+    std::lock_guard<std::mutex> lock(mu_);
 
-  // We may enqueue 1 or more pending inferences triggered by the
-  // completion. If the sequence has a pending inference then it needs
-  // to be send to dynamic batcher since the "previous" inference just
-  // completed. If this next inference ends up being the end of the
-  // sequence (either from the END flag or because the sequence is
-  // being force-ended) then we try to fill the now-free sequence slot
-  // from the backlog and then send the first inference from that
-  // sequence to the dynamic batcher...
-  std::deque<std::unique_ptr<InferenceRequest>>& queue = queues_[seq_slot];
-  bool retry = true;
-  while (retry) {
-    retry = false;
+    // We may enqueue 1 or more pending inferences triggered by the
+    // completion. If the sequence has a pending inference then it needs
+    // to be send to dynamic batcher since the "previous" inference just
+    // completed. If this next inference ends up being the end of the
+    // sequence (either from the END flag or because the sequence is
+    // being force-ended) then we try to fill the now-free sequence slot
+    // from the backlog and then send the first inference from that
+    // sequence to the dynamic batcher...
+    std::deque<std::unique_ptr<InferenceRequest>>& queue = queues_[seq_slot];
+    bool retry = true;
+    while (retry) {
+      retry = false;
 
-    bool release_seq_slot = false;
-    in_flight_[seq_slot] = false;
+      bool release_seq_slot = false;
+      in_flight_[seq_slot] = false;
 
-    // If the next sequence inference is ready in the queue then enqueue
-    // it in the dynamic batcher now.
-    if (!queue.empty()) {
-      auto& irequest = queue.front();
+      // If the next sequence inference is ready in the queue then enqueue
+      // it in the dynamic batcher now.
+      if (!queue.empty()) {
+        auto& irequest = queue.front();
 
-      // If the request is null then this inference request is from
-      // the reaper thread indicating a timed-out sequence. Mark that
-      // the sequence slot should be released but otherwise do
-      // nothing.
-      if (irequest == nullptr) {
-        LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
-                       << batcher_idx_ << ", slot " << seq_slot;
-        release_seq_slot = true;
-      } else {
-        const InferenceRequest::SequenceId& correlation_id =
-            irequest->CorrelationId();
-
-        // After handling the last inference in a sequence we must
-        // release the sequence slot to make it available to another
-        // sequence.
-        if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0) {
-          LOG_VERBOSE(1) << irequest->LogRequest() << "end sequence CORRID "
-                         << correlation_id << " in batcher " << batcher_idx_
-                         << ", slot " << seq_slot;
+        // If the request is null then this inference request is from
+        // the reaper thread indicating a timed-out sequence. Mark that
+        // the sequence slot should be released but otherwise do
+        // nothing.
+        if (irequest == nullptr) {
+          LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
+                        << batcher_idx_ << ", slot " << seq_slot;
           release_seq_slot = true;
+        } else {
+          const InferenceRequest::SequenceId& correlation_id =
+              irequest->CorrelationId();
+
+          // After handling the last inference in a sequence we must
+          // release the sequence slot to make it available to another
+          // sequence.
+          if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0) {
+            LOG_VERBOSE(1) << irequest->LogRequest() << "end sequence CORRID "
+                           << correlation_id << " in batcher " << batcher_idx_
+                           << ", slot " << seq_slot;
+            release_seq_slot = true;
+          }
+
+          // Add the appropriate control tensor values to the request.
+          SetControlTensors(irequest, seq_slot, correlation_id);
+
+          // Update the implicit state and set the input state tensors.
+          UpdateImplicitState(irequest, seq_slot);
+
+          LOG_VERBOSE(1) << irequest->LogRequest()
+                        << "issue to dynamic batcher CORRID " << correlation_id
+                        << " in batcher " << batcher_idx_ << ", slot "
+                        << seq_slot;
+          in_flight_[seq_slot] = true;
+
+          irequest->AddInternalReleaseCallback(
+              [this, seq_slot]() { CompleteAndNext(seq_slot); });
+
+          dynamic_batcher_->Enqueue(irequest);
         }
 
-        // Add the appropriate control tensor values to the request.
-        SetControlTensors(irequest, seq_slot, correlation_id);
-
-        // Update the implicit state and set the input state tensors.
-        UpdateImplicitState(irequest, seq_slot);
-
-        LOG_VERBOSE(1) << irequest->LogRequest()
-                       << "issue to dynamic batcher CORRID " << correlation_id
-                       << " in batcher " << batcher_idx_ << ", slot "
-                       << seq_slot;
-        in_flight_[seq_slot] = true;
-
-        irequest->AddInternalReleaseCallback(
-            [this, seq_slot]() { CompleteAndNext(seq_slot); });
-
-        dynamic_batcher_->Enqueue(irequest);
+        queue.pop_front();
       }
 
-      queue.pop_front();
-    }
+      // If releasing the sequence slot then the sequence queue should be
+      // empty and we can now assign a new sequence to the queue (from the
+      // backlog).
+      if (release_seq_slot) {
+        // Should never be anything in a queue after the END marker. If it
+        // happens that means we will clobber that request if/when we swap
+        // in a backlog sequence in ReleaseSequenceSlot below.
+        if (!queue.empty()) {
+          LOG_ERROR << "internal: unexpected requests after sequence end in slot "
+                    << seq_slot;
+        }
 
-    // If releasing the sequence slot then the sequence queue should be
-    // empty and we can now assign a new sequence to the queue (from the
-    // backlog).
-    if (release_seq_slot) {
-      // Should never be anything in a queue after the END marker. If it
-      // happens that means we will clobber that request if/when we swap
-      // in a backlog sequence in ReleaseSequenceSlot below.
-      if (!queue.empty()) {
-        LOG_ERROR << "internal: unexpected requests after sequence end in slot "
-                  << seq_slot;
-      }
+        SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
+            batcher_idx_, seq_slot);
+        const InferenceRequest::SequenceId& released_cid =
+            base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
 
-      SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-          batcher_idx_, seq_slot);
-      const InferenceRequest::SequenceId& released_cid =
-          base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
+        if (released_cid.InSequence()) {
+          LOG_VERBOSE(1) << "Enqueued new sequence containing " << queue.size()
+                        << " requests into OldestFirst batcher " << batcher_idx_
+                        << ", slot " << seq_slot;
 
-      if (released_cid.InSequence()) {
-        LOG_VERBOSE(1) << "Enqueued new sequence containing " << queue.size()
-                       << " requests into OldestFirst batcher " << batcher_idx_
-                       << ", slot " << seq_slot;
-
-        // If an inference is already in-flight in the dynamic batcher
-        // in this sequence slot then can't process the new queue
-        // inferences right now, because the in-flight request is
-        // using slot resources like the CORRID override map.
-        if (!in_flight_[seq_slot]) {
-          retry = true;
+          // If an inference is already in-flight in the dynamic batcher
+          // in this sequence slot then can't process the new queue
+          // inferences right now, because the in-flight request is
+          // using slot resources like the CORRID override map.
+          if (!in_flight_[seq_slot]) {
+            retry = true;
+          }
         }
       }
     }
   }
+
+  // Opportunity for checking queueing and in-flight status.
+  cv_.notify_all();
 }
 
 void
