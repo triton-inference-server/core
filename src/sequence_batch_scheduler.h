@@ -116,9 +116,18 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
  private:
-  SequenceBatchScheduler(TritonModel* model, const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors) : model_(model), enforce_equal_shape_tensors_(enforce_equal_shape_tensors), updating_(false), stop_(false) {}
+  SequenceBatchScheduler(
+      TritonModel* model,
+      const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
+      : model_(model),
+        enforce_equal_shape_tensors_(enforce_equal_shape_tensors),
+        updating_(false), stop_(false)
+  {
+  }
 
   void ReaperThread(const int nice);
+
+  Status CreateBatchers();
 
   Status CreateBooleanControlTensors(
       const inference::ModelConfig& config,
@@ -142,6 +151,9 @@ class SequenceBatchScheduler : public Scheduler {
 
   TritonModel* model_;
   std::unordered_map<std::string, bool> enforce_equal_shape_tensors_;
+
+  // The number of candidate sequence slots.
+  size_t seq_slot_cnt_;
 
   // The max_sequence_idle_microseconds value for this scheduler.
   uint64_t max_sequence_idle_microseconds_;

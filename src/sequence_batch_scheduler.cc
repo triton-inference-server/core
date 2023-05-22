@@ -60,7 +60,8 @@ SequenceBatchScheduler::Create(
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     std::unique_ptr<Scheduler>* scheduler)
 {
-  std::unique_ptr<SequenceBatchScheduler> sched(new SequenceBatchScheduler(model, enforce_equal_shape_tensors));
+  std::unique_ptr<SequenceBatchScheduler> sched(
+      new SequenceBatchScheduler(model, enforce_equal_shape_tensors));
 
   // For debugging and testing,
   const char* dstr = getenv("TRITONSERVER_BACKLOG_DELAY_SCHEDULER");
@@ -71,7 +72,7 @@ SequenceBatchScheduler::Create(
              << " backlog queued requests...";
   }
 
-  auto instance_count = model->Instances().size();
+  auto instance_count = model->BackgroundInstances().size();
   sched->queue_request_cnts_.resize(instance_count, 0);
 
   auto& config = model->Config();
@@ -110,11 +111,72 @@ SequenceBatchScheduler::Create(
   // runner. This is at least 1 even if the model doesn't support
   // batching.
   const size_t model_batch_size = std::max(1, config.max_batch_size());
-  size_t seq_slot_cnt = model_batch_size;
+  sched->seq_slot_cnt_ = model_batch_size;
   if (config.sequence_batching().has_oldest()) {
-    seq_slot_cnt =
+    sched->seq_slot_cnt_ =
         config.sequence_batching().oldest().max_candidate_sequences();
   }
+
+  // Create batchers.
+  sched->CreateBatchers();
+
+  // Create a reaper thread that watches for idle sequences. Run the
+  // reaper a lower priority.
+  SequenceBatchScheduler* raw = sched.release();
+
+  raw->reaper_thread_exit_ = false;
+  raw->reaper_thread_.reset(
+      new std::thread([raw]() { raw->ReaperThread(10 /* nice */); }));
+
+  scheduler->reset(raw);
+
+  return Status::Success;
+}
+
+Status
+SequenceBatchScheduler::Update(
+    std::unique_ptr<std::lock_guard<std::mutex>>* lock)
+{
+  std::unique_lock<std::mutex> lk(mu_);
+
+  // Instruct 'Enqueue()' to begin pausing new sequence.
+  if (updating_) {
+    return Status(
+        Status::Code::INTERNAL, "sequence batch scheduler is already updating");
+  }
+  updating_ = true;
+
+  // Wait until all in-flight and backlog sequence are queued.
+  update_enqueued_cv_.wait(lk, [this] {
+    return sequence_to_batcherseqslot_map_.empty() && backlog_queues_.empty() &&
+           sequence_to_backlog_map_.empty();
+  });
+
+  // Flush all pending requests to the rate limiter.
+  lk.unlock();
+  batchers_.clear();
+  lk.lock();
+
+  // Re-construct the scheduler with new instances.
+  auto instance_count = model_->BackgroundInstances().size();
+  queue_request_cnts_.clear();
+  queue_request_cnts_.resize(instance_count, 0);
+  CreateBatchers();
+
+  // The update is complete, 'Enqueue()' may resume after the mutex is released.
+  updating_ = false;
+  update_complete_cv_.notify_all();
+  if (lock != nullptr) {
+    lock->reset(
+        new std::lock_guard<std::mutex>(*lk.release(), std::adopt_lock));
+  }
+  return Status::Success;
+}
+
+Status
+SequenceBatchScheduler::CreateBatchers()
+{
+  auto& config = model_->Config();
 
   // Based on the model configuration create input tensors for control
   // signals indicating sequence start, sequence continue, and
@@ -124,7 +186,7 @@ SequenceBatchScheduler::Create(
   std::shared_ptr<ControlInputs> startend;
   std::shared_ptr<ControlInputs> cont;
   std::shared_ptr<ControlInputs> notready;
-  RETURN_IF_ERROR(sched->CreateBooleanControlTensors(
+  RETURN_IF_ERROR(CreateBooleanControlTensors(
       config, &start, &end, &startend, &cont, &notready));
 
   bool has_optional_input = false;
@@ -138,7 +200,7 @@ SequenceBatchScheduler::Create(
   // Create one SequenceBatch object for each requested runner. The
   // SequenceBatch object has a thread that manages the batch of
   // requests.
-  const auto& instances = model->Instances();
+  const auto& instances = model_->BackgroundInstances();
   uint32_t index = 0;
   for (const auto& instance : instances) {
     bool init_state;
@@ -148,42 +210,32 @@ SequenceBatchScheduler::Create(
     // scheduling strategy.
     if (config.sequence_batching().has_oldest()) {
       sb.reset(new OldestSequenceBatch(
-          sched.get(), index, seq_slot_cnt, instance.get(),
-          enforce_equal_shape_tensors, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
+          this, index, seq_slot_cnt_, instance.get(),
+          enforce_equal_shape_tensors_, has_optional_input, start, end,
+          startend, cont, notready, &init_state));
     } else {
       sb.reset(new DirectSequenceBatch(
-          sched.get(), index, seq_slot_cnt, instance.get(),
-          enforce_equal_shape_tensors, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
+          this, index, seq_slot_cnt_, instance.get(),
+          enforce_equal_shape_tensors_, has_optional_input, start, end,
+          startend, cont, notready, &init_state));
     }
 
     if (init_state) {
-      sched->batchers_.push_back(std::move(sb));
+      batchers_.push_back(std::move(sb));
       // All sequence slots in the batcher are initially ready for a
       // new sequence.
-      for (size_t b = 0; b < seq_slot_cnt; ++b) {
-        sched->ready_batcher_seq_slots_.push(
+      for (size_t b = 0; b < seq_slot_cnt_; ++b) {
+        ready_batcher_seq_slots_.push(
             SequenceBatchScheduler::BatcherSequenceSlot(index, b));
       }
     }
     ++index;
   }
-  if (sched->batchers_.empty()) {
+  if (batchers_.empty()) {
     return Status(
         Status::Code::INTERNAL,
         "Initialization failed for all sequence-batch scheduler threads");
   }
-
-  // Create a reaper thread that watches for idle sequences. Run the
-  // reaper a lower priority.
-  SequenceBatchScheduler* raw = sched.release();
-
-  raw->reaper_thread_exit_ = false;
-  raw->reaper_thread_.reset(
-      new std::thread([raw]() { raw->ReaperThread(10 /* nice */); }));
-
-  scheduler->reset(raw);
 
   return Status::Success;
 }
@@ -320,105 +372,6 @@ SequenceBatchScheduler::GenerateInitialStateData(
               state.input_name() + "' to have state_data set");
   }
 
-  return Status::Success;
-}
-
-Status
-SequenceBatchScheduler::Update(
-    std::unique_ptr<std::lock_guard<std::mutex>>* lock)
-{
-  std::unique_lock<std::mutex> lk(mu_);
-
-  // Instruct 'Enqueue()' to begin pausing new sequence.
-  if (updating_) {
-    return Status(
-        Status::Code::INTERNAL, "sequence batch scheduler is already updating");
-  }
-  updating_ = true;
-
-  // Wait until all in-flight and backlog sequence are queued.
-  if (!sequence_to_batcherseqslot_map_.empty() || !backlog_queues_.empty() || !sequence_to_backlog_map_.empty()) {
-    update_enqueued_cv_.wait(lk, [this]{ return sequence_to_batcherseqslot_map_.empty() && backlog_queues_.empty() && sequence_to_backlog_map_.empty(); });
-  }
-
-  // Flush all pending requests to the rate limiter.
-  lk.unlock();
-  batchers_.clear();
-  lk.lock();
-
-  // Re-construct the scheduler with new instances.
-  auto instance_count = model_->BackgroundInstances().size();
-  this->queue_request_cnts_.clear();
-  this->queue_request_cnts_.resize(instance_count, 0);
-
-  auto& config = model_->Config();
-
-  const size_t model_batch_size = std::max(1, config.max_batch_size());
-  size_t seq_slot_cnt = model_batch_size;
-  if (config.sequence_batching().has_oldest()) {
-    seq_slot_cnt =
-        config.sequence_batching().oldest().max_candidate_sequences();
-  }
-
-  std::shared_ptr<ControlInputs> start;
-  std::shared_ptr<ControlInputs> end;
-  std::shared_ptr<ControlInputs> startend;
-  std::shared_ptr<ControlInputs> cont;
-  std::shared_ptr<ControlInputs> notready;
-  RETURN_IF_ERROR(this->CreateBooleanControlTensors(
-      config, &start, &end, &startend, &cont, &notready));
-
-  bool has_optional_input = false;
-  for (const auto& input : config.input()) {
-    if (input.optional()) {
-      has_optional_input = true;
-      break;
-    }
-  }
-
-  const auto& instances = model_->BackgroundInstances();
-  uint32_t index = 0;
-  for (const auto& instance : instances) {
-    bool init_state;
-    std::unique_ptr<SequenceBatch> sb;
-
-    // Create the SequenceBatch derivative that handles the requested
-    // scheduling strategy.
-    if (config.sequence_batching().has_oldest()) {
-      sb.reset(new OldestSequenceBatch(
-          this, index, seq_slot_cnt, instance.get(),
-          enforce_equal_shape_tensors_, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
-    } else {
-      sb.reset(new DirectSequenceBatch(
-          this, index, seq_slot_cnt, instance.get(),
-          enforce_equal_shape_tensors_, has_optional_input, start, end, startend,
-          cont, notready, &init_state));
-    }
-
-    if (init_state) {
-      this->batchers_.push_back(std::move(sb));
-      // All sequence slots in the batcher are initially ready for a
-      // new sequence.
-      for (size_t b = 0; b < seq_slot_cnt; ++b) {
-        this->ready_batcher_seq_slots_.push(
-            SequenceBatchScheduler::BatcherSequenceSlot(index, b));
-      }
-    }
-    ++index;
-  }
-  if (this->batchers_.empty()) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Initialization failed for all sequence-batch scheduler threads");
-  }
-
-  // The update is complete, 'Enqueue()' may resume after the mutex is released.
-  updating_ = false;
-  update_complete_cv_.notify_all();
-  if (lock != nullptr) {
-    lock->reset(new std::lock_guard<std::mutex>(*lk.release(), std::adopt_lock));
-  }
   return Status::Success;
 }
 
@@ -673,7 +626,7 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   // Check if the scheduler is about to be updated. Only allow in-flight or
   // backlog sequence, and block new sequence, during update.
   if (updating_ && seq_start) {
-    update_complete_cv_.wait(lock, [this]{ return !updating_; });
+    update_complete_cv_.wait(lock, [this] { return !updating_; });
   }
 
   // Check if the request is one of the in-flight sequence (not starting new
@@ -1775,7 +1728,10 @@ OldestSequenceBatch::~OldestSequenceBatch()
   // Flush all queued requests onto the dynamic batcher.
   for (uint32_t seq_slot = 0; seq_slot < queues_.size(); seq_slot++) {
     while (in_flight_[seq_slot] || !queues_[seq_slot].empty()) {
-      LOG_VERBOSE(1) << "Waiting for slot " << seq_slot << " with " << (in_flight_[seq_slot] ? "an" : "no") << " in-flight request and " << queues_[seq_slot].size() << " pending requests before exiting";
+      LOG_VERBOSE(1) << "Waiting for slot " << seq_slot << " with "
+                     << (in_flight_[seq_slot] ? "an" : "no")
+                     << " in-flight request and " << queues_[seq_slot].size()
+                     << " pending requests before exiting";
       cv_.wait(lock);
     }
   }
@@ -1814,7 +1770,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         // nothing.
         if (irequest == nullptr) {
           LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
-                        << batcher_idx_ << ", slot " << seq_slot;
+                         << batcher_idx_ << ", slot " << seq_slot;
           release_seq_slot = true;
         } else {
           const InferenceRequest::SequenceId& correlation_id =
@@ -1823,7 +1779,8 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           // After handling the last inference in a sequence we must
           // release the sequence slot to make it available to another
           // sequence.
-          if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0) {
+          if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) !=
+              0) {
             LOG_VERBOSE(1) << irequest->LogRequest() << "end sequence CORRID "
                            << correlation_id << " in batcher " << batcher_idx_
                            << ", slot " << seq_slot;
@@ -1837,9 +1794,9 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           UpdateImplicitState(irequest, seq_slot);
 
           LOG_VERBOSE(1) << irequest->LogRequest()
-                        << "issue to dynamic batcher CORRID " << correlation_id
-                        << " in batcher " << batcher_idx_ << ", slot "
-                        << seq_slot;
+                         << "issue to dynamic batcher CORRID " << correlation_id
+                         << " in batcher " << batcher_idx_ << ", slot "
+                         << seq_slot;
           in_flight_[seq_slot] = true;
 
           irequest->AddInternalReleaseCallback(
@@ -1859,8 +1816,9 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         // happens that means we will clobber that request if/when we swap
         // in a backlog sequence in ReleaseSequenceSlot below.
         if (!queue.empty()) {
-          LOG_ERROR << "internal: unexpected requests after sequence end in slot "
-                    << seq_slot;
+          LOG_ERROR
+              << "internal: unexpected requests after sequence end in slot "
+              << seq_slot;
         }
 
         SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
@@ -1870,8 +1828,8 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
 
         if (released_cid.InSequence()) {
           LOG_VERBOSE(1) << "Enqueued new sequence containing " << queue.size()
-                        << " requests into OldestFirst batcher " << batcher_idx_
-                        << ", slot " << seq_slot;
+                         << " requests into OldestFirst batcher "
+                         << batcher_idx_ << ", slot " << seq_slot;
 
           // If an inference is already in-flight in the dynamic batcher
           // in this sequence slot then can't process the new queue

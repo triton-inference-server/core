@@ -244,9 +244,8 @@ TritonModel::Create(
   RETURN_IF_ERROR(TritonModelInstance::SetInstances(
       raw_local_model, backend_cmdline_config_map, host_policy_map,
       model_config));
-  RETURN_IF_ERROR(local_model->CommitInstances());
-
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
+  RETURN_IF_ERROR(local_model->CommitInstances());
 
   *model = std::move(local_model);
   return Status::Success;
