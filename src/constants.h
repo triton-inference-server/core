@@ -71,6 +71,7 @@ constexpr char kAutoMixedPrecisionExecutionAccelerator[] =
     "auto_mixed_precision";
 
 constexpr char kModelConfigPbTxt[] = "config.pbtxt";
+constexpr char kModelCard[] = "README.md";
 
 constexpr char kMetricsLabelModelName[] = "model";
 constexpr char kMetricsLabelModelVersion[] = "version";
