@@ -245,12 +245,9 @@ class RateLimiter {
         const ResourceMap& resource_map,
         std::unique_ptr<ResourceManager>* resource_manager);
     // Adds the model instance to the resource manager
-    void AddModelInstance(const ModelInstanceContext* instance);
+    Status AddModelInstance(const ModelInstanceContext* instance);
     // Removes the model instance from the resource manager
     Status RemoveModelInstance(const ModelInstanceContext* instance);
-    // Based upon the model instances being managed by resource manager,
-    // this function will update the available resource counts.
-    Status UpdateResourceLimits();
     // Allocate resources for the given model instance. Returns
     // false if resources are not available at this time.
     bool AllocateResources(const ModelInstanceContext* instance);
@@ -260,6 +257,9 @@ class RateLimiter {
 
    private:
     ResourceManager(const ResourceMap& resource_map);
+    void ComputeResourceLimits();
+    void UpdateMaxResource(const ResourceMap& instance_resource_map);
+    Status ParseAndValidateResources();
     Status ValidateMaxResources();
     Status ParseAndValidateExplicitResources();
 

@@ -78,8 +78,8 @@ RateLimiter::RegisterModelInstance(
       // Without this serialization instances of other models might fail
       // to load because of the resource constraints in this instance.
       std::lock_guard<std::mutex> lk(resource_manager_mtx_);
-      resource_manager_->AddModelInstance(pair_it.first->second.get());
-      const auto& status = resource_manager_->UpdateResourceLimits();
+      const auto& status =
+          resource_manager_->AddModelInstance(pair_it.first->second.get());
       if (!status.IsOk()) {
         resource_manager_->RemoveModelInstance(pair_it.first->second.get());
         return status;
@@ -111,23 +111,6 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
     model_instances.erase(i_it);
   }
 
-  if (!ignore_resources_and_priority_) {
-    // The update can be skipped if there is only model instance count update,
-    // which new results will not be generated in such case. [FIXME: DLIS-4821]
-    RETURN_IF_ERROR(resource_manager_->UpdateResourceLimits());
-  }
-
-  {
-    std::lock_guard<std::mutex> lk(payload_queues_mu_);
-    auto p_it = payload_queues_.find(model);
-    if (p_it != payload_queues_.end()) {
-      auto s_it = p_it->second->specific_queues_.find(triton_model_instance);
-      if (s_it != p_it->second->specific_queues_.end()) {
-        p_it->second->specific_queues_.erase(s_it);
-      }
-    }
-  }
-
   return Status::Success;
 }
 
@@ -149,10 +132,6 @@ RateLimiter::UnregisterModel(const TritonModel* model)
 
     model_instance_ctxs_.erase(model);
     model_contexts_.erase(model);
-  }
-
-  if (!ignore_resources_and_priority_) {
-    RETURN_IF_ERROR(resource_manager_->UpdateResourceLimits());
   }
 
   {
@@ -733,13 +712,15 @@ RateLimiter::ModelInstanceContext::ScaledPriority()
 }
 
 void
-RateLimiter::ModelInstanceContext::RequestRemoval() {
+RateLimiter::ModelInstanceContext::RequestRemoval()
+{
   std::unique_lock<std::mutex> lk(state_mtx_);
   removal_in_progress_ = true;
 }
 
 bool
-RateLimiter::ModelInstanceContext::IsRemovalInProgress() {
+RateLimiter::ModelInstanceContext::IsRemovalInProgress()
+{
   std::unique_lock<std::mutex> lk(state_mtx_);
   return removal_in_progress_;
 }
@@ -760,11 +741,12 @@ RateLimiter::ResourceManager::Create(
   return Status::Success;
 }
 
-void
+Status
 RateLimiter::ResourceManager::AddModelInstance(
     const ModelInstanceContext* instance)
 {
-  std::lock_guard<std::mutex> lk(model_resources_mtx_);
+  // Add instance into model resources.
+  std::lock_guard<std::mutex> lk1(model_resources_mtx_);
   auto pr = model_resources_.emplace(std::make_pair(instance, ResourceMap()));
   for (const auto& resource : instance->GetRateLimiterConfig()->resources()) {
     if (resource.global()) {
@@ -775,52 +757,89 @@ RateLimiter::ResourceManager::AddModelInstance(
           resource.count();
     }
   }
+  // Increase max resource if needed.
+  std::lock_guard<std::mutex> lk2(max_resources_mtx_);
+  UpdateMaxResource(pr.first->second);
+  return ParseAndValidateResources();
 }
 
 Status
 RateLimiter::ResourceManager::RemoveModelInstance(
     const ModelInstanceContext* instance)
 {
-  std::lock_guard<std::mutex> lk(model_resources_mtx_);
+  // Find instance from model resources.
+  std::lock_guard<std::mutex> lk1(model_resources_mtx_);
   const auto& itr = model_resources_.find(instance);
   if (itr == model_resources_.end()) {
     return Status(
         Status::Code::INTERNAL, "Can not find the instance to remove");
   }
+  // Check if max resources need to be updated.
+  bool update_needed = false;
+  std::lock_guard<std::mutex> lk2(max_resources_mtx_);
+  for (const auto& resource_device_map : itr->second) {
+    auto ditr = max_resources_.find(resource_device_map.first);
+    if (ditr != max_resources_.end()) {
+      for (const auto resource : resource_device_map.second) {
+        auto ritr = ditr->second.find(resource.first);
+        if (ritr != ditr->second.end() && ritr->second >= resource.second) {
+          update_needed = true;
+          break;
+        }
+      }
+    }
+    if (update_needed) {
+      break;
+    }
+  }
+  // Remove instance from model resources.
   model_resources_.erase(instance);
-  return Status::Success;
+  // Re-compute max resource if needed.
+  if (update_needed) {
+    ComputeResourceLimits();
+  }
+  return ParseAndValidateResources();
 }
 
-Status
-RateLimiter::ResourceManager::UpdateResourceLimits()
+void
+RateLimiter::ResourceManager::ComputeResourceLimits()
 {
-  std::lock_guard<std::mutex> lk1(model_resources_mtx_);
-  std::lock_guard<std::mutex> lk2(max_resources_mtx_);
+  // Obtain the maximum resource across all the instances and use it as the
+  // default available.
   max_resources_.clear();
-  // Obtain the maximum resource across all the instances
-  // and use it as the default available.
   for (const auto& instance_resources : model_resources_) {
-    for (const auto& resource_device_map : instance_resources.second) {
-      auto ditr = max_resources_.find(resource_device_map.first);
-      if (ditr == max_resources_.end()) {
-        ditr =
-            max_resources_
-                .emplace(resource_device_map.first, resource_device_map.second)
-                .first;
-      } else {
-        for (const auto& resource : resource_device_map.second) {
-          auto ritr = ditr->second.find(resource.first);
-          if (ritr == ditr->second.end()) {
-            ritr = ditr->second.emplace(resource.first, resource.second).first;
-          } else {
-            if (ritr->second < resource.second) {
-              ritr->second = resource.second;
-            }
+    UpdateMaxResource(instance_resources.second);
+  }
+}
+
+void
+RateLimiter::ResourceManager::UpdateMaxResource(
+    const ResourceMap& instance_resource_map)
+{
+  for (const auto& resource_device_map : instance_resource_map) {
+    auto ditr = max_resources_.find(resource_device_map.first);
+    if (ditr == max_resources_.end()) {
+      ditr = max_resources_
+                 .emplace(resource_device_map.first, resource_device_map.second)
+                 .first;
+    } else {
+      for (const auto resource : resource_device_map.second) {
+        auto ritr = ditr->second.find(resource.first);
+        if (ritr == ditr->second.end()) {
+          ritr = ditr->second.emplace(resource.first, resource.second).first;
+        } else {
+          if (ritr->second < resource.second) {
+            ritr->second = resource.second;
           }
         }
       }
     }
   }
+}
+
+Status
+RateLimiter::ResourceManager::ParseAndValidateResources()
+{
   if (!explicit_max_resources_.empty()) {
     RETURN_IF_ERROR(ParseAndValidateExplicitResources());
   }
@@ -830,9 +849,9 @@ RateLimiter::ResourceManager::UpdateResourceLimits()
     std::string resource_map_str{"\nMax Resource Map===>\n"};
     for (const auto& ditr : max_resources_) {
       if (!ditr.second.empty()) {
-        std::string device_str{(ditr.first == GLOBAL_RESOURCE_KEY)
-                                   ? "GLOBAL"
-                                   : std::to_string(ditr.first)};
+        std::string device_str{
+            (ditr.first == GLOBAL_RESOURCE_KEY) ? "GLOBAL"
+                                                : std::to_string(ditr.first)};
         resource_map_str += "\tDevice: " + device_str + "\n";
         for (const auto& ritr : ditr.second) {
           resource_map_str += "\t\tResource: " + ritr.first +
