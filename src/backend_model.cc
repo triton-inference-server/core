@@ -274,7 +274,7 @@ TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
   // holding off new inference requests, and then commit the changes.
   std::unique_ptr<std::lock_guard<std::mutex>> lock;
   RETURN_IF_ERROR(scheduler_->Update(&lock));
-  config_.mutable_instance_group()->Swap(model_config.mutable_instance_group());
+  *config_.mutable_instance_group() = model_config.instance_group();
   RETURN_IF_ERROR(CommitInstances());
 
   return Status::Success;
