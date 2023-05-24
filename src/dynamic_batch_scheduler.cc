@@ -188,10 +188,6 @@ DynamicBatchScheduler::Update(
 Status
 DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
-  // Pause if the scheduler is updating.
-  {
-    std::lock_guard<std::mutex> update_lock(update_mu_);
-  }
   if (stop_) {
     return Status(
         Status::Code::UNAVAILABLE,
