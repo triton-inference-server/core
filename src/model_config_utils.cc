@@ -2316,4 +2316,18 @@ EquivalentInInstanceConfig(
   return pb_diff.Compare(instance_config_lhs, instance_config_rhs);
 }
 
+bool
+CompareInstanceConfig(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs)
+{
+  inference::ModelInstanceGroup lhs = instance_config_lhs;
+  inference::ModelInstanceGroup rhs = instance_config_rhs;
+  *lhs.mutable_name() = "[Normalized]";
+  *rhs.mutable_name() = "[Normalized]";
+  lhs.set_count(1);
+  rhs.set_count(1);
+  return lhs.SerializeAsString().compare(rhs.SerializeAsString()) < 0;
+}
+
 }}  // namespace triton::core

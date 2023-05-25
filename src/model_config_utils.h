@@ -299,4 +299,16 @@ bool EquivalentInInstanceConfig(
     const inference::ModelInstanceGroup& instance_config_lhs,
     const inference::ModelInstanceGroup& instance_config_rhs);
 
+/// Compare both model instance configs. 'name' and 'count' fields do not alter
+/// the functionality of the instance and hence excluded from checking.
+/// \param instance_config_lhs The left hand side instance config.
+/// \param instance_config_rhs The right hand side instance config.
+/// \return True if the left hand side instance config is considered to go
+/// before the right hand side instance config, ignoring 'name' and 'count'
+/// fields. False if they are equivalent or the left hand side is considered to
+/// go after the right hand side, ignoring 'name' and 'count' fields.
+bool CompareInstanceConfig(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs);
+
 }}  // namespace triton::core
