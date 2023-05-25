@@ -835,6 +835,10 @@ TRITONBACKEND_ModelSetState()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelReportMemoryUsage()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceName()
 {
 }
@@ -880,6 +884,10 @@ TRITONBACKEND_ModelInstanceState()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceSetState()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceReportMemoryUsage()
 {
 }
 TRITONAPI_DECLSPEC void

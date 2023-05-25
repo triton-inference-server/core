@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 12
+#define TRITONBACKEND_API_VERSION_MINOR 13
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -1066,6 +1066,27 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelState(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelSetState(
     TRITONBACKEND_Model* model, void* state);
 
+/// Report the memory usage of the model that will be released on
+/// TRITONBACKEND_ModelFinalize. The backend may call this function within the
+/// lifecycle of the TRITONBACKEND_Model object (between
+/// TRITONBACKEND_ModelInitialize and TRITONBACKEND_ModelFinalize) to report the
+/// latest usage. To report the memory usage of a model instance,
+/// see TRITONBACKEND_ModelInstanceReportMemoryUsage.
+///
+/// \param model The model.
+/// \param usage The list of buffer attributes that records the memory usage,
+/// each entry should record the total memory usage of a given memory type and
+/// id. For example, if the model itself occupies 64 bytes on each of
+/// CUDA device 0 and CUDA device 1. Then 'usage' should have first two entries
+/// set, one has the buffer attributes of "type GPU, id 0, 64 bytes" and the
+/// other has "type GPU, id 1, 64 bytes". 'usage' is owned by the backend and
+/// may be released after the function returns.
+/// \param usage_size The number of entries in 'usage'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelReportMemoryUsage(
+    TRITONBACKEND_Model* model, TRITONSERVER_BufferAttributes** usage,
+    uint32_t usage_size);
+
 ///
 /// TRITONBACKEND_ModelInstance
 ///
@@ -1205,6 +1226,28 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceState(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceSetState(
     TRITONBACKEND_ModelInstance* instance, void* state);
+
+/// Report the memory usage of the model instance that will be released on
+/// TRITONBACKEND_ModelInstanceFinalize. The backend may call this function
+/// within the lifecycle of the TRITONBACKEND_Model object (between
+/// TRITONBACKEND_ModelInstanceInitialize and
+/// TRITONBACKEND_ModelInstanceFinalize) to report the latest usage. To report
+/// the memory usage of the model, see TRITONBACKEND_ModelReportMemoryUsage.
+///
+/// \param instance The model instance.
+/// \param usage The list of buffer attributes that records the memory usage,
+/// each entry should record the total memory usage of a given memory type and
+/// id. For example, if the instance itself occupies 64 bytes on each of
+/// CUDA device 0 and CUDA device 1. Then 'usage' should have first two entries
+/// set, one has the buffer attributes of "type GPU, id 0, 64 bytes" and the
+/// other has "type GPU, id 1, 64 bytes". 'usage' is owned by the backend and
+/// may be released after the function returns.
+/// \param usage_size The number of entries in 'usage'.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportMemoryUsage(
+    TRITONBACKEND_ModelInstance* instance,
+    TRITONSERVER_BufferAttributes** usage, uint32_t usage_size);
 
 /// Record statistics for an inference request.
 ///

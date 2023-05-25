@@ -134,6 +134,27 @@ class TritonModel : public Model {
   // Gets the execution policy setting from the backend.
   Status GetExecutionPolicy(const inference::ModelConfig& model_config);
 
+  std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>>
+  AccumulatedInstanceMemoryUsage() const override
+  {
+    std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> res;
+    // [FIXME] thread-safety on encountering instance change
+    for (const auto& instances : {&instances_, &passive_instances_}) {
+      for (const auto& instance : *instances) {
+        const auto& imu = instance->MemoryUsage();
+        for (const auto& mem_type_map : imu) {
+          const auto& mem_type = mem_type_map.first;
+          for (const auto& mem_id_map : mem_type_map.second) {
+            const auto& mem_id = mem_id_map.first;
+            const auto& byte_size = mem_id_map.second;
+            res[mem_type][mem_id] += byte_size;
+          }
+        }
+      }
+    }
+    return res;
+  }
+
   // Set the scheduler based on the model configuration and foreground
   // 'instances'.
   Status SetConfiguredScheduler();

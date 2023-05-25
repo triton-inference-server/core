@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <boost/core/span.hpp>
 #include <functional>
 #include <future>
 #include <memory>
@@ -125,6 +126,24 @@ class TritonModelInstance {
 
   MetricModelReporter* MetricReporter() const { return reporter_.get(); }
 
+  // Directly call from C API, so arguments are in the same style
+  void SetMemoryUsage(boost::span<BufferAttributes*> memory_usage)
+  {
+    std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> lusage;
+    for (const auto& mu : memory_usage) {
+      lusage[mu->MemoryType()][mu->MemoryTypeId()] = mu->ByteSize();
+    }
+    std::lock_guard<std::mutex> lk(usage_mtx_);
+    memory_usage_.swap(lusage);
+  }
+
+  std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> MemoryUsage()
+      const
+  {
+    std::lock_guard<std::mutex> lk(usage_mtx_);
+    return memory_usage_;
+  }
+
  private:
   class TritonBackendThread {
    public:
@@ -223,6 +242,10 @@ class TritonModelInstance {
 
   // Reporter for metrics, or nullptr if no metrics should be reported
   std::shared_ptr<MetricModelReporter> reporter_;
+
+  // Records of memory used for the model instance
+  std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>> memory_usage_;
+  mutable std::mutex usage_mtx_;
 
   // Opaque state associated with this model instance.
   void* state_;

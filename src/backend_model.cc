@@ -781,6 +781,16 @@ TRITONBACKEND_ModelSetState(TRITONBACKEND_Model* model, void* state)
   return nullptr;  // success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelReportMemoryUsage(
+    TRITONBACKEND_Model* model, TRITONSERVER_BufferAttributes** usage,
+    uint32_t usage_size)
+{
+  TritonModel* tm = reinterpret_cast<TritonModel*>(model);
+  tm->SetMemoryUsage({reinterpret_cast<BufferAttributes**>(usage), usage_size});
+  return nullptr;  // success
+}
+
 ///
 /// TRITONBACKEND_Request
 ///
