@@ -2303,31 +2303,13 @@ EquivalentInNonInstanceGroupConfig(
   return pb_diff.Compare(old_config, new_config);
 }
 
-bool
-EquivalentInInstanceConfig(
-    const inference::ModelInstanceGroup& instance_config_lhs,
-    const inference::ModelInstanceGroup& instance_config_rhs)
+std::string
+InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
 {
-  ::google::protobuf::util::MessageDifferencer pb_diff;
-  pb_diff.IgnoreField(
-      instance_config_lhs.descriptor()->FindFieldByLowercaseName("name"));
-  pb_diff.IgnoreField(
-      instance_config_lhs.descriptor()->FindFieldByLowercaseName("count"));
-  return pb_diff.Compare(instance_config_lhs, instance_config_rhs);
-}
-
-bool
-CompareInstanceConfig(
-    const inference::ModelInstanceGroup& instance_config_lhs,
-    const inference::ModelInstanceGroup& instance_config_rhs)
-{
-  inference::ModelInstanceGroup lhs = instance_config_lhs;
-  inference::ModelInstanceGroup rhs = instance_config_rhs;
-  *lhs.mutable_name() = "[Normalized]";
-  *rhs.mutable_name() = "[Normalized]";
-  lhs.set_count(1);
-  rhs.set_count(1);
-  return lhs.SerializeAsString().compare(rhs.SerializeAsString()) < 0;
+  inference::ModelInstanceGroup config = instance_config;
+  *config.mutable_name() = "[Normalized]";
+  config.set_count(1);
+  return config.SerializeAsString();
 }
 
 }}  // namespace triton::core

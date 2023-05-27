@@ -201,7 +201,8 @@ TritonModelInstance::SetInstances(
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const inference::ModelConfig& model_config)
 {
-  std::map<Signature, std::vector<std::shared_ptr<TritonModelInstance>>>
+  std::unordered_map<
+      Signature, std::vector<std::shared_ptr<TritonModelInstance>>>
       existing_instances = model->IndexInstances();
 
   static triton::common::HostPolicyCmdlineConfig empty_host_policy;

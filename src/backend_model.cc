@@ -368,12 +368,12 @@ TritonModel::SetBackendConfigDefaults(
   return Status::Success;
 }
 
-std::map<
+std::unordered_map<
     TritonModelInstance::Signature,
     std::vector<std::shared_ptr<TritonModelInstance>>>
 TritonModel::IndexInstances() const
 {
-  std::map<
+  std::unordered_map<
       TritonModelInstance::Signature,
       std::vector<std::shared_ptr<TritonModelInstance>>>
       mapped_instances;

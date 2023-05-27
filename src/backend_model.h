@@ -96,7 +96,7 @@ class TritonModel : public Model {
   void SetState(void* state) { state_ = state; }
 
   // Return all foreground instances indexed by its respective signature.
-  std::map<
+  std::unordered_map<
       TritonModelInstance::Signature,
       std::vector<std::shared_ptr<TritonModelInstance>>>
   IndexInstances() const;
