@@ -288,6 +288,17 @@ bool EquivalentInNonInstanceGroupConfig(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config);
 
+/// Check if both model instance configs are equivalent. 'name' and 'count'
+/// fields do not alter the functionality of the instance and hence excluded
+/// from checking.
+/// \param instance_config_lhs The left hand side instance config.
+/// \param instance_config_rhs The right hand side instance config.
+/// \return True if instance configs are the same without checking 'name' and
+/// 'count' fields. False if they are different without checking the fields.
+bool EquivalentInInstanceConfig(
+    const inference::ModelInstanceGroup& instance_config_lhs,
+    const inference::ModelInstanceGroup& instance_config_rhs);
+
 /// Obtain a signature identifying the instance config. 'name' and 'count'
 /// fields do not alter the functionality of the instance and hence excluded
 /// from altering the signature.
