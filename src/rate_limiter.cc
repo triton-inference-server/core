@@ -798,9 +798,9 @@ RateLimiter::ResourceManager::RemoveModelInstance(
     if (ditr != max_resources_.end()) {
       for (const auto& resource : resource_device_map.second) {
         auto ritr = ditr->second.find(resource.first);
-        if (ritr != ditr->second.end() && ritr->second >= resource.second) {
+        if (ritr != ditr->second.end() && ritr->second <= resource.second) {
           update_needed = true;
-          if (ritr->second > resource.second) {
+          if (ritr->second < resource.second) {
             LOG_ERROR << "Should not print this! Removing an instance with "
                          "resource above max resource.";
           }
