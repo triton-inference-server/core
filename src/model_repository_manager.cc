@@ -35,7 +35,7 @@
 #include "backend_model.h"
 #include "constants.h"
 #include "ensemble_utils.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "triton/common/logging.h"

@@ -93,8 +93,8 @@ if(${TRITON_ENABLE_GPU})
     ../cache_manager.h
     ../cache_entry.cc
     ../cache_entry.h
-    ../filesystem.cc
-    ../filesystem.h
+    ../filesystem/api.cc
+    ../filesystem/api.h
     ../shared_library.cc
     ../shared_library.h
     ../status.cc
@@ -391,12 +391,12 @@ add_executable(
   repo_agent_test.cc
   ../repo_agent.cc
   ../status.cc
-  ../filesystem.cc
+  ../filesystem/api.cc
   ../model_config_utils.cc
   ../repo_agent.h
   ../shared_library.h
   ../status.h
-  ../filesystem.h
+  ../filesystem/api.h
   ../model_config_utils.h
 )
 

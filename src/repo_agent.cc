@@ -27,7 +27,7 @@
 #include "repo_agent.h"
 
 #include <string>
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "shared_library.h"
 #include "triton/common/logging.h"
 #include "tritonserver_apis.h"

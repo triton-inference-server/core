@@ -116,7 +116,7 @@ set(
   dynamic_batch_scheduler.cc
   ensemble_scheduler.cc
   ensemble_utils.cc
-  filesystem.cc
+  filesystem/api.cc
   infer_parameter.cc
   infer_request.cc
   infer_response.cc
@@ -162,7 +162,7 @@ set(
   dynamic_batch_scheduler.h
   ensemble_scheduler.h
   ensemble_utils.h
-  filesystem.h
+  filesystem/api.h
   infer_parameter.h
   infer_request.h
   infer_response.h
@@ -296,8 +296,9 @@ if(${TRITON_ENABLE_GCS})
     PRIVATE $<TARGET_PROPERTY:google-cloud-cpp::storage,INTERFACE_INCLUDE_DIRECTORIES>
   )
   if (NOT WIN32)
+    # [WIP] still needed?
     set_source_files_properties(
-      filesystem.cc
+      filesystem/api.cc
       PROPERTIES
         COMPILE_FLAGS -Wno-missing-field-initializers
     )

@@ -26,7 +26,7 @@
 
 #include "shared_library.h"
 
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "mutex"
 #include "triton/common/logging.h"
 

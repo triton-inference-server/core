@@ -33,7 +33,7 @@
 #include <set>
 #include "constants.h"
 #include "cuda_utils.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "triton/common/logging.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
