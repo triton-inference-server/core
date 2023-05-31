@@ -78,11 +78,15 @@ RateLimiter::RegisterModelInstance(
       // Without this serialization instances of other models might fail
       // to load because of the resource constraints in this instance.
       std::lock_guard<std::mutex> lk(resource_manager_mtx_);
-      const auto& status =
+      const auto& add_status =
           resource_manager_->AddModelInstance(pair_it.first->second.get());
-      if (!status.IsOk()) {
-        resource_manager_->RemoveModelInstance(pair_it.first->second.get());
-        return status;
+      if (!add_status.IsOk()) {
+        const auto& remove_status =
+            resource_manager_->RemoveModelInstance(pair_it.first->second.get());
+        if (!remove_status.IsOk()) {
+          LOG_ERROR << remove_status.Message();
+        }
+        return add_status;
       }
     }
   }
@@ -105,7 +109,8 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
   auto i_it = model_instances.find(triton_model_instance);
   if (i_it != model_instances.end()) {
     if (!ignore_resources_and_priority_) {
-      resource_manager_->RemoveModelInstance(i_it->second.get());
+      RETURN_IF_ERROR(
+          resource_manager_->RemoveModelInstance(i_it->second.get()));
     }
     model_context.RemoveInstance(i_it->second.get());
     model_instances.erase(i_it);
@@ -126,7 +131,8 @@ RateLimiter::UnregisterModel(const TritonModel* model)
     model_context.RequestRemoval();
     for (const auto& instance : model_instance_ctxs_[model]) {
       if (!ignore_resources_and_priority_) {
-        resource_manager_->RemoveModelInstance(instance.second.get());
+        RETURN_IF_ERROR(
+            resource_manager_->RemoveModelInstance(instance.second.get()));
       }
     }
 
@@ -780,7 +786,7 @@ RateLimiter::ResourceManager::RemoveModelInstance(
   for (const auto& resource_device_map : itr->second) {
     auto ditr = max_resources_.find(resource_device_map.first);
     if (ditr != max_resources_.end()) {
-      for (const auto resource : resource_device_map.second) {
+      for (const auto& resource : resource_device_map.second) {
         auto ritr = ditr->second.find(resource.first);
         if (ritr != ditr->second.end() && ritr->second >= resource.second) {
           update_needed = true;
@@ -823,7 +829,7 @@ RateLimiter::ResourceManager::UpdateMaxResource(
                  .emplace(resource_device_map.first, resource_device_map.second)
                  .first;
     } else {
-      for (const auto resource : resource_device_map.second) {
+      for (const auto& resource : resource_device_map.second) {
         auto ritr = ditr->second.find(resource.first);
         if (ritr == ditr->second.end()) {
           ritr = ditr->second.emplace(resource.first, resource.second).first;
