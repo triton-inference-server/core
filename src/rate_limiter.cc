@@ -176,7 +176,9 @@ RateLimiter::EnqueuePayload(
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(model) == payload_queues_.end()) {
-      LOG_INFO << "Should not print this ";
+      return Status(
+          Status::Code::INTERNAL,
+          "Should not print this! Enqueuing payload with an unknown model.");
     }
     payload_queue = payload_queues_[model].get();
   }
@@ -223,7 +225,9 @@ RateLimiter::DequeuePayload(
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(instances[0]->Model()) == payload_queues_.end()) {
-      LOG_INFO << "Should not print this ";
+      LOG_ERROR << "Should not print this! Dequeuing payload with an unknown "
+                   "instance.";
+      return;
     }
     payload_queue = payload_queues_[instances[0]->Model()].get();
   }
@@ -306,13 +310,19 @@ RateLimiter::PayloadRelease(std::shared_ptr<Payload>& payload)
   // available, so mark the instance as removing.
   if (payload->GetOpType() == Payload::Operation::EXIT) {
     std::lock_guard<std::mutex> lk(model_instance_ctx_mtx_);
-    auto& instances = model_instance_ctxs_[payload->GetInstance()->Model()];
-    auto it = instances.find(payload->GetInstance());
-    if (it == instances.end()) {
-      LOG_INFO << "Should not print this ";
+    auto it_model = model_instance_ctxs_.find(payload->GetInstance()->Model());
+    if (it_model == model_instance_ctxs_.end()) {
+      LOG_ERROR << "Should not print this! Releasing payload containing an "
+                   "instance of an unknown model.";
       return;
     }
-    it->second->RequestRemoval();  // mark the instance as removing
+    auto it_instance = it_model->second.find(payload->GetInstance());
+    if (it_instance == it_model->second.end()) {
+      LOG_ERROR << "Should not print this! Releasing payload containing an "
+                   "unknown instance.";
+      return;
+    }
+    it_instance->second->RequestRemoval();  // mark the instance as removing
   }
 
   payload->OnRelease();
@@ -790,6 +800,10 @@ RateLimiter::ResourceManager::RemoveModelInstance(
         auto ritr = ditr->second.find(resource.first);
         if (ritr != ditr->second.end() && ritr->second >= resource.second) {
           update_needed = true;
+          if (ritr->second > resource.second) {
+            LOG_ERROR << "Should not print this! Removing an instance with "
+                         "resource above max resource.";
+          }
           break;
         }
       }
