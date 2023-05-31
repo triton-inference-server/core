@@ -25,7 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "model_config.pb.h"
 #include "status.h"
 #include "triton/common/model_config.h"

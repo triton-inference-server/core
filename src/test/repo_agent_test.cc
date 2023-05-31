@@ -32,7 +32,7 @@
 #include <future>
 #include <map>
 #include <memory>
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "repo_agent.h"
 #include "server_message.h"
 #include "shared_library.h"

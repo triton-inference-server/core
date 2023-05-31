@@ -25,16 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#ifdef _WIN32
-// Remove GetObject definition from windows.h, which can cause
-// a naming collision when GetObject is called.
-// https://github.com/Tencent/rapidjson/issues/1448
-#undef GetObject
-#endif  // _WIN32
-
 #include <string>
+#include "../status.h"
 #include "google/protobuf/message.h"
-#include "status.h"
 
 namespace triton { namespace core {
 

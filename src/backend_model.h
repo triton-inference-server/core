@@ -29,7 +29,7 @@
 #include <string>
 #include "backend_manager.h"
 #include "backend_model_instance.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "infer_request.h"
 #include "model.h"
 #include "model_config.pb.h"

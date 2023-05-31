@@ -31,7 +31,7 @@
 
 #include "backend_config.h"
 #include "dynamic_batch_scheduler.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "model_config_utils.h"
 #include "numa_utils.h"
 #include "sequence_batch_scheduler.h"

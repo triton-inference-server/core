@@ -33,7 +33,7 @@
 #include <stdexcept>
 #include <thread>
 #include "constants.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "repo_agent.h"

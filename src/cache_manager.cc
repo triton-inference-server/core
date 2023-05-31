@@ -27,7 +27,7 @@
 #include "cache_manager.h"
 #include <boost/functional/hash.hpp>
 #include "cache_entry.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "server_message.h"
 #include "shared_library.h"
 #include "triton/common/logging.h"

@@ -29,7 +29,7 @@
 #include <chrono>
 #include <future>
 #include "constants.h"
-#include "filesystem.h"
+#include "filesystem/api.h"
 #include "infer_request.h"
 #include "model_config_utils.h"
 #include "triton/common/logging.h"
