@@ -26,18 +26,18 @@
 
 #include "api.h"
 
-#include "common.h"
+#include "implementations/common.h"
 
-// Different file system implementation
-#include "local.h"
+// Different file system implementations
+#include "implementations/local.h"
 #ifdef TRITON_ENABLE_GCS
-#include "gcs.h"
+#include "implementations/gcs.h"
 #endif  // TRITON_ENABLE_GCS
 #ifdef TRITON_ENABLE_S3
-#include "s3.h"
+#include "implementations/s3.h"
 #endif  // TRITON_ENABLE_S3
 #ifdef TRITON_ENABLE_AZURE_STORAGE
-#include "as.h"
+#include "implementations/as.h"
 #endif  // TRITON_ENABLE_AZURE_STORAGE
 
 #include <google/protobuf/io/coded_stream.h>
