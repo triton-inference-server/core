@@ -31,7 +31,7 @@
 #include <sys/types.h>
 #include <fstream>
 
-#include "../constants.h"
+#include "../../constants.h"
 
 namespace triton { namespace core {
 
