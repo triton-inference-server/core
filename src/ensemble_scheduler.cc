@@ -1407,7 +1407,7 @@ EnsembleScheduler::EnsembleScheduler(
 }
 
 Status
-EnsembleScheduler::Update(std::unique_ptr<std::lock_guard<std::mutex>>* lock)
+EnsembleScheduler::Update()
 {
   return Status(Status::Code::INTERNAL, "ensemble scheduler cannot be updated");
 }

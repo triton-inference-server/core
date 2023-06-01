@@ -648,9 +648,12 @@ ModelLifeCycle::UpdateModelConfig(
     return;
   }
 
-  // Update model instance group. It is the responsibility of the model to
-  // safeguard the update process, so the 'model_info_lock' is released during
-  // update to allow concurrent inference.
+  // Update model instance group. The 'model_info->mtx_' may be released while
+  // the model is updating its instance group, because no model info from this
+  // model lifecycle object is being accessed by the model during the update,
+  // and model repository manager will ensure no concurrent update on the same
+  // model may take place. Therefore, releasing the lock allows the model to be
+  // accessed which enables inference during update.
   model_info_lock.unlock();
   Status status = model->UpdateInstanceGroup(new_model_config);
   model_info_lock.lock();

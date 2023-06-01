@@ -73,13 +73,10 @@ class Scheduler {
   // Return the number of in-flight inferences tracked by the scheduler.
   virtual size_t InflightInferenceCount() = 0;
 
-  // Update the scheduler during a model update (i.e. instances). This function
-  // should block any new inference requests into 'Enqueue()' when ready (i.e.
-  // sequence models), and provide the mutex blocking new requests in locked
-  // state back to the caller, so the caller can finalize its own internal
-  // update and then release the mutex. If Status::Success is returned, then the
-  // is successful. Otherwise, the update has failed.
-  virtual Status Update(std::unique_ptr<std::lock_guard<std::mutex>>* lock) = 0;
+  // Update the scheduler during a model instance update.
+  // If Status::Success is returned, then the update is successful. Otherwise,
+  // the update has failed.
+  virtual Status Update() = 0;
 
   // Instruct the scheduler to stop processing future requests unless they are
   // considered as in-flight.

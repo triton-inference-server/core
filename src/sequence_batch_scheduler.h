@@ -75,7 +75,7 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
   // \see Scheduler::Update()
-  Status Update(std::unique_ptr<std::lock_guard<std::mutex>>* lock) override;
+  Status Update() override;
 
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }

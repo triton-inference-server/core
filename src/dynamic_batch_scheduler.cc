@@ -171,16 +171,12 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
 }
 
 Status
-DynamicBatchScheduler::Update(
-    std::unique_ptr<std::lock_guard<std::mutex>>* lock)
+DynamicBatchScheduler::Update()
 {
   if (model_instance_ != nullptr) {
     return Status(
         Status::Code::INTERNAL,
         "Cannot update dynamic batch scheduler specific to a model instance");
-  }
-  if (lock != nullptr) {
-    lock->reset(new std::lock_guard<std::mutex>(update_mu_));
   }
   return Status::Success;
 }

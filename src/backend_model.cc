@@ -264,17 +264,16 @@ TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
       min_compute_capability_, backend_->BackendAttributes().preferred_groups_,
       &model_config));
   RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
+  // Updating the 'config_' has to be an atomic operation, because it can be
+  // accessed by other threads concurrently.
+  *config_.mutable_instance_group() = model_config.instance_group();
 
   // Prepare the new instances on the new config.
   RETURN_IF_ERROR(TritonModelInstance::SetInstances(
       this, backend_cmdline_config_map_, host_policy_map_, model_config));
-
-  // At this point, the new model config and instances are ready but not yet
-  // written into this object. Update the scheduler and retrieve the lock
-  // holding off new inference requests, and then commit the changes.
-  std::unique_ptr<std::lock_guard<std::mutex>> lock;
-  RETURN_IF_ERROR(scheduler_->Update(&lock));
-  *config_.mutable_instance_group() = model_config.instance_group();
+  // Update the scheduler while the union of the old and new set of instances
+  // are presence.
+  RETURN_IF_ERROR(scheduler_->Update());
   RETURN_IF_ERROR(CommitInstances());
 
   return Status::Success;

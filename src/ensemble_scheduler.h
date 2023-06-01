@@ -100,7 +100,7 @@ class EnsembleScheduler : public Scheduler {
   size_t InflightInferenceCount() override { return inflight_count_; }
 
   // \see Scheduler::Update()
-  Status Update(std::unique_ptr<std::lock_guard<std::mutex>>* lock) override;
+  Status Update() override;
 
   // \see Scheduler::Stop()
   void Stop() override {}
