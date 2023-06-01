@@ -98,7 +98,7 @@ class DynamicBatchScheduler : public Scheduler {
       const std::set<int32_t>& preferred_batch_sizes,
       const uint64_t max_queue_delay_microseconds,
       const inference::ModelQueuePolicy& default_queue_policy,
-      const uint32_t priority_levels,
+      const uint64_t priority_levels,
       const ModelQueuePolicyMap& queue_policy_map);
 
   void BatcherThread(const int nice);

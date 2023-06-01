@@ -57,7 +57,7 @@ struct RequiredEqualInputs {
 // PriorityQueue
 //
 using ModelQueuePolicyMap = ::google::protobuf::Map<
-    ::google::protobuf::uint32, inference::ModelQueuePolicy>;
+    ::google::protobuf::uint64, inference::ModelQueuePolicy>;
 
 class PriorityQueue {
  public:
