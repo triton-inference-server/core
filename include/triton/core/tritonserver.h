@@ -1058,9 +1058,11 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
     struct TRITONSERVER_InferenceRequest* inference_request,
     const char* correlation_id);
 
+/// Deprecated. See TRITONSERVER_InferenceRequestPriorityU64 instead.
+///  
 /// Get the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
-/// model's default priority.
+/// model's default priority. 
 ///
 /// \param inference_request The request object.
 /// \param priority Returns the priority level.
@@ -1068,6 +1070,18 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
     struct TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority);
 
+/// Get the priority for a request. The default is 0 indicating that
+/// the request does not specify a priority and so will use the
+/// model's default priority.
+///
+/// \param inference_request The request object.
+/// \param priority Returns the priority level.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriorityU64(
+    struct TRITONSERVER_InferenceRequest* inference_request, uint64_t* priority);
+
+/// Deprecated. See TRITONSERVER_InferenceRequestSetPriorityU64 instead.
+///  
 /// Set the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
 /// model's default priority.
@@ -1078,6 +1092,17 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestPr
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     struct TRITONSERVER_InferenceRequest* inference_request, uint32_t priority);
+  
+/// Set the priority for a request. The default is 0 indicating that
+/// the request does not specify a priority and so will use the
+/// model's default priority.
+///
+/// \param inference_request The request object.
+/// \param priority The priority level.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetPriorityU64(
+    struct TRITONSERVER_InferenceRequest* inference_request, uint64_t priority);
 
 /// Get the timeout for a request, in microseconds. The default is 0
 /// which indicates that the request has no timeout.

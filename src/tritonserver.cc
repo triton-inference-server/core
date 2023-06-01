@@ -1700,8 +1700,25 @@ TRITONSERVER_InferenceRequestPriority(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestPriorityU64(
+    TRITONSERVER_InferenceRequest* inference_request, uint64_t* priority)
+{
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  *priority = lrequest->Priority();
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t priority)
+{
+  return TRITONSERVER_InferenceRequestSetPriorityU64(inference_request,priority);
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetPriorityU64(
+    TRITONSERVER_InferenceRequest* inference_request, uint64_t priority)
 {
   tc::InferenceRequest* lrequest =
       reinterpret_cast<tc::InferenceRequest*>(inference_request);
