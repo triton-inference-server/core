@@ -264,7 +264,7 @@ PriorityQueue::PriorityQueue()
 
 PriorityQueue::PriorityQueue(
     const inference::ModelQueuePolicy& default_queue_policy,
-    uint32_t priority_levels, const ModelQueuePolicyMap queue_policy_map)
+    uint64_t priority_levels, const ModelQueuePolicyMap queue_policy_map)
     : size_(0), default_policy_(default_queue_policy)
 {
   // Permanently instantiate PolicyQueue with keep_instantiate=true
@@ -286,7 +286,7 @@ PriorityQueue::PriorityQueue(
 
 Status
 PriorityQueue::Enqueue(
-    uint32_t priority_level, std::unique_ptr<InferenceRequest>& request)
+    uint64_t priority_level, std::unique_ptr<InferenceRequest>& request)
 {
   // Get corresponding PolicyQueue if it exists, otherwise insert it
   // via emplace with the default policy

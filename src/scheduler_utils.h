@@ -70,7 +70,7 @@ class PriorityQueue {
   // 'queue_policy_map', otherwise, the 'default_queue_policy' will be used.
   PriorityQueue(
       const inference::ModelQueuePolicy& default_queue_policy,
-      uint32_t priority_levels, const ModelQueuePolicyMap queue_policy_map);
+      uint64_t priority_levels, const ModelQueuePolicyMap queue_policy_map);
 
   // Enqueue a request with priority set to 'priority_level'. If
   // Status::Success is returned then the queue has taken ownership of
@@ -78,7 +78,7 @@ class PriorityQueue {
   // non-success is returned then the caller still retains ownership
   // of 'request'.
   Status Enqueue(
-      uint32_t priority_level, std::unique_ptr<InferenceRequest>& request);
+      uint64_t priority_level, std::unique_ptr<InferenceRequest>& request);
 
   // Dequeue the request at the front of the queue.
   Status Dequeue(std::unique_ptr<InferenceRequest>* request);
@@ -229,7 +229,7 @@ class PriorityQueue {
     std::deque<std::unique_ptr<InferenceRequest>> delayed_queue_;
     std::deque<std::unique_ptr<InferenceRequest>> rejected_queue_;
   };
-  using PriorityQueues = std::map<uint32_t, PolicyQueue>;
+  using PriorityQueues = std::map<uint64_t, PolicyQueue>;
 
   // Cursor for tracking pending batch, the cursor points to the item after
   // the pending batch.
@@ -254,7 +254,7 @@ class PriorityQueue {
 
   // Keep track of the priority level that the first request in the queue
   // is at to avoid traversing 'queues_'
-  uint32_t front_priority_level_;
+  uint64_t front_priority_level_;
   inference::ModelQueuePolicy default_policy_;
 
   Cursor pending_cursor_;
