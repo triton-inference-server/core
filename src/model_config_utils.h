@@ -299,4 +299,12 @@ bool EquivalentInInstanceConfig(
     const inference::ModelInstanceGroup& instance_config_lhs,
     const inference::ModelInstanceGroup& instance_config_rhs);
 
+/// Obtain a signature identifying the instance config. 'name' and 'count'
+/// fields do not alter the functionality of the instance and hence excluded
+/// from altering the signature.
+/// \param instance_config The instance config.
+/// \return Signature identifying the instance config.
+std::string InstanceConfigSignature(
+    const inference::ModelInstanceGroup& instance_config);
+
 }}  // namespace triton::core

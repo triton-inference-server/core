@@ -84,9 +84,6 @@ class TritonModel : public Model {
   {
     return instances_;
   }
-  // Find a foreground instance, if any, that matched the signature.
-  std::shared_ptr<TritonModelInstance> FindInstance(
-      const TritonModelInstance::Signature& signature) const;
 
   // True if different instances should be grouped by device; false otherwise.
   bool DeviceBlocking() const { return device_blocking_; }
@@ -98,8 +95,12 @@ class TritonModel : public Model {
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
 
-  // Called by 'backend_model_instance' to move new instances to this object.
-  // The new instances are registered into the background.
+  // Return all foreground instances indexed by its respective signature.
+  std::unordered_map<
+      TritonModelInstance::Signature,
+      std::vector<std::shared_ptr<TritonModelInstance>>>
+  IndexInstances() const;
+  // Register new instances into the background.
   Status RegisterInstance(
       std::shared_ptr<TritonModelInstance>&& instance, const bool passive);
 

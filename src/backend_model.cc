@@ -368,27 +368,32 @@ TritonModel::SetBackendConfigDefaults(
   return Status::Success;
 }
 
-std::shared_ptr<TritonModelInstance>
-TritonModel::FindInstance(const TritonModelInstance::Signature& signature) const
+std::unordered_map<
+    TritonModelInstance::Signature,
+    std::vector<std::shared_ptr<TritonModelInstance>>>
+TritonModel::IndexInstances() const
 {
-  // The search can be improved by introducing some gradient into comparing
-  // signatures. One solution could be to use hash key. [FIXME: DLIS-4822]
+  std::unordered_map<
+      TritonModelInstance::Signature,
+      std::vector<std::shared_ptr<TritonModelInstance>>>
+      mapped_instances;
   for (auto* instances : {&instances_, &passive_instances_}) {
     for (auto& instance : (*instances)) {
-      if (instance->GetSignature() == signature) {
-        return instance;
-      }
+      auto itr = mapped_instances
+                     .emplace(
+                         instance->GetSignature(),
+                         std::vector<std::shared_ptr<TritonModelInstance>>())
+                     .first;
+      itr->second.push_back(instance);
     }
   }
-  return std::shared_ptr<TritonModelInstance>();
+  return mapped_instances;
 }
 
 Status
 TritonModel::RegisterInstance(
     std::shared_ptr<TritonModelInstance>&& instance, const bool passive)
 {
-  instance->GetSignature().DisableMatching();
-
   if (passive) {
     bg_passive_instances_.emplace_back(std::move(instance));
   } else {
@@ -405,12 +410,6 @@ TritonModel::CommitInstances()
   passive_instances_.swap(bg_passive_instances_);
   bg_instances_.clear();
   bg_passive_instances_.clear();
-
-  for (auto* instances : {&instances_, &passive_instances_}) {
-    for (auto& instance : (*instances)) {
-      instance->GetSignature().EnableMatching();
-    }
-  }
 
   return Status::Success;
 }

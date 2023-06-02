@@ -201,6 +201,10 @@ TritonModelInstance::SetInstances(
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
     const inference::ModelConfig& model_config)
 {
+  std::unordered_map<
+      Signature, std::vector<std::shared_ptr<TritonModelInstance>>>
+      existing_instances = model->IndexInstances();
+
   static triton::common::HostPolicyCmdlineConfig empty_host_policy;
 
   for (const auto& group : model_config.instance_group()) {
@@ -256,8 +260,10 @@ TritonModelInstance::SetInstances(
         const Signature signature(group, id);
         // Check if an existing instance can be re-used.
         if (!ShareBackendThread(model->DeviceBlocking(), kind)) {
-          auto existing_instance = model->FindInstance(signature);
-          if (existing_instance) {
+          auto itr = existing_instances.find(signature);
+          if (itr != existing_instances.end() && !itr->second.empty()) {
+            auto existing_instance = itr->second.back();
+            itr->second.pop_back();
             LOG_VERBOSE(2) << "Re-using model instance named '"
                            << existing_instance->Name() << "' with device id '"
                            << existing_instance->DeviceId() << "'";
