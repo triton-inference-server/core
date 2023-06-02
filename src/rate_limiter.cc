@@ -116,6 +116,17 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
     model_instances.erase(i_it);
   }
 
+  {
+    std::lock_guard<std::mutex> lk(payload_queues_mu_);
+    auto p_it = payload_queues_.find(model);
+    if (p_it != payload_queues_.end()) {
+      auto s_it = p_it->second->specific_queues_.find(triton_model_instance);
+      if (s_it != p_it->second->specific_queues_.end()) {
+        p_it->second->specific_queues_.erase(s_it);
+      }
+    }
+  }
+
   return Status::Success;
 }
 
