@@ -1856,6 +1856,7 @@ ValidateModelConfigInt64()
       "ModelConfig::dynamic_batching::priority_queue_policy::value::default_"
       "timeout_microseconds",
       "ModelConfig::dynamic_batching::priority_levels",
+      "ModelConfig::dynamic_batching::priority_queue_policy::key",
       "ModelConfig::dynamic_batching::default_priority_level",
       "ModelConfig::sequence_batching::direct::max_queue_delay_microseconds",
       "ModelConfig::sequence_batching::state::dims",
@@ -2068,6 +2069,9 @@ ModelConfigToJson(
   // Fix dynamic_batching::max_queue_delay_microseconds,
   // dynamic_batching::default_queue_policy::default_timeout_microseconds,
   // dynamic_batching::priority_queue_policy::value::default_timeout_microseconds
+  // dynamic_batching::priority_levels
+  // dynamic_batching::default_priority_level
+  // dynamic_batching::priority_queue_policy::key is left as JSON only allows strings for keys
   {
     triton::common::TritonJson::Value db;
     if (config_json.Find("dynamic_batching", &db)) {
@@ -2089,21 +2093,6 @@ ModelConfigToJson(
           RETURN_IF_ERROR(pqp.MemberAsObject(m.c_str(), &el));
           RETURN_IF_ERROR(
               FixUInt(config_json, el, "default_timeout_microseconds"));
-
-	  uint64_t index;
-
-	  try {
-	    index = std::strtoull(m.c_str(),nullptr,10);
-	  }
-	  catch (...) {
-	    return Status(
-			  Status::Code::INTERNAL,
-			  (std::string("unable to convert '") + m + "' to unsigned integer"));
-	  }
-
-	  pqp.Add(index,std::move(el));
-	  pqp.Remove(m.c_str());
-	  
         }
       }
     }
