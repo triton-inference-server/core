@@ -277,7 +277,7 @@ PriorityQueue::PriorityQueue(
     // permanently add default PolicyQueue because those will be dynamically
     // created and erased to keep memory footprint low
     for (const auto& qp : queue_policy_map) {
-      queues_.emplace((uint32_t)qp.first, PolicyQueue(qp.second, true));
+      queues_.emplace(qp.first, PolicyQueue(qp.second, true));
     }
   }
   front_priority_level_ = queues_.empty() ? 0 : queues_.begin()->first;
