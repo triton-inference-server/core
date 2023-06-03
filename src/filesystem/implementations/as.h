@@ -27,16 +27,16 @@
 
 #include "common.h"
 
-#include <blob/blob_client.h>
-#include <storage_account.h>
-#include <storage_credential.h>
+#include <azure/storage/blobs.hpp>
+#include <azure/storage/common/storage_credential.hpp>
 // [WIP] below needed?
 #undef LOG_INFO
 #undef LOG_WARNING
 
 namespace triton { namespace core {
 
-namespace as = azure::storage_lite;
+namespace as = Azure::Storage;
+namespace asb = Azure::Storage::Blobs;
 const std::string AS_URL_PATTERN = "as://([^/]+)/([^/?]+)(?:/([^?]*))?(\\?.*)?";
 
 struct ASCredential {
@@ -99,27 +99,32 @@ class ASFileSystem : public FileSystem {
 
  private:
   Status ParsePath(
-      const std::string& path, std::string* bucket, std::string* object);
-  std::shared_ptr<as::blob_client> client_;
+      const std::string& path, std::string* container, std::string* blob);
 
+  // 'callback' will be invoked when directory content is received, it may
+  // be invoked multiple times within the same ListDirectory() call if the
+  // result is paged.
   Status ListDirectory(
       const std::string& path, const std::string& dir_path,
-      std::function<
-          Status(const as::list_blobs_segmented_item&, const std::string&)>
-          func);
+      std::function<Status(
+          const std::vector<asb::Models::BlobItem>& blobs,
+          const std::vector<std::string>& blob_prefixes)>
+          callback);
 
   Status DownloadFolder(
       const std::string& container, const std::string& path,
       const std::string& dest);
+
+  std::shared_ptr<asb::BlobServiceClient> client_;
   re2::RE2 as_regex_;
 };
 
 Status
 ASFileSystem::ParsePath(
-    const std::string& path, std::string* container, std::string* object)
+    const std::string& path, std::string* container, std::string* blob)
 {
   std::string host_name, query;
-  if (!RE2::FullMatch(path, as_regex_, &host_name, container, object, &query)) {
+  if (!RE2::FullMatch(path, as_regex_, &host_name, container, blob, &query)) {
     return Status(
         Status::Code::INTERNAL, "Invalid azure storage path: " + path);
   }
@@ -129,7 +134,6 @@ ASFileSystem::ParsePath(
 ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
     : as_regex_(AS_URL_PATTERN)
 {
-  std::shared_ptr<as::storage_account> account = nullptr;
   std::string host_name, container, blob_path, query;
   if (RE2::FullMatch(
           path, as_regex_, &host_name, &container, &blob_path, &query)) {
@@ -144,19 +148,17 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
     } else {
       account_name = as_cred.account_str_;
     }
+    std::string service_url(
+        "https://" + account_name + ".blob.core.windows.net");
 
-    std::shared_ptr<as::storage_credential> cred;
     if (!as_cred.account_key_.empty()) {
       // Shared Key
-      cred = std::make_shared<as::shared_key_credential>(
+      auto cred = std::make_shared<as::StorageSharedKeyCredential>(
           account_name, as_cred.account_key_);
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
     } else {
-      cred = std::make_shared<as::anonymous_credential>();
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url);
     }
-    account = std::make_shared<as::storage_account>(
-        account_name, cred, /* use_https */ true);
-    client_ =
-        std::make_shared<as::blob_client>(account, /*max_concurrency*/ 16);
   }
 }
 
@@ -175,57 +177,53 @@ ASFileSystem::CheckClient()
 Status
 ASFileSystem::FileModificationTime(const std::string& path, int64_t* mtime_ns)
 {
-  as::blob_client_wrapper bc(client_);
-  std::string container, object_path;
-  RETURN_IF_ERROR(ParsePath(path, &container, &object_path));
+  std::string container, blob;
+  RETURN_IF_ERROR(ParsePath(path, &container, &blob));
+  auto bc = client_->GetBlobContainerClient(container).GetBlobClient(blob);
 
-  auto blobProperty = bc.get_blob_property(container, object_path);
-  if (errno != 0) {
+  try {
+    auto blobProperty = bc.GetProperties().Value;
+    *mtime_ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(
+                    blobProperty.LastModified)
+                    .time_since_epoch()
+                    .count();
+  }
+  catch (as::StorageException& ex) {
     return Status(
-        Status::Code::INTERNAL, "Unable to get blob property for file at " +
-                                    path + ", errno:" + strerror(errno));
+        Status::Code::INTERNAL,
+        "Unable to get blob property for file at " + path + ":" + ex.what());
   }
 
-  auto time =
-      std::chrono::system_clock::from_time_t(blobProperty.last_modified);
-  auto update_time =
-      std::chrono::time_point_cast<std::chrono::nanoseconds>(time)
-          .time_since_epoch()
-          .count();
-
-  *mtime_ns = update_time;
   return Status::Success;
 };
 
 Status
 ASFileSystem::ListDirectory(
     const std::string& container, const std::string& dir_path,
-    std::function<
-        Status(const as::list_blobs_segmented_item&, const std::string&)>
-        func)
+    std::function<Status(
+        const std::vector<asb::Models::BlobItem>& blobs,
+        const std::vector<std::string>& blob_prefixes)>
+        callback)
 {
-  as::blob_client_wrapper bc(client_);
-
+  auto container_client = client_->GetBlobContainerClient(container);
+  auto options = asb::ListBlobsOptions();
   // Append a slash to make it easier to list contents
   std::string full_dir = AppendSlash(dir_path);
-  auto blobs = bc.list_blobs_segmented(container, "/", "", full_dir);
-  if (errno != 0) {
-    return Status(
-        Status::Code::INTERNAL, "Failed to get contents of directory " +
-                                    dir_path + ", errno:" + strerror(errno));
-  }
+  options.Prefix = full_dir;
 
-  for (auto&& item : blobs.blobs) {
-    std::string name = item.name;
-    int item_start = name.find(full_dir) + full_dir.size();
-    int item_end = name.find("/", item_start);
-    // Let set take care of subdirectory contents
-    std::string subfile = name.substr(item_start, item_end - item_start);
-    auto status = func(item, subfile);
-    if (!status.IsOk()) {
-      return status;
+  try {
+    for (auto blobPage = container_client.ListBlobsByHierarchy("/", options);
+         blobPage.HasPage(); blobPage.MoveToNextPage()) {
+      // per-page per-blob
+      RETURN_IF_ERROR(callback(blobPage.Blobs, blobPage.BlobPrefixes));
     }
   }
+  catch (as::StorageException& ex) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to get contents of directory " + dir_path + ":" + ex.what());
+  }
+
   return Status::Success;
 }
 
@@ -233,14 +231,25 @@ Status
 ASFileSystem::GetDirectoryContents(
     const std::string& path, std::set<std::string>* contents)
 {
-  auto func = [&](const as::list_blobs_segmented_item& item,
-                  const std::string& dir) {
-    contents->insert(dir);
-    // Fail-safe check to ensure the item name is not empty
-    if (dir.empty()) {
-      return Status(
-          Status::Code::INTERNAL,
-          "Cannot handle item with empty name at " + path);
+  auto func = [&](const std::vector<asb::Models::BlobItem>& blobs,
+                  const std::vector<std::string>& blob_prefixes) {
+    for (const auto& blob_item : blobs) {
+      // Fail-safe check to ensure the item name is not empty
+      if (blob_item.Name.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Cannot handle item with empty name at " + path);
+      }
+      contents->insert(BaseName(blob_item.Name));
+    }
+    for (const auto& directory_item : blob_prefixes) {
+      // Fail-safe check to ensure the item name is not empty
+      if (directory_item.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Cannot handle item with empty name at " + path);
+      }
+      contents->insert(BaseName(directory_item));
     }
     return Status::Success;
   };
@@ -253,10 +262,16 @@ Status
 ASFileSystem::GetDirectorySubdirs(
     const std::string& path, std::set<std::string>* subdirs)
 {
-  auto func = [&](const as::list_blobs_segmented_item& item,
-                  const std::string& dir) {
-    if (item.is_directory) {
-      subdirs->insert(dir);
+  auto func = [&](const std::vector<asb::Models::BlobItem>& blobs,
+                  const std::vector<std::string>& blob_prefixes) {
+    for (const auto& directory_item : blob_prefixes) {
+      // Fail-safe check to ensure the item name is not empty
+      if (directory_item.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Cannot handle item with empty name at " + path);
+      }
+      subdirs->insert(BaseName(directory_item));
     }
     return Status::Success;
   };
@@ -269,10 +284,16 @@ Status
 ASFileSystem::GetDirectoryFiles(
     const std::string& path, std::set<std::string>* files)
 {
-  auto func = [&](const as::list_blobs_segmented_item& item,
-                  const std::string& file) {
-    if (!item.is_directory) {
-      files->insert(file);
+  auto func = [&](const std::vector<asb::Models::BlobItem>& blobs,
+                  const std::vector<std::string>& blob_prefixes) {
+    for (const auto& blob_item : blobs) {
+      // Fail-safe check to ensure the item name is not empty
+      if (blob_item.Name.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Cannot handle item with empty name at " + path);
+      }
+      files->insert(BaseName(blob_item.Name));
     }
     return Status::Success;
   };
@@ -285,17 +306,32 @@ Status
 ASFileSystem::IsDirectory(const std::string& path, bool* is_dir)
 {
   *is_dir = false;
-  std::string container, object_path;
-  RETURN_IF_ERROR(ParsePath(path, &container, &object_path));
+  std::string container, blob_path;
+  RETURN_IF_ERROR(ParsePath(path, &container, &blob_path));
 
-  as::blob_client_wrapper bc(client_);
-  auto blobs = bc.list_blobs_segmented(container, "/", "", object_path, 1);
-  if (errno != 0) {
-    return Status(
-        Status::Code::INTERNAL, "Failed to check if directory at " + path +
-                                    ", errno:" + strerror(errno));
+  auto container_client = client_->GetBlobContainerClient(container);
+  auto options = asb::ListBlobsOptions();
+  // Append a slash to make it easier to list contents
+  std::string full_dir = AppendSlash(blob_path);
+  options.Prefix = full_dir;
+  try {
+    for (auto blobPage = container_client.ListBlobsByHierarchy("/", options);
+         blobPage.HasPage(); blobPage.MoveToNextPage()) {
+      if ((blobPage.Blobs.size() == 1) &&
+          (blobPage.Blobs[0].Name == blob_path)) {
+        // It's a file
+        return Status::Success;
+      }
+      *is_dir =
+          ((blobPage.Blobs.size() > 0) || (blobPage.BlobPrefixes.size() > 0));
+      break;
+    }
   }
-  *is_dir = blobs.blobs.size() > 0;
+  catch (as::StorageException& ex) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to check if directory at " + path + ":" + ex.what());
+  }
 
   return Status::Success;
 };
@@ -303,19 +339,21 @@ ASFileSystem::IsDirectory(const std::string& path, bool* is_dir)
 Status
 ASFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 {
-  as::blob_client_wrapper bc(client_);
-  std::string container, object_path;
-  RETURN_IF_ERROR(ParsePath(path, &container, &object_path));
-  using namespace azure::storage_lite;
-  std::ostringstream out_stream;
-  bc.download_blob_to_stream(container, object_path, 0, 0, out_stream);
-  if (errno != 0) {
-    return Status(
-        Status::Code::INTERNAL, "Failed to fetch file stream at " + path +
-                                    ", errno:" + strerror(errno));
+  std::string container, blob_path;
+  RETURN_IF_ERROR(ParsePath(path, &container, &blob_path));
+  try {
+    auto res = client_->GetBlobContainerClient(container)
+                   .GetBlobClient(blob_path)
+                   .Download();
+    *contents = std::string(
+        (const char*)res.Value.BodyStream->ReadToEnd().data(),
+        res.Value.BlobSize);
   }
-  *contents = out_stream.str();
-
+  catch (as::StorageException& ex) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Failed to read text file at " + path + ":" + ex.what());
+  }
   return Status::Success;
 }
 
@@ -324,18 +362,27 @@ ASFileSystem::FileExists(const std::string& path, bool* exists)
 {
   *exists = false;
 
-  std::string container, object;
-  RETURN_IF_ERROR(ParsePath(path, &container, &object));
-  as::blob_client_wrapper bc(client_);
-  auto blobs = bc.list_blobs_segmented(container, "/", "", object, 1);
-  if (errno != 0) {
+  std::string container, blob;
+  RETURN_IF_ERROR(ParsePath(path, &container, &blob));
+
+  auto container_client = client_->GetBlobContainerClient(container);
+  auto options = asb::ListBlobsOptions();
+  options.Prefix = blob;
+  try {
+    for (auto blobPage = container_client.ListBlobsByHierarchy("/", options);
+         blobPage.HasPage(); blobPage.MoveToNextPage()) {
+      // If any entries are returned from ListBlobs, the file / directory exists
+      *exists =
+          ((blobPage.Blobs.size() > 0) || (blobPage.BlobPrefixes.size() > 0));
+      break;
+    }
+  }
+  catch (as::StorageException& ex) {
     return Status(
-        Status::Code::INTERNAL, "Failed to check if file exists at " + path +
-                                    ", errno:" + strerror(errno));
+        Status::Code::INTERNAL,
+        "Failed to check if file exists at " + path + ":" + ex.what());
   }
-  if (blobs.blobs.size() > 0) {
-    *exists = true;
-  }
+
   return Status::Success;
 }
 
@@ -344,12 +391,22 @@ ASFileSystem::DownloadFolder(
     const std::string& container, const std::string& path,
     const std::string& dest)
 {
-  as::blob_client_wrapper bc(client_);
-  auto func = [&](const as::list_blobs_segmented_item& item,
-                  const std::string& dir) {
-    auto local_path = JoinPath({dest, dir});
-    auto blob_path = JoinPath({path, dir});
-    if (item.is_directory) {
+  auto container_client = client_->GetBlobContainerClient(container);
+  auto func = [&](const std::vector<asb::Models::BlobItem>& blobs,
+                  const std::vector<std::string>& blob_prefixes) {
+    for (const auto& blob_item : blobs) {
+      const auto& local_path = JoinPath({dest, BaseName(blob_item.Name)});
+      try {
+        container_client.GetBlobClient(blob_item.Name).DownloadTo(local_path);
+      }
+      catch (as::StorageException& ex) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Failed to download file at " + blob_item.Name + ":" + ex.what());
+      }
+    }
+    for (const auto& directory_item : blob_prefixes) {
+      const auto& local_path = JoinPath({dest, BaseName(directory_item)});
       int status = mkdir(
           const_cast<char*>(local_path.c_str()), S_IRUSR | S_IWUSR | S_IXUSR);
       if (status == -1) {
@@ -358,18 +415,7 @@ ASFileSystem::DownloadFolder(
             "Failed to create local folder: " + local_path +
                 ", errno:" + strerror(errno));
       }
-      auto ret = DownloadFolder(container, blob_path, local_path);
-      if (!ret.IsOk()) {
-        return ret;
-      }
-    } else {
-      time_t last_modified;
-      bc.download_blob_to_file(container, blob_path, local_path, last_modified);
-      if (errno != 0) {
-        return Status(
-            Status::Code::INTERNAL, "Failed to download file at " + blob_path +
-                                        ", errno:" + strerror(errno));
-      }
+      RETURN_IF_ERROR(DownloadFolder(container, directory_item, local_path));
     }
     return Status::Success;
   };
@@ -407,30 +453,26 @@ ASFileSystem::LocalizePath(
 
   std::string dest(folder_template);
 
-  as::blob_client_wrapper bc(client_);
-
-  std::string container, object;
-  RETURN_IF_ERROR(ParsePath(path, &container, &object));
-  return DownloadFolder(container, object, dest);
+  std::string container, blob;
+  RETURN_IF_ERROR(ParsePath(path, &container, &blob));
+  return DownloadFolder(container, blob, dest);
 }
 
 Status
 ASFileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
-  std::stringstream ss(contents);
-  std::istream is(ss.rdbuf());
-  std::string container, object;
-  RETURN_IF_ERROR(ParsePath(path, &container, &object));
-  std::vector<std::pair<std::string, std::string>> metadata;
-  auto ret =
-      client_->upload_block_blob_from_stream(container, object, is, metadata)
-          .get();
-  if (!ret.success()) {
+  std::string container, blob;
+  RETURN_IF_ERROR(ParsePath(path, &container, &blob));
+  try {
+    client_->GetBlobContainerClient(container)
+        .GetBlockBlobClient(blob)
+        .UploadFrom((const uint8_t*)contents.data(), contents.size());
+  }
+  catch (as::StorageException& ex) {
     return Status(
         Status::Code::INTERNAL,
-        "Failed to upload blob, Error: " + ret.error().code + ", " +
-            ret.error().code_name);
+        "Failed to write file to " + path + ":" + ex.what());
   }
   return Status::Success;
 }

@@ -278,7 +278,8 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib)
   endif() # TRITON_ENABLE_S3
   if(${TRITON_ENABLE_AZURE_STORAGE})
-    set(TRITON_DEPENDS ${TRITON_DEPENDS} azure-storage-cpplite)
+    set(TRITON_DEPENDS ${TRITON_DEPENDS} curl)
+    # set(TRITON_DEPENDS ${TRITON_DEPENDS} azure-storage-blobs)
   endif() # TRITON_ENABLE_AZURE_STORAGE
   if(${TRITON_ENABLE_METRICS})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} prometheus-cpp)
@@ -304,7 +305,8 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Dprometheus-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/prometheus-cpp/${LIB_DIR}/cmake/prometheus-cpp
       -Dgoogle_cloud_cpp_storage_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/google-cloud-cpp/${LIB_DIR}/cmake/google_cloud_cpp_storage
       -Dgoogle_cloud_cpp_rest_internal_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/google-cloud-cpp/${LIB_DIR}/cmake/google_cloud_cpp_rest_internal
-      -Dazure-storage-cpplite_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-storage-cpplite
+      # -Dazure-storage-blobs_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-storage-blobs
+      -DCURL_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/curl/lib/cmake/CURL
       -Dgoogle_cloud_cpp_common_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/google-cloud-cpp/${LIB_DIR}/cmake/google_cloud_cpp_common
       -DCrc32c_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/crc32c/${LIB_DIR}/cmake/Crc32c
       -DAWSSDK_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/cmake/AWSSDK
