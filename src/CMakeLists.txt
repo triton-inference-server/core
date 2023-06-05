@@ -104,34 +104,8 @@ endif()
 # Azure Storage
 #
 if(${TRITON_ENABLE_AZURE_STORAGE})
-include(FetchContent)
-FetchContent_Declare(
-    azuresdk
-    GIT_REPOSITORY      https://github.com/Azure/azure-sdk-for-cpp.git
-    GIT_TAG             azure-storage-blobs_12.7.0
-)
-FetchContent_GetProperties(azuresdk)
-if(NOT azuresdk_POPULATED)
-    # [FXIME] WAR for configuring compiler option
-    if (DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
-      set(OLD_CMAKE_POSITION_INDEPENDENT_CODE ${CMAKE_POSITION_INDEPENDENT_CODE})
-    endif()
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-    FetchContent_Populate(azuresdk)
-    # Adding all Azure SDK libraries
-    set(DISABLE_AZURE_CORE_OPENTELEMETRY ON)
-    add_subdirectory(${azuresdk_SOURCE_DIR} ${azuresdk_BINARY_DIR} EXCLUDE_FROM_ALL)
-    # Adding one Azure SDK Library only (Storage blobs)
-    # add_subdirectory(${azuresdk_SOURCE_DIR}/sdk/core/azure-core ${azuresdk_BINARY_DIR}/sdk/core/azure-core EXCLUDE_FROM_ALL)
-    # set(azure-core-cpp_DIR ${azuresdk_BINARY_DIR}/sdk/core/azure-core)
-    # add_subdirectory(${azuresdk_SOURCE_DIR}/sdk/storage/azure-storage-common ${azuresdk_BINARY_DIR}/sdk/storage/azure-storage-common EXCLUDE_FROM_ALL)
-    # add_subdirectory(${azuresdk_SOURCE_DIR}/sdk/storage/azure-storage-blobs ${azuresdk_BINARY_DIR}/sdk/storage/azure-storage-blobs EXCLUDE_FROM_ALL)
-    if (DEFINED OLD_CMAKE_POSITION_INDEPENDENT_CODE)
-      set(CMAKE_POSITION_INDEPENDENT_CODE ${OLD_CMAKE_POSITION_INDEPENDENT_CODE})
-    endif()
-endif()
-  # find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
-  # message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
+  find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+  message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
 endif()
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
