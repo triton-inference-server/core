@@ -1059,7 +1059,7 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
     const char* correlation_id);
 
 /// Deprecated. See TRITONSERVER_InferenceRequestPriorityU64 instead.
-///  
+///
 /// Get the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
 /// model's default priority.
