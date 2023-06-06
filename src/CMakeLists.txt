@@ -100,6 +100,14 @@ if(${TRITON_ENABLE_S3})
   message(STATUS "Using aws-sdk-cpp ${AWSSDK_VERSION}")
 endif()
 
+#
+# Azure Storage
+#
+if(${TRITON_ENABLE_AZURE_STORAGE})
+  find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+  message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
+endif()
+
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
@@ -315,7 +323,7 @@ endif()
 if(${TRITON_ENABLE_AZURE_STORAGE})
   target_include_directories(
     triton-core
-    PRIVATE ${azure-storage-cpplite_DIR}/include
+    PRIVATE $<TARGET_PROPERTY:Azure::azure-storage-blobs,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
@@ -485,10 +493,7 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   target_link_libraries(
     triton-core
     PRIVATE
-      -L${azure-storage-cpplite_DIR}/lib
-      -lazure-storage-lite
-      -luuid
-      -lcurl
+      Azure::azure-storage-blobs
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
