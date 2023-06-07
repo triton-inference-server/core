@@ -1693,8 +1693,9 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority)
 {
-  uint64_t temp;  
-  auto error = TRITONSERVER_InferenceRequestPriorityU64(inference_request, &temp);
+  uint64_t temp;
+  auto error =
+      TRITONSERVER_InferenceRequestPriorityUInt64(inference_request, &temp);
   if (error != nullptr) {
     return error;
   }
@@ -1702,14 +1703,16 @@ TRITONSERVER_InferenceRequestPriority(
     *priority = temp;
     return nullptr; // Success
   }
-  return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INVALID_ARG,
-			       (std::string(
-				   "request priority overflows uint32_t, priority=") +
-				std::to_string(temp)).c_str());
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_INVALID_ARG,
+      (std::string("request priority overflows uint32_t, use "
+                   "TRITONSERVER_InferenceRequestPriorityUInt64, priority=") +
+       std::to_string(temp))
+          .c_str());
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceRequestPriorityU64(
+TRITONSERVER_InferenceRequestPriorityUInt64(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t* priority)
 {
   tc::InferenceRequest* lrequest =
@@ -1722,11 +1725,12 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t priority)
 {
-  return TRITONSERVER_InferenceRequestSetPriorityU64(inference_request, priority);
+  return TRITONSERVER_InferenceRequestSetPriorityUInt64(
+      inference_request, priority);
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceRequestSetPriorityU64(
+TRITONSERVER_InferenceRequestSetPriorityUInt64(
     TRITONSERVER_InferenceRequest* inference_request, uint64_t priority)
 {
   tc::InferenceRequest* lrequest =

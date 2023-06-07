@@ -222,7 +222,7 @@ TRITONSERVER_InferenceRequestPriority()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceRequestPriorityU64()
+TRITONSERVER_InferenceRequestPriorityUInt64()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -230,7 +230,7 @@ TRITONSERVER_InferenceRequestSetPriority()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceRequestSetPriorityU64()
+TRITONSERVER_InferenceRequestSetPriorityUInt64()
 {
 }
 TRITONAPI_DECLSPEC void
