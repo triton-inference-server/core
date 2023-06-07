@@ -31,11 +31,9 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 
 // [FIXME: DLIS-4973]
-#ifndef _WIN32
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/http/curl/CurlHttpClient.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
-#endif
 
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -51,7 +49,6 @@ namespace s3 = Aws::S3;
 // Remove once s3 fully supports HTTP/2 [FIXME: DLIS-4973].
 // Reference:
 // https://github.com/awsdocs/aws-doc-sdk-examples/blob/main/cpp/example_code/s3/list_buckets_disabling_dns_cache.cpp
-#ifndef _WIN32
 static const char S3_ALLOCATION_TAG[] = "OverrideDefaultHttpClient";
 class S3CurlHttpClient : public Aws::Http::CurlHttpClient {
  public:
@@ -91,7 +88,6 @@ class S3HttpClientFactory : public Aws::Http::HttpClientFactory {
   void InitStaticState() override { S3CurlHttpClient::InitGlobalState(); }
   void CleanupStaticState() override { S3CurlHttpClient::CleanupGlobalState(); }
 };
-#endif
 
 struct S3Credential {
   std::string secret_key_;
@@ -284,10 +280,8 @@ S3FileSystem::S3FileSystem(
   std::call_once(onceFlag, [&options] { Aws::InitAPI(options); });
 
   // [FIXME: DLIS-4973]
-#ifndef _WIN32
   Aws::Http::SetHttpClientFactory(
       Aws::MakeShared<S3HttpClientFactory>(S3_ALLOCATION_TAG));
-#endif
 
   Aws::Client::ClientConfiguration config;
   Aws::Auth::AWSCredentials credentials;
