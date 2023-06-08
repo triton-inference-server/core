@@ -640,10 +640,12 @@ ModelLifeCycle::UpdateModelConfig(
 
   std::unique_lock<std::mutex> model_info_lock(model_info->mtx_);
 
+  // Make sure the state reason is empty before attempting to update.
+  model_info->state_reason_.clear();
+
   // Downcast 'Model' to 'TritonModel'.
   TritonModel* model = (TritonModel*)model_info->model_.get();
   if (model == nullptr) {
-    model_info->state_ = ModelReadyState::UNAVAILABLE;
     model_info->state_reason_ =
         "Unable to downcast '" + model_id.str() +
         "' from 'Model' to 'TritonModel' during model update.";
@@ -654,8 +656,8 @@ ModelLifeCycle::UpdateModelConfig(
   Status status =
       model->UpdateInstanceGroup(new_model_config, &model_info_lock);
   if (!status.IsOk()) {
-    model_info->state_ = ModelReadyState::UNAVAILABLE;
     model_info->state_reason_ = status.AsString();
+    return;
   }
 
   // Write new config into 'model_info'.
@@ -682,10 +684,10 @@ ModelLifeCycle::OnLoadComplete(
     std::lock_guard<std::mutex> model_info_lock(model_info->mtx_);
 
     // Write failed to load reason into tracker, if any.
-    // A newly created model should be at state 'LOADING' unless failed to load.
-    // A updated model should be at state 'READY' unless failed to update.
+    // A newly created model is at 'LOADING' state unless it failed to load.
+    // An updated model has an empty state reason unless it failed to update.
     if ((!is_update && model_info->state_ != ModelReadyState::LOADING) ||
-        (is_update && model_info->state_ != ModelReadyState::READY)) {
+        (is_update && !model_info->state_reason_.empty())) {
       load_tracker->load_failed_ = true;
       load_tracker->reason_ +=
           ("version " + std::to_string(version) + " is at " +

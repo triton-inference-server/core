@@ -274,6 +274,9 @@ TritonModel::UpdateInstanceGroup(
       this, backend_cmdline_config_map_, host_policy_map_, model_config);
   caller_lock->lock();
   if (!status.IsOk()) {
+    // Remove any pending instances if created.
+    bg_instances_.clear();
+    bg_passive_instances_.clear();
     return status;
   }
 
