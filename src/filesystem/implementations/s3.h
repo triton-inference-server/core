@@ -61,7 +61,8 @@ class S3CurlHttpClient : public Aws::Http::CurlHttpClient {
  protected:
   void OverrideOptionsOnConnectionHandle(CURL* connectionHandle) const override
   {
-    curl_easy_setopt(connectionHandle, CURLOPT_HTTP_VERSION, 2L);  // HTTP 1.1
+    curl_easy_setopt(
+        connectionHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
   }
 };
 class S3HttpClientFactory : public Aws::Http::HttpClientFactory {
