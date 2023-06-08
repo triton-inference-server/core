@@ -84,13 +84,11 @@ class RateLimiter {
   /// Unregisters the model instance with the rate limiter.
   /// \param instance The pointer to the TritonModelInstance object to
   /// unregister with the rate limiter.
-  /// \return Status object indicating success or failure.
-  Status UnregisterModelInstance(TritonModelInstance* instance);
+  void UnregisterModelInstance(TritonModelInstance* instance);
 
   /// Remove model from the set of models being managed by the rate limiter.
   /// \param model The pointer to TritonModel object to be removed.
-  /// \return Status object indicating success or failure.
-  Status UnregisterModel(const TritonModel* model);
+  void UnregisterModel(const TritonModel* model);
 
   /// Returns true if there is a payload slot available for the given model.
   /// \param model The pointer to TritonModel object to be removed.

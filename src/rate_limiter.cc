@@ -78,15 +78,13 @@ RateLimiter::RegisterModelInstance(
       // Without this serialization instances of other models might fail
       // to load because of the resource constraints in this instance.
       std::lock_guard<std::mutex> lk(resource_manager_mtx_);
-      const auto& add_status =
+      const auto& status =
           resource_manager_->AddModelInstance(pair_it.first->second.get());
-      if (!add_status.IsOk()) {
-        const auto& remove_status =
-            resource_manager_->RemoveModelInstance(pair_it.first->second.get());
-        if (!remove_status.IsOk()) {
-          LOG_ERROR << remove_status.Message();
-        }
-        return add_status;
+      if (!status.IsOk()) {
+        LOG_STATUS_ERROR(
+            resource_manager_->RemoveModelInstance(pair_it.first->second.get()),
+            "Cannot remove instance from resource manager");
+        return status;
       }
     }
   }
@@ -96,7 +94,7 @@ RateLimiter::RegisterModelInstance(
   return Status::Success;
 }
 
-Status
+void
 RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
 {
   std::lock_guard<std::mutex> lk1(model_ctx_mtx_);
@@ -109,8 +107,9 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
   auto i_it = model_instances.find(triton_model_instance);
   if (i_it != model_instances.end()) {
     if (!ignore_resources_and_priority_) {
-      RETURN_IF_ERROR(
-          resource_manager_->RemoveModelInstance(i_it->second.get()));
+      LOG_STATUS_ERROR(
+          resource_manager_->RemoveModelInstance(i_it->second.get()),
+          "Cannot remove instance from resource manager");
     }
     model_context.RemoveInstance(i_it->second.get());
     model_instances.erase(i_it);
@@ -126,11 +125,9 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
       }
     }
   }
-
-  return Status::Success;
 }
 
-Status
+void
 RateLimiter::UnregisterModel(const TritonModel* model)
 {
   {
@@ -142,8 +139,9 @@ RateLimiter::UnregisterModel(const TritonModel* model)
     model_context.RequestRemoval();
     for (const auto& instance : model_instance_ctxs_[model]) {
       if (!ignore_resources_and_priority_) {
-        RETURN_IF_ERROR(
-            resource_manager_->RemoveModelInstance(instance.second.get()));
+        LOG_STATUS_ERROR(
+            resource_manager_->RemoveModelInstance(instance.second.get()),
+            "Cannot remove instance from resource manager");
       }
     }
 
@@ -157,8 +155,6 @@ RateLimiter::UnregisterModel(const TritonModel* model)
       payload_queues_.erase(model);
     }
   }
-
-  return Status::Success;
 }
 
 bool
@@ -798,8 +794,7 @@ RateLimiter::ResourceManager::RemoveModelInstance(
   std::lock_guard<std::mutex> lk1(model_resources_mtx_);
   const auto& itr = model_resources_.find(instance);
   if (itr == model_resources_.end()) {
-    return Status(
-        Status::Code::INTERNAL, "Can not find the instance to remove");
+    return Status(Status::Code::INTERNAL, "Cannot find the instance to remove");
   }
   // Check if max resources need to be updated.
   bool update_needed = false;
