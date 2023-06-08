@@ -29,6 +29,12 @@
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
+
+// [FIXME: DLIS-4973]
+#include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/http/curl/CurlHttpClient.h>
+#include <aws/core/http/standard/StandardHttpRequest.h>
+
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>
@@ -38,6 +44,51 @@
 namespace triton { namespace core {
 
 namespace s3 = Aws::S3;
+
+// Override the default S3 Curl initialization for disabling HTTP/2 on s3.
+// Remove once s3 fully supports HTTP/2 [FIXME: DLIS-4973].
+// Reference:
+// https://github.com/awsdocs/aws-doc-sdk-examples/blob/main/cpp/example_code/s3/list_buckets_disabling_dns_cache.cpp
+static const char S3_ALLOCATION_TAG[] = "OverrideDefaultHttpClient";
+class S3CurlHttpClient : public Aws::Http::CurlHttpClient {
+ public:
+  explicit S3CurlHttpClient(
+      const Aws::Client::ClientConfiguration& client_config)
+      : Aws::Http::CurlHttpClient(client_config)
+  {
+  }
+
+ protected:
+  void OverrideOptionsOnConnectionHandle(CURL* connectionHandle) const override
+  {
+    curl_easy_setopt(
+        connectionHandle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+  }
+};
+class S3HttpClientFactory : public Aws::Http::HttpClientFactory {
+  std::shared_ptr<Aws::Http::HttpClient> CreateHttpClient(
+      const Aws::Client::ClientConfiguration& client_config) const override
+  {
+    return Aws::MakeShared<S3CurlHttpClient>(S3_ALLOCATION_TAG, client_config);
+  }
+  std::shared_ptr<Aws::Http::HttpRequest> CreateHttpRequest(
+      const Aws::String& uri, Aws::Http::HttpMethod method,
+      const Aws::IOStreamFactory& stream_factory) const override
+  {
+    return CreateHttpRequest(Aws::Http::URI(uri), method, stream_factory);
+  }
+  std::shared_ptr<Aws::Http::HttpRequest> CreateHttpRequest(
+      const Aws::Http::URI& uri, Aws::Http::HttpMethod method,
+      const Aws::IOStreamFactory& stream_factory) const override
+  {
+    auto req = Aws::MakeShared<Aws::Http::Standard::StandardHttpRequest>(
+        S3_ALLOCATION_TAG, uri, method);
+    req->SetResponseStreamFactory(stream_factory);
+    return req;
+  }
+  void InitStaticState() override { S3CurlHttpClient::InitGlobalState(); }
+  void CleanupStaticState() override { S3CurlHttpClient::CleanupGlobalState(); }
+};
 
 struct S3Credential {
   std::string secret_key_;
@@ -228,6 +279,10 @@ S3FileSystem::S3FileSystem(
   Aws::SDKOptions options;
   static std::once_flag onceFlag;
   std::call_once(onceFlag, [&options] { Aws::InitAPI(options); });
+
+  // [FIXME: DLIS-4973]
+  Aws::Http::SetHttpClientFactory(
+      Aws::MakeShared<S3HttpClientFactory>(S3_ALLOCATION_TAG));
 
   Aws::Client::ClientConfiguration config;
   Aws::Auth::AWSCredentials credentials;
