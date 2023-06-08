@@ -1135,6 +1135,11 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
 // there are no tests around specific Redis settings or eviction
 // policies at this time, and instead tests Redis's default settings.
 //
+// NOTE: These tests require a Redis server to already be running and
+// accessible. There is an assumed host:port of localhost:6379 for testing
+// purposes, but these can be configured via TRITON_REDIS_HOST and 
+// TRITON_REDIS_PORT env vars.
+//
 
 TEST_F(RequestResponseCacheTest, TestRedisCacheInsertLookupCompareBytes)
 {
