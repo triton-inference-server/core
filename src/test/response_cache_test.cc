@@ -34,6 +34,9 @@
 
 namespace tc = triton::core;
 
+const std::string REDIS_HOST = "localhost";
+const std::string REDIS_PORT = "6379";
+
 /* Mock classes for Unit Testing */
 namespace triton { namespace core {
 
@@ -478,7 +481,7 @@ InsertLookupCompare(
 }
 
 std::shared_ptr<tc::TritonCache>
-CreateCache(uint64_t cache_size)
+CreateLocalCache(uint64_t cache_size)
 {
   // Create TritonCacheManager
   std::shared_ptr<tc::TritonCacheManager> cache_manager;
@@ -489,8 +492,29 @@ CreateCache(uint64_t cache_size)
   // Create TritonCache
   std::shared_ptr<tc::TritonCache> cache;
   auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
-  std::cout << "Creating cache with size: " << cache_size << std::endl;
+  std::cout << "Creating local cache with config: " << cache_config << std::endl;
   auto cache_name = "local";
+  helpers::CheckStatus(
+      cache_manager->CreateCache(cache_name, cache_config, &cache));
+
+  return cache;
+}
+
+std::shared_ptr<tc::TritonCache>
+CreateRedisCache(std::string host, std::string port)
+{
+  // Create TritonCacheManager
+  std::shared_ptr<tc::TritonCacheManager> cache_manager;
+  auto cache_dir = "/opt/tritonserver/caches";
+  helpers::CheckStatus(
+      tc::TritonCacheManager::Create(&cache_manager, cache_dir));
+
+  // Create TritonCache
+  std::shared_ptr<tc::TritonCache> cache;
+  std::ostringstream cache_config_json;
+  auto cache_config = R"({"host": ")" + host + R"(", "port": ")" + port + R"("})";
+  std::cout << "Creating redis cache with config: " << cache_config << std::endl;
+  auto cache_name = "redis";
   helpers::CheckStatus(
       cache_manager->CreateCache(cache_name, cache_config, &cache));
 
@@ -596,6 +620,16 @@ class RequestResponseCacheTest : public ::testing::Test {
     response_400bytes = helpers::GenerateResponse(
         request0, dtype, memory_type, memory_type_id, outputs100);
     ASSERT_NE(response_400bytes, nullptr);
+
+    // Redis cache config
+    auto rh = std::getenv("TRITON_REDIS_HOST");
+    if (rh) {
+      redis_host = rh;
+    }
+    auto rp = std::getenv("TRITON_REDIS_PORT");
+    if (rp) {
+      redis_port = rp;
+    }
   }
 
   void TearDown() override
@@ -618,6 +652,8 @@ class RequestResponseCacheTest : public ::testing::Test {
   int64_t memory_type_id = 0;
   size_t thread_count = 100;
   uint64_t output100_size;
+  std::string redis_host = "localhost";
+  std::string redis_port = "6379";
 
   std::vector<int> data0, data1, data100;
   std::vector<helpers::Tensor> inputs0, inputs1, inputs2, inputs3, inputs4,
@@ -628,100 +664,13 @@ class RequestResponseCacheTest : public ::testing::Test {
   std::unique_ptr<tc::InferenceResponse> response0, response_400bytes;
 };
 
-// Test cache size too small to initialize.
-TEST_F(RequestResponseCacheTest, TestCacheSizeTooSmall)
+// Group common cache tests into namespace for testing multiple implementations
+namespace tests {
+
+void InsertLookupCompareBytes(
+  std::shared_ptr<tc::TritonCache> cache
+)
 {
-  // Pick intentionally small cache size, expecting failure
-  constexpr uint64_t cache_size = 1;
-  auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
-  std::cout << "Create cache of size: " << cache_size << std::endl;
-  helpers::CreateCacheExpectFail("local", cache_config);
-}
-
-// Test cache size too large to initialize.
-TEST_F(RequestResponseCacheTest, TestCacheSizeTooLarge)
-{
-  // Pick intentionally large cache size, expecting failure
-  constexpr uint64_t cache_size = ULLONG_MAX;
-  auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
-  std::cout << "Create cache of size: " << cache_size << std::endl;
-  helpers::CreateCacheExpectFail("local", cache_config);
-}
-
-TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryBytes)
-{
-  constexpr uint64_t cache_size = 4 * 1024 * 1024;  // 4 MB, arbitrary
-  auto cache = helpers::CreateCache(cache_size);
-  ASSERT_NE(cache, nullptr);
-
-  // Setup byte buffer larger than cache size
-  std::vector<tc::Byte> large_data(cache_size + 1);
-  // Setup entry
-  std::vector<boost::span<tc::Byte>> entry;
-  entry.push_back(large_data);
-
-  auto status = cache->Insert(entry, "large_bytes");
-  // We expect insertion to fail here since cache is too small
-  ASSERT_FALSE(status.IsOk())
-      << "Inserting item larger than cache succeeded when it should fail";
-}
-
-TEST_F(RequestResponseCacheTest, TestCacheSizeSmallerThanEntryResponse)
-{
-  constexpr uint64_t cache_size = 4 * 1024 * 1024;  // 4 MB, arbitrary
-  auto cache = helpers::CreateCache(cache_size);
-  ASSERT_NE(cache, nullptr);
-
-  // Set output data to be larger than cache size
-  // NOTE: This is not 1 byte larger than cache_size, the cache_size + 1 is to
-  // be clear it will always be larger than cache even if the dtype is changed.
-  std::vector<int> large_data(cache_size + 1, 0);
-  std::cout << "Create large_response (larger than cache) of size: "
-            << large_data.size() << std::endl;
-  std::vector<helpers::Tensor> large_outputs{
-      helpers::Tensor{"output", large_data}};
-  auto large_response = helpers::GenerateResponse(
-      request0, dtype, memory_type, memory_type_id, large_outputs);
-
-  std::cout << "Insert large_response into cache" << std::endl;
-  auto status = cache->Insert(large_response.get(), "large_response");
-  // We expect insertion to fail here since cache is too small
-  ASSERT_FALSE(status.IsOk())
-      << "Inserting item larger than cache succeeded when it should fail";
-}
-
-TEST_F(RequestResponseCacheTest, TestEvictionLRU)
-{
-  // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
-  auto cache = helpers::CreateCache(1200);
-  ASSERT_NE(cache, nullptr);
-  // Insert 2 responses, expecting both to fit in cache
-  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request0"));
-  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request1"));
-  // Validate both responses fit in cache by looking them up
-  tc::CacheEntry entry0, entry1, entry2, entry3, entry4, entry5, entry6, entry7;
-  auto status = cache->Lookup("request0", &entry0);
-  ASSERT_TRUE(status.IsOk()) << status.Message();
-  ASSERT_TRUE(cache->Lookup("request1", &entry1).IsOk());
-  // Insert a 3rd response, expecting the 1st response to be evicted
-  // in LRU order
-  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request2"));
-  ASSERT_TRUE(cache->Lookup("request2", &entry2).IsOk());
-  ASSERT_FALSE(cache->Lookup("request0", &entry3).IsOk());
-  // Lookup 2nd request to bump its LRU order over 3rd
-  ASSERT_TRUE(cache->Lookup("request1", &entry4).IsOk());
-  // Insert a 4th response, expecting the 3rd to get evicted by LRU order
-  // after looking up the 2nd
-  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request3"));
-  ASSERT_TRUE(cache->Lookup("request3", &entry5).IsOk());
-  ASSERT_TRUE(cache->Lookup("request1", &entry6).IsOk());
-  ASSERT_FALSE(cache->Lookup("request2", &entry7).IsOk());
-}
-
-TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
-{
-  auto cache = helpers::CreateCache(1024);
-  ASSERT_NE(cache, nullptr);
   // Setup byte buffers
   std::vector<tc::Byte> buffer1{1, tc::Byte{1}};
   std::vector<tc::Byte> buffer2{2, tc::Byte{2}};
@@ -741,10 +690,40 @@ TEST_F(RequestResponseCacheTest, TestCacheInsertLookupCompareBytes)
       helpers::InsertLookupCompare(cache, entry, "TestCacheEntry"));
 }
 
-TEST_F(RequestResponseCacheTest, TestHashingRequests)
+// Hash a collection of unique requests and assert no collisions occured
+void HashUnique(
+  std::shared_ptr<tc::TritonCache> cache,
+  std::vector<tc::InferenceRequest*>& unique_requests
+)
 {
-  auto cache = helpers::CreateCache(1024);
-  ASSERT_NE(cache, nullptr);
+  ASSERT_NE(unique_requests.size(), 0);
+  std::vector<std::string> hashes;
+  for (const auto& request : unique_requests) {
+    std::string hash = "";
+    helpers::CheckStatus(cache->Hash(*request, &hash));
+    ASSERT_NE(hash, "");
+    hashes.push_back(hash);
+  }
+  ASSERT_NE(hashes.size(), 0);
+
+  // Verify no two hashes from the unique requests are the same
+  for (size_t i = 0; i < hashes.size(); i++) {
+    for (size_t j = 0; j < hashes.size(); j++) {
+      if (i == j) { continue; }
+      ASSERT_NE(hashes[i], hashes[j]);
+    }
+  }
+}
+
+// Hash specifically crafted requests to verify their hashes are as expected
+void HashLogic(
+  std::shared_ptr<tc::TritonCache> cache,
+  tc::InferenceRequest* request0,
+  tc::InferenceRequest* request1,
+  tc::InferenceRequest* request2,
+  tc::InferenceRequest* request3,
+  tc::InferenceRequest* request4)
+{
   std::string hash0, hash1, hash2, hash3, hash4;
   helpers::CheckStatus(cache->Hash(*request0, &hash0));
   helpers::CheckStatus(cache->Hash(*request1, &hash1));
@@ -760,13 +739,11 @@ TEST_F(RequestResponseCacheTest, TestHashingRequests)
 }
 
 
-TEST_F(RequestResponseCacheTest, TestParallelInsert)
+void ParallelInsert(std::shared_ptr<tc::TritonCache> cache,
+  size_t thread_count, std::unique_ptr<tc::InferenceResponse>& insert_response, 
+  size_t expected_cache_hits
+  )
 {
-  // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
-  auto cache = helpers::CreateCache(1200);
-  ASSERT_NE(cache, nullptr);
-  constexpr size_t expected_cache_hits = 2;
-
   // Create threads
   std::vector<std::thread> threads;
   std::cout << "Insert responses into cache with [" << thread_count
@@ -774,7 +751,7 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
     threads.emplace_back(std::thread(
-        &helpers::InsertWrapper, cache, response_400bytes.get(), key));
+        &helpers::InsertWrapper, cache, insert_response.get(), key));
   }
 
   // Join threads
@@ -799,11 +776,11 @@ TEST_F(RequestResponseCacheTest, TestParallelInsert)
   ASSERT_EQ(cache_hits + cache_misses, thread_count);
 }
 
-TEST_F(RequestResponseCacheTest, TestParallelLookup)
+void ParallelLookup(std::shared_ptr<tc::TritonCache> cache,
+  size_t thread_count, std::unique_ptr<tc::InferenceResponse>& insert_response, std::vector<tc::InferenceRequest*>& unique_requests,
+  std::vector<int> expected_outputs
+  )
 {
-  // Set size large enough to hold all responses
-  auto cache = helpers::CreateCache(2 * thread_count * output100_size);
-  ASSERT_NE(cache, nullptr);
   const size_t expected_cache_hits = thread_count;
   constexpr size_t expected_cache_misses = 0;
 
@@ -820,7 +797,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
     responses.push_back(std::move(response));
     // Insert response for each thread
     auto key = std::to_string(idx);
-    cache->Insert(response_400bytes.get(), key);
+    cache->Insert(insert_response.get(), key);
   }
 
   // Assert all entries were put into cache and no evictions occurred yet
@@ -856,7 +833,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
   }
 
   // Grab output from sample response for comparison
-  const auto& response0_output = response_400bytes->Outputs()[0];
+  const auto& response0_output = insert_response->Outputs()[0];
 
   // Verify output results from cache
   for (size_t idx = 0; idx < thread_count; idx++) {
@@ -880,20 +857,16 @@ TEST_F(RequestResponseCacheTest, TestParallelLookup)
       // TODO: Use Triton DType to cast buffer and compare outputs generically
       const int* cache_output = static_cast<const int*>(response_buffer);
       for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-        ASSERT_EQ(cache_output[i], data100[i]);
+        ASSERT_EQ(cache_output[i], expected_outputs[i]);
       }
     }
   }
 }
 
 // Run Inserts/Lookups in parallel to check for race conditions, deadlocks, etc
-TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
+void ParallelLookupInsert(std::shared_ptr<tc::TritonCache> cache,
+  size_t thread_count, std::unique_ptr<tc::InferenceResponse>& insert_response, std::vector<tc::InferenceRequest*>& unique_requests)
 {
-  // Set size that can hold a few responses but will certainly
-  // run into evictions
-  auto cache = helpers::CreateCache(1024);
-  ASSERT_NE(cache, nullptr);
-
   // Create threads
   std::vector<std::thread> insert_threads;
   std::vector<std::thread> lookup_threads;
@@ -914,7 +887,7 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
     insert_threads.emplace_back(std::thread(
-        &helpers::InsertWrapper, cache, response_400bytes.get(), key));
+        &helpers::InsertWrapper, cache, insert_response.get(), key));
     lookup_threads.emplace_back(std::thread(
         &helpers::LookupWrapperMaybeMiss, cache, responses[idx].get(), key));
   }
@@ -926,38 +899,42 @@ TEST_F(RequestResponseCacheTest, TestParallelLookupAndInsert)
   }
 }
 
-TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
+void EndToEnd(std::shared_ptr<tc::TritonCache> cache, tc::InferenceRequest* request, std::unique_ptr<tc::InferenceResponse>& response, const std::vector<helpers::Tensor>& expected_outputs)
 {
-  auto cache = helpers::CreateCache(8 * 1024 * 1024);
-  ASSERT_NE(cache, nullptr);
-
   std::string key = "";
-  helpers::CheckStatus(cache->Hash(*request0, &key));
+  helpers::CheckStatus(cache->Hash(*request, &key));
   ASSERT_NE(key, "");
 
-  std::cout << "Lookup request0 in empty cache" << std::endl;
+  std::cout << "Lookup request in empty cache" << std::endl;
   auto status = cache->Lookup(nullptr, key);
   // This hash not in cache yet
   ASSERT_FALSE(status.IsOk()) << "hash [" + key + "] should not be in cache";
   // Insertion should succeed
-  helpers::CheckStatus(cache->Insert(response0.get(), key));
+  helpers::CheckStatus(cache->Insert(response.get(), key));
 
-  // Duplicate insertion should fail since request0 already exists in cache
-  status = cache->Insert(response0.get(), key);
-  ASSERT_FALSE(status.IsOk())
-      << "Inserting duplicate item in cache should fail";
+  // Duplicate insertion should fail since request already exists in cache
+  status = cache->Insert(response.get(), key);
+  // Cache implementations may choose behavior for duplicate insertion
+  if (cache->Name() == "redis") {
+     ASSERT_TRUE(status.IsOk())
+      << "Inserting duplicate item in cache should succeed for redis cache";
+  } else {
+    ASSERT_FALSE(status.IsOk())
+      << "Inserting duplicate item in cache should fail unless implementation "
+      << "explicitly allows it and is specified here.";
+  }
 
   // Create response to test cache lookup
   std::cout << "Create response object into fill from cache" << std::endl;
   std::unique_ptr<tc::InferenceResponse> response_test;
   helpers::CheckStatus(
-      request0->ResponseFactory()->CreateResponse(&response_test));
+      request->ResponseFactory()->CreateResponse(&response_test));
 
   // Lookup should now succeed
-  std::cout << "Lookup request0 in cache after insertion" << std::endl;
+  std::cout << "Lookup request in cache after insertion" << std::endl;
   helpers::CheckStatus(cache->Lookup(response_test.get(), key));
   // Grab output from sample response for comparison
-  const auto& response0_output = response0->Outputs()[0];
+  const auto& response0_output = response->Outputs()[0];
 
   // Fetch output buffer details
   const void* response_buffer = nullptr;
@@ -978,8 +955,220 @@ TEST_F(RequestResponseCacheTest, TestResponseEndToEnd)
   // TODO: Use Triton DType to cast buffer and compare outputs generically
   const int* cache_output = static_cast<const int*>(response_buffer);
   for (size_t i = 0; i < response_byte_size / sizeof(int); i++) {
-    ASSERT_EQ(cache_output[i], outputs0[0].data[i]);
+    ASSERT_EQ(cache_output[i], expected_outputs[0].data[i]);
   }
+}
+
+}  // namespace tests
+
+// 
+// Local Cache Testing
+//
+// Currently, cache size and eviction related tests are specific to the local
+// cache implementation. 
+//
+// Other tests related to hashing, insertion, and lookups are fairly agnostic
+// to the cache implementation.
+//
+
+// Test cache size too small to initialize.
+TEST_F(RequestResponseCacheTest, TestLocalCacheSizeTooSmall)
+{
+  // Pick intentionally small cache size, expecting failure
+  constexpr uint64_t cache_size = 1;
+  auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
+  std::cout << "Create cache of size: " << cache_size << std::endl;
+  helpers::CreateCacheExpectFail("local", cache_config);
+}
+
+// Test cache size too large to initialize.
+TEST_F(RequestResponseCacheTest, TestLocalCacheSizeTooLarge)
+{
+  // Pick intentionally large cache size, expecting failure
+  constexpr uint64_t cache_size = ULLONG_MAX;
+  auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
+  std::cout << "Create cache of size: " << cache_size << std::endl;
+  helpers::CreateCacheExpectFail("local", cache_config);
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheSizeSmallerThanEntryBytes)
+{
+  constexpr uint64_t cache_size = 4 * 1024 * 1024;  // 4 MB, arbitrary
+  auto cache = helpers::CreateLocalCache(cache_size);
+  ASSERT_NE(cache, nullptr);
+
+  // Setup byte buffer larger than cache size
+  std::vector<tc::Byte> large_data(cache_size + 1);
+  // Setup entry
+  std::vector<boost::span<tc::Byte>> entry;
+  entry.push_back(large_data);
+
+  auto status = cache->Insert(entry, "large_bytes");
+  // We expect insertion to fail here since cache is too small
+  ASSERT_FALSE(status.IsOk())
+      << "Inserting item larger than cache succeeded when it should fail";
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheSizeSmallerThanEntryResponse)
+{
+  constexpr uint64_t cache_size = 4 * 1024 * 1024;  // 4 MB, arbitrary
+  auto cache = helpers::CreateLocalCache(cache_size);
+  ASSERT_NE(cache, nullptr);
+
+  // Set output data to be larger than cache size
+  // NOTE: This is not 1 byte larger than cache_size, the cache_size + 1 is to
+  // be clear it will always be larger than cache even if the dtype is changed.
+  std::vector<int> large_data(cache_size + 1, 0);
+  std::cout << "Create large_response (larger than cache) of size: "
+            << large_data.size() << std::endl;
+  std::vector<helpers::Tensor> large_outputs{
+      helpers::Tensor{"output", large_data}};
+  auto large_response = helpers::GenerateResponse(
+      request0, dtype, memory_type, memory_type_id, large_outputs);
+
+  std::cout << "Insert large_response into cache" << std::endl;
+  auto status = cache->Insert(large_response.get(), "large_response");
+  // We expect insertion to fail here since cache is too small
+  ASSERT_FALSE(status.IsOk())
+      << "Inserting item larger than cache succeeded when it should fail";
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheEvictionLRU)
+{
+  // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
+  auto cache = helpers::CreateLocalCache(1200);
+  ASSERT_NE(cache, nullptr);
+  // Insert 2 responses, expecting both to fit in cache
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request0"));
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request1"));
+  // Validate both responses fit in cache by looking them up
+  tc::CacheEntry entry0, entry1, entry2, entry3, entry4, entry5, entry6, entry7;
+  auto status = cache->Lookup("request0", &entry0);
+  ASSERT_TRUE(status.IsOk()) << status.Message();
+  ASSERT_TRUE(cache->Lookup("request1", &entry1).IsOk());
+  // Insert a 3rd response, expecting the 1st response to be evicted
+  // in LRU order
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request2"));
+  ASSERT_TRUE(cache->Lookup("request2", &entry2).IsOk());
+  ASSERT_FALSE(cache->Lookup("request0", &entry3).IsOk());
+  // Lookup 2nd request to bump its LRU order over 3rd
+  ASSERT_TRUE(cache->Lookup("request1", &entry4).IsOk());
+  // Insert a 4th response, expecting the 3rd to get evicted by LRU order
+  // after looking up the 2nd
+  helpers::CheckStatus(cache->Insert(response_400bytes.get(), "request3"));
+  ASSERT_TRUE(cache->Lookup("request3", &entry5).IsOk());
+  ASSERT_TRUE(cache->Lookup("request1", &entry6).IsOk());
+  ASSERT_FALSE(cache->Lookup("request2", &entry7).IsOk());
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheInsertLookupCompareBytes)
+{
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  tests::InsertLookupCompareBytes(cache);
+}
+
+// This test isn't cache implementation specific since hashing is done
+// in Triton core internally for now, but hashing may be exposed to
+// implementations in the future.
+TEST_F(RequestResponseCacheTest, TestLocalCacheHashing)
+{
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  tests::HashLogic(cache, request0, request1, request2, request3, request4);
+  tests::HashUnique(cache, unique_requests);
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheParallelInsert)
+{
+  // Set size 1200 to hold exactly 2x (400byte + metadata) responses, not 3x
+  auto cache = helpers::CreateLocalCache(1200);
+  ASSERT_NE(cache, nullptr);
+  const size_t expected_cache_hits = 2;
+  tests::ParallelInsert(cache, thread_count, response_400bytes, expected_cache_hits);
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheParallelLookup)
+{
+  // Set size large enough to hold all responses
+  auto cache = helpers::CreateLocalCache(2 * thread_count * output100_size);
+  ASSERT_NE(cache, nullptr);
+  tests::ParallelLookup(cache, thread_count, response_400bytes, unique_requests, data100);
+}
+TEST_F(RequestResponseCacheTest, TestLocalCacheParallelLookupInsert)
+{
+  // Set size that can hold a few responses but will certainly
+  // run into evictions
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  tests::ParallelLookupInsert(cache, thread_count, response_400bytes, unique_requests);
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
+{
+  auto cache = helpers::CreateLocalCache(8 * 1024 * 1024);
+  ASSERT_NE(cache, nullptr);
+  tests::EndToEnd(cache, request0, response0, outputs0);
+}
+
+
+// 
+// Redis Cache Testing
+//
+// The following tests are fairly agnostic to cache implementation,
+// there are no tests around specific Redis settings or eviction
+// policies at this time, and instead tests Redis's default settings.
+//
+
+TEST_F(RequestResponseCacheTest, TestRedisCacheInsertLookupCompareBytes)
+{
+  auto cache = helpers::CreateRedisCache(redis_host, redis_port);
+  ASSERT_NE(cache, nullptr);
+  tests::InsertLookupCompareBytes(cache);
+}
+// This test isn't cache implementation specific since hashing is done
+// in Triton core internally for now, but hashing may be exposed to
+// implementations in the future.
+TEST_F(RequestResponseCacheTest, TestRedisCacheHashing)
+{
+  auto cache = helpers::CreateRedisCache(redis_host, redis_port);
+  ASSERT_NE(cache, nullptr);
+  tests::HashLogic(cache, request0, request1, request2, request3, request4);
+  tests::HashUnique(cache, unique_requests);
+}
+
+
+
+TEST_F(RequestResponseCacheTest, TestRedisCacheParallelInsert)
+{
+  auto cache = helpers::CreateRedisCache(redis_host, redis_port);
+  ASSERT_NE(cache, nullptr);
+  // Don't expect any cache misses from Redis by default. 
+  // Future tests can set a fixed size and eviction policy on Redis.
+  // For now, no eviction policy testing is done on Redis cache.
+  const size_t expected_cache_hits = thread_count;
+  tests::ParallelInsert(cache, thread_count, response_400bytes, expected_cache_hits);
+}
+
+TEST_F(RequestResponseCacheTest, TestRedisCacheParallelLookup)
+{
+  auto cache = helpers::CreateRedisCache(redis_host, redis_port);
+  ASSERT_NE(cache, nullptr);
+  tests::ParallelLookup(cache, thread_count, response_400bytes, unique_requests, data100);
+}
+
+TEST_F(RequestResponseCacheTest, TestRedisCacheParallelLookupInsert)
+{
+  auto cache = helpers::CreateRedisCache(redis_host, redis_port);
+  ASSERT_NE(cache, nullptr);
+  tests::ParallelLookupInsert(cache, thread_count, response_400bytes, unique_requests);
+}
+
+TEST_F(RequestResponseCacheTest, TestRedisCacheEndToEnd)
+{
+  auto cache = helpers::CreateRedisCache(redis_host, redis_port);
+  ASSERT_NE(cache, nullptr);
+  tests::EndToEnd(cache, request0, response0, outputs0);
 }
 
 }  // namespace
