@@ -34,9 +34,6 @@
 
 namespace tc = triton::core;
 
-const std::string REDIS_HOST = "localhost";
-const std::string REDIS_PORT = "6379";
-
 /* Mock classes for Unit Testing */
 namespace triton { namespace core {
 
