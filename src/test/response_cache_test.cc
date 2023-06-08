@@ -492,7 +492,8 @@ CreateLocalCache(uint64_t cache_size)
   // Create TritonCache
   std::shared_ptr<tc::TritonCache> cache;
   auto cache_config = R"({"size": )" + std::to_string(cache_size) + "}";
-  std::cout << "Creating local cache with config: " << cache_config << std::endl;
+  std::cout << "Creating local cache with config: " << cache_config
+            << std::endl;
   auto cache_name = "local";
   helpers::CheckStatus(
       cache_manager->CreateCache(cache_name, cache_config, &cache));
@@ -512,8 +513,10 @@ CreateRedisCache(std::string host, std::string port)
   // Create TritonCache
   std::shared_ptr<tc::TritonCache> cache;
   std::ostringstream cache_config_json;
-  auto cache_config = R"({"host": ")" + host + R"(", "port": ")" + port + R"("})";
-  std::cout << "Creating redis cache with config: " << cache_config << std::endl;
+  auto cache_config =
+      R"({"host": ")" + host + R"(", "port": ")" + port + R"("})";
+  std::cout << "Creating redis cache with config: " << cache_config
+            << std::endl;
   auto cache_name = "redis";
   helpers::CheckStatus(
       cache_manager->CreateCache(cache_name, cache_config, &cache));
@@ -667,9 +670,8 @@ class RequestResponseCacheTest : public ::testing::Test {
 // Group common cache tests into namespace for testing multiple implementations
 namespace tests {
 
-void InsertLookupCompareBytes(
-  std::shared_ptr<tc::TritonCache> cache
-)
+void
+InsertLookupCompareBytes(std::shared_ptr<tc::TritonCache> cache)
 {
   // Setup byte buffers
   std::vector<tc::Byte> buffer1{1, tc::Byte{1}};
@@ -691,10 +693,10 @@ void InsertLookupCompareBytes(
 }
 
 // Hash a collection of unique requests and assert no collisions occured
-void HashUnique(
-  std::shared_ptr<tc::TritonCache> cache,
-  std::vector<tc::InferenceRequest*>& unique_requests
-)
+void
+HashUnique(
+    std::shared_ptr<tc::TritonCache> cache,
+    std::vector<tc::InferenceRequest*>& unique_requests)
 {
   ASSERT_NE(unique_requests.size(), 0);
   std::vector<std::string> hashes;
@@ -709,20 +711,20 @@ void HashUnique(
   // Verify no two hashes from the unique requests are the same
   for (size_t i = 0; i < hashes.size(); i++) {
     for (size_t j = 0; j < hashes.size(); j++) {
-      if (i == j) { continue; }
+      if (i == j) {
+        continue;
+      }
       ASSERT_NE(hashes[i], hashes[j]);
     }
   }
 }
 
 // Hash specifically crafted requests to verify their hashes are as expected
-void HashLogic(
-  std::shared_ptr<tc::TritonCache> cache,
-  tc::InferenceRequest* request0,
-  tc::InferenceRequest* request1,
-  tc::InferenceRequest* request2,
-  tc::InferenceRequest* request3,
-  tc::InferenceRequest* request4)
+void
+HashLogic(
+    std::shared_ptr<tc::TritonCache> cache, tc::InferenceRequest* request0,
+    tc::InferenceRequest* request1, tc::InferenceRequest* request2,
+    tc::InferenceRequest* request3, tc::InferenceRequest* request4)
 {
   std::string hash0, hash1, hash2, hash3, hash4;
   helpers::CheckStatus(cache->Hash(*request0, &hash0));
@@ -739,10 +741,11 @@ void HashLogic(
 }
 
 
-void ParallelInsert(std::shared_ptr<tc::TritonCache> cache,
-  size_t thread_count, std::unique_ptr<tc::InferenceResponse>& insert_response, 
-  size_t expected_cache_hits
-  )
+void
+ParallelInsert(
+    std::shared_ptr<tc::TritonCache> cache, size_t thread_count,
+    std::unique_ptr<tc::InferenceResponse>& insert_response,
+    size_t expected_cache_hits)
 {
   // Create threads
   std::vector<std::thread> threads;
@@ -776,10 +779,12 @@ void ParallelInsert(std::shared_ptr<tc::TritonCache> cache,
   ASSERT_EQ(cache_hits + cache_misses, thread_count);
 }
 
-void ParallelLookup(std::shared_ptr<tc::TritonCache> cache,
-  size_t thread_count, std::unique_ptr<tc::InferenceResponse>& insert_response, std::vector<tc::InferenceRequest*>& unique_requests,
-  std::vector<int> expected_outputs
-  )
+void
+ParallelLookup(
+    std::shared_ptr<tc::TritonCache> cache, size_t thread_count,
+    std::unique_ptr<tc::InferenceResponse>& insert_response,
+    std::vector<tc::InferenceRequest*>& unique_requests,
+    std::vector<int> expected_outputs)
 {
   const size_t expected_cache_hits = thread_count;
   constexpr size_t expected_cache_misses = 0;
@@ -864,8 +869,11 @@ void ParallelLookup(std::shared_ptr<tc::TritonCache> cache,
 }
 
 // Run Inserts/Lookups in parallel to check for race conditions, deadlocks, etc
-void ParallelLookupInsert(std::shared_ptr<tc::TritonCache> cache,
-  size_t thread_count, std::unique_ptr<tc::InferenceResponse>& insert_response, std::vector<tc::InferenceRequest*>& unique_requests)
+void
+ParallelLookupInsert(
+    std::shared_ptr<tc::TritonCache> cache, size_t thread_count,
+    std::unique_ptr<tc::InferenceResponse>& insert_response,
+    std::vector<tc::InferenceRequest*>& unique_requests)
 {
   // Create threads
   std::vector<std::thread> insert_threads;
@@ -899,7 +907,11 @@ void ParallelLookupInsert(std::shared_ptr<tc::TritonCache> cache,
   }
 }
 
-void EndToEnd(std::shared_ptr<tc::TritonCache> cache, tc::InferenceRequest* request, std::unique_ptr<tc::InferenceResponse>& response, const std::vector<helpers::Tensor>& expected_outputs)
+void
+EndToEnd(
+    std::shared_ptr<tc::TritonCache> cache, tc::InferenceRequest* request,
+    std::unique_ptr<tc::InferenceResponse>& response,
+    const std::vector<helpers::Tensor>& expected_outputs)
 {
   std::string key = "";
   helpers::CheckStatus(cache->Hash(*request, &key));
@@ -916,12 +928,13 @@ void EndToEnd(std::shared_ptr<tc::TritonCache> cache, tc::InferenceRequest* requ
   status = cache->Insert(response.get(), key);
   // Cache implementations may choose behavior for duplicate insertion
   if (cache->Name() == "redis") {
-     ASSERT_TRUE(status.IsOk())
-      << "Inserting duplicate item in cache should succeed for redis cache";
+    ASSERT_TRUE(status.IsOk())
+        << "Inserting duplicate item in cache should succeed for redis cache";
   } else {
     ASSERT_FALSE(status.IsOk())
-      << "Inserting duplicate item in cache should fail unless implementation "
-      << "explicitly allows it and is specified here.";
+        << "Inserting duplicate item in cache should fail unless "
+           "implementation "
+        << "explicitly allows it and is specified here.";
   }
 
   // Create response to test cache lookup
@@ -961,11 +974,11 @@ void EndToEnd(std::shared_ptr<tc::TritonCache> cache, tc::InferenceRequest* requ
 
 }  // namespace tests
 
-// 
+//
 // Local Cache Testing
 //
 // Currently, cache size and eviction related tests are specific to the local
-// cache implementation. 
+// cache implementation.
 //
 // Other tests related to hashing, insertion, and lookups are fairly agnostic
 // to the cache implementation.
@@ -1085,7 +1098,8 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheParallelInsert)
   auto cache = helpers::CreateLocalCache(1200);
   ASSERT_NE(cache, nullptr);
   const size_t expected_cache_hits = 2;
-  tests::ParallelInsert(cache, thread_count, response_400bytes, expected_cache_hits);
+  tests::ParallelInsert(
+      cache, thread_count, response_400bytes, expected_cache_hits);
 }
 
 TEST_F(RequestResponseCacheTest, TestLocalCacheParallelLookup)
@@ -1093,7 +1107,8 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheParallelLookup)
   // Set size large enough to hold all responses
   auto cache = helpers::CreateLocalCache(2 * thread_count * output100_size);
   ASSERT_NE(cache, nullptr);
-  tests::ParallelLookup(cache, thread_count, response_400bytes, unique_requests, data100);
+  tests::ParallelLookup(
+      cache, thread_count, response_400bytes, unique_requests, data100);
 }
 TEST_F(RequestResponseCacheTest, TestLocalCacheParallelLookupInsert)
 {
@@ -1101,7 +1116,8 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheParallelLookupInsert)
   // run into evictions
   auto cache = helpers::CreateLocalCache(1024);
   ASSERT_NE(cache, nullptr);
-  tests::ParallelLookupInsert(cache, thread_count, response_400bytes, unique_requests);
+  tests::ParallelLookupInsert(
+      cache, thread_count, response_400bytes, unique_requests);
 }
 
 TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
@@ -1112,7 +1128,7 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
 }
 
 
-// 
+//
 // Redis Cache Testing
 //
 // The following tests are fairly agnostic to cache implementation,
@@ -1138,30 +1154,32 @@ TEST_F(RequestResponseCacheTest, TestRedisCacheHashing)
 }
 
 
-
 TEST_F(RequestResponseCacheTest, TestRedisCacheParallelInsert)
 {
   auto cache = helpers::CreateRedisCache(redis_host, redis_port);
   ASSERT_NE(cache, nullptr);
-  // Don't expect any cache misses from Redis by default. 
+  // Don't expect any cache misses from Redis by default.
   // Future tests can set a fixed size and eviction policy on Redis.
   // For now, no eviction policy testing is done on Redis cache.
   const size_t expected_cache_hits = thread_count;
-  tests::ParallelInsert(cache, thread_count, response_400bytes, expected_cache_hits);
+  tests::ParallelInsert(
+      cache, thread_count, response_400bytes, expected_cache_hits);
 }
 
 TEST_F(RequestResponseCacheTest, TestRedisCacheParallelLookup)
 {
   auto cache = helpers::CreateRedisCache(redis_host, redis_port);
   ASSERT_NE(cache, nullptr);
-  tests::ParallelLookup(cache, thread_count, response_400bytes, unique_requests, data100);
+  tests::ParallelLookup(
+      cache, thread_count, response_400bytes, unique_requests, data100);
 }
 
 TEST_F(RequestResponseCacheTest, TestRedisCacheParallelLookupInsert)
 {
   auto cache = helpers::CreateRedisCache(redis_host, redis_port);
   ASSERT_NE(cache, nullptr);
-  tests::ParallelLookupInsert(cache, thread_count, response_400bytes, unique_requests);
+  tests::ParallelLookupInsert(
+      cache, thread_count, response_400bytes, unique_requests);
 }
 
 TEST_F(RequestResponseCacheTest, TestRedisCacheEndToEnd)
