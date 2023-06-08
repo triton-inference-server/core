@@ -305,8 +305,8 @@ class InferenceRequest {
   // request is normalized.
   uint32_t BatchSize() const { return batch_size_; }
 
-  uint64_t Priority() const { return priority_; }
-  void SetPriority(uint64_t p);
+  uint32_t Priority() const { return priority_; }
+  void SetPriority(uint32_t p);
 
   uint64_t TimeoutMicroseconds() const { return timeout_us_; }
   void SetTimeoutMicroseconds(uint64_t t) { timeout_us_ = t; }
@@ -691,7 +691,7 @@ class InferenceRequest {
   uint32_t flags_;
   SequenceId correlation_id_;
   uint32_t batch_size_;
-  uint64_t priority_;
+  uint32_t priority_;
   uint64_t timeout_us_;
   std::string cache_key_ = "";
   // Helper to determine if request was successfully hashed
