@@ -142,6 +142,10 @@ TRITONSERVER_InferenceTraceLevelString()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceModeString()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceActivityString()
 {
 }
@@ -151,6 +155,10 @@ TRITONSERVER_InferenceTraceNew()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceTensorNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceWithModeNew()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -175,6 +183,18 @@ TRITONSERVER_InferenceTraceModelVersion()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceRequestId()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceSetOpenTelemetryTracer()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceSetOpenTelemetryContext()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceSetOpenTelemetryTimeOffset()
 {
 }
 TRITONAPI_DECLSPEC void

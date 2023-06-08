@@ -50,6 +50,12 @@
 #include "triton/common/triton_json.h"
 #include "tritonserver_apis.h"
 
+#ifndef _WIN32
+#include "opentelemetry/sdk/trace/tracer.h"
+namespace otel_trace_api = opentelemetry::trace;
+namespace otel_trace_sdk = opentelemetry::sdk::trace;
+#endif
+
 // For unknown reason, windows will not export some functions declared
 // with dllexport in tritonrepoagent.h and tritonbackend.h. To get
 // those functions exported it is (also?) necessary to mark the
@@ -872,6 +878,19 @@ TRITONSERVER_MetricsFormatted(
 // TRITONSERVER_InferenceTrace
 //
 TRITONAPI_DECLSPEC const char*
+TRITONSERVER_InferenceTraceModeString(TRITONSERVER_InferenceTraceMode mode)
+{
+  switch (mode) {
+    case TRITONSERVER_TRACE_MODE_TRITON:
+      return "TRITON";
+    case TRITONSERVER_TRACE_MODE_OPENTELEMETRY:
+      return "OPENTELEMETRY";
+  }
+
+  return "<unknown>";
+}
+
+TRITONAPI_DECLSPEC const char*
 TRITONSERVER_InferenceTraceLevelString(TRITONSERVER_InferenceTraceLevel level)
 {
   switch (level) {
@@ -926,32 +945,27 @@ TRITONSERVER_InferenceTraceNew(
     uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp)
 {
-#ifdef TRITON_ENABLE_TRACING
-  if ((level & TRITONSERVER_TRACE_LEVEL_MIN) > 0) {
-    level = static_cast<TRITONSERVER_InferenceTraceLevel>(
-        (level ^ TRITONSERVER_TRACE_LEVEL_MIN) |
-        TRITONSERVER_TRACE_LEVEL_TIMESTAMPS);
-  }
-  if ((level & TRITONSERVER_TRACE_LEVEL_MAX) > 0) {
-    level = static_cast<TRITONSERVER_InferenceTraceLevel>(
-        (level ^ TRITONSERVER_TRACE_LEVEL_MAX) |
-        TRITONSERVER_TRACE_LEVEL_TIMESTAMPS);
-  }
-  tc::InferenceTrace* ltrace = new tc::InferenceTrace(
-      level, parent_id, activity_fn, nullptr, release_fn, trace_userp);
-  *trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(ltrace);
-  return nullptr;  // Success
-#else
-  *trace = nullptr;
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
-#endif  // TRITON_ENABLE_TRACING
+  return TRITONSERVER_InferenceTraceTensorNew(
+      trace, level, parent_id, activity_fn, nullptr, release_fn, trace_userp);
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceTensorNew(
     TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
     uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
+    TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
+    TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp)
+{
+  return TRITONSERVER_InferenceTraceWithModeNew(
+      trace, level, TRITONSERVER_TRACE_MODE_TRITON, parent_id, activity_fn,
+      tensor_activity_fn, release_fn, trace_userp);
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceWithModeNew(
+    TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
+    TRITONSERVER_InferenceTraceMode mode, uint64_t parent_id,
+    TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
     TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp)
 {
@@ -967,7 +981,7 @@ TRITONSERVER_InferenceTraceTensorNew(
         TRITONSERVER_TRACE_LEVEL_TIMESTAMPS);
   }
   tc::InferenceTrace* ltrace = new tc::InferenceTrace(
-      level, parent_id, activity_fn, tensor_activity_fn, release_fn,
+      level, mode, parent_id, activity_fn, tensor_activity_fn, release_fn,
       trace_userp);
   *trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(ltrace);
   return nullptr;  // Success
@@ -1046,6 +1060,49 @@ TRITONSERVER_InferenceTraceRequestId(
 #endif  // TRITON_ENABLE_TRACING
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetOpenTelemetryTracer(
+    TRITONSERVER_InferenceTrace* trace, void* otel_tracer_void)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  otel_trace_api::Tracer* otel_tracer =
+      reinterpret_cast<otel_trace_api::Tracer*>(otel_tracer_void);
+  ltrace->SetOpenTelemetryTracer(otel_tracer);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetOpenTelemetryContext(
+    TRITONSERVER_InferenceTrace* trace, void* otel_context_ptr)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  opentelemetry::context::Context otel_context =
+      *reinterpret_cast<opentelemetry::context::Context*>(otel_context_ptr);
+  ltrace->SetOpenTelemetryContext(otel_context);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetOpenTelemetryTimeOffset(
+    TRITONSERVER_InferenceTrace* trace, uint64_t offset)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  ltrace->SetTimeOffset(offset);
+  return nullptr;
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif
+}
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)
@@ -3058,7 +3115,6 @@ TRITONSERVER_ServerInferAsync(
     ltrace->SetModelName(lrequest->ModelName());
     ltrace->SetModelVersion(lrequest->ActualModelVersion());
     ltrace->SetRequestId(lrequest->Id());
-
     lrequest->SetTrace(std::make_shared<tc::InferenceTraceProxy>(ltrace));
 #else
     return TRITONSERVER_ErrorNew(

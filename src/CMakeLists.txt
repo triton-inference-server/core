@@ -108,6 +108,19 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
 endif()
 
+#
+# OpenTelemetry
+#
+if (NOT WIN32)
+  if(${TRITON_ENABLE_TRACING})
+    find_package(absl CONFIG REQUIRED)
+    find_package(CURL CONFIG REQUIRED)
+    find_package(nlohmann_json CONFIG REQUIRED)
+    find_package(opentelemetry-cpp CONFIG REQUIRED)
+    message(STATUS "Using opentelemetry-cpp ${opentelemetry-cpp_VERSION}")
+  endif()
+endif()
+
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
@@ -464,6 +477,22 @@ if (NOT WIN32)
       dl
       numa
   )
+endif()
+
+if (NOT WIN32)
+  if(${TRITON_ENABLE_TRACING})
+    target_include_directories(
+      triton-core 
+      PRIVATE ${OPENTELEMETRY_CPP_INCLUDE_DIRS}
+    )
+  endif()
+  if(${TRITON_ENABLE_TRACING})
+    target_link_libraries(
+      triton-core
+      PRIVATE
+        ${OPENTELEMETRY_CPP_LIBRARIES}
+    )
+  endif()
 endif()
 
 if(${TRITON_ENABLE_METRICS})

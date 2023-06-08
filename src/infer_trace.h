@@ -31,6 +31,15 @@
 #include "constants.h"
 #include "status.h"
 #include "tritonserver_apis.h"
+#if !defined(_WIN32) && defined(TRITON_ENABLE_TRACING)
+#include "opentelemetry/nostd/shared_ptr.h"
+#include "opentelemetry/sdk/trace/tracer.h"
+#include "opentelemetry/trace/context.h"
+#include "opentelemetry/trace/provider.h"
+namespace otel_trace_api = opentelemetry::trace;
+namespace otel_trace_sdk = opentelemetry::sdk::trace;
+namespace otel_common = opentelemetry::common;
+#endif
 
 namespace triton { namespace core {
 
@@ -44,11 +53,12 @@ namespace triton { namespace core {
 class InferenceTrace {
  public:
   InferenceTrace(
-      const TRITONSERVER_InferenceTraceLevel level, const uint64_t parent_id,
+      const TRITONSERVER_InferenceTraceLevel level,
+      const TRITONSERVER_InferenceTraceMode mode, const uint64_t parent_id,
       TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
       TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
       TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* userp)
-      : level_(level), id_(next_id_++), parent_id_(parent_id),
+      : level_(level), mode_(mode), id_(next_id_++), parent_id_(parent_id),
         activity_fn_(activity_fn), tensor_activity_fn_(tensor_activity_fn),
         release_fn_(release_fn), userp_(userp)
   {
@@ -62,6 +72,7 @@ class InferenceTrace {
   const std::string& ModelName() const { return model_name_; }
   int64_t ModelVersion() const { return model_version_; }
   const std::string& RequestId() const { return request_id_; }
+  const TRITONSERVER_InferenceTraceMode& TraceMode() const { return mode_; }
 
   void SetModelName(const std::string& n) { model_name_ = n; }
   void SetModelVersion(int64_t v) { model_version_ = v; }
@@ -75,8 +86,98 @@ class InferenceTrace {
       activity_fn_(
           reinterpret_cast<TRITONSERVER_InferenceTrace*>(this), activity,
           timestamp_ns, userp_);
+#ifndef _WIN32
+      if (mode_ == TRITONSERVER_TRACE_MODE_OPENTELEMETRY) {
+        ReportToOpenTelemetry(activity, timestamp_ns);
+      }
+#endif
     }
   }
+
+#ifndef _WIN32
+
+  otel_trace_api::Tracer* OpenTelemetryTracer() { return otel_tracer_; }
+  opentelemetry::nostd::shared_ptr<otel_trace_api::Span> OpenTelemetrySpan()
+  {
+    return trace_span_;
+  }
+  opentelemetry::context::Context& GetOpenTelemetryContext()
+  {
+    return otel_context_;
+  }
+  std::chrono::time_point<std::chrono::system_clock> TimeOffset()
+  {
+    return time_offset_;
+  };
+  void SetOpenTelemetryTracer(otel_trace_api::Tracer* otel_tracer)
+  {
+    otel_tracer_ = otel_tracer;
+  }
+  void SetOpenTelemetySpan(
+      opentelemetry::nostd::shared_ptr<otel_trace_api::Span> span)
+  {
+    trace_span_ = span;
+  }
+  void SetOpenTelemetryContext(opentelemetry::context::Context& ctxt)
+  {
+    otel_context_ = ctxt;
+  }
+  void SetTimeOffset(uint64_t offset)
+  {
+    time_offset_ = std::chrono::time_point<std::chrono::system_clock>{
+        std::chrono::nanoseconds{offset}};
+  }
+
+  void InitRequestSpan(
+      const otel_common::SystemTimestamp& timestamp_ns,
+      uint64_t& raw_timestamp_ns)
+  {
+    otel_trace_api::StartSpanOptions options;
+    options.start_system_time = timestamp_ns;
+    options.start_steady_time = otel_common::SteadyTimestamp{
+        std::chrono::nanoseconds{raw_timestamp_ns}};
+    options.parent = otel_trace_api::GetSpan(otel_context_)->GetContext();
+    if (otel_tracer_ != nullptr) {
+      trace_span_ = otel_tracer_->StartSpan("request: " + model_name_, options);
+      trace_span_->SetAttribute("triton.model_name", model_name_);
+      trace_span_->SetAttribute("triton.model_version", model_version_);
+      trace_span_->SetAttribute("triton.trace_parent_id", parent_id_);
+      trace_span_->SetAttribute("triton.trace_request_id", request_id_);
+      otel_context_ = otel_trace_api::SetSpan(otel_context_, trace_span_);
+    }
+  }
+
+  void EndRequestSpan(uint64_t& raw_timestamp_ns)
+  {
+    if (trace_span_ != nullptr) {
+      otel_trace_api::EndSpanOptions end_options;
+      end_options.end_steady_time = otel_common::SteadyTimestamp{
+          std::chrono::nanoseconds{raw_timestamp_ns}};
+      trace_span_->End(end_options);
+    }
+  }
+
+  void ReportToOpenTelemetry(
+      const TRITONSERVER_InferenceTraceActivity activity,
+      uint64_t& raw_timestamp_ns)
+  {
+    otel_common::SystemTimestamp otel_timestamp{
+        (time_offset_ + std::chrono::nanoseconds{raw_timestamp_ns})};
+
+    if (activity == TRITONSERVER_TRACE_REQUEST_START) {
+      InitRequestSpan(otel_timestamp, raw_timestamp_ns);
+    }
+
+    otel_trace_api::GetSpan(otel_context_)
+        ->AddEvent(
+            TRITONSERVER_InferenceTraceActivityString(activity),
+            otel_timestamp);
+
+    if (activity == TRITONSERVER_TRACE_REQUEST_END) {
+      EndRequestSpan(raw_timestamp_ns);
+    }
+  }
+#endif
 
   // Report trace activity at the current time.
   void ReportNow(const TRITONSERVER_InferenceTraceActivity activity)
@@ -109,6 +210,7 @@ class InferenceTrace {
 
  private:
   const TRITONSERVER_InferenceTraceLevel level_;
+  const TRITONSERVER_InferenceTraceMode mode_;
   const uint64_t id_;
   const uint64_t parent_id_;
 
@@ -124,6 +226,14 @@ class InferenceTrace {
   // Maintain next id statically so that trace id is unique even
   // across traces
   static std::atomic<uint64_t> next_id_;
+
+#ifndef _WIN32
+  otel_trace_api::Tracer* otel_tracer_{nullptr};
+  opentelemetry::nostd::shared_ptr<otel_trace_api::Span> trace_span_{nullptr};
+  opentelemetry::context::Context otel_context_{
+      opentelemetry::context::RuntimeContext::GetCurrent()};
+  std::chrono::time_point<std::chrono::system_clock> time_offset_;
+#endif
 };
 
 //
@@ -139,12 +249,45 @@ class InferenceTraceProxy {
   ~InferenceTraceProxy() { trace_->Release(); }
   int64_t Id() const { return trace_->Id(); }
   int64_t ParentId() const { return trace_->ParentId(); }
+
   const std::string& ModelName() const { return trace_->ModelName(); }
   const std::string& RequestId() const { return trace_->RequestId(); }
+  const TRITONSERVER_InferenceTraceMode& TraceMode() const
+  {
+    return trace_->TraceMode();
+  }
+
   int64_t ModelVersion() const { return trace_->ModelVersion(); }
   void SetModelName(const std::string& n) { trace_->SetModelName(n); }
   void SetRequestId(const std::string& n) { trace_->SetRequestId(n); }
   void SetModelVersion(int64_t v) { trace_->SetModelVersion(v); }
+
+#ifndef _WIN32
+  otel_trace_api::Tracer* OpenTelemetryTracer()
+  {
+    return trace_->OpenTelemetryTracer();
+  }
+  opentelemetry::nostd::shared_ptr<otel_trace_api::Span> OpenTelemetrySpan()
+  {
+    return trace_->OpenTelemetrySpan();
+  }
+  const std::chrono::time_point<std::chrono::system_clock> TimeOffset()
+  {
+    return trace_->TimeOffset();
+  }
+  opentelemetry::context::Context& GetOpenTelemetryContext()
+  {
+    return trace_->GetOpenTelemetryContext();
+  }
+  void SetOpenTelemetryContext(opentelemetry::context::Context& ctxt)
+  {
+    trace_->SetOpenTelemetryContext(ctxt);
+  }
+  void SetOpenTelemetryTracer(otel_trace_api::Tracer* otel_tracer)
+  {
+    trace_->SetOpenTelemetryTracer(otel_tracer);
+  }
+#endif
 
   void Report(
       const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns)

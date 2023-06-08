@@ -38,7 +38,8 @@ InferenceTrace*
 InferenceTrace::SpawnChildTrace()
 {
   InferenceTrace* trace = new InferenceTrace(
-      level_, id_, activity_fn_, tensor_activity_fn_, release_fn_, userp_);
+      level_, mode_, id_, activity_fn_, tensor_activity_fn_, release_fn_,
+      userp_);
   return trace;
 }
 
