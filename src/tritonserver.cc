@@ -1699,16 +1699,16 @@ TRITONSERVER_InferenceRequestPriority(
   if (error != nullptr) {
     return error;
   }
-  if (temp <= std::numeric_limits<uint32_t>::max()) {
-    *priority = temp;
-    return nullptr; // Success
+  if (temp > std::numeric_limits<uint32_t>::max()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        (std::string("request priority overflows uint32_t, use "
+                     "TRITONSERVER_InferenceRequestPriorityUInt64, priority=") +
+         std::to_string(temp))
+            .c_str());
   }
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_INVALID_ARG,
-      (std::string("request priority overflows uint32_t, use "
-                   "TRITONSERVER_InferenceRequestPriorityUInt64, priority=") +
-       std::to_string(temp))
-          .c_str());
+  *priority = temp;
+  return nullptr;  // Success
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
