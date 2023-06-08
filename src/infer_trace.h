@@ -139,10 +139,6 @@ class InferenceTrace {
     options.parent = otel_trace_api::GetSpan(otel_context_)->GetContext();
     if (otel_tracer_ != nullptr) {
       trace_span_ = otel_tracer_->StartSpan("request: " + model_name_, options);
-      trace_span_->SetAttribute("triton.model_name", model_name_);
-      trace_span_->SetAttribute("triton.model_version", model_version_);
-      trace_span_->SetAttribute("triton.trace_parent_id", parent_id_);
-      trace_span_->SetAttribute("triton.trace_request_id", request_id_);
       otel_context_ = otel_trace_api::SetSpan(otel_context_, trace_span_);
     }
   }
@@ -166,6 +162,10 @@ class InferenceTrace {
 
     if (activity == TRITONSERVER_TRACE_REQUEST_START) {
       InitRequestSpan(otel_timestamp, raw_timestamp_ns);
+      trace_span_->SetAttribute("triton.model_name", model_name_);
+      trace_span_->SetAttribute("triton.model_version", model_version_);
+      trace_span_->SetAttribute("triton.trace_parent_id", parent_id_);
+      trace_span_->SetAttribute("triton.trace_request_id", request_id_);
     }
 
     otel_trace_api::GetSpan(otel_context_)

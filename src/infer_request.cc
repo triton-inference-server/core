@@ -1063,7 +1063,9 @@ InferenceRequest::ReportStatistics(
       otel_trace_api::StartSpanOptions start_options;
       otel_trace_api::EndSpanOptions end_options;
       otel_common::SystemTimestamp otel_timestamp{
-          (trace_->TimeOffset() + std::chrono::nanoseconds{compute_start_ns})};
+          (opentelemetry::context::RuntimeContext::GetValue(
+               "time_offset", trace_->GetOpenTelemetryContext()) +
+           std::chrono::nanoseconds{compute_start_ns})};
       start_options.start_system_time = otel_timestamp;
       otel_common::SteadyTimestamp otel_steady_timestamp{
           std::chrono::nanoseconds{compute_start_ns}};
