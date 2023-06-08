@@ -63,7 +63,7 @@ DynamicBatchScheduler::DynamicBatchScheduler(
     const std::set<int32_t>& preferred_batch_sizes,
     const uint64_t max_queue_delay_microseconds,
     const inference::ModelQueuePolicy& default_queue_policy,
-    const uint32_t priority_levels, const ModelQueuePolicyMap& queue_policy_map)
+    const uint64_t priority_levels, const ModelQueuePolicyMap& queue_policy_map)
     : model_(model), model_instance_(model_instance),
       model_name_(model->Name()),
       dynamic_batching_enabled_(dynamic_batching_enabled),

@@ -1855,6 +1855,9 @@ ValidateModelConfigInt64()
       "microseconds",
       "ModelConfig::dynamic_batching::priority_queue_policy::value::default_"
       "timeout_microseconds",
+      "ModelConfig::dynamic_batching::priority_levels",
+      "ModelConfig::dynamic_batching::priority_queue_policy::key",
+      "ModelConfig::dynamic_batching::default_priority_level",
       "ModelConfig::sequence_batching::direct::max_queue_delay_microseconds",
       "ModelConfig::sequence_batching::state::dims",
       "ModelConfig::sequence_batching::state::initial_state::dims",
@@ -1871,6 +1874,34 @@ ValidateModelConfigInt64()
     return Status(
         Status::Code::INTERNAL, "ModelConfig 64-bit field needs update");
   }
+
+  return Status::Success;
+}
+
+Status
+FixUInt(
+    triton::common::TritonJson::Value& document,
+    triton::common::TritonJson::Value& io, const std::string& name)
+{
+  triton::common::TritonJson::Value str_value;
+  if (!io.Find(name.c_str(), &str_value)) {
+    return Status::Success;
+  }
+
+  std::string str;
+  RETURN_IF_ERROR(str_value.AsString(&str));
+
+  uint64_t d;
+  try {
+    d = std::strtoull(str.c_str(),nullptr,10);
+  }
+  catch (...) {
+    return Status(
+        Status::Code::INTERNAL,
+        (std::string("unable to convert '") + str + "' to unsigned integer"));
+  }
+
+  str_value.SetUInt(d);
 
   return Status::Success;
 }
@@ -2038,14 +2069,19 @@ ModelConfigToJson(
   // Fix dynamic_batching::max_queue_delay_microseconds,
   // dynamic_batching::default_queue_policy::default_timeout_microseconds,
   // dynamic_batching::priority_queue_policy::value::default_timeout_microseconds
+  // dynamic_batching::priority_levels
+  // dynamic_batching::default_priority_level
+  // dynamic_batching::priority_queue_policy::key is left as JSON only allows strings for keys
   {
     triton::common::TritonJson::Value db;
     if (config_json.Find("dynamic_batching", &db)) {
-      RETURN_IF_ERROR(FixInt(config_json, db, "max_queue_delay_microseconds"));
+      RETURN_IF_ERROR(FixUInt(config_json, db, "max_queue_delay_microseconds"));
+      RETURN_IF_ERROR(FixUInt(config_json, db, "priority_levels"));
+      RETURN_IF_ERROR(FixUInt(config_json, db, "default_priority_level"));
       triton::common::TritonJson::Value dqp;
       if (db.Find("default_queue_policy", &dqp)) {
         RETURN_IF_ERROR(
-            FixInt(config_json, dqp, "default_timeout_microseconds"));
+            FixUInt(config_json, dqp, "default_timeout_microseconds"));
       }
       triton::common::TritonJson::Value pqp;
       if (db.Find("priority_queue_policy", &pqp)) {
@@ -2056,7 +2092,7 @@ ModelConfigToJson(
           triton::common::TritonJson::Value el;
           RETURN_IF_ERROR(pqp.MemberAsObject(m.c_str(), &el));
           RETURN_IF_ERROR(
-              FixInt(config_json, el, "default_timeout_microseconds"));
+              FixUInt(config_json, el, "default_timeout_microseconds"));
         }
       }
     }
@@ -2069,16 +2105,16 @@ ModelConfigToJson(
     triton::common::TritonJson::Value sb;
     if (config_json.Find("sequence_batching", &sb)) {
       RETURN_IF_ERROR(
-          FixInt(config_json, sb, "max_sequence_idle_microseconds"));
+          FixUInt(config_json, sb, "max_sequence_idle_microseconds"));
       triton::common::TritonJson::Value oldest;
       if (sb.Find("oldest", &oldest)) {
         RETURN_IF_ERROR(
-            FixInt(config_json, oldest, "max_queue_delay_microseconds"));
+            FixUInt(config_json, oldest, "max_queue_delay_microseconds"));
       }
       triton::common::TritonJson::Value direct;
       if (sb.Find("direct", &direct)) {
         RETURN_IF_ERROR(
-            FixInt(config_json, direct, "max_queue_delay_microseconds"));
+            FixUInt(config_json, direct, "max_queue_delay_microseconds"));
       }
 
       triton::common::TritonJson::Value states;
