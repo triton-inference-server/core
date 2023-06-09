@@ -35,9 +35,7 @@
 #include "opentelemetry/nostd/shared_ptr.h"
 #include "opentelemetry/sdk/trace/tracer.h"
 #include "opentelemetry/trace/context.h"
-#include "opentelemetry/trace/provider.h"
 namespace otel_trace_api = opentelemetry::trace;
-namespace otel_trace_sdk = opentelemetry::sdk::trace;
 namespace otel_common = opentelemetry::common;
 #endif
 
@@ -109,7 +107,7 @@ class InferenceTrace {
   {
     return std::chrono::nanoseconds{opentelemetry::nostd::get<uint64_t>(
         opentelemetry::context::RuntimeContext::GetValue(
-            "time_offset", &(otel_context_)))};
+            "time_offset", &otel_context_))};
   };
   void SetOpenTelemetryTracer(otel_trace_api::Tracer* otel_tracer)
   {
@@ -125,61 +123,28 @@ class InferenceTrace {
     otel_context_ = ctxt;
   }
 
+  // Starts OpenTelemetry Span with provided name and timestamps. 
+  // SystemTimestamp is used to display span on the timeline properly.
+  // and `raw_timestamp_ns` is a timestamp from steady clock, which
+  // is used to compute duration of the span.
   opentelemetry::nostd::shared_ptr<otel_trace_api::Span> InitSpan(
       std::string name, const otel_common::SystemTimestamp& timestamp_ns,
-      const uint64_t& raw_timestamp_ns)
-  {
-    opentelemetry::nostd::shared_ptr<otel_trace_api::Span> span{nullptr};
-    otel_trace_api::StartSpanOptions options;
-    options.start_system_time = timestamp_ns;
-    options.start_steady_time = otel_common::SteadyTimestamp{
-        std::chrono::nanoseconds{raw_timestamp_ns}};
-    options.parent = otel_trace_api::GetSpan(otel_context_)->GetContext();
-    if (otel_tracer_ != nullptr) {
-      span = otel_tracer_->StartSpan(name, options);
-    }
-    return span;
-  }
+      const uint64_t& raw_timestamp_ns);
 
-  void EndActiveSpan(const uint64_t& raw_timestamp_ns)
-  {
-    opentelemetry::nostd::shared_ptr<otel_trace_api::Span> span =
-        otel_trace_api::GetSpan(otel_context_);
-    if (span != nullptr) {
-      otel_trace_api::EndSpanOptions end_options;
-      end_options.end_steady_time = otel_common::SteadyTimestamp{
-          std::chrono::nanoseconds{raw_timestamp_ns}};
-      span->End(end_options);
-    }
-  }
+  // Ends currently acive OpenTelemetry Span with provided steady timestamp.
+  // Currently active span is retrieved from the context, stored in 
+  // `otel_context_`.
+  void EndActiveSpan(const uint64_t& raw_timestamp_ns);
 
+  // Reports TRITONSERVER_InferenceTraceActivity as event
+  // to the currently active span. If activity is an instance of 
+  // `TRITONSERVER_TRACE_REQUEST_START`, this will start a new span with the 
+  // equal to the current model name, add some triton related attributes,
+  // and set this span it to `otel_context_`. Alternativelly, if activity is 
+  // `TRITONSERVER_TRACE_REQUEST_END`, will end the currently active span.
   void ReportToOpenTelemetry(
       const TRITONSERVER_InferenceTraceActivity activity,
-      const uint64_t& raw_timestamp_ns)
-  {
-    otel_common::SystemTimestamp otel_timestamp{
-        (TimeOffset() + std::chrono::nanoseconds{raw_timestamp_ns})};
-
-    if (activity == TRITONSERVER_TRACE_REQUEST_START) {
-      trace_span_ =
-          InitSpan("request: " + model_name_, otel_timestamp, raw_timestamp_ns);
-      otel_context_ = otel_trace_api::SetSpan(otel_context_, trace_span_);
-    }
-
-    otel_trace_api::GetSpan(otel_context_)
-        ->AddEvent(
-            TRITONSERVER_InferenceTraceActivityString(activity),
-            otel_timestamp);
-
-    if (activity == TRITONSERVER_TRACE_REQUEST_END) {
-      trace_span_->SetAttribute("triton.model_name", model_name_);
-      trace_span_->SetAttribute("triton.model_version", model_version_);
-      trace_span_->SetAttribute("triton.trace_id", id_);
-      trace_span_->SetAttribute("triton.trace_parent_id", parent_id_);
-      trace_span_->SetAttribute("triton.request_id", request_id_);
-      EndActiveSpan(raw_timestamp_ns);
-    }
-  }
+      const uint64_t& raw_timestamp_ns);
 #endif
 
   // Report trace activity at the current time.
@@ -231,8 +196,11 @@ class InferenceTrace {
   static std::atomic<uint64_t> next_id_;
 
 #ifndef _WIN32
+  // OpenTelemetry tracer
   otel_trace_api::Tracer* otel_tracer_{nullptr};
+  // Main outer OpenTelemetry span  
   opentelemetry::nostd::shared_ptr<otel_trace_api::Span> trace_span_{nullptr};
+  // OpenTelemetry context to store currently active span and time offset
   opentelemetry::context::Context otel_context_{
       opentelemetry::context::RuntimeContext::GetCurrent()};
 #endif

@@ -57,6 +57,70 @@ InferenceTraceProxy::SpawnChildTrace()
   return strace_proxy;
 }
 
+#ifndef _WIN32
+
+opentelemetry::nostd::shared_ptr<otel_trace_api::Span> 
+InferenceTrace::InitSpan(
+      std::string name, const otel_common::SystemTimestamp& timestamp_ns,
+      const uint64_t& raw_timestamp_ns)
+  {
+    opentelemetry::nostd::shared_ptr<otel_trace_api::Span> span{nullptr};
+    if (otel_tracer_ != nullptr) {
+      otel_trace_api::StartSpanOptions options;
+      options.start_system_time = timestamp_ns;
+      options.start_steady_time = otel_common::SteadyTimestamp{
+          std::chrono::nanoseconds{raw_timestamp_ns}};
+      options.parent = otel_trace_api::GetSpan(otel_context_)->GetContext();
+      span = otel_tracer_->StartSpan(name, options);
+    }
+    return span;
+  }
+
+void 
+InferenceTrace::EndActiveSpan(const uint64_t& raw_timestamp_ns)
+  {
+    opentelemetry::nostd::shared_ptr<otel_trace_api::Span> span =
+        otel_trace_api::GetSpan(otel_context_);
+    if (span != nullptr) {
+      otel_trace_api::EndSpanOptions end_options;
+      end_options.end_steady_time = otel_common::SteadyTimestamp{
+          std::chrono::nanoseconds{raw_timestamp_ns}};
+      span->End(end_options);
+    }
+  }
+
+void 
+InferenceTrace::ReportToOpenTelemetry(
+      const TRITONSERVER_InferenceTraceActivity activity,
+      const uint64_t& raw_timestamp_ns)
+  {
+    otel_common::SystemTimestamp otel_timestamp{
+        (TimeOffset() + std::chrono::nanoseconds{raw_timestamp_ns})};
+
+    if (activity == TRITONSERVER_TRACE_REQUEST_START) {
+      trace_span_ =
+          InitSpan(model_name_, otel_timestamp, raw_timestamp_ns);
+      if (trace_span_ != nullptr){
+        trace_span_->SetAttribute("triton.model_name", model_name_);
+        trace_span_->SetAttribute("triton.model_version", model_version_);
+        trace_span_->SetAttribute("triton.trace_id", id_);
+        trace_span_->SetAttribute("triton.trace_parent_id", parent_id_);
+        trace_span_->SetAttribute("triton.request_id", request_id_);
+        otel_context_ = otel_trace_api::SetSpan(otel_context_, trace_span_);
+      }
+    }
+
+    otel_trace_api::GetSpan(otel_context_)
+        ->AddEvent(
+            TRITONSERVER_InferenceTraceActivityString(activity),
+            otel_timestamp);
+
+    if (activity == TRITONSERVER_TRACE_REQUEST_END) {
+      EndActiveSpan(raw_timestamp_ns);
+    }
+  }
+#endif // _WIN32
+
 #endif  // TRITON_ENABLE_TRACING
 
 }}  // namespace triton::core

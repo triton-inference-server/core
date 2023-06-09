@@ -1069,6 +1069,7 @@ InferenceRequest::ReportStatistics(
           trace_->GetOpenTelemetryContext(), compute_span);
       trace_->SetOpenTelemetryContext(cur_ctxt);
     }
+
     trace_->Report(TRITONSERVER_TRACE_COMPUTE_START, compute_start_ns);
     trace_->Report(TRITONSERVER_TRACE_COMPUTE_INPUT_END, compute_input_end_ns);
     trace_->Report(
