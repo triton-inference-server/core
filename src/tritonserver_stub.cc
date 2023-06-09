@@ -194,10 +194,6 @@ TRITONSERVER_InferenceTraceSetOpenTelemetryContext()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceTraceSetOpenTelemetryTimeOffset()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestNew()
 {
 }
