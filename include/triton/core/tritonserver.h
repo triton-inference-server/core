@@ -942,7 +942,6 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetOpenTelemetryTracer(
     struct TRITONSERVER_InferenceTrace* trace, void* otel_tracer);
 
-
 /// Set the OpenTelemetry context associated with a trace, which should contain
 /// an information about currently active span, started on the server side.
 ///
@@ -952,10 +951,6 @@ TRITONSERVER_InferenceTraceSetOpenTelemetryTracer(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetOpenTelemetryContext(
     struct TRITONSERVER_InferenceTrace* trace, void* otel_context_ptr);
-
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
-TRITONSERVER_InferenceTraceSetOpenTelemetryTimeOffset(
-    struct TRITONSERVER_InferenceTrace* trace, uint64_t offset);
 
 /// TRITONSERVER_InferenceRequest
 ///
@@ -1194,7 +1189,7 @@ TRITONSERVER_InferenceRequestPriorityUInt64(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     struct TRITONSERVER_InferenceRequest* inference_request, uint32_t priority);
-  
+
 /// Set the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
 /// model's default priority.

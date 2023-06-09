@@ -1090,19 +1090,6 @@ TRITONSERVER_InferenceTraceSetOpenTelemetryContext(
       TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
 #endif  // TRITON_ENABLE_TRACING
 }
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceTraceSetOpenTelemetryTimeOffset(
-    TRITONSERVER_InferenceTrace* trace, uint64_t offset)
-{
-#ifdef TRITON_ENABLE_TRACING
-  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  ltrace->SetTimeOffset(offset);
-  return nullptr;
-#else
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
-#endif
-}
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)

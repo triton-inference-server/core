@@ -1059,43 +1059,28 @@ InferenceRequest::ReportStatistics(
 #ifdef TRITON_ENABLE_TRACING
   if (trace_ != nullptr) {
     if (trace_->TraceMode() == TRITONSERVER_TRACE_MODE_OPENTELEMETRY &&
-        trace_->OpenTelemetryTracer() != nullptr) {
-      otel_trace_api::StartSpanOptions start_options;
-      otel_trace_api::EndSpanOptions end_options;
+        trace_->ParentId() == 0) {
       otel_common::SystemTimestamp otel_timestamp{
-          (opentelemetry::context::RuntimeContext::GetValue(
-               "time_offset", trace_->GetOpenTelemetryContext()) +
-           std::chrono::nanoseconds{compute_start_ns})};
-      start_options.start_system_time = otel_timestamp;
-      otel_common::SteadyTimestamp otel_steady_timestamp{
-          std::chrono::nanoseconds{compute_start_ns}};
-      start_options.start_steady_time = otel_steady_timestamp;
-      start_options.parent = trace_->OpenTelemetrySpan()->GetContext();
-      otel_common::SteadyTimestamp otel_end_steady_timestamp{
-          std::chrono::nanoseconds{compute_end_ns}};
-      end_options.end_steady_time = otel_end_steady_timestamp;
+          (trace_->TimeOffset() + std::chrono::nanoseconds{compute_start_ns})};
+
       auto compute_span =
-          trace_->OpenTelemetryTracer()->StartSpan("compute", start_options);
+          trace_->InitSpan("compute", otel_timestamp, compute_start_ns);
       auto cur_ctxt = otel_trace_api::SetSpan(
           trace_->GetOpenTelemetryContext(), compute_span);
       trace_->SetOpenTelemetryContext(cur_ctxt);
-      trace_->Report(TRITONSERVER_TRACE_COMPUTE_START, compute_start_ns);
-      trace_->Report(
-          TRITONSERVER_TRACE_COMPUTE_INPUT_END, compute_input_end_ns);
-      trace_->Report(
-          TRITONSERVER_TRACE_COMPUTE_OUTPUT_START, compute_output_start_ns);
-      trace_->Report(TRITONSERVER_TRACE_COMPUTE_END, compute_end_ns);
-      compute_span->End(end_options);
-      cur_ctxt = otel_trace_api::SetSpan(
+    }
+    trace_->Report(TRITONSERVER_TRACE_COMPUTE_START, compute_start_ns);
+    trace_->Report(TRITONSERVER_TRACE_COMPUTE_INPUT_END, compute_input_end_ns);
+    trace_->Report(
+        TRITONSERVER_TRACE_COMPUTE_OUTPUT_START, compute_output_start_ns);
+    trace_->Report(TRITONSERVER_TRACE_COMPUTE_END, compute_end_ns);
+
+    if (trace_->TraceMode() == TRITONSERVER_TRACE_MODE_OPENTELEMETRY &&
+        trace_->ParentId() == 0) {
+      trace_->EndActiveSpan(compute_end_ns);
+      auto cur_ctxt = otel_trace_api::SetSpan(
           trace_->GetOpenTelemetryContext(), trace_->OpenTelemetrySpan());
       trace_->SetOpenTelemetryContext(cur_ctxt);
-    } else {
-      trace_->Report(TRITONSERVER_TRACE_COMPUTE_START, compute_start_ns);
-      trace_->Report(
-          TRITONSERVER_TRACE_COMPUTE_INPUT_END, compute_input_end_ns);
-      trace_->Report(
-          TRITONSERVER_TRACE_COMPUTE_OUTPUT_START, compute_output_start_ns);
-      trace_->Report(TRITONSERVER_TRACE_COMPUTE_END, compute_end_ns);
     }
   }
 #endif  // TRITON_ENABLE_TRACING
