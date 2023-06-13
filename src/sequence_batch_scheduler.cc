@@ -133,15 +133,15 @@ SequenceBatchScheduler::Create(
   return Status::Success;
 }
 
-Status
+void
 SequenceBatchScheduler::Update()
 {
   std::unique_lock<std::mutex> lk(mu_);
 
   // Instruct 'Enqueue()' to begin pausing new sequence.
   if (updating_) {
-    return Status(
-        Status::Code::INTERNAL, "sequence batch scheduler is already updating");
+    LOG_ERROR << "sequence batch scheduler is already updating";
+    return;
   }
   updating_ = true;
 
@@ -165,8 +165,6 @@ SequenceBatchScheduler::Update()
   // The update is completed.
   updating_ = false;
   update_complete_cv_.notify_all();
-
-  return Status::Success;
 }
 
 Status

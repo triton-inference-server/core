@@ -74,11 +74,15 @@ class SequenceBatchScheduler : public Scheduler {
     return sequence_to_batcherseqslot_map_.size();
   }
 
-  // \see Scheduler::Update()
-  Status Update() override;
-
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
+
+  // Update the scheduler to the new set of model instances. When this function
+  // is called, the foreground instances on the TritonModel must represent the
+  // current set of instances that this scheduler is serving, and the background
+  // instances must represent the new set of instances that this scheduler will
+  // serve during/after the update. The function cannot be called concurrently.
+  void Update();
 
   // A batcher-sequence_slot combination. The batcher is represented
   // by the index into 'batchers_'.

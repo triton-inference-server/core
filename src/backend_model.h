@@ -133,7 +133,9 @@ class TritonModel : public Model {
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
 
   // Replace the foreground instances with background instances.
-  Status CommitInstances();
+  void CommitInstances();
+  // Clear any set background instances.
+  void ClearBackgroundInstances();
 
   // Gets the execution policy setting from the backend.
   Status GetExecutionPolicy(const inference::ModelConfig& model_config);

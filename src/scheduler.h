@@ -73,11 +73,6 @@ class Scheduler {
   // Return the number of in-flight inferences tracked by the scheduler.
   virtual size_t InflightInferenceCount() = 0;
 
-  // Update the scheduler during a model instance update.
-  // If Status::Success is returned, then the update is successful. Otherwise,
-  // the update has failed.
-  virtual Status Update() = 0;
-
   // Instruct the scheduler to stop processing future requests unless they are
   // considered as in-flight.
   virtual void Stop() = 0;

@@ -171,17 +171,6 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
 }
 
 Status
-DynamicBatchScheduler::Update()
-{
-  if (model_instance_ != nullptr) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Cannot update dynamic batch scheduler specific to a model instance");
-  }
-  return Status::Success;
-}
-
-Status
 DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
   if (stop_) {

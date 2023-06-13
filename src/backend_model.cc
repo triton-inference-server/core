@@ -245,7 +245,7 @@ TritonModel::Create(
       raw_local_model, backend_cmdline_config_map, host_policy_map,
       model_config));
   RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
-  RETURN_IF_ERROR(local_model->CommitInstances());
+  local_model->CommitInstances();
 
   *model = std::move(local_model);
   return Status::Success;
@@ -264,17 +264,30 @@ TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
       min_compute_capability_, backend_->BackendAttributes().preferred_groups_,
       &model_config));
   RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
-  // Updating the 'config_' has to be an atomic operation, because it can be
-  // accessed by other threads concurrently.
-  *config_.mutable_instance_group() = model_config.instance_group();
 
   // Prepare the new instances on the new config.
-  RETURN_IF_ERROR(TritonModelInstance::SetInstances(
-      this, backend_cmdline_config_map_, host_policy_map_, model_config));
-  // Update the scheduler while the union of the old and new set of instances
-  // are presence.
-  RETURN_IF_ERROR(scheduler_->Update());
-  RETURN_IF_ERROR(CommitInstances());
+  Status status = TritonModelInstance::SetInstances(
+      this, backend_cmdline_config_map_, host_policy_map_, model_config);
+  if (!status.IsOk()) {
+    ClearBackgroundInstances();
+    return status;
+  }
+
+  // Update the scheduler if this is a sequence model.
+  if (model_config.has_sequence_batching()) {
+    SequenceBatchScheduler* sched = (SequenceBatchScheduler*)scheduler_.get();
+    if (sched == nullptr) {
+      ClearBackgroundInstances();
+      return Status(
+          Status::Code::INTERNAL,
+          "Unable to downcast from Scheduler to SequenceBatchScheduler");
+    }
+    sched->Update();
+  }
+
+  // Commit the instance update.
+  CommitInstances();
+  *config_.mutable_instance_group() = model_config.instance_group();
 
   return Status::Success;
 }
@@ -394,15 +407,19 @@ TritonModel::RegisterInstance(
   return Status::Success;
 }
 
-Status
+void
 TritonModel::CommitInstances()
 {
   instances_.swap(bg_instances_);
   passive_instances_.swap(bg_passive_instances_);
+  ClearBackgroundInstances();
+}
+
+void
+TritonModel::ClearBackgroundInstances()
+{
   bg_instances_.clear();
   bg_passive_instances_.clear();
-
-  return Status::Success;
 }
 
 std::vector<std::shared_ptr<TritonModelInstance>>
@@ -621,8 +638,7 @@ TritonModel::~TritonModel()
   // the model itself.
   instances_.clear();
   passive_instances_.clear();
-  bg_instances_.clear();
-  bg_passive_instances_.clear();
+  ClearBackgroundInstances();
 
   // Unregister itself from the rate limiter. Note this should happen
   // after all instances are destructed. Destrucing instances ensures

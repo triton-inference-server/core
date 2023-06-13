@@ -1406,12 +1406,6 @@ EnsembleScheduler::EnsembleScheduler(
   }
 }
 
-Status
-EnsembleScheduler::Update()
-{
-  return Status(Status::Code::INTERNAL, "ensemble scheduler cannot be updated");
-}
-
 EnsembleScheduler::~EnsembleScheduler()
 {
 #ifdef TRITON_ENABLE_GPU
