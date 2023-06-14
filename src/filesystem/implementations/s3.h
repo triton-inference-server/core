@@ -25,16 +25,15 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "common.h"
-
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
+
+#include "common.h"
 
 // [FIXME: DLIS-4973]
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/http/curl/CurlHttpClient.h>
 #include <aws/core/http/standard/StandardHttpRequest.h>
-
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>

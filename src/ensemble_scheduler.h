@@ -28,6 +28,7 @@
 #ifdef TRITON_ENABLE_ENSEMBLE
 
 #include <memory>
+
 #include "metric_model_reporter.h"
 #include "model.h"
 #include "model_config.pb.h"

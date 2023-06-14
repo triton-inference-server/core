@@ -23,12 +23,12 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "gtest/gtest-spi.h"
-#include "gtest/gtest.h"
-
 #include <numeric>
 #include <thread>
+
 #include "cache_manager.h"
+#include "gtest/gtest-spi.h"
+#include "gtest/gtest.h"
 #include "memory.h"
 #include "triton/common/logging.h"
 
@@ -1134,7 +1134,7 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
 //
 // NOTE: These tests require a Redis server to already be running and
 // accessible. There is an assumed host:port of localhost:6379 for testing
-// purposes, but these can be configured via TRITON_REDIS_HOST and 
+// purposes, but these can be configured via TRITON_REDIS_HOST and
 // TRITON_REDIS_PORT env vars.
 //
 

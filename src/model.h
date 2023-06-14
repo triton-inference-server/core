@@ -26,6 +26,7 @@
 #pragma once
 
 #include <boost/core/span.hpp>
+
 #include "infer_stats.h"
 #include "label_provider.h"
 #include "model_config.pb.h"

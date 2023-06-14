@@ -25,14 +25,14 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "tritonserver_apis.h"
-
 #include <memory>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+
 #include "constants.h"
 #include "model_config_utils.h"
+#include "tritonserver_apis.h"
 
 namespace triton { namespace core {
 

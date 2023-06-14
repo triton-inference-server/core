@@ -27,6 +27,7 @@
 
 #include <deque>
 #include <unordered_map>
+
 #include "scheduler.h"
 
 namespace triton { namespace core {

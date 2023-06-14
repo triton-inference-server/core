@@ -29,6 +29,7 @@
 #include "ensemble_scheduler.h"
 
 #include <mutex>
+
 #include "cuda_utils.h"
 #include "metrics.h"
 #include "model.h"

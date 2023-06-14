@@ -27,6 +27,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include "metric_family.h"
+
 #include "metrics.h"
 #include "triton/common/logging.h"
 
