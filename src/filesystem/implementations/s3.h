@@ -39,6 +39,7 @@
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/ListObjectsOutcome.h>
 
 namespace triton { namespace core {
 
@@ -487,42 +488,52 @@ S3FileSystem::GetDirectoryContents(
   s3::Model::ListObjectsRequest objects_request;
   objects_request.SetBucket(bucket.c_str());
   objects_request.SetPrefix(full_dir.c_str());
-  auto list_objects_outcome = client_->ListObjects(objects_request);
 
-  if (list_objects_outcome.IsSuccess()) {
-    Aws::Vector<Aws::S3::Model::Object> object_list =
-        list_objects_outcome.GetResult().GetContents();
-    for (auto const& s3_object : object_list) {
-      // In the case of empty directories, the directory itself will appear here
-      if (s3_object.GetKey().c_str() == full_dir) {
-        continue;
-      }
+    bool done_listing = false;
+    while (!done_listing)
+    {
+      auto list_objects_outcome = client_->ListObjects(objects_request);
 
-      // We have to make sure that subdirectory contents do not appear here
-      std::string name(s3_object.GetKey().c_str());
-      int item_start = name.find(full_dir) + full_dir.size();
-      // S3 response prepends parent directory name
-      int item_end = name.find("/", item_start);
+      if (list_objects_outcome.IsSuccess()) {
+        const auto& list_objects_result = list_objects_outcome.GetResult();
+        for (const auto& s3_object : list_objects_result.getContents()) {
+          // In the case of empty directories, the directory itself will appear here
+          if (s3_object.GetKey().c_str() == full_dir) {
+            continue;
+          }
 
-      // Let set take care of subdirectory contents
-      std::string item = name.substr(item_start, item_end - item_start);
-      contents->insert(item);
+          // We have to make sure that subdirectory contents do not appear here
+          std::string name(s3_object.GetKey().c_str());
+          int item_start = name.find(full_dir) + full_dir.size();
+          // S3 response prepends parent directory name
+          int item_end = name.find("/", item_start);
 
-      // Fail-safe check to ensure the item name is not empty
-      if (item.empty()) {
+          // Let set take care of subdirectory contents
+          std::string item = name.substr(item_start, item_end - item_start);
+          contents->insert(item);
+
+          // Fail-safe check to ensure the item name is not empty
+          if (item.empty()) {
+            return Status(
+                Status::Code::INTERNAL,
+                "Cannot handle item with empty name at " + true_path);
+          }
+        }
+        // If there are more pages to retrieve, set the marker to the next page.
+        if(list_objects_result.GetIsTruncated()){
+          objects_request.WithMarker(list_objects_result.GetNextMarker());
+        } else {
+          done_listing = true;
+        }
+      } else {
         return Status(
             Status::Code::INTERNAL,
-            "Cannot handle item with empty name at " + true_path);
+            "Could not list contents of directory at " + true_path +
+                " due to exception: " +
+                list_objects_outcome.GetError().GetExceptionName() +
+                ", error message: " + list_objects_outcome.GetError().GetMessage());
       }
     }
-  } else {
-    return Status(
-        Status::Code::INTERNAL,
-        "Could not list contents of directory at " + true_path +
-            " due to exception: " +
-            list_objects_outcome.GetError().GetExceptionName() +
-            ", error message: " + list_objects_outcome.GetError().GetMessage());
-  }
   return Status::Success;
 }
 
