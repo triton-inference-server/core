@@ -340,6 +340,10 @@ class EnsembleContext {
   // Objects related to the ensemble infer request
   Status ensemble_status_;
   RequestTracker* request_tracker_;
+  // Use in conjunction with 'is_decoupled_' in EnsembleInfo to
+  // better distinguish ensemble ending behavior (see documentation in
+  // FinishEnsemble for detail).
+  bool response_sent_{false};
 
   // The allocator that will be used to allocate buffers for the
   // inference result tensors.
@@ -774,11 +778,13 @@ EnsembleContext::PrepareSteps(
         ensemble_status_ = GetNextSteps(updated_tensors, ready_steps);
       }
 
-      // Check and send ensemble response
-      if ((!ensemble_status_.IsOk()) || (inflight_step_counter_ == 0) ||
-          info_->is_decoupled_) {
+      // Reaching the end of processing completed step, check if the ensemble
+      // should send response / error.
+      if (!ensemble_status_.IsOk()) {
+        ensemble_status_ = FinishEnsemble();
+      } else {
         std::unique_ptr<InferenceResponse> response;
-        if (ensemble_status_.IsOk()) {
+        if (!updated_tensors.empty()) {
           ensemble_status_ =
               CheckAndSetEnsembleOutput(updated_tensors, &response);
         }
@@ -1032,18 +1038,28 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
   }
 
   if (ensemble_status_.IsOk()) {
-    if (info_->is_decoupled_) {
-      if (response != nullptr) {
-        InferenceResponse::Send(std::move(response), 0 /* flags */);
+    auto flags = (inflight_step_counter_ == 0)
+                     ? TRITONSERVER_RESPONSE_COMPLETE_FINAL
+                     : 0;
+    if (response != nullptr) {
+      InferenceResponse::Send(std::move(response), flags);
+      response_sent_ = true;
+    } else if (flags != 0) {
+      // check if any response is sent, if no, decoupled must be specified
+      if ((!info_->is_decoupled_) && (!response_sent_)) {
+        ensemble_status_ = Status(
+            Status::Code::INVALID_ARG,
+            "in ensemble '" + info_->ensemble_name_ + "', " +
+                request_tracker_->Request()->LogRequest() +
+                "unexpected deadlock, at least one output is not set while no "
+                "more "
+                "ensemble steps can be made");
+        InferenceRequest::RespondIfError(
+            request_tracker_->Request(), ensemble_status_);
+      } else {
+        request_tracker_->Request()->ResponseFactory()->SendFlags(
+            TRITONSERVER_RESPONSE_COMPLETE_FINAL);
       }
-      if (inflight_step_counter_ != 0) {
-        return ensemble_status_;
-      }
-      request_tracker_->Request()->ResponseFactory()->SendFlags(
-          TRITONSERVER_RESPONSE_COMPLETE_FINAL);
-    } else {
-      InferenceResponse::Send(
-          std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     }
   } else {
     if (response != nullptr) {
@@ -1056,13 +1072,15 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
     }
   }
 
-  // Reach here when the ensemble execution comes to the end, 'ensemble_status_'
-  // at this point is representative.
-  request_tracker_->SetStatus(ensemble_status_);
-  if (request_tracker_->DecrementCounter()) {
-    delete request_tracker_;
+  if (inflight_step_counter_ == 0) {
+    // Reach here when the ensemble execution comes to the end,
+    // 'ensemble_status_' at this point is representative.
+    request_tracker_->SetStatus(ensemble_status_);
+    if (request_tracker_->DecrementCounter()) {
+      delete request_tracker_;
+    }
+    request_tracker_ = nullptr;
   }
-  request_tracker_ = nullptr;
   return ensemble_status_;
 }
 
@@ -1100,14 +1118,8 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     }
   }
   if (!ready) {
-    if (info_->is_decoupled_) {
-      return Status::Success;
-    }
-    return Status(
-        Status::Code::INVALID_ARG,
-        lrequest->LogRequest() +
-            "unexpected deadlock, at least one output is not set while no more "
-            "ensemble steps can be made");
+    // Do not create response if the actual response is not ready.
+    return Status::Success;
   }
 
   RETURN_IF_ERROR(lrequest->ResponseFactory()->CreateResponse(response));
