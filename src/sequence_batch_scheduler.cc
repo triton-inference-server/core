@@ -52,6 +52,17 @@ Now()
       .count();
 }
 
+std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>>
+IndexTritonModelInstances(
+    const std::vector<std::shared_ptr<TritonModelInstance>>& instances)
+{
+  std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>> mapped_instances;
+  for (auto& instance : instances) {
+    mapped_instances.emplace(instance.get(), instance);
+  }
+  return mapped_instances;
+}
+
 }  // namespace
 
 Status
@@ -72,8 +83,8 @@ SequenceBatchScheduler::Create(
              << " backlog queued requests...";
   }
 
-  auto instance_count = model->BackgroundInstances().size();
-  sched->queue_request_cnts_.resize(instance_count, 0);
+  //auto instance_count = model->BackgroundInstances().size();
+  //sched->queue_request_cnts_.resize(instance_count, 0);
 
   auto& config = model->Config();
 
@@ -136,6 +147,15 @@ SequenceBatchScheduler::Create(
 void
 SequenceBatchScheduler::Update()
 {
+  // Find added and removed instances for this update.
+  InstanceMap added_instances, removed_instances;
+  InstancesDiff(&added_instances, &removed_instances);
+
+  // For new instances, only need to add them safely.
+  // For removed instances, make sure any ongoing sequences related them have completed, and then remove those threads.
+
+  // Stop making changes from this point, make sure the transition from index to pointer is correct first.
+
   std::unique_lock<std::mutex> lk(mu_);
 
   // Instruct 'Enqueue()' to begin pausing new sequence.
@@ -157,14 +177,42 @@ SequenceBatchScheduler::Update()
   lk.lock();
 
   // Re-construct the scheduler with new instances.
-  auto instance_count = model_->BackgroundInstances().size();
-  queue_request_cnts_.clear();
-  queue_request_cnts_.resize(instance_count, 0);
+  //auto instance_count = model_->BackgroundInstances().size();
+  //queue_request_cnts_.clear();
+  //queue_request_cnts_.resize(instance_count, 0);
   CreateBatchers();
 
   // The update is completed.
   updating_ = false;
   update_complete_cv_.notify_all();
+}
+
+void
+SequenceBatchScheduler::InstancesDiff(InstanceMap* added_instances, InstanceMap* removed_instances)
+{
+  added_instances->clear();
+  removed_instances->clear();
+
+  auto curr_instances = IndexTritonModelInstances(model_->Instances());  // can come from previous new_instances
+  auto new_instances = IndexTritonModelInstances(model_->BackgroundInstances());
+
+  for (auto& pair : new_instances) {
+    auto& new_instance = pair.second;
+    if (curr_instances.find(new_instance.get()) == curr_instances.end()) {
+      added_instances->emplace(new_instance.get(), new_instance);
+    }
+    else {
+      // The instance is re-used, remove it from current to reduce search size.
+      curr_instances.erase(pair.first);
+    }
+  }
+
+  for (auto& pair : curr_instances) {
+    auto& curr_instance = pair.second;
+    if (new_instances.find(curr_instance.get()) == new_instances.end()) {
+      removed_instances->emplace(curr_instance.get(), curr_instance);
+    }
+  }
 }
 
 Status
@@ -195,7 +243,7 @@ SequenceBatchScheduler::CreateBatchers()
   // SequenceBatch object has a thread that manages the batch of
   // requests.
   const auto& instances = model_->BackgroundInstances();
-  uint32_t index = 0;
+  //uint32_t index = 0;
   for (const auto& instance : instances) {
     bool init_state;
     std::unique_ptr<SequenceBatch> sb;
@@ -204,26 +252,27 @@ SequenceBatchScheduler::CreateBatchers()
     // scheduling strategy.
     if (config.sequence_batching().has_oldest()) {
       sb.reset(new OldestSequenceBatch(
-          this, index, seq_slot_cnt_, instance.get(),
+          this, /*index*/instance.get(), seq_slot_cnt_, /*instance.get(),*/
           enforce_equal_shape_tensors_, has_optional_input, start, end,
           startend, cont, notready, &init_state));
     } else {
       sb.reset(new DirectSequenceBatch(
-          this, index, seq_slot_cnt_, instance.get(),
+          this, /*index*/instance.get(), seq_slot_cnt_, /*instance.get(),*/
           enforce_equal_shape_tensors_, has_optional_input, start, end,
           startend, cont, notready, &init_state));
     }
 
     if (init_state) {
-      batchers_.push_back(std::move(sb));
+      //batchers_.push_back(std::move(sb));
+      batchers_.emplace(instance.get(), std::move(sb));
       // All sequence slots in the batcher are initially ready for a
       // new sequence.
       for (size_t b = 0; b < seq_slot_cnt_; ++b) {
         ready_batcher_seq_slots_.push(
-            SequenceBatchScheduler::BatcherSequenceSlot(index, b));
+            SequenceBatchScheduler::BatcherSequenceSlot(instance.get(), b));
       }
     }
-    ++index;
+    //++index;
   }
   if (batchers_.empty()) {
     return Status(
@@ -757,7 +806,8 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   // Need to grab the target contents before the erase below since
   // that can free it.
-  const size_t batcher_idx = target->batcher_idx_;
+  //const size_t batcher_idx = target->batcher_idx_;
+  const TritonModelInstance* model_instance = target->model_instance_;
   const uint32_t seq_slot = target->seq_slot_;
 
   // At this point the request has been assigned to a sequence
@@ -772,10 +822,10 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   lock.unlock();
 
   LOG_VERBOSE(1) << "Enqueuing CORRID " << correlation_id << " into batcher "
-                 << batcher_idx << ", sequence slot " << seq_slot << ": "
+                 << /*batcher_idx_*/(size_t)model_instance << ", sequence slot " << seq_slot << ": "
                  << irequest->ModelName();
 
-  batchers_[batcher_idx]->Enqueue(seq_slot, correlation_id, irequest);
+  batchers_[/*batcher_idx_*/model_instance]->Enqueue(seq_slot, correlation_id, irequest);
   // If the sequence is ending, opportunity for update to proceed after enqueue.
   if (seq_end) {
     update_enqueued_cv_.notify_one();
@@ -828,7 +878,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
       }
 
       LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
-                     << " reusing batcher " << batcher_seq_slot.batcher_idx_
+                     << " reusing batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)batcher_seq_slot.model_instance_
                      << ", slot " << batcher_seq_slot.seq_slot_ << ": "
                      << irequest->ModelName();
       return correlation_id;
@@ -836,7 +886,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
   }
 
   // There is no backlogged sequence so just release the batch slot
-  LOG_VERBOSE(1) << "Freeing slot in batcher " << batcher_seq_slot.batcher_idx_
+  LOG_VERBOSE(1) << "Freeing slot in batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)batcher_seq_slot.model_instance_
                  << ", slot " << batcher_seq_slot.seq_slot_;
 
   ready_batcher_seq_slots_.push(batcher_seq_slot);
@@ -845,14 +895,15 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 
 bool
 SequenceBatchScheduler::DelayScheduler(
-    const uint32_t batcher_idx, const size_t cnt, const size_t total)
+    /*const uint32_t batcher_idx*/const TritonModelInstance* model_instance, const size_t cnt, const size_t total)
 {
   std::unique_lock<std::mutex> lock(mu_);
-  queue_request_cnts_[batcher_idx] = cnt;
+  queue_request_cnts_[/*batcher_idx*/model_instance] = cnt;
 
   size_t seen = 0;
   for (auto c : queue_request_cnts_) {
-    seen += c;
+    //seen += c;
+    seen += c.second;
   }
 
   if (seen < total) {
@@ -957,11 +1008,12 @@ SequenceBatchScheduler::ReaperThread(const int nice)
       // Enqueue force-ends outside of the lock.
       for (const auto& pr : force_end_sequences) {
         const InferenceRequest::SequenceId& idle_correlation_id = pr.first;
-        const size_t batcher_idx = pr.second.batcher_idx_;
+        //const size_t batcher_idx = pr.second.batcher_idx_;
+        const TritonModelInstance* model_instance = pr.second.model_instance_;
         const uint32_t seq_slot = pr.second.seq_slot_;
 
         LOG_VERBOSE(1) << "Reaper: force-ending CORRID " << idle_correlation_id
-                       << " in batcher " << batcher_idx << ", slot "
+                       << " in batcher " << /*batcher_idx*/(size_t)model_instance << ", slot "
                        << seq_slot;
 
         // A slot assignment is released by enqueuing a request with a
@@ -969,7 +1021,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
         // request as meaning it should release the sequence slot but
         // otherwise do nothing with the request.
         std::unique_ptr<InferenceRequest> null_request;
-        batchers_[batcher_idx]->Enqueue(
+        batchers_[/*batcher_idx*/model_instance]->Enqueue(
             seq_slot, idle_correlation_id, null_request);
       }
 
@@ -1043,7 +1095,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 }
 
 SequenceBatch::SequenceBatch(
-    SequenceBatchScheduler* base, const uint32_t batcher_idx,
+    SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
     const size_t seq_slot_cnt,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const bool has_optional_input,
@@ -1057,7 +1109,7 @@ SequenceBatch::SequenceBatch(
         continue_input_overrides,
     const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
         notready_input_overrides)
-    : base_(base), batcher_idx_(batcher_idx), seq_slot_cnt_(seq_slot_cnt),
+    : base_(base), /*batcher_idx_(batcher_idx)*/model_instance_(model_instance), seq_slot_cnt_(seq_slot_cnt),
       enforce_equal_shape_tensors_(enforce_equal_shape_tensors),
       has_optional_input_(has_optional_input),
       start_input_overrides_(start_input_overrides),
@@ -1085,7 +1137,7 @@ SequenceBatch::CreateCorrelationIDControl(const inference::ModelConfig& config)
   if (!corrid_status.IsOk()) {
     LOG_ERROR << "failed validating CORRID control for sequence-batch "
                  "scheduler thread "
-              << batcher_idx_ << ": " << corrid_status.Message();
+              << /*batcher_idx_*/(size_t)model_instance_ << ": " << corrid_status.Message();
     return false;
   }
 
@@ -1183,7 +1235,7 @@ SequenceBatch::SetControlTensors(
     if (!corrid_status.IsOk()) {
       LOG_ERROR << "failed creating CORRID control for sequence-batch "
                    "scheduler thread "
-                << batcher_idx_ << " for " << seq_corr_id->Name();
+                << /*batcher_idx_*/(size_t)model_instance_ << " for " << seq_corr_id->Name();
       return;
     }
 
@@ -1230,8 +1282,8 @@ SequenceBatch::UpdateImplicitState(
 }
 
 DirectSequenceBatch::DirectSequenceBatch(
-    SequenceBatchScheduler* base, const uint32_t batcher_idx,
-    const size_t seq_slot_cnt, TritonModelInstance* model_instance,
+    SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
+    const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const bool has_optional_input,
     const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -1246,11 +1298,11 @@ DirectSequenceBatch::DirectSequenceBatch(
         notready_input_overrides,
     bool* is_initialized)
     : SequenceBatch(
-          base, batcher_idx, seq_slot_cnt, enforce_equal_shape_tensors,
+          base, /*batcher_idx*/model_instance, seq_slot_cnt, enforce_equal_shape_tensors,
           has_optional_input, start_input_overrides, end_input_overrides,
           startend_input_overrides, continue_input_overrides,
           notready_input_overrides),
-      model_instance_(model_instance), scheduler_thread_exit_(false),
+      /*model_instance_(model_instance),*/ scheduler_thread_exit_(false),
       scheduler_idle_(false), queues_(seq_slot_cnt),
       seq_slot_correlation_ids_(seq_slot_cnt, 0), max_active_seq_slot_(-1)
 {
@@ -1342,15 +1394,15 @@ DirectSequenceBatch::BatcherThread(const int nice)
 #ifndef _WIN32
   if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << batcher_idx_ << " at nice " << nice << "...";
+                   << /*batcher_idx_*/(size_t)model_instance_ << " at nice " << nice << "...";
   } else {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << batcher_idx_ << " at default nice (requested nice "
+                   << /*batcher_idx_*/(size_t)model_instance_ << " at default nice (requested nice "
                    << nice << " failed)...";
   }
 #else
   LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                 << batcher_idx_ << " at default nice...";
+                 << /*batcher_idx_*/(size_t)model_instance_ << " at default nice...";
 #endif
 
   // For debugging and testing, delay start of thread until queues
@@ -1360,7 +1412,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
   size_t delay_cnt = 0;
   if (dstr != nullptr) {
     delay_cnt = atoi(dstr);
-    LOG_VERBOSE(1) << "Delaying scheduler thread " << batcher_idx_ << " until "
+    LOG_VERBOSE(1) << "Delaying scheduler thread " << /*batcher_idx_*/(size_t)model_instance_ << " until "
                    << delay_cnt << " queued requests...";
   }
 
@@ -1393,10 +1445,10 @@ DirectSequenceBatch::BatcherThread(const int nice)
         for (const auto& q : queues_) {
           total_size += q.size();
         }
-        if (!base_->DelayScheduler(batcher_idx_, total_size, delay_cnt)) {
+        if (!base_->DelayScheduler(/*batcher_idx_*/model_instance_, total_size, delay_cnt)) {
           delay_cnt = 0;
         }
-        LOG_VERBOSE(1) << "Delaying scheduler thread " << batcher_idx_
+        LOG_VERBOSE(1) << "Delaying scheduler thread " << /*batcher_idx_*/(size_t)model_instance_
                        << " until " << delay_cnt
                        << " queued requests, current total = " << total_size;
       } else {
@@ -1432,7 +1484,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
               queue.pop_front();
 
               SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-                  batcher_idx_, seq_slot);
+                  /*batcher_idx_*/model_instance_, seq_slot);
               seq_slot_correlation_ids_[seq_slot] =
                   base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
             }
@@ -1593,7 +1645,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
           if (end_of_sequence) {
             LOG_VERBOSE(1) << "End sequence CORRID "
                            << seq_slot_correlation_ids_[seq_slot]
-                           << " in batcher " << batcher_idx_ << ", slot "
+                           << " in batcher " << /*batcher_idx_*/(size_t)model_instance_ << ", slot "
                            << seq_slot;
 
             // Should never be anything in a queue after the END
@@ -1607,7 +1659,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
             }
 
             SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-                batcher_idx_, seq_slot);
+                /*batcher_idx_*/model_instance_, seq_slot);
             seq_slot_correlation_ids_[seq_slot] =
                 base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
           }
@@ -1652,12 +1704,12 @@ DirectSequenceBatch::BatcherThread(const int nice)
   }  // end runner loop
 
   LOG_VERBOSE(1) << "Stopping Direct sequence-batch scheduler thread "
-                 << batcher_idx_ << "...";
+                 << /*batcher_idx_*/(size_t)model_instance_ << "...";
 }
 
 OldestSequenceBatch::OldestSequenceBatch(
-    SequenceBatchScheduler* base, const uint32_t batcher_idx,
-    const size_t seq_slot_cnt, TritonModelInstance* model_instance,
+    SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
+    const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const bool has_optional_input,
     const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -1672,7 +1724,7 @@ OldestSequenceBatch::OldestSequenceBatch(
         notready_input_overrides,
     bool* is_initialized)
     : SequenceBatch(
-          base, batcher_idx, seq_slot_cnt, enforce_equal_shape_tensors,
+          base, /*batcher_idx*/model_instance, seq_slot_cnt, enforce_equal_shape_tensors,
           has_optional_input, start_input_overrides, end_input_overrides,
           startend_input_overrides, continue_input_overrides,
           notready_input_overrides),
@@ -1707,7 +1759,7 @@ OldestSequenceBatch::OldestSequenceBatch(
       &dynamic_batcher_);
   if (!status.IsOk()) {
     LOG_ERROR << "failed creating dynamic sequence batcher for OldestFirst "
-              << batcher_idx_ << ": " << status.Message();
+              << /*batcher_idx_*/(size_t)model_instance << ": " << status.Message();
     *is_initialized = false;
     return;
   }
@@ -1764,7 +1816,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         // nothing.
         if (irequest == nullptr) {
           LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
-                         << batcher_idx_ << ", slot " << seq_slot;
+                         << /*batcher_idx_*/(size_t)model_instance_ << ", slot " << seq_slot;
           release_seq_slot = true;
         } else {
           const InferenceRequest::SequenceId& correlation_id =
@@ -1776,7 +1828,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) !=
               0) {
             LOG_VERBOSE(1) << irequest->LogRequest() << "end sequence CORRID "
-                           << correlation_id << " in batcher " << batcher_idx_
+                           << correlation_id << " in batcher " << /*batcher_idx_*/(size_t)model_instance_
                            << ", slot " << seq_slot;
             release_seq_slot = true;
           }
@@ -1789,7 +1841,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
 
           LOG_VERBOSE(1) << irequest->LogRequest()
                          << "issue to dynamic batcher CORRID " << correlation_id
-                         << " in batcher " << batcher_idx_ << ", slot "
+                         << " in batcher " << /*batcher_idx_*/(size_t)model_instance_ << ", slot "
                          << seq_slot;
           in_flight_[seq_slot] = true;
 
@@ -1816,14 +1868,14 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         }
 
         SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-            batcher_idx_, seq_slot);
+            /*batcher_idx_*/model_instance_, seq_slot);
         const InferenceRequest::SequenceId& released_cid =
             base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
 
         if (released_cid.InSequence()) {
           LOG_VERBOSE(1) << "Enqueued new sequence containing " << queue.size()
                          << " requests into OldestFirst batcher "
-                         << batcher_idx_ << ", slot " << seq_slot;
+                         << /*batcher_idx_*/(size_t)model_instance_ << ", slot " << seq_slot;
 
           // If an inference is already in-flight in the dynamic batcher
           // in this sequence slot then can't process the new queue

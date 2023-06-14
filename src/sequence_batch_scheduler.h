@@ -89,8 +89,8 @@ class SequenceBatchScheduler : public Scheduler {
   struct BatcherSequenceSlot {
     BatcherSequenceSlot() = default;
     BatcherSequenceSlot(const BatcherSequenceSlot&) = default;
-    BatcherSequenceSlot(size_t b, uint32_t s) : batcher_idx_(b), seq_slot_(s) {}
-    size_t batcher_idx_;
+    BatcherSequenceSlot(/*size_t b*/TritonModelInstance* i, uint32_t s) : model_instance_(i), seq_slot_(s) {}
+    /*size_t batcher_idx_*/TritonModelInstance* model_instance_;
     uint32_t seq_slot_;
   };
 
@@ -103,7 +103,7 @@ class SequenceBatchScheduler : public Scheduler {
   // For debugging/testing, batcher reports how many waiting requests
   // and returns true if the batcher should continue waiting.
   bool DelayScheduler(
-      const uint32_t batcher_idx, const size_t cnt, const size_t total);
+      /*const uint32_t batcher_idx*/const TritonModelInstance* model_instance, const size_t cnt, const size_t total);
 
   const std::unordered_map<
       std::string, const inference::ModelSequenceBatching_State&>&
@@ -120,6 +120,8 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
  private:
+  using InstanceMap = std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>>;
+
   SequenceBatchScheduler(
       TritonModel* model,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
@@ -153,6 +155,11 @@ class SequenceBatchScheduler : public Scheduler {
     }
   };
 
+  // Return the added and removed instances for scheduler update purposes.
+  void InstancesDiff(InstanceMap* added_instances, InstanceMap* removed_instances);
+
+  // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
+  // created.
   TritonModel* model_;
   std::unordered_map<std::string, bool> enforce_equal_shape_tensors_;
 
@@ -162,6 +169,7 @@ class SequenceBatchScheduler : public Scheduler {
   // The max_sequence_idle_microseconds value for this scheduler.
   uint64_t max_sequence_idle_microseconds_;
 
+  // The updating/stopped status for this scheduler.
   bool updating_, stop_;
 
   // Mutex
@@ -181,7 +189,8 @@ class SequenceBatchScheduler : public Scheduler {
   uint64_t timeout_timestamp_;
 
   // The SequenceBatchs being managed by this scheduler.
-  std::vector<std::unique_ptr<SequenceBatch>> batchers_;
+  //std::vector<std::unique_ptr<SequenceBatch>> batchers_;
+  std::unordered_map<const TritonModelInstance*, std::unique_ptr<SequenceBatch>> batchers_;
 
   // Map from a request's correlation ID to the BatcherSequenceSlot
   // assigned to that correlation ID.
@@ -224,7 +233,8 @@ class SequenceBatchScheduler : public Scheduler {
 
   // Used for debugging/testing.
   size_t backlog_delay_cnt_;
-  std::vector<size_t> queue_request_cnts_;
+  //std::vector<size_t> queue_request_cnts_;
+  std::unordered_map<const TritonModelInstance*, size_t> queue_request_cnts_;
 
   // IO mapping between the output state name and the state configuration.
   std::unordered_map<std::string, const inference::ModelSequenceBatching_State&>
@@ -241,7 +251,7 @@ class SequenceBatchScheduler : public Scheduler {
 class SequenceBatch {
  public:
   SequenceBatch(
-      SequenceBatchScheduler* base, const uint32_t batcher_idx,
+      SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
       const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
@@ -280,7 +290,9 @@ class SequenceBatch {
   SequenceBatchScheduler* const base_;
 
   // The index of this batcher within the controlling scheduler.
-  const uint32_t batcher_idx_;
+  //const uint32_t batcher_idx_;
+  // The identifier of this batcher within the controlling scheduler.
+  TritonModelInstance* const model_instance_;
 
   // The number of candidate sequence slots.
   const size_t seq_slot_cnt_;
@@ -314,7 +326,7 @@ class SequenceBatch {
   std::shared_ptr<InferenceRequest::Input> seq_slot_corrid_override_;
 
   // For each sequence slot store the optional state i/o tensors.
-  std::vector<std::shared_ptr<SequenceStates>> sequence_states_;
+  std::vector<std::shared_ptr<SequenceStates>> sequence_states_;  // batcher id -> pointer
 };
 
 // Scheduler that implements the Direct sequence scheduling strategy
@@ -322,8 +334,8 @@ class SequenceBatch {
 class DirectSequenceBatch : public SequenceBatch {
  public:
   DirectSequenceBatch(
-      SequenceBatchScheduler* base, const uint32_t batcher_idx,
-      const size_t seq_slot_cnt, TritonModelInstance* model_instance,
+      SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
+      const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
       const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -349,7 +361,7 @@ class DirectSequenceBatch : public SequenceBatch {
   void NewPayload();
 
   std::shared_ptr<Payload> curr_payload_;
-  TritonModelInstance* model_instance_;
+  //TritonModelInstance* model_instance_;
 
   // The thread scheduling requests that are queued in this batch.
   std::unique_ptr<std::thread> scheduler_thread_;
@@ -393,8 +405,8 @@ class DirectSequenceBatch : public SequenceBatch {
 class OldestSequenceBatch : public SequenceBatch {
  public:
   OldestSequenceBatch(
-      SequenceBatchScheduler* base, const uint32_t batcher_idx,
-      const size_t seq_slot_cnt, TritonModelInstance* model_instance,
+      SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
+      const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
       const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -421,7 +433,7 @@ class OldestSequenceBatch : public SequenceBatch {
   // The dynamic batcher for this scheduler
   std::unique_ptr<Scheduler> dynamic_batcher_;
 
-  TritonModelInstance* model_instance_;
+  //TritonModelInstance* model_instance_;
 
   // Mutex protecting queues, etc.
   std::mutex mu_;
