@@ -178,8 +178,12 @@ SequenceBatchScheduler::Update()
 
   // Re-construct the scheduler with new instances.
   //auto instance_count = model_->BackgroundInstances().size();
-  //queue_request_cnts_.clear();
+  queue_request_cnts_.clear();
   //queue_request_cnts_.resize(instance_count, 0);
+  std::priority_queue<
+      BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
+      BatcherSequenceSlotCompare> empty_ready_batcher_seq_slots;
+  ready_batcher_seq_slots_.swap(empty_ready_batcher_seq_slots);
   CreateBatchers();
 
   // The update is completed.

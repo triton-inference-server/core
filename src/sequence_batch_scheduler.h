@@ -326,7 +326,7 @@ class SequenceBatch {
   std::shared_ptr<InferenceRequest::Input> seq_slot_corrid_override_;
 
   // For each sequence slot store the optional state i/o tensors.
-  std::vector<std::shared_ptr<SequenceStates>> sequence_states_;  // batcher id -> pointer
+  std::vector<std::shared_ptr<SequenceStates>> sequence_states_;
 };
 
 // Scheduler that implements the Direct sequence scheduling strategy
