@@ -32,8 +32,8 @@
 #include <string>
 #include <thread>
 #include <vector>
-
 #include "backend_manager.h"
+#include "persistent_backend_manager.h"
 #include "cache_manager.h"
 #include "infer_parameter.h"
 #include "model_config.pb.h"
@@ -348,6 +348,7 @@ class InferenceServer {
   std::unique_ptr<ModelRepositoryManager> model_repository_manager_;
   std::shared_ptr<TritonBackendManager> backend_manager_;
   std::shared_ptr<TritonCacheManager> cache_manager_;
+  std::shared_ptr<PersistentBackendManager> persist_backend_manager_;
 };
 
 }}  // namespace triton::core

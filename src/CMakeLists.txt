@@ -114,6 +114,7 @@ set(
   SERVER_SRCS
   backend_config.cc
   backend_manager.cc
+  persistent_backend_manager.cc
   backend_memory_manager.cc
   backend_model.cc
   backend_model_instance.cc
@@ -159,6 +160,7 @@ set(
   SERVER_HDRS
   backend_config.h
   backend_manager.h
+  persistent_backend_manager.h
   backend_memory_manager.h
   backend_model.h
   backend_model_instance.h

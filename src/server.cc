@@ -35,6 +35,7 @@
 #include <utility>
 #include <vector>
 #include "backend_manager.h"
+#include "persistent_backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"
 #include "model.h"
@@ -149,6 +150,13 @@ InferenceServer::Init()
     return status;
   }
 
+  status = PersistentBackendManager::Create(
+      backend_cmdline_config_map_, &persist_backend_manager_, backend_manager_);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
+
   // CacheManager
   status = TritonCacheManager::Create(&cache_manager_, cache_dir_);
   if (!status.IsOk()) {
@@ -235,6 +243,7 @@ InferenceServer::Init()
     // failed to enable peer access is not critical, just inefficient.
     LOG_WARNING << status.Message();
   }
+
 
   // Create the model manager for the repository. Unless model control
   // is disabled, all models are eagerly loaded when the manager is created.
