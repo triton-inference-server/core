@@ -29,6 +29,9 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <list>
+#include "filesystem/api.h"
+#include "backend_config.h"
 #include "constants.h"
 #include "server_message.h"
 #include "status.h"
@@ -152,7 +155,9 @@ class TritonBackend {
 //
 class TritonBackendManager {
  public:
-  static Status Create(std::shared_ptr<TritonBackendManager>* manager);
+  static Status Create(
+      std::shared_ptr<TritonBackendManager>* manager,
+      const triton::common::BackendCmdlineConfigMap& config_map);
 
   Status CreateBackend(
       const std::string& name, const std::string& dir,
@@ -168,7 +173,12 @@ class TritonBackendManager {
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonBackendManager);
   TritonBackendManager() = default;
+
+  Status PreloadBackend(
+      const std::string& backend_name,
+      const triton::common::BackendCmdlineConfigMap& config_map);
   std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
+  std::list<std::shared_ptr<TritonBackend>> persist_backends_;
 };
 
 }}  // namespace triton::core
