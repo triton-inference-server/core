@@ -35,7 +35,6 @@
 #include <utility>
 #include <vector>
 #include "backend_manager.h"
-#include "persistent_backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"
 #include "model.h"

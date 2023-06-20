@@ -178,7 +178,6 @@ class TritonBackendManager {
       const std::string& backend_name,
       const triton::common::BackendCmdlineConfigMap& config_map);
   std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
-  std::list<std::shared_ptr<TritonBackend>> persist_backends_;
 };
 
 }}  // namespace triton::core

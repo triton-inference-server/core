@@ -416,10 +416,11 @@ TritonBackendManager::PreloadBackend(
       config = &itr->second;
     }
 
-    std::shared_ptr<TritonBackend> persist_backend;
+    // Backend manager would always hold a reference to the backend object
+    // so it is ok if this object goes out of scope.
+    std::shared_ptr<TritonBackend> backend;
     RETURN_IF_ERROR(CreateBackend(
-        backend_name, backend_dir, backend_libpath, *config, &persist_backend));
-    persist_backends_.push_back(persist_backend);
+        backend_name, backend_dir, backend_libpath, *config, &backend));
   }
 
   return Status::Success;
