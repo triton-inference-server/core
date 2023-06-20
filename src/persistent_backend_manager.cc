@@ -40,7 +40,8 @@ static std::mutex mu_;
 Status
 PersistentBackendManager::Create(
     const triton::common::BackendCmdlineConfigMap& config_map,
-    std::shared_ptr<PersistentBackendManager>* manager, std::shared_ptr<TritonBackendManager> backend_manager)
+    std::shared_ptr<PersistentBackendManager>* manager,
+    std::shared_ptr<TritonBackendManager>& backend_manager)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -50,19 +51,21 @@ PersistentBackendManager::Create(
     return Status::Success;
   }
 
-  manager->reset(new PersistentBackendManager(backend_manager));
+  manager->reset(new PersistentBackendManager());
   persist_backend_manager_ = *manager;
 
-  RETURN_IF_ERROR((*manager)->InitPersistentBackends(config_map));
+  RETURN_IF_ERROR(
+      (*manager)->InitPersistentBackends(config_map, backend_manager));
   return Status::Success;
 }
 
 Status
 PersistentBackendManager::InitPersistentBackends(
-    const triton::common::BackendCmdlineConfigMap& config_map)
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::shared_ptr<TritonBackendManager>& backend_manager)
 {
   for (const auto& be : {"pytorch"}) {
-    RETURN_IF_ERROR(InitPersistentBackend(be, config_map));
+    RETURN_IF_ERROR(InitPersistentBackend(be, config_map, backend_manager));
   }
 
   return Status::Success;
@@ -70,7 +73,9 @@ PersistentBackendManager::InitPersistentBackends(
 
 Status
 PersistentBackendManager::InitPersistentBackend(
-    const std::string& backend_name, const triton::common::BackendCmdlineConfigMap& config_map)
+    const std::string& backend_name,
+    const triton::common::BackendCmdlineConfigMap& config_map,
+    std::shared_ptr<TritonBackendManager>& backend_manager)
 {
   std::string backends_dir;
   std::string specialized_backend_name;
@@ -97,7 +102,7 @@ PersistentBackendManager::InitPersistentBackend(
     }
 
     std::shared_ptr<TritonBackend> persist_backend;
-    RETURN_IF_ERROR(backend_manager_->CreateBackend(
+    RETURN_IF_ERROR(backend_manager->CreateBackend(
         backend_name, backend_dir, backend_libpath, *config, &persist_backend));
     persist_backends_.push_back(persist_backend);
   }
@@ -106,4 +111,3 @@ PersistentBackendManager::InitPersistentBackend(
 }
 
 }}  // namespace triton::core
-

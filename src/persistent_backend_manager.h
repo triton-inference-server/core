@@ -26,10 +26,11 @@
 #pragma once
 
 #include <list>
+
 #include "backend_manager.h"
 #include "constants.h"
-#include "triton/common/model_config.h"
 #include "status.h"
+#include "triton/common/model_config.h"
 
 namespace triton { namespace core {
 
@@ -42,20 +43,21 @@ class PersistentBackendManager {
  public:
   static Status Create(
       const triton::common::BackendCmdlineConfigMap& config_map,
-      std::shared_ptr<PersistentBackendManager>* manager, std::shared_ptr<TritonBackendManager> backend_manager);
+      std::shared_ptr<PersistentBackendManager>* manager,
+      std::shared_ptr<TritonBackendManager>& backend_manager);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PersistentBackendManager);
-  PersistentBackendManager(std::shared_ptr<TritonBackendManager> backend_manager) : backend_manager_(backend_manager) {
-  }
-  Status InitPersistentBackends(const triton::common::BackendCmdlineConfigMap& config_map);
+  PersistentBackendManager() = default;
+  Status InitPersistentBackends(
+      const triton::common::BackendCmdlineConfigMap& config_map,
+      std::shared_ptr<TritonBackendManager>& backend_manager);
   Status InitPersistentBackend(
       const std::string& backend_name,
-      const triton::common::BackendCmdlineConfigMap& config_map);
+      const triton::common::BackendCmdlineConfigMap& config_map,
+      std::shared_ptr<TritonBackendManager>& backend_manager);
 
   std::list<std::shared_ptr<TritonBackend>> persist_backends_;
-  std::shared_ptr<TritonBackendManager> backend_manager_;
 };
 
 }}  // namespace triton::core
-
