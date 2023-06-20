@@ -156,14 +156,17 @@ class TritonBackend {
 class TritonBackendManager {
  public:
   static Status Create(
-      std::shared_ptr<TritonBackendManager>* manager,
-      const triton::common::BackendCmdlineConfigMap& config_map);
+      std::shared_ptr<TritonBackendManager>* manager);
 
   Status CreateBackend(
       const std::string& name, const std::string& dir,
       const std::string& libpath,
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
+
+  Status PreloadBackend(
+      const std::string& backend_name,
+      const triton::common::BackendCmdlineConfigMap& config_map);
 
   Status BackendState(
       std::unique_ptr<
@@ -174,9 +177,6 @@ class TritonBackendManager {
   DISALLOW_COPY_AND_ASSIGN(TritonBackendManager);
   TritonBackendManager() = default;
 
-  Status PreloadBackend(
-      const std::string& backend_name,
-      const triton::common::BackendCmdlineConfigMap& config_map);
   std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
 };
 

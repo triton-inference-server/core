@@ -318,8 +318,7 @@ static std::mutex mu_;
 
 Status
 TritonBackendManager::Create(
-    std::shared_ptr<TritonBackendManager>* manager,
-    const triton::common::BackendCmdlineConfigMap& config_map)
+    std::shared_ptr<TritonBackendManager>* manager)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -330,11 +329,6 @@ TritonBackendManager::Create(
   }
 
   manager->reset(new TritonBackendManager());
-  // TODO: Remove once the PyTorch bug is resolved. Currently, PyTorch has some
-  // issues with simultaneous model loading of other backends causing a segfault
-  // (TF to be specific). Once those issues are resolved we can remove this
-  // change.
-  RETURN_IF_ERROR((*manager)->PreloadBackend("pytorch", config_map));
   backend_manager_ = *manager;
 
   return Status::Success;
