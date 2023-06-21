@@ -521,7 +521,8 @@ S3FileSystem::GetDirectoryContents(
       }
       // If there are more pages to retrieve, set the marker to the next page.
       if (list_objects_result.GetIsTruncated()) {
-        objects_request.SetContinuationToken(list_objects_result.GetNextContinuationToken());
+        objects_request.SetContinuationToken(
+            list_objects_result.GetNextContinuationToken());
       } else {
         done_listing = true;
       }
