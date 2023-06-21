@@ -38,8 +38,8 @@
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/ListObjectsOutcome.h>
 #include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/Object.h>
 
 namespace triton { namespace core {
 
@@ -495,7 +495,7 @@ S3FileSystem::GetDirectoryContents(
 
     if (list_objects_outcome.IsSuccess()) {
       const auto& list_objects_result = list_objects_outcome.GetResult();
-      for (const auto& s3_object : list_objects_result.getContents()) {
+      for (const auto& s3_object : list_objects_result.GetContents()) {
         // In the case of empty directories, the directory itself will appear
         // here
         if (s3_object.GetKey().c_str() == full_dir) {
