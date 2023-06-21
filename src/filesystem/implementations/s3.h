@@ -38,8 +38,8 @@
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/ListObjectsRequest.h>
-#include <aws/s3/model/Object.h>
+#include <aws/s3/model/ListObjectsV2Request.h>
+#include <aws/s3/model/ListObjectsV2Result.h>
 
 namespace triton { namespace core {
 
@@ -420,10 +420,10 @@ S3FileSystem::IsDirectory(const std::string& path, bool* is_dir)
   }
 
   // List the objects in the bucket
-  s3::Model::ListObjectsRequest list_objects_request;
+  s3::Model::ListObjectsV2Request list_objects_request;
   list_objects_request.SetBucket(bucket.c_str());
   list_objects_request.SetPrefix(AppendSlash(object_path).c_str());
-  auto list_objects_outcome = client_->ListObjects(list_objects_request);
+  auto list_objects_outcome = client_->ListObjectsV2(list_objects_request);
 
   if (list_objects_outcome.IsSuccess()) {
     *is_dir = !list_objects_outcome.GetResult().GetContents().empty();
@@ -485,13 +485,13 @@ S3FileSystem::GetDirectoryContents(
   full_dir = AppendSlash(dir_path);
 
   // Issue request for objects with prefix
-  s3::Model::ListObjectsRequest objects_request;
+  s3::Model::ListObjectsV2Request objects_request;
   objects_request.SetBucket(bucket.c_str());
   objects_request.SetPrefix(full_dir.c_str());
 
   bool done_listing = false;
   while (!done_listing) {
-    auto list_objects_outcome = client_->ListObjects(objects_request);
+    auto list_objects_outcome = client_->ListObjectsV2(objects_request);
 
     if (list_objects_outcome.IsSuccess()) {
       const auto& list_objects_result = list_objects_outcome.GetResult();
@@ -521,7 +521,7 @@ S3FileSystem::GetDirectoryContents(
       }
       // If there are more pages to retrieve, set the marker to the next page.
       if (list_objects_result.GetIsTruncated()) {
-        objects_request.WithMarker(list_objects_result.GetNextMarker());
+        objects_request.SetContinuationToken(list_objects_result.GetNextContinuationToken());
       } else {
         done_listing = true;
       }
