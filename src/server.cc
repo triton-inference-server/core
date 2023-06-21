@@ -145,7 +145,19 @@ InferenceServer::Init()
   }
 
   // BackendManager
-  status = TritonBackendManager::Create(&backend_manager_);
+  status = TritonBackendManager::Create(
+      &backend_manager_);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
+  }
+
+  // TODO: Remove once the PyTorch bug is resolved. Currently, PyTorch has some
+  // issues with simultaneous model loading of other backends causing a segfault
+  // (TF to be specific). Once those issues are resolved we can remove this
+  // change.
+  status =
+      backend_manager_->PreloadBackend("pytorch", backend_cmdline_config_map_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
@@ -237,6 +249,7 @@ InferenceServer::Init()
     // failed to enable peer access is not critical, just inefficient.
     LOG_WARNING << status.Message();
   }
+
 
   // Create the model manager for the repository. Unless model control
   // is disabled, all models are eagerly loaded when the manager is created.

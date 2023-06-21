@@ -33,7 +33,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-
 #include "backend_manager.h"
 #include "cache_manager.h"
 #include "infer_parameter.h"
