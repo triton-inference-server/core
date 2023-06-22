@@ -219,9 +219,9 @@ TritonModelInstance::SetInstances(
           secondary_device.device_id());
     }
     for (int32_t c = 0; c < group.count(); ++c) {
-      std::string instance_name{group.count() > 1
-                                    ? group.name() + "_" + std::to_string(c)
-                                    : group.name()};
+      std::string instance_name{
+          group.count() > 1 ? group.name() + "_" + std::to_string(c)
+                            : group.name()};
       const bool passive = group.passive();
       std::vector<std::tuple<
           std::string, TRITONSERVER_InstanceGroupKind, int32_t,
@@ -537,8 +537,9 @@ TritonModelInstance::GenerateWarmupData()
             warmup_data.provided_data_.emplace_back(new std::string());
             auto input_data = warmup_data.provided_data_.back().get();
             RETURN_IF_ERROR(ReadTextFile(
-                JoinPath({model_->LocalizedModelPath(), kWarmupDataFolder,
-                          input_meta.second.input_data_file()}),
+                JoinPath(
+                    {model_->LocalizedModelPath(), kWarmupDataFolder,
+                     input_meta.second.input_data_file()}),
                 input_data));
             if (input_meta.second.data_type() ==
                 inference::DataType::TYPE_STRING) {

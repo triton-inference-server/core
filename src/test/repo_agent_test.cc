@@ -23,17 +23,19 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "gtest/gtest.h"
+#include "repo_agent.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
+
 #include <fstream>
 #include <functional>
 #include <future>
 #include <map>
 #include <memory>
+
 #include "filesystem/api.h"
-#include "repo_agent.h"
+#include "gtest/gtest.h"
 #include "server_message.h"
 #include "shared_library.h"
 
@@ -1088,8 +1090,8 @@ TEST_F(TritonRepoAgentModelTest, AgentParameters)
       << "Expect successful agent creation: " << status.AsString();
 
   // Create model
-  tc::TritonRepoAgent::Parameters expected_params{{"key_a", "value_b"},
-                                                  {"key_b", "value_b"}};
+  tc::TritonRepoAgent::Parameters expected_params{
+      {"key_a", "value_b"}, {"key_b", "value_b"}};
   std::unique_ptr<tc::TritonRepoAgentModel> model;
   status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
@@ -1269,15 +1271,16 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
       TRITONREPOAGENT_ACTION_LOAD_COMPLETE, TRITONREPOAGENT_ACTION_UNLOAD,
       TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE};
   std::map<TRITONREPOAGENT_ActionType, std::set<TRITONREPOAGENT_ActionType>>
-      valid_actions{{TRITONREPOAGENT_ACTION_LOAD,
-                     {TRITONREPOAGENT_ACTION_LOAD_FAIL,
-                      TRITONREPOAGENT_ACTION_LOAD_COMPLETE}},
-                    {TRITONREPOAGENT_ACTION_LOAD_FAIL, {}},
-                    {TRITONREPOAGENT_ACTION_LOAD_COMPLETE,
-                     {TRITONREPOAGENT_ACTION_UNLOAD}},
-                    {TRITONREPOAGENT_ACTION_UNLOAD,
-                     {TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE}},
-                    {TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE, {}}};
+      valid_actions{
+          {TRITONREPOAGENT_ACTION_LOAD,
+           {TRITONREPOAGENT_ACTION_LOAD_FAIL,
+            TRITONREPOAGENT_ACTION_LOAD_COMPLETE}},
+          {TRITONREPOAGENT_ACTION_LOAD_FAIL, {}},
+          {TRITONREPOAGENT_ACTION_LOAD_COMPLETE,
+           {TRITONREPOAGENT_ACTION_UNLOAD}},
+          {TRITONREPOAGENT_ACTION_UNLOAD,
+           {TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE}},
+          {TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE, {}}};
   for (const auto& valid_lifecycle : valid_lifecycles) {
     log.clear();
     std::unique_ptr<tc::TritonRepoAgentModel> model;
@@ -1853,8 +1856,8 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryUpdate)
 
 TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelParameter)
 {
-  static tc::TritonRepoAgent::Parameters expected_params{{"key_a", "value_a"},
-                                                         {"key_b", "value_b"}};
+  static tc::TritonRepoAgent::Parameters expected_params{
+      {"key_a", "value_a"}, {"key_b", "value_b"}};
   model_init_fn_ =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model) {
         uint32_t count;

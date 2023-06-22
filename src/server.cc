@@ -28,12 +28,14 @@
 
 #include <stdint.h>
 #include <time.h>
+
 #include <algorithm>
 #include <csignal>
 #include <iostream>
 #include <memory>
 #include <utility>
 #include <vector>
+
 #include "backend_manager.h"
 #include "constants.h"
 #include "cuda_utils.h"

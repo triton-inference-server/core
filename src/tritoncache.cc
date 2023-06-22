@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <iostream>
+
 #include "cache_manager.h"
 
 // For unknown reason, windows will not export the TRITONCACHE_*

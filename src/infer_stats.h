@@ -26,10 +26,12 @@
 #pragma once
 
 #include <time.h>
+
 #include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
+
 #include "constants.h"
 #include "infer_response.h"
 #include "status.h"

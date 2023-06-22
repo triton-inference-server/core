@@ -25,9 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "common.h"
-
 #include <google/cloud/storage/client.h>
+
+#include "common.h"
 
 namespace triton { namespace core {
 

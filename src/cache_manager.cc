@@ -25,7 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cache_manager.h"
+
 #include <boost/functional/hash.hpp>
+
 #include "cache_entry.h"
 #include "filesystem/api.h"
 #include "server_message.h"

@@ -26,6 +26,7 @@
 #pragma once
 
 #include <functional>
+
 #include "infer_request.h"
 #include "status.h"
 

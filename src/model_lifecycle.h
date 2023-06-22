@@ -30,6 +30,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+
 #include "infer_parameter.h"
 #include "model.h"
 #include "model_config.pb.h"

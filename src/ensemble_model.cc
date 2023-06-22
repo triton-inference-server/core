@@ -27,6 +27,7 @@
 #include "ensemble_model.h"
 
 #include <stdint.h>
+
 #include "constants.h"
 #include "ensemble_scheduler.h"
 #include "model_config_utils.h"

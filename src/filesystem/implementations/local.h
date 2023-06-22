@@ -25,13 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "common.h"
-
 #include <sys/stat.h>
 #include <sys/types.h>
+
 #include <fstream>
 
 #include "../../constants.h"
+#include "common.h"
 
 namespace triton { namespace core {
 
