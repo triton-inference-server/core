@@ -27,6 +27,7 @@
 #include "infer_stats.h"
 
 #include <time.h>
+
 #include "metric_model_reporter.h"
 #include "metrics.h"
 #include "triton/common/logging.h"

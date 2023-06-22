@@ -32,6 +32,7 @@
 #include <future>
 #include <stdexcept>
 #include <thread>
+
 #include "backend_model.h"
 #include "constants.h"
 #include "ensemble_utils.h"

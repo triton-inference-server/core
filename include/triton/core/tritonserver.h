@@ -217,7 +217,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Parameter* TRITONSERVER_ParameterNew(
 /// \param byte_ptr The pointer to the data content.
 /// \param size The size of the data content.
 /// \return A new TRITONSERVER_Error object.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Parameter* TRITONSERVER_ParameterBytesNew(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Parameter*
+TRITONSERVER_ParameterBytesNew(
     const char* name, const void* byte_ptr, const uint64_t size);
 
 /// Delete an parameter object.
@@ -323,7 +324,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ErrorNew(
 /// Delete an error object.
 ///
 /// \param error The error object.
-TRITONSERVER_DECLSPEC void TRITONSERVER_ErrorDelete(struct TRITONSERVER_Error* error);
+TRITONSERVER_DECLSPEC void TRITONSERVER_ErrorDelete(
+    struct TRITONSERVER_Error* error);
 
 /// Get the error code.
 ///
@@ -470,8 +472,8 @@ typedef struct TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorQueryFn_t)(
 /// attempting the release. If an error is returned Triton will not
 /// attempt to release the buffer again.
 typedef struct TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorReleaseFn_t)(
-    struct TRITONSERVER_ResponseAllocator* allocator, void* buffer, void* buffer_userp,
-    size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    struct TRITONSERVER_ResponseAllocator* allocator, void* buffer,
+    void* buffer_userp, size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id);
 
 /// Type for function that is called to indicate that subsequent
@@ -535,7 +537,8 @@ typedef struct TRITONSERVER_Error* (*TRITONSERVER_ResponseAllocatorStartFn_t)(
 /// is optional (use nullptr to indicate that it should not be
 /// invoked).
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorNew(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ResponseAllocatorNew(
     struct TRITONSERVER_ResponseAllocator** allocator,
     TRITONSERVER_ResponseAllocatorAllocFn_t alloc_fn,
     TRITONSERVER_ResponseAllocatorReleaseFn_t release_fn,
@@ -578,7 +581,8 @@ TRITONSERVER_ResponseAllocatorSetQueryFunction(
 ///
 /// \param allocator The response allocator object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ResponseAllocatorDelete(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ResponseAllocatorDelete(
     struct TRITONSERVER_ResponseAllocator* allocator);
 
 /// TRITONSERVER_Message
@@ -614,7 +618,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MessageDelete(
 /// \param byte_size Returns the size, in bytes, of the serialized
 /// message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MessageSerializeToJson(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_MessageSerializeToJson(
     struct TRITONSERVER_Message* message, const char** base, size_t* byte_size);
 
 /// TRITONSERVER_Metrics
@@ -775,8 +780,9 @@ typedef void (*TRITONSERVER_InferenceTraceReleaseFn_t)(
 /// the activity and release callback functions.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
-    struct TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
-    uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
+    struct TRITONSERVER_InferenceTrace** trace,
+    TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
+    TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
 /// Create a new inference trace object. The caller takes ownership of
@@ -804,9 +810,11 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
 /// \param trace_userp User-provided pointer that is delivered to
 /// the activity and release callback functions.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceTensorNew(
-    struct TRITONSERVER_InferenceTrace** trace, TRITONSERVER_InferenceTraceLevel level,
-    uint64_t parent_id, TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceTensorNew(
+    struct TRITONSERVER_InferenceTrace** trace,
+    TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
+    TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
     TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
@@ -814,8 +822,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceTens
 ///
 /// \param trace The trace object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceDelete(
-    struct TRITONSERVER_InferenceTrace* trace);
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceDelete(struct TRITONSERVER_InferenceTrace* trace);
 
 /// Get the id associated with a trace. Every trace is assigned an id
 /// that is unique across all traces created for a Triton server.
@@ -833,7 +841,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceId(
 /// \param trace The trace.
 /// \param id Returns the parent id associated with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceParentId(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceParentId(
     struct TRITONSERVER_InferenceTrace* trace, uint64_t* parent_id);
 
 /// Get the name of the model associated with a trace. The caller does
@@ -844,7 +853,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTracePare
 /// \param model_name Returns the name of the model associated with
 /// the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceModelName(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceModelName(
     struct TRITONSERVER_InferenceTrace* trace, const char** model_name);
 
 /// Get the version of the model associated with a trace.
@@ -865,7 +875,8 @@ TRITONSERVER_InferenceTraceModelVersion(
 /// \param request_id Returns the version of the model associated
 /// with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceRequestId(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceRequestId(
     struct TRITONSERVER_InferenceTrace* trace, const char** request_id);
 
 /// TRITONSERVER_InferenceRequest
@@ -918,7 +929,8 @@ typedef enum tritonserver_responsecompleteflag_enum {
 /// before taking ownership of the request object.
 ///
 typedef void (*TRITONSERVER_InferenceRequestReleaseFn_t)(
-    struct TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp);
+    struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
+    void* userp);
 
 /// Type for callback function indicating that an inference response
 /// has completed. The callback function takes ownership of the
@@ -950,7 +962,8 @@ typedef void (*TRITONSERVER_InferenceResponseCompleteFn_t)(
 /// request. If -1 then the server will choose a version based on the
 /// model's policy.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestNew(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestNew(
     struct TRITONSERVER_InferenceRequest** inference_request,
     struct TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version);
@@ -959,7 +972,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestNe
 ///
 /// \param inference_request The request object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestDelete(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestDelete(
     struct TRITONSERVER_InferenceRequest* inference_request);
 
 /// Get the ID for a request. The returned ID is owned by
@@ -969,7 +983,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestDe
 /// \param inference_request The request object.
 /// \param id Returns the ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestId(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestId(
     struct TRITONSERVER_InferenceRequest* inference_request, const char** id);
 
 /// Set the ID for a request.
@@ -977,7 +992,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestId
 /// \param inference_request The request object.
 /// \param id The ID.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetId(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetId(
     struct TRITONSERVER_InferenceRequest* inference_request, const char* id);
 
 /// Get the flag(s) associated with a request. On return 'flags' holds
@@ -987,7 +1003,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestSe
 /// \param inference_request The request object.
 /// \param flags Returns the flags.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestFlags(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestFlags(
     struct TRITONSERVER_InferenceRequest* inference_request, uint32_t* flags);
 
 /// Set the flag(s) associated with a request. 'flags' should hold a
@@ -997,7 +1014,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestFl
 /// \param inference_request The request object.
 /// \param flags The flags.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestSetFlags(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetFlags(
     struct TRITONSERVER_InferenceRequest* inference_request, uint32_t flags);
 
 /// Get the correlation ID of the inference request as an unsigned integer.
@@ -1013,7 +1031,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestSe
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestCorrelationId(
-    struct TRITONSERVER_InferenceRequest* inference_request, uint64_t* correlation_id);
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    uint64_t* correlation_id);
 
 /// Get the correlation ID of the inference request as a string.
 /// Default is empty "", which indicates that the request has no correlation ID.
@@ -1042,7 +1061,8 @@ TRITONSERVER_InferenceRequestCorrelationIdString(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationId(
-    struct TRITONSERVER_InferenceRequest* inference_request, uint64_t correlation_id);
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    uint64_t correlation_id);
 
 /// Set the correlation ID of the inference request to be a string.
 /// The correlation ID is used to indicate two or more inference
@@ -1067,8 +1087,10 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
 /// \param inference_request The request object.
 /// \param priority Returns the priority level.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestPriority(
-    struct TRITONSERVER_InferenceRequest* inference_request, uint32_t* priority);
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestPriority(
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    uint32_t* priority);
 
 /// Get the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
@@ -1094,7 +1116,7 @@ TRITONSERVER_InferenceRequestPriorityUInt64(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetPriority(
     struct TRITONSERVER_InferenceRequest* inference_request, uint32_t priority);
-  
+
 /// Set the priority for a request. The default is 0 indicating that
 /// the request does not specify a priority and so will use the
 /// model's default priority.
@@ -1114,7 +1136,8 @@ TRITONSERVER_InferenceRequestSetPriorityUInt64(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestTimeoutMicroseconds(
-    struct TRITONSERVER_InferenceRequest* inference_request, uint64_t* timeout_us);
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    uint64_t* timeout_us);
 
 /// Set the timeout for a request, in microseconds. The default is 0
 /// which indicates that the request has no timeout.
@@ -1124,7 +1147,8 @@ TRITONSERVER_InferenceRequestTimeoutMicroseconds(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
-    struct TRITONSERVER_InferenceRequest* inference_request, uint64_t timeout_us);
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    uint64_t timeout_us);
 
 /// Add an input to a request.
 ///
@@ -1136,7 +1160,8 @@ TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
 /// \param shape The shape of the input.
 /// \param dim_count The number of dimensions of 'shape'.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceRequestAddInput(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAddInput(
     struct TRITONSERVER_InferenceRequest* inference_request, const char* name,
     const TRITONSERVER_DataType datatype, const int64_t* shape,
     uint64_t dim_count);
@@ -1318,7 +1343,8 @@ TRITONSERVER_InferenceRequestSetResponseCallback(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetStringParameter(
-    struct TRITONSERVER_InferenceRequest* request, const char* key, const char* value);
+    struct TRITONSERVER_InferenceRequest* request, const char* key,
+    const char* value);
 
 /// Set an integer parameter in the request.
 ///
@@ -1339,7 +1365,8 @@ TRITONSERVER_InferenceRequestSetIntParameter(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetBoolParameter(
-    struct TRITONSERVER_InferenceRequest* request, const char* key, const bool value);
+    struct TRITONSERVER_InferenceRequest* request, const char* key,
+    const bool value);
 
 /// TRITONSERVER_InferenceResponse
 ///
@@ -1352,7 +1379,8 @@ TRITONSERVER_InferenceRequestSetBoolParameter(
 ///
 /// \param inference_response The response object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseDelete(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceResponseDelete(
     struct TRITONSERVER_InferenceResponse* inference_response);
 
 /// Return the error status of an inference response. Return a
@@ -1363,7 +1391,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseD
 /// \param inference_response The response object.
 /// \return a TRITONSERVER_Error indicating the success or failure
 /// status of the response.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseError(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceResponseError(
     struct TRITONSERVER_InferenceResponse* inference_response);
 
 /// Get model used to produce a response. The caller does not own the
@@ -1376,9 +1405,10 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseE
 /// \param model_version Returns the version of the model.
 /// this response.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseModel(
-    struct TRITONSERVER_InferenceResponse* inference_response, const char** model_name,
-    int64_t* model_version);
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceResponseModel(
+    struct TRITONSERVER_InferenceResponse* inference_response,
+    const char** model_name, int64_t* model_version);
 
 /// Get the ID of the request corresponding to a response. The caller
 /// does not own the returned ID and must not modify or delete it. The
@@ -1389,7 +1419,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseM
 /// \param request_id Returns the ID of the request corresponding to
 /// this response.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseId(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceResponseId(
     struct TRITONSERVER_InferenceResponse* inference_response,
     const char** request_id);
 
@@ -1435,8 +1466,9 @@ TRITONSERVER_InferenceResponseParameterCount(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseParameter(
-    struct TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
-    const char** name, TRITONSERVER_ParameterType* type, const void** vvalue);
+    struct TRITONSERVER_InferenceResponse* inference_response,
+    const uint32_t index, const char** name, TRITONSERVER_ParameterType* type,
+    const void** vvalue);
 
 /// Get the number of outputs available in the response.
 ///
@@ -1469,12 +1501,13 @@ TRITONSERVER_InferenceResponseOutputCount(
 /// \param userp The user-specified value associated with the buffer
 /// in TRITONSERVER_ResponseAllocatorAllocFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseOutput(
-    struct TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
-    const char** name, TRITONSERVER_DataType* datatype, const int64_t** shape,
-    uint64_t* dim_count, const void** base, size_t* byte_size,
-    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id,
-    void** userp);
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceResponseOutput(
+    struct TRITONSERVER_InferenceResponse* inference_response,
+    const uint32_t index, const char** name, TRITONSERVER_DataType* datatype,
+    const int64_t** shape, uint64_t* dim_count, const void** base,
+    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+    int64_t* memory_type_id, void** userp);
 
 /// Get a classification label associated with an output for a given
 /// index.  The caller does not own the returned label and must not
@@ -1491,8 +1524,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceResponseO
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceResponseOutputClassificationLabel(
-    struct TRITONSERVER_InferenceResponse* inference_response, const uint32_t index,
-    const size_t class_index, const char** label);
+    struct TRITONSERVER_InferenceResponse* inference_response,
+    const uint32_t index, const size_t class_index, const char** label);
 
 /// TRITONSERVER_BufferAttributes
 ///
@@ -1505,14 +1538,16 @@ TRITONSERVER_InferenceResponseOutputClassificationLabel(
 ///
 /// \param buffer_attributes Returns the new buffer attributes object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_BufferAttributesNew(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesNew(
     struct TRITONSERVER_BufferAttributes** buffer_attributes);
 
 /// Delete a buffer attributes object.
 ///
 /// \param buffer_attributes The buffer_attributes object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_BufferAttributesDelete(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesDelete(
     struct TRITONSERVER_BufferAttributes* buffer_attributes);
 
 /// Set the memory type id field of the buffer attributes.
@@ -1523,7 +1558,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_BufferAttributesDe
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetMemoryTypeId(
-    struct TRITONSERVER_BufferAttributes* buffer_attributes, int64_t memory_type_id);
+    struct TRITONSERVER_BufferAttributes* buffer_attributes,
+    int64_t memory_type_id);
 
 /// Set the memory type field of the buffer attributes.
 ///
@@ -1543,7 +1579,8 @@ TRITONSERVER_BufferAttributesSetMemoryType(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesSetCudaIpcHandle(
-    struct TRITONSERVER_BufferAttributes* buffer_attributes, void* cuda_ipc_handle);
+    struct TRITONSERVER_BufferAttributes* buffer_attributes,
+    void* cuda_ipc_handle);
 
 /// Set the byte size field of the buffer attributes.
 ///
@@ -1562,7 +1599,8 @@ TRITONSERVER_BufferAttributesSetByteSize(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesMemoryTypeId(
-    struct TRITONSERVER_BufferAttributes* buffer_attributes, int64_t* memory_type_id);
+    struct TRITONSERVER_BufferAttributes* buffer_attributes,
+    int64_t* memory_type_id);
 
 /// Get the memory type field of the buffer attributes.
 ///
@@ -1584,7 +1622,8 @@ TRITONSERVER_BufferAttributesMemoryType(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_BufferAttributesCudaIpcHandle(
-    struct TRITONSERVER_BufferAttributes* buffer_attributes, void** cuda_ipc_handle);
+    struct TRITONSERVER_BufferAttributes* buffer_attributes,
+    void** cuda_ipc_handle);
 
 /// Get the byte size field of the buffer attributes.
 ///
@@ -1592,7 +1631,8 @@ TRITONSERVER_BufferAttributesCudaIpcHandle(
 /// \param byte_size Returns the byte size associated with the buffer attributes
 /// object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_BufferAttributesByteSize(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_BufferAttributesByteSize(
     struct TRITONSERVER_BufferAttributes* buffer_attributes, size_t* byte_size);
 
 
@@ -1627,8 +1667,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsNew(
 ///
 /// \param options The server options object.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsDelete(
-    struct TRITONSERVER_ServerOptions* options);
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsDelete(struct TRITONSERVER_ServerOptions* options);
 
 /// Set the textual ID for the server in a server options. The ID is a
 /// name that identifies the server.
@@ -1636,7 +1676,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsDelet
 /// \param options The server options object.
 /// \param server_id The server identifier.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetServerId(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetServerId(
     struct TRITONSERVER_ServerOptions* options, const char* server_id);
 
 /// Set the model repository path in a server options. The path must be
@@ -1650,7 +1691,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetSe
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelRepositoryPath(
-    struct TRITONSERVER_ServerOptions* options, const char* model_repository_path);
+    struct TRITONSERVER_ServerOptions* options,
+    const char* model_repository_path);
 
 /// Set the model control mode in a server options. For each mode the models
 /// will be managed as the following:
@@ -1674,7 +1716,8 @@ TRITONSERVER_ServerOptionsSetModelRepositoryPath(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelControlMode(
-    struct TRITONSERVER_ServerOptions* options, TRITONSERVER_ModelControlMode mode);
+    struct TRITONSERVER_ServerOptions* options,
+    TRITONSERVER_ModelControlMode mode);
 
 /// Set the model to be loaded at startup in a server options. The model must be
 /// present in one, and only one, of the specified model repositories.
@@ -1716,7 +1759,8 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetRateLimiterMode(
-    struct TRITONSERVER_ServerOptions* options, TRITONSERVER_RateLimitMode mode);
+    struct TRITONSERVER_ServerOptions* options,
+    TRITONSERVER_RateLimitMode mode);
 
 /// Add resource count for rate limiting.
 ///
@@ -1885,7 +1929,8 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 /// An empty string for the file name will cause triton to direct logging
 /// facilities to the console
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogFile(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogFile(
     struct TRITONSERVER_ServerOptions* options, const char* file);
 
 /// Enable or disable info level logging.
@@ -1893,7 +1938,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLo
 /// \param options The server options object.
 /// \param log True to enable info logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogInfo(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogInfo(
     struct TRITONSERVER_ServerOptions* options, bool log);
 
 /// Enable or disable warning level logging.
@@ -1901,7 +1947,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLo
 /// \param options The server options object.
 /// \param log True to enable warning logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogWarn(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogWarn(
     struct TRITONSERVER_ServerOptions* options, bool log);
 
 /// Enable or disable error level logging.
@@ -1909,7 +1956,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLo
 /// \param options The server options object.
 /// \param log True to enable error logging, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLogError(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogError(
     struct TRITONSERVER_ServerOptions* options, bool log);
 
 /// Set the logging format.
@@ -1919,7 +1967,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetLo
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogFormat(
-    struct TRITONSERVER_ServerOptions* options, const TRITONSERVER_LogFormat format);
+    struct TRITONSERVER_ServerOptions* options,
+    const TRITONSERVER_LogFormat format);
 
 /// Set verbose logging level. Level zero disables verbose logging.
 ///
@@ -1935,7 +1984,8 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 /// \param options The server options object.
 /// \param metrics True to enable metrics, false to disable.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerOptionsSetMetrics(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetMetrics(
     struct TRITONSERVER_ServerOptions* options, bool metrics);
 
 /// Enable or disable GPU metrics collection in a server options. GPU
@@ -2049,8 +2099,8 @@ TRITONSERVER_ServerOptionsSetHostPolicy(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetricsConfig(
-    struct TRITONSERVER_ServerOptions* options, const char* name, const char* setting,
-    const char* value);
+    struct TRITONSERVER_ServerOptions* options, const char* name,
+    const char* setting, const char* value);
 
 /// TRITONSERVER_Server
 ///
@@ -2083,7 +2133,8 @@ typedef enum tritonserver_txn_property_flag_enum {
 /// \param options The inference server options object.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerNew(
-    struct TRITONSERVER_Server** server, struct TRITONSERVER_ServerOptions* options);
+    struct TRITONSERVER_Server** server,
+    struct TRITONSERVER_ServerOptions* options);
 
 /// Delete a server object. If server is not already stopped it is
 /// stopped before being deleted.
@@ -2112,7 +2163,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerRegisterModelRepository(
     struct TRITONSERVER_Server* server, const char* repository_path,
-    const struct TRITONSERVER_Parameter** name_mapping, const uint32_t mapping_count);
+    const struct TRITONSERVER_Parameter** name_mapping,
+    const uint32_t mapping_count);
 
 /// Unregister a model repository. Not available in polling mode.
 ///
@@ -2156,7 +2208,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
 /// model's policy.
 /// \param ready Returns true if server is ready, false otherwise.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerModelIsReady(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerModelIsReady(
     struct TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, bool* ready);
 
@@ -2219,7 +2272,8 @@ TRITONSERVER_ServerModelTransactionProperties(
 /// \param server_metadata Returns the server metadata message.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerMetadata(
-    struct TRITONSERVER_Server* server, struct TRITONSERVER_Message** server_metadata);
+    struct TRITONSERVER_Server* server,
+    struct TRITONSERVER_Message** server_metadata);
 
 /// Get the metadata of a model as a TRITONSERVER_Message
 /// object.  The caller takes ownership of the message object and must
@@ -2232,7 +2286,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerMetadata(
 /// policy.
 /// \param model_metadata Returns the model metadata message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerModelMetadata(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerModelMetadata(
     struct TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, struct TRITONSERVER_Message** model_metadata);
 
@@ -2248,7 +2303,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerModelMetadat
 /// server will choose a version based on the model's policy.
 /// \param model_stats Returns the model statistics message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerModelStatistics(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerModelStatistics(
     struct TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version, struct TRITONSERVER_Message** model_stats);
 
@@ -2318,7 +2374,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerLoadModel(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerLoadModelWithParameters(
     struct TRITONSERVER_Server* server, const char* model_name,
-    const struct TRITONSERVER_Parameter** parameters, const uint64_t parameter_count);
+    const struct TRITONSERVER_Parameter** parameters,
+    const uint64_t parameter_count);
 
 /// Unload the requested model. Unloading a model that is not loaded
 /// on server has no affect and success code will be returned.
@@ -2404,8 +2461,9 @@ typedef enum TRITONSERVER_metrickind_enum {
 /// calling the metrics endpoint.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
-    struct TRITONSERVER_MetricFamily** family, const TRITONSERVER_MetricKind kind,
-    const char* name, const char* description);
+    struct TRITONSERVER_MetricFamily** family,
+    const TRITONSERVER_MetricKind kind, const char* name,
+    const char* description);
 
 /// Delete a metric family object.
 /// A TRITONSERVER_MetricFamily* object should be deleted AFTER its
@@ -2414,8 +2472,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
 ///
 /// \param family The metric family object to delete.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete(
-    struct TRITONSERVER_MetricFamily* family);
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_MetricFamilyDelete(struct TRITONSERVER_MetricFamily* family);
 
 /// Create a new metric object. The caller takes ownership of the
 /// TRITONSERVER_Metric object and must call
@@ -2430,7 +2488,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricFamilyDelete
 /// \param label_count The number of labels.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNew(
-    struct TRITONSERVER_Metric** metric, struct TRITONSERVER_MetricFamily* family,
+    struct TRITONSERVER_Metric** metric,
+    struct TRITONSERVER_MetricFamily* family,
     const struct TRITONSERVER_Parameter** labels, const uint64_t label_count);
 
 /// Delete a metric object.

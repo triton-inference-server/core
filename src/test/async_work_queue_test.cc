@@ -23,7 +23,7 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "gtest/gtest.h"
+#include "triton/common/async_work_queue.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -33,7 +33,8 @@
 #include <random>
 #include <thread>
 #include <vector>
-#include "triton/common/async_work_queue.h"
+
+#include "gtest/gtest.h"
 
 namespace tc = triton::common;
 
@@ -110,8 +111,9 @@ TEST_F(AsyncWorkQueueTest, RunTasksInParallel)
     // Use large element count to reduce the async work queue overhead
     size_t element_count = 1 << 24;
     auto RandHalfIntFn = std::bind(
-        std::uniform_int_distribution<>{std::numeric_limits<int>::min() / 2,
-                                        std::numeric_limits<int>::max() / 2},
+        std::uniform_int_distribution<>{
+            std::numeric_limits<int>::min() / 2,
+            std::numeric_limits<int>::max() / 2},
         std::default_random_engine{});
     for (size_t tc = 0; tc < task_count + 1; tc++) {
       expected_results.push_back(std::vector<int>());

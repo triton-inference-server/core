@@ -28,9 +28,11 @@
 
 #include <google/protobuf/util/json_util.h>
 #include <google/protobuf/util/message_differencer.h>
+
 #include <deque>
 #include <mutex>
 #include <set>
+
 #include "constants.h"
 #include "cuda_utils.h"
 #include "filesystem/api.h"
@@ -1893,7 +1895,7 @@ FixUInt(
 
   uint64_t d;
   try {
-    d = std::strtoull(str.c_str(),nullptr,10);
+    d = std::strtoull(str.c_str(), nullptr, 10);
   }
   catch (...) {
     return Status(
@@ -2071,7 +2073,8 @@ ModelConfigToJson(
   // dynamic_batching::priority_queue_policy::value::default_timeout_microseconds
   // dynamic_batching::priority_levels
   // dynamic_batching::default_priority_level
-  // dynamic_batching::priority_queue_policy::key is left as JSON only allows strings for keys
+  // dynamic_batching::priority_queue_policy::key is left as JSON only allows
+  // strings for keys
   {
     triton::common::TritonJson::Value db;
     if (config_json.Find("dynamic_batching", &db)) {

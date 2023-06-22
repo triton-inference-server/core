@@ -25,13 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "../api.h"
-
 #include <re2/re2.h>
+
 #include <cerrno>
 #include <memory>
 #include <set>
 
+#include "../api.h"
 #include "triton/common/logging.h"
 
 #ifdef _WIN32

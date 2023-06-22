@@ -26,6 +26,7 @@
 #pragma once
 
 #include <stdint.h>
+
 #include "model_config.pb.h"
 
 namespace triton { namespace core {

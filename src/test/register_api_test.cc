@@ -26,6 +26,7 @@
 
 #include <iostream>
 #include <thread>
+
 #include "gtest/gtest.h"
 #include "triton/core/tritonserver.h"
 

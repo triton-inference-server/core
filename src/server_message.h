@@ -26,6 +26,7 @@
 #pragma once
 
 #include <string>
+
 #include "status.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status

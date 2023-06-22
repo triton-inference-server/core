@@ -25,10 +25,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include "common.h"
-
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
+
+#include "common.h"
 // [WIP] below needed?
 #undef LOG_INFO
 #undef LOG_WARNING
