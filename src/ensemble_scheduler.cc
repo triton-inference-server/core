@@ -123,7 +123,7 @@ struct Step {
       size_t step_idx, const InferenceRequest::SequenceId& correlation_id,
       uint32_t flags)
       : correlation_id_(correlation_id), flags_(flags), response_flags_(0),
-        infer_status_(nullptr), step_idx_(step_idx)
+        step_idx_(step_idx)
   {
   }
 
@@ -140,8 +140,13 @@ struct Step {
       int64_t, std::unordered_map<uintptr_t, std::shared_ptr<AllocatedMemory>>>
       gpu_output_map_;
   std::set<std::pair<std::string, IterationCount>> updated_tensors_;
+
+  // Location to store information convey through response callback,
+  // should be properly consumed by EnsembleContext and clean up before
+  // returning from the callback.
   uint32_t response_flags_;
-  TRITONSERVER_Error* infer_status_;
+  TRITONSERVER_InferenceResponse* response_;
+
 
   size_t step_idx_;
 };
@@ -281,6 +286,11 @@ class EnsembleContext {
   Status UpdateEnsembleState(
       const std::unique_ptr<Step>& completed_step,
       std::set<std::pair<std::string, IterationCount>>* updated_tensors);
+
+  // Helper function of 'UpdateEnsembleState' to convert a
+  // TRITONSERVER_InferenceResponse captured in 'completed_step' into
+  // internal variables of this EnsembleContext object.
+  Status ConsumeResponse(const std::unique_ptr<Step>& completed_step);
 
   // Helper function that returns a list of 'steps' that should be run under
   // current ensemble state. 'updated_tensors' is used so that we don't need to
@@ -595,155 +605,148 @@ EnsembleContext::ResponseComplete(
 {
   auto step_ptr = std::unique_ptr<Step>(reinterpret_cast<Step*>(userp));
   step_ptr->response_flags_ = flags;
-
-  if (response != nullptr) {
-    auto err = TRITONSERVER_InferenceResponseError(response);
-    uint32_t count;
-    bool parameter_override = false;
-    InferenceRequest::SequenceId correlation_id{0};
-    uint32_t flags = 0;
-    if (err == nullptr) {
-      err = TRITONSERVER_InferenceResponseParameterCount(response, &count);
-      if (err == nullptr) {
-        for (uint32_t idx = 0; idx < count; idx++) {
-          const char* name;
-          TRITONSERVER_ParameterType type;
-          const void* vvalue;
-          err = TRITONSERVER_InferenceResponseParameter(
-              response, idx, &name, &type, &vvalue);
-          if (err == nullptr) {
-            if (!strcmp(name, "sequence_id")) {
-              switch (type) {
-                case TRITONSERVER_PARAMETER_INT:
-                  correlation_id = InferenceRequest::SequenceId(
-                      *reinterpret_cast<const uint64_t*>(vvalue));
-                  parameter_override = true;
-                  break;
-                case TRITONSERVER_PARAMETER_STRING:
-                  correlation_id = InferenceRequest::SequenceId(std::string(
-                      *reinterpret_cast<const char* const*>(vvalue)));
-                  parameter_override = true;
-                  break;
-                default:
-                  err = TRITONSERVER_ErrorNew(
-                      TRITONSERVER_ERROR_INVALID_ARG,
-                      "expected parameter 'sequence_id' to be "
-                      "TRITONSERVER_PARAMETER_INT or "
-                      "TRITONSERVER_PARAMETER_STRING");
-              }
-            } else if (!strcmp(name, "sequence_start")) {
-              if (type != TRITONSERVER_PARAMETER_BOOL) {
-                err = TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    "expect paremeter 'sequence_start' to be "
-                    "TRITONSERVER_PARAMETER_BOOL");
-              } else {
-                if (*reinterpret_cast<const bool*>(vvalue)) {
-                  flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_START;
-                }
-                parameter_override = true;
-              }
-            } else if (!strcmp(name, "sequence_end")) {
-              if (type != TRITONSERVER_PARAMETER_BOOL) {
-                err = TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    "expect paremeter 'sequence_end' to be "
-                    "TRITONSERVER_PARAMETER_BOOL");
-              } else {
-                if (*reinterpret_cast<const bool*>(vvalue)) {
-                  flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_END;
-                }
-                parameter_override = true;
-              }
-            }
-          }
-        }
-      }
-    }
-    if (err == nullptr) {
-      err = TRITONSERVER_InferenceResponseOutputCount(response, &count);
-      if (err == nullptr) {
-        std::lock_guard<std::mutex> lock(step_ptr->ctx_->mutex_);
-        auto& output_to_tensor =
-            step_ptr->ctx_->info_->steps_[step_ptr->step_idx_]
-                .output_to_tensor_;
-        for (uint32_t idx = 0; idx < count; idx++) {
-          const char* name;
-          TRITONSERVER_DataType datatype;
-          const int64_t* shape;
-          uint64_t dim_count;
-          const void* base;
-          size_t byte_size;
-          TRITONSERVER_MemoryType memory_type;
-          int64_t memory_type_id;
-          void* userp;
-          err = TRITONSERVER_InferenceResponseOutput(
-              response, idx, &name, &datatype, &shape, &dim_count, &base,
-              &byte_size, &memory_type, &memory_type_id, &userp);
-          if (err == nullptr) {
-            auto it = output_to_tensor.find(name);
-            if (it != output_to_tensor.end()) {
-              std::unique_ptr<InferenceRequest::Input> tensor(
-                  new InferenceRequest::Input(
-                      it->second, TritonToDataType(datatype), shape,
-                      dim_count));
-
-              if (byte_size != 0) {
-                std::lock_guard<std::mutex> output_lk(step_ptr->output_mtx_);
-                if (memory_type == TRITONSERVER_MEMORY_GPU) {
-                  auto& gpu_output_map =
-                      step_ptr->gpu_output_map_[memory_type_id];
-                  auto it =
-                      gpu_output_map.find(reinterpret_cast<uintptr_t>(base));
-                  tensor->SetData(std::move(it->second));
-                  gpu_output_map.erase(it);
-                } else {
-                  auto it = step_ptr->cpu_output_map_.find(
-                      reinterpret_cast<uintptr_t>(base));
-                  tensor->SetData(std::move(it->second));
-                  step_ptr->cpu_output_map_.erase(it);
-                }
-              }
-
-              auto& tensor_data = step_ptr->ctx_->tensor_data_[it->second];
-              if (parameter_override) {
-                step_ptr->updated_tensors_.emplace(
-                    it->second, tensor_data.AddTensor(
-                                    std::move(tensor), correlation_id, flags));
-              } else {
-                step_ptr->updated_tensors_.emplace(
-                    it->second,
-                    tensor_data.AddTensor(
-                        std::move(tensor), step_ptr->correlation_id_,
-                        step_ptr->flags_));
-              }
-            } else {
-              LOG_VERBOSE(1)
-                  << "in ensemble, an internal response header specified "
-                     "output '"
-                  << name << "' that does not map to any ensemble tensors";
-            }
-          }
-          if (err != nullptr) {
-            break;
-          }
-        }
-      }
-    }
-
-    if (err != nullptr) {
-      step_ptr->infer_status_ = err;
-    }
-    LOG_TRITONSERVER_ERROR(
-        TRITONSERVER_InferenceResponseDelete(response),
-        "deleting inference response");
-  }
+  step_ptr->response_ = response;
 
   EnsembleContext::Proceed(step_ptr->ctx_, step_ptr);
   // Expecting more responses
   if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) == 0) {
     step_ptr.release();
   }
+}
+
+Status
+EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
+{
+  // Scoped deleter for response
+  static auto res_dlt = [](TRITONSERVER_InferenceResponse* res) {
+    if (res != nullptr) {
+      LOG_TRITONSERVER_ERROR(
+          TRITONSERVER_InferenceResponseDelete(res),
+          "deleting inference response");
+    }
+  };
+  std::unique_ptr<TRITONSERVER_InferenceResponse, decltype(res_dlt)>
+      managed_response(completed_step->response_, res_dlt);
+  completed_step->response_ = nullptr;
+
+  auto response = managed_response.get();
+  auto step_ptr = completed_step.get();
+  if (response != nullptr) {
+    RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseError(response));
+    uint32_t count;
+    bool parameter_override = false;
+    InferenceRequest::SequenceId correlation_id{0};
+    uint32_t flags = 0;
+    RETURN_IF_TRITONSERVER_ERROR(
+        TRITONSERVER_InferenceResponseParameterCount(response, &count));
+    for (uint32_t idx = 0; idx < count; idx++) {
+      const char* name;
+      TRITONSERVER_ParameterType type;
+      const void* vvalue;
+      RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseParameter(
+          response, idx, &name, &type, &vvalue));
+      if (!strcmp(name, "sequence_id")) {
+        switch (type) {
+          case TRITONSERVER_PARAMETER_INT:
+            correlation_id = InferenceRequest::SequenceId(
+                *reinterpret_cast<const uint64_t*>(vvalue));
+            parameter_override = true;
+            break;
+          case TRITONSERVER_PARAMETER_STRING:
+            correlation_id = InferenceRequest::SequenceId(
+                std::string(*reinterpret_cast<const char* const*>(vvalue)));
+            parameter_override = true;
+            break;
+          default:
+            RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                "expected parameter 'sequence_id' to be "
+                "TRITONSERVER_PARAMETER_INT or "
+                "TRITONSERVER_PARAMETER_STRING"));
+        }
+      } else if (!strcmp(name, "sequence_start")) {
+        if (type != TRITONSERVER_PARAMETER_BOOL) {
+          RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              "expect paremeter 'sequence_start' to be "
+              "TRITONSERVER_PARAMETER_BOOL"));
+        } else {
+          if (*reinterpret_cast<const bool*>(vvalue)) {
+            flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_START;
+          }
+          parameter_override = true;
+        }
+      } else if (!strcmp(name, "sequence_end")) {
+        if (type != TRITONSERVER_PARAMETER_BOOL) {
+          RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              "expect paremeter 'sequence_end' to be "
+              "TRITONSERVER_PARAMETER_BOOL"));
+        } else {
+          if (*reinterpret_cast<const bool*>(vvalue)) {
+            flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_END;
+          }
+          parameter_override = true;
+        }
+      }
+    }
+    RETURN_IF_TRITONSERVER_ERROR(
+        TRITONSERVER_InferenceResponseOutputCount(response, &count));
+    auto& output_to_tensor =
+        info_->steps_[step_ptr->step_idx_].output_to_tensor_;
+    for (uint32_t idx = 0; idx < count; idx++) {
+      const char* name;
+      TRITONSERVER_DataType datatype;
+      const int64_t* shape;
+      uint64_t dim_count;
+      const void* base;
+      size_t byte_size;
+      TRITONSERVER_MemoryType memory_type;
+      int64_t memory_type_id;
+      void* userp;
+      RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseOutput(
+          response, idx, &name, &datatype, &shape, &dim_count, &base,
+          &byte_size, &memory_type, &memory_type_id, &userp));
+      auto it = output_to_tensor.find(name);
+      if (it != output_to_tensor.end()) {
+        std::unique_ptr<InferenceRequest::Input> tensor(
+            new InferenceRequest::Input(
+                it->second, TritonToDataType(datatype), shape, dim_count));
+
+        if (byte_size != 0) {
+          std::lock_guard<std::mutex> output_lk(step_ptr->output_mtx_);
+          if (memory_type == TRITONSERVER_MEMORY_GPU) {
+            auto& gpu_output_map = step_ptr->gpu_output_map_[memory_type_id];
+            auto it = gpu_output_map.find(reinterpret_cast<uintptr_t>(base));
+            tensor->SetData(std::move(it->second));
+            gpu_output_map.erase(it);
+          } else {
+            auto it = step_ptr->cpu_output_map_.find(
+                reinterpret_cast<uintptr_t>(base));
+            tensor->SetData(std::move(it->second));
+            step_ptr->cpu_output_map_.erase(it);
+          }
+        }
+
+        auto& tensor_data = tensor_data_[it->second];
+        if (parameter_override) {
+          step_ptr->updated_tensors_.emplace(
+              it->second,
+              tensor_data.AddTensor(std::move(tensor), correlation_id, flags));
+        } else {
+          step_ptr->updated_tensors_.emplace(
+              it->second, tensor_data.AddTensor(
+                              std::move(tensor), step_ptr->correlation_id_,
+                              step_ptr->flags_));
+        }
+      } else {
+        LOG_VERBOSE(1) << "in ensemble, an internal response header specified "
+                          "output '"
+                       << name << "' that does not map to any ensemble tensors";
+      }
+    }
+  }
+  return Status::Success;
 }
 
 void
@@ -812,7 +815,7 @@ EnsembleContext::UpdateEnsembleState(
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
     }
-    RETURN_IF_TRITONSERVER_ERROR(completed_step->infer_status_);
+    RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
   }
   return Status::Success;
