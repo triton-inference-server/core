@@ -133,9 +133,6 @@ class DynamicBatchScheduler : public Scheduler {
   // True if dynamic batching is enabled.
   const bool dynamic_batching_enabled_;
 
-  // Block incoming inference request(s) during update.
-  std::mutex update_mu_;
-
   // Map from priority level to queue holding inference requests for the model
   // represented by this scheduler. If priority queues are not supported by the
   // scheduler, then priority zero entry is used as the single queue.

@@ -26,7 +26,7 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
+
 #include "infer_request.h"
 #include "status.h"
 
