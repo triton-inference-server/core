@@ -120,8 +120,6 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
  private:
-  using InstanceMap = std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>>;
-
   SequenceBatchScheduler(
       TritonModel* model,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
@@ -132,8 +130,6 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
   void ReaperThread(const int nice);
-
-  Status CreateBatchers();
 
   Status CreateBooleanControlTensors(
       const inference::ModelConfig& config,
@@ -155,8 +151,14 @@ class SequenceBatchScheduler : public Scheduler {
     }
   };
 
+  // Create a batcher for each of the provided instances.
+  Status CreateBatchers(
+      const std::vector<std::shared_ptr<TritonModelInstance>>& instances);
+
   // Return the added and removed instances for scheduler update purposes.
-  void InstancesDiff(InstanceMap* added_instances, InstanceMap* removed_instances);
+  void InstancesDiff(
+      std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
+      std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>>* removed_instances);
 
   // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
   // created.
