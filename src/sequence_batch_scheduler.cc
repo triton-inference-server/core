@@ -72,9 +72,6 @@ SequenceBatchScheduler::Create(
              << " backlog queued requests...";
   }
 
-  //auto instance_count = model->BackgroundInstances().size();
-  //sched->queue_request_cnts_.resize(instance_count, 0);
-
   auto& config = model->Config();
 
   // Max sequence idle...
@@ -156,24 +153,18 @@ SequenceBatchScheduler::Update()
       pending_removal_seq_slots_.emplace(instance, seq_slot_cnt_);
     }
 
-    /*// Instruct 'Enqueue()' to begin pausing new sequence.
-    if (updating_) {
-      LOG_ERROR << "sequence batch scheduler is already updating";
-      return;
-    }
-    updating_ = true;*/
-
     // Erase ready slots which its instance is pending removal.
     std::priority_queue<
         BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
-        BatcherSequenceSlotCompare> new_ready_batcher_seq_slots;
+        BatcherSequenceSlotCompare>
+        new_ready_batcher_seq_slots;
     while (!ready_batcher_seq_slots_.empty()) {
       auto& ready_batcher_seq_slot = ready_batcher_seq_slots_.top();
-      if (removed_instances.find(ready_batcher_seq_slot.model_instance_) == removed_instances.end()) {
+      if (removed_instances.find(ready_batcher_seq_slot.model_instance_) ==
+          removed_instances.end()) {
         // The ready slot is not being removed.
         new_ready_batcher_seq_slots.push(ready_batcher_seq_slot);
-      }
-      else {
+      } else {
         // The ready slot is removed, so update pending removal instances.
         ErasePendingRemovalSequenceSlot(ready_batcher_seq_slot);
       }
@@ -181,21 +172,9 @@ SequenceBatchScheduler::Update()
     }
     ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
 
-    /*// Wait until all in-flight and backlog sequence are queued.
-    update_enqueued_cv_.wait(lk, [this] {
-      return sequence_to_batcherseqslot_map_.empty() && backlog_queues_.empty() &&
-            sequence_to_backlog_map_.empty();
-    });*/
-
     // Wait until all removed batchers have completed its assigned sequence.
-    pending_removal_seq_slots_cv_.wait(lk, [this] {
-      return pending_removal_seq_slots_.empty();
-    });
-
-    /*// Flush all pending requests to the rate limiter.
-    lk.unlock();
-    batchers_.clear();
-    lk.lock();*/
+    pending_removal_seq_slots_cv_.wait(
+        lk, [this] { return pending_removal_seq_slots_.empty(); });
 
     // Erase all removed batchers, outside the lock.
     for (auto& instance : removed_instances) {
@@ -205,24 +184,10 @@ SequenceBatchScheduler::Update()
       batchers_.erase(std::move(it));
     }
 
-    /*// Re-construct the scheduler with new instances.
-    auto instance_count = model_->BackgroundInstances().size();
-    queue_request_cnts_.resize(instance_count, 0);
-    queue_request_cnts_.clear();*/
-
     // Update removed request count.
     for (auto& instance : removed_instances) {
       queue_request_cnts_.erase(instance);
     }
-
-    /*std::priority_queue<
-        BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
-        BatcherSequenceSlotCompare> empty_ready_batcher_seq_slots;
-    ready_batcher_seq_slots_.swap(empty_ready_batcher_seq_slots);*/
-
-    /*// The update is completed.
-    updating_ = false;
-    update_complete_cv_.notify_all();*/
   }
 
   return Status::Success;
@@ -247,8 +212,7 @@ SequenceBatchScheduler::InstancesDiff(
     if (curr_instances->find(instance.get()) == curr_instances->end()) {
       // The instance is on the next set but not current, so it is added.
       added_instances->push_back(instance);
-    }
-    else {
+    } else {
       // Remove overlappings from current, so any remainings are removed.
       curr_instances->erase(instance.get());
     }
@@ -259,11 +223,14 @@ void
 SequenceBatchScheduler::ErasePendingRemovalSequenceSlot(
     const BatcherSequenceSlot& seq_slot)
 {
-  LOG_VERBOSE(1) << "Removing slot in batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)seq_slot.model_instance_ << ", slot " << seq_slot.seq_slot_;
+  LOG_VERBOSE(1) << "Removing slot in batcher "
+                 << seq_slot.model_instance_->Name() << ", slot "
+                 << seq_slot.seq_slot_;
 
   auto it = pending_removal_seq_slots_.find(seq_slot.model_instance_);
   if (it == pending_removal_seq_slots_.end()) {
-    LOG_ERROR << "Cannot find batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)seq_slot.model_instance_;
+    LOG_ERROR << "Batcher " << seq_slot.model_instance_->Name()
+              << " is not pending removal";
     return;
   }
   // Subtract the number of slots, and erase the key if no more slots left.
@@ -300,8 +267,6 @@ SequenceBatchScheduler::CreateBatchers(
   // Create one SequenceBatch object for each requested runner. The
   // SequenceBatch object has a thread that manages the batch of
   // requests.
-  //const auto& instances = model_->BackgroundInstances();
-  //uint32_t index = 0;
   for (const auto& instance : instances) {
     bool init_state;
     std::unique_ptr<SequenceBatch> sb;
@@ -310,18 +275,17 @@ SequenceBatchScheduler::CreateBatchers(
     // scheduling strategy.
     if (config.sequence_batching().has_oldest()) {
       sb.reset(new OldestSequenceBatch(
-          this, /*index*/instance.get(), seq_slot_cnt_, /*instance.get(),*/
-          enforce_equal_shape_tensors_, has_optional_input, start, end,
-          startend, cont, notready, &init_state));
+          this, instance.get(), seq_slot_cnt_, enforce_equal_shape_tensors_,
+          has_optional_input, start, end, startend, cont, notready,
+          &init_state));
     } else {
       sb.reset(new DirectSequenceBatch(
-          this, /*index*/instance.get(), seq_slot_cnt_, /*instance.get(),*/
-          enforce_equal_shape_tensors_, has_optional_input, start, end,
-          startend, cont, notready, &init_state));
+          this, instance.get(), seq_slot_cnt_, enforce_equal_shape_tensors_,
+          has_optional_input, start, end, startend, cont, notready,
+          &init_state));
     }
 
     if (init_state) {
-      //batchers_.push_back(std::move(sb));
       batchers_.emplace(instance.get(), std::move(sb));
       // All sequence slots in the batcher are initially ready for a
       // new sequence.
@@ -330,7 +294,6 @@ SequenceBatchScheduler::CreateBatchers(
             SequenceBatchScheduler::BatcherSequenceSlot(instance.get(), b));
       }
     }
-    //++index;
   }
   if (batchers_.empty()) {
     return Status(
@@ -724,12 +687,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   std::unique_lock<std::mutex> lock(mu_);
 
-  /*// Check if the scheduler is about to be updated. Only allow in-flight or
-  // backlog sequence, and block new sequence, during update.
-  if (updating_ && seq_start) {
-    update_complete_cv_.wait(lock, [this] { return !updating_; });
-  }*/
-
   // Check if the request is one of the in-flight sequence (not starting new
   // sequence), we consider sequences in backlog as also in-flight.
   if (stop_ && seq_start) {
@@ -864,7 +821,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   // Need to grab the target contents before the erase below since
   // that can free it.
-  //const size_t batcher_idx = target->batcher_idx_;
   const TritonModelInstance* model_instance = target->model_instance_;
   const uint32_t seq_slot = target->seq_slot_;
 
@@ -880,10 +836,10 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   lock.unlock();
 
   LOG_VERBOSE(1) << "Enqueuing CORRID " << correlation_id << " into batcher "
-                 << /*batcher_idx_*/(size_t)model_instance << ", sequence slot " << seq_slot << ": "
-                 << irequest->ModelName();
+                 << model_instance->Name() << ", sequence slot " << seq_slot
+                 << ": " << irequest->ModelName();
 
-  batchers_[/*batcher_idx_*/model_instance]->Enqueue(seq_slot, correlation_id, irequest);
+  batchers_[model_instance]->Enqueue(seq_slot, correlation_id, irequest);
   return Status::Success;
 }
 
@@ -894,12 +850,10 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 {
   std::unique_lock<std::mutex> lock(mu_);
 
-  /*// Opportunity for update to proceed after the release.
-  update_enqueued_cv_.notify_one();*/
-
   // If the instance behind the slot is pending to be removed, do not add the
   // slot back to ready.
-  if (pending_removal_seq_slots_.find(batcher_seq_slot.model_instance_) != pending_removal_seq_slots_.end()) {
+  if (pending_removal_seq_slots_.find(batcher_seq_slot.model_instance_) !=
+      pending_removal_seq_slots_.end()) {
     ErasePendingRemovalSequenceSlot(batcher_seq_slot);
     pending_removal_seq_slots_cv_.notify_one();
     return InferenceRequest::SequenceId();
@@ -940,16 +894,18 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
       }
 
       LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
-                     << " reusing batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)batcher_seq_slot.model_instance_
-                     << ", slot " << batcher_seq_slot.seq_slot_ << ": "
+                     << " reusing batcher "
+                     << batcher_seq_slot.model_instance_->Name() << ", slot "
+                     << batcher_seq_slot.seq_slot_ << ": "
                      << irequest->ModelName();
       return correlation_id;
     }
   }
 
   // There is no backlogged sequence so just release the batch slot
-  LOG_VERBOSE(1) << "Freeing slot in batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)batcher_seq_slot.model_instance_
-                 << ", slot " << batcher_seq_slot.seq_slot_;
+  LOG_VERBOSE(1) << "Freeing slot in batcher "
+                 << batcher_seq_slot.model_instance_->Name() << ", slot "
+                 << batcher_seq_slot.seq_slot_;
 
   ready_batcher_seq_slots_.push(batcher_seq_slot);
   return InferenceRequest::SequenceId();
@@ -957,14 +913,14 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 
 bool
 SequenceBatchScheduler::DelayScheduler(
-    /*const uint32_t batcher_idx*/const TritonModelInstance* model_instance, const size_t cnt, const size_t total)
+    const TritonModelInstance* model_instance, const size_t cnt,
+    const size_t total)
 {
   std::unique_lock<std::mutex> lock(mu_);
-  queue_request_cnts_[/*batcher_idx*/model_instance] = cnt;
+  queue_request_cnts_[model_instance] = cnt;
 
   size_t seen = 0;
   for (auto c : queue_request_cnts_) {
-    //seen += c;
     seen += c.second;
   }
 
@@ -1070,12 +1026,11 @@ SequenceBatchScheduler::ReaperThread(const int nice)
       // Enqueue force-ends outside of the lock.
       for (const auto& pr : force_end_sequences) {
         const InferenceRequest::SequenceId& idle_correlation_id = pr.first;
-        //const size_t batcher_idx = pr.second.batcher_idx_;
         const TritonModelInstance* model_instance = pr.second.model_instance_;
         const uint32_t seq_slot = pr.second.seq_slot_;
 
         LOG_VERBOSE(1) << "Reaper: force-ending CORRID " << idle_correlation_id
-                       << " in batcher " << /*batcher_idx*/(size_t)model_instance << ", slot "
+                       << " in batcher " << model_instance->Name() << ", slot "
                        << seq_slot;
 
         // A slot assignment is released by enqueuing a request with a
@@ -1083,7 +1038,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
         // request as meaning it should release the sequence slot but
         // otherwise do nothing with the request.
         std::unique_ptr<InferenceRequest> null_request;
-        batchers_[/*batcher_idx*/model_instance]->Enqueue(
+        batchers_[model_instance]->Enqueue(
             seq_slot, idle_correlation_id, null_request);
       }
 
@@ -1151,7 +1106,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 }
 
 SequenceBatch::SequenceBatch(
-    SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
+    SequenceBatchScheduler* base, TritonModelInstance* model_instance,
     const size_t seq_slot_cnt,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const bool has_optional_input,
@@ -1165,7 +1120,7 @@ SequenceBatch::SequenceBatch(
         continue_input_overrides,
     const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
         notready_input_overrides)
-    : base_(base), /*batcher_idx_(batcher_idx)*/model_instance_(model_instance), seq_slot_cnt_(seq_slot_cnt),
+    : base_(base), model_instance_(model_instance), seq_slot_cnt_(seq_slot_cnt),
       enforce_equal_shape_tensors_(enforce_equal_shape_tensors),
       has_optional_input_(has_optional_input),
       start_input_overrides_(start_input_overrides),
@@ -1193,7 +1148,7 @@ SequenceBatch::CreateCorrelationIDControl(const inference::ModelConfig& config)
   if (!corrid_status.IsOk()) {
     LOG_ERROR << "failed validating CORRID control for sequence-batch "
                  "scheduler thread "
-              << /*batcher_idx_*/(size_t)model_instance_ << ": " << corrid_status.Message();
+              << model_instance_->Name() << ": " << corrid_status.Message();
     return false;
   }
 
@@ -1291,7 +1246,7 @@ SequenceBatch::SetControlTensors(
     if (!corrid_status.IsOk()) {
       LOG_ERROR << "failed creating CORRID control for sequence-batch "
                    "scheduler thread "
-                << /*batcher_idx_*/(size_t)model_instance_ << " for " << seq_corr_id->Name();
+                << model_instance_->Name() << " for " << seq_corr_id->Name();
       return;
     }
 
@@ -1338,8 +1293,8 @@ SequenceBatch::UpdateImplicitState(
 }
 
 DirectSequenceBatch::DirectSequenceBatch(
-    SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
-    const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
+    SequenceBatchScheduler* base, TritonModelInstance* model_instance,
+    const size_t seq_slot_cnt,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const bool has_optional_input,
     const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -1354,13 +1309,13 @@ DirectSequenceBatch::DirectSequenceBatch(
         notready_input_overrides,
     bool* is_initialized)
     : SequenceBatch(
-          base, /*batcher_idx*/model_instance, seq_slot_cnt, enforce_equal_shape_tensors,
+          base, model_instance, seq_slot_cnt, enforce_equal_shape_tensors,
           has_optional_input, start_input_overrides, end_input_overrides,
           startend_input_overrides, continue_input_overrides,
           notready_input_overrides),
-      /*model_instance_(model_instance),*/ scheduler_thread_exit_(false),
-      scheduler_idle_(false), queues_(seq_slot_cnt),
-      seq_slot_correlation_ids_(seq_slot_cnt, 0), max_active_seq_slot_(-1)
+      scheduler_thread_exit_(false), scheduler_idle_(false),
+      queues_(seq_slot_cnt), seq_slot_correlation_ids_(seq_slot_cnt, 0),
+      max_active_seq_slot_(-1)
 {
   // Initialize to handle CORRID control. If error just exit
   // now... that means the corresponding model instance will not have
@@ -1397,7 +1352,8 @@ DirectSequenceBatch::~DirectSequenceBatch()
 
     // Wait until the last enqueued payload completes execution.
     while (!exec_complete_ || curr_payload_->RequestCount() > 0) {
-      LOG_VERBOSE(1) << "Waiting for current payload to complete execution before exiting";
+      LOG_VERBOSE(1)
+          << "Waiting for current payload to complete execution before exiting";
       payload_cv_.wait(lk2);
     }
 
@@ -1405,7 +1361,8 @@ DirectSequenceBatch::~DirectSequenceBatch()
     waiting_for_requests = false;
     for (uint32_t seq_slot = 0; seq_slot < queues_.size(); seq_slot++) {
       if (!queues_[seq_slot].empty()) {
-        LOG_VERBOSE(1) << "Waiting for slot " << seq_slot << " to begin execution before exiting";
+        LOG_VERBOSE(1) << "Waiting for slot " << seq_slot
+                       << " to begin execution before exiting";
         waiting_for_requests = true;
         break;
       }
@@ -1472,15 +1429,18 @@ DirectSequenceBatch::BatcherThread(const int nice)
 #ifndef _WIN32
   if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << /*batcher_idx_*/(size_t)model_instance_ << " at nice " << nice << "...";
+                   << model_instance_->Name() << " [" << (size_t)model_instance_
+                   << "] at nice " << nice << "...";
   } else {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << /*batcher_idx_*/(size_t)model_instance_ << " at default nice (requested nice "
-                   << nice << " failed)...";
+                   << model_instance_->Name() << " [" << (size_t)model_instance_
+                   << "] at default nice (requested nice " << nice
+                   << " failed)...";
   }
 #else
   LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                 << /*batcher_idx_*/(size_t)model_instance_ << " at default nice...";
+                 << model_instance_->Name() << " [" << (size_t)model_instance_
+                 << "] at default nice...";
 #endif
 
   // For debugging and testing, delay start of thread until queues
@@ -1490,8 +1450,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
   size_t delay_cnt = 0;
   if (dstr != nullptr) {
     delay_cnt = atoi(dstr);
-    LOG_VERBOSE(1) << "Delaying scheduler thread " << /*batcher_idx_*/(size_t)model_instance_ << " until "
-                   << delay_cnt << " queued requests...";
+    LOG_VERBOSE(1) << "Delaying scheduler thread " << model_instance_->Name()
+                   << " until " << delay_cnt << " queued requests...";
   }
 
   const uint64_t default_wait_microseconds = 500 * 1000;
@@ -1523,11 +1483,11 @@ DirectSequenceBatch::BatcherThread(const int nice)
         for (const auto& q : queues_) {
           total_size += q.size();
         }
-        if (!base_->DelayScheduler(/*batcher_idx_*/model_instance_, total_size, delay_cnt)) {
+        if (!base_->DelayScheduler(model_instance_, total_size, delay_cnt)) {
           delay_cnt = 0;
         }
-        LOG_VERBOSE(1) << "Delaying scheduler thread " << /*batcher_idx_*/(size_t)model_instance_
-                       << " until " << delay_cnt
+        LOG_VERBOSE(1) << "Delaying scheduler thread "
+                       << model_instance_->Name() << " until " << delay_cnt
                        << " queued requests, current total = " << total_size;
       } else {
         RequiredEqualInputs required_equal_inputs;
@@ -1562,7 +1522,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
               queue.pop_front();
 
               SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-                  /*batcher_idx_*/model_instance_, seq_slot);
+                  model_instance_, seq_slot);
               seq_slot_correlation_ids_[seq_slot] =
                   base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
             }
@@ -1723,8 +1683,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
           if (end_of_sequence) {
             LOG_VERBOSE(1) << "End sequence CORRID "
                            << seq_slot_correlation_ids_[seq_slot]
-                           << " in batcher " << /*batcher_idx_*/(size_t)model_instance_ << ", slot "
-                           << seq_slot;
+                           << " in batcher " << model_instance_->Name()
+                           << ", slot " << seq_slot;
 
             // Should never be anything in a queue after the END
             // marker. If it happens that means we will clobber
@@ -1737,7 +1697,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
             }
 
             SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-                /*batcher_idx_*/model_instance_, seq_slot);
+                model_instance_, seq_slot);
             seq_slot_correlation_ids_[seq_slot] =
                 base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
           }
@@ -1782,12 +1742,12 @@ DirectSequenceBatch::BatcherThread(const int nice)
   }  // end runner loop
 
   LOG_VERBOSE(1) << "Stopping Direct sequence-batch scheduler thread "
-                 << /*batcher_idx_*/(size_t)model_instance_ << "...";
+                 << (size_t)model_instance_ << "...";
 }
 
 OldestSequenceBatch::OldestSequenceBatch(
-    SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
-    const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
+    SequenceBatchScheduler* base, TritonModelInstance* model_instance,
+    const size_t seq_slot_cnt,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const bool has_optional_input,
     const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -1802,7 +1762,7 @@ OldestSequenceBatch::OldestSequenceBatch(
         notready_input_overrides,
     bool* is_initialized)
     : SequenceBatch(
-          base, /*batcher_idx*/model_instance, seq_slot_cnt, enforce_equal_shape_tensors,
+          base, model_instance, seq_slot_cnt, enforce_equal_shape_tensors,
           has_optional_input, start_input_overrides, end_input_overrides,
           startend_input_overrides, continue_input_overrides,
           notready_input_overrides),
@@ -1837,7 +1797,7 @@ OldestSequenceBatch::OldestSequenceBatch(
       &dynamic_batcher_);
   if (!status.IsOk()) {
     LOG_ERROR << "failed creating dynamic sequence batcher for OldestFirst "
-              << /*batcher_idx_*/(size_t)model_instance << ": " << status.Message();
+              << model_instance->Name() << ": " << status.Message();
     *is_initialized = false;
     return;
   }
@@ -1894,7 +1854,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         // nothing.
         if (irequest == nullptr) {
           LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
-                         << /*batcher_idx_*/(size_t)model_instance_ << ", slot " << seq_slot;
+                         << model_instance_->Name() << ", slot " << seq_slot;
           release_seq_slot = true;
         } else {
           const InferenceRequest::SequenceId& correlation_id =
@@ -1906,8 +1866,8 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) !=
               0) {
             LOG_VERBOSE(1) << irequest->LogRequest() << "end sequence CORRID "
-                           << correlation_id << " in batcher " << /*batcher_idx_*/(size_t)model_instance_
-                           << ", slot " << seq_slot;
+                           << correlation_id << " in batcher "
+                           << model_instance_->Name() << ", slot " << seq_slot;
             release_seq_slot = true;
           }
 
@@ -1919,8 +1879,8 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
 
           LOG_VERBOSE(1) << irequest->LogRequest()
                          << "issue to dynamic batcher CORRID " << correlation_id
-                         << " in batcher " << /*batcher_idx_*/(size_t)model_instance_ << ", slot "
-                         << seq_slot;
+                         << " in batcher " << model_instance_->Name()
+                         << ", slot " << seq_slot;
           in_flight_[seq_slot] = true;
 
           irequest->AddInternalReleaseCallback(
@@ -1946,14 +1906,14 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
         }
 
         SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
-            /*batcher_idx_*/model_instance_, seq_slot);
+            model_instance_, seq_slot);
         const InferenceRequest::SequenceId& released_cid =
             base_->ReleaseSequenceSlot(batcher_seq_slot, &queue);
 
         if (released_cid.InSequence()) {
           LOG_VERBOSE(1) << "Enqueued new sequence containing " << queue.size()
                          << " requests into OldestFirst batcher "
-                         << /*batcher_idx_*/(size_t)model_instance_ << ", slot " << seq_slot;
+                         << model_instance_->Name() << ", slot " << seq_slot;
 
           // If an inference is already in-flight in the dynamic batcher
           // in this sequence slot then can't process the new queue

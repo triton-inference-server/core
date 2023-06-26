@@ -89,8 +89,11 @@ class SequenceBatchScheduler : public Scheduler {
   struct BatcherSequenceSlot {
     BatcherSequenceSlot() = default;
     BatcherSequenceSlot(const BatcherSequenceSlot&) = default;
-    BatcherSequenceSlot(/*size_t b*/TritonModelInstance* i, uint32_t s) : model_instance_(i), seq_slot_(s) {}
-    /*size_t batcher_idx_*/TritonModelInstance* model_instance_;
+    BatcherSequenceSlot(TritonModelInstance* i, uint32_t s)
+        : model_instance_(i), seq_slot_(s)
+    {
+    }
+    TritonModelInstance* model_instance_;
     uint32_t seq_slot_;
   };
 
@@ -103,7 +106,8 @@ class SequenceBatchScheduler : public Scheduler {
   // For debugging/testing, batcher reports how many waiting requests
   // and returns true if the batcher should continue waiting.
   bool DelayScheduler(
-      /*const uint32_t batcher_idx*/const TritonModelInstance* model_instance, const size_t cnt, const size_t total);
+      const TritonModelInstance* model_instance, const size_t cnt,
+      const size_t total);
 
   const std::unordered_map<
       std::string, const inference::ModelSequenceBatching_State&>&
@@ -180,11 +184,6 @@ class SequenceBatchScheduler : public Scheduler {
   // Mutex
   std::mutex mu_;
 
-  /*// Signal an update is complete.
-  std::condition_variable update_complete_cv_;
-  // Signal all in-flight or backlog sequence are enqueued.
-  std::condition_variable update_enqueued_cv_;*/
-
   // The reaper thread
   std::unique_ptr<std::thread> reaper_thread_;
   std::condition_variable reaper_cv_;
@@ -196,13 +195,14 @@ class SequenceBatchScheduler : public Scheduler {
   // Map from model instance pointer to the number of sequence slots pending to
   // be removed. The sequence slots corresponding to the model instance should
   // be erased once it becomes ready (or already at ready).
-  std::unordered_map<const TritonModelInstance*, size_t> pending_removal_seq_slots_;
+  std::unordered_map<const TritonModelInstance*, size_t>
+      pending_removal_seq_slots_;
   // Signal all pending removal sequence slots are erased.
   std::condition_variable pending_removal_seq_slots_cv_;
 
   // The SequenceBatchs being managed by this scheduler.
-  //std::vector<std::unique_ptr<SequenceBatch>> batchers_;
-  std::unordered_map<const TritonModelInstance*, std::unique_ptr<SequenceBatch>> batchers_;
+  std::unordered_map<const TritonModelInstance*, std::unique_ptr<SequenceBatch>>
+      batchers_;
 
   // Map from a request's correlation ID to the BatcherSequenceSlot
   // assigned to that correlation ID.
@@ -245,7 +245,6 @@ class SequenceBatchScheduler : public Scheduler {
 
   // Used for debugging/testing.
   size_t backlog_delay_cnt_;
-  //std::vector<size_t> queue_request_cnts_;
   std::unordered_map<const TritonModelInstance*, size_t> queue_request_cnts_;
 
   // IO mapping between the output state name and the state configuration.
@@ -263,7 +262,7 @@ class SequenceBatchScheduler : public Scheduler {
 class SequenceBatch {
  public:
   SequenceBatch(
-      SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
+      SequenceBatchScheduler* base, TritonModelInstance* model_instance,
       const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
@@ -301,8 +300,6 @@ class SequenceBatch {
   // The controlling scheduler.
   SequenceBatchScheduler* const base_;
 
-  // The index of this batcher within the controlling scheduler.
-  //const uint32_t batcher_idx_;
   // The identifier of this batcher within the controlling scheduler.
   TritonModelInstance* const model_instance_;
 
@@ -346,8 +343,8 @@ class SequenceBatch {
 class DirectSequenceBatch : public SequenceBatch {
  public:
   DirectSequenceBatch(
-      SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
-      const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
+      SequenceBatchScheduler* base, TritonModelInstance* model_instance,
+      const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
       const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -373,7 +370,6 @@ class DirectSequenceBatch : public SequenceBatch {
   void NewPayload();
 
   std::shared_ptr<Payload> curr_payload_;
-  //TritonModelInstance* model_instance_;
 
   // The thread scheduling requests that are queued in this batch.
   std::unique_ptr<std::thread> scheduler_thread_;
@@ -417,8 +413,8 @@ class DirectSequenceBatch : public SequenceBatch {
 class OldestSequenceBatch : public SequenceBatch {
  public:
   OldestSequenceBatch(
-      SequenceBatchScheduler* base, /*const uint32_t batcher_idx*/TritonModelInstance* model_instance,
-      const size_t seq_slot_cnt, /*TritonModelInstance* model_instance,*/
+      SequenceBatchScheduler* base, TritonModelInstance* model_instance,
+      const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
       const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -444,8 +440,6 @@ class OldestSequenceBatch : public SequenceBatch {
 
   // The dynamic batcher for this scheduler
   std::unique_ptr<Scheduler> dynamic_batcher_;
-
-  //TritonModelInstance* model_instance_;
 
   // Mutex protecting queues, etc.
   std::mutex mu_;
