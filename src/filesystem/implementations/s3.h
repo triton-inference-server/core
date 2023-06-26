@@ -493,7 +493,15 @@ S3FileSystem::GetDirectoryContents(
   while (!done_listing) {
     auto list_objects_outcome = client_->ListObjectsV2(objects_request);
 
-    if (list_objects_outcome.IsSuccess()) {
+    if (!list_objects_outcome.IsSuccess()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Could not list contents of directory at " + true_path +
+              " due to exception: " +
+              list_objects_outcome.GetError().GetExceptionName() +
+              ", error message: " +
+              list_objects_outcome.GetError().GetMessage());
+    } else {
       const auto& list_objects_result = list_objects_outcome.GetResult();
       for (const auto& s3_object : list_objects_result.GetContents()) {
         // In the case of empty directories, the directory itself will appear
@@ -526,14 +534,6 @@ S3FileSystem::GetDirectoryContents(
       } else {
         done_listing = true;
       }
-    } else {
-      return Status(
-          Status::Code::INTERNAL,
-          "Could not list contents of directory at " + true_path +
-              " due to exception: " +
-              list_objects_outcome.GetError().GetExceptionName() +
-              ", error message: " +
-              list_objects_outcome.GetError().GetMessage());
     }
   }
   return Status::Success;
