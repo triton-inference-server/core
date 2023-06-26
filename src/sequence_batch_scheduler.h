@@ -82,7 +82,7 @@ class SequenceBatchScheduler : public Scheduler {
   // current set of instances that this scheduler is serving, and the background
   // instances must represent the new set of instances that this scheduler will
   // serve during/after the update. The function cannot be called concurrently.
-  void Update();
+  Status Update();
 
   // A batcher-sequence_slot combination. The batcher is represented
   // by the index into 'batchers_'.
@@ -124,8 +124,7 @@ class SequenceBatchScheduler : public Scheduler {
       TritonModel* model,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
       : model_(model),
-        enforce_equal_shape_tensors_(enforce_equal_shape_tensors),
-        updating_(false), stop_(false)
+        enforce_equal_shape_tensors_(enforce_equal_shape_tensors), stop_(false)
   {
   }
 
@@ -158,7 +157,11 @@ class SequenceBatchScheduler : public Scheduler {
   // Return the added and removed instances for scheduler update purposes.
   void InstancesDiff(
       std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
-      std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>>* removed_instances);
+      std::unordered_set<TritonModelInstance*>* removed_instances);
+
+  // Update the 'pending_removal_seq_slots_', when the provided sequence slot is
+  // no longer pending removal.
+  void ErasePendingRemovalSequenceSlot(const BatcherSequenceSlot& seq_slot);
 
   // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
   // created.
@@ -171,16 +174,16 @@ class SequenceBatchScheduler : public Scheduler {
   // The max_sequence_idle_microseconds value for this scheduler.
   uint64_t max_sequence_idle_microseconds_;
 
-  // The updating/stopped status for this scheduler.
-  bool updating_, stop_;
+  // Whether this scheduler has stopped accepting new inference requests.
+  bool stop_;
 
   // Mutex
   std::mutex mu_;
 
-  // Signal an update is complete.
+  /*// Signal an update is complete.
   std::condition_variable update_complete_cv_;
   // Signal all in-flight or backlog sequence are enqueued.
-  std::condition_variable update_enqueued_cv_;
+  std::condition_variable update_enqueued_cv_;*/
 
   // The reaper thread
   std::unique_ptr<std::thread> reaper_thread_;
@@ -189,6 +192,13 @@ class SequenceBatchScheduler : public Scheduler {
   // Need to share between enqueue thread and reaper thread because
   // the timeout may be shorten by new request
   uint64_t timeout_timestamp_;
+
+  // Map from model instance pointer to the number of sequence slots pending to
+  // be removed. The sequence slots corresponding to the model instance should
+  // be erased once it becomes ready (or already at ready).
+  std::unordered_map<const TritonModelInstance*, size_t> pending_removal_seq_slots_;
+  // Signal all pending removal sequence slots are erased.
+  std::condition_variable pending_removal_seq_slots_cv_;
 
   // The SequenceBatchs being managed by this scheduler.
   //std::vector<std::unique_ptr<SequenceBatch>> batchers_;

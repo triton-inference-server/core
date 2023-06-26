@@ -282,7 +282,11 @@ TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
           Status::Code::INTERNAL,
           "Unable to downcast from Scheduler to SequenceBatchScheduler");
     }
-    sched->Update();
+    Status status = sched->Update();
+    if (!status.IsOk()) {
+      ClearBackgroundInstances();
+      return status;
+    }
   }
 
   // Commit the instance update.

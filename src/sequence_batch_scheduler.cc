@@ -133,73 +133,105 @@ SequenceBatchScheduler::Create(
   return Status::Success;
 }
 
-void
+Status
 SequenceBatchScheduler::Update()
 {
   // Find added and removed instances for this update.
   std::vector<std::shared_ptr<TritonModelInstance>> added_instances;
-  std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>> removed_instances;
+  std::unordered_set<TritonModelInstance*> removed_instances;
   InstancesDiff(&added_instances, &removed_instances);
 
-  std::unique_lock<std::mutex> lk(mu_);
+  // Batchers should be destroyed outside the lock.
+  std::vector<std::unique_ptr<SequenceBatch>> removed_batchers;
 
-  // Instruct 'Enqueue()' to begin pausing new sequence.
-  if (updating_) {
-    LOG_ERROR << "sequence batch scheduler is already updating";
-    return;
-  }
-  updating_ = true;
+  {
+    std::unique_lock<std::mutex> lk(mu_);
 
-  // Wait until all in-flight and backlog sequence are queued.
-  update_enqueued_cv_.wait(lk, [this] {
-    return sequence_to_batcherseqslot_map_.empty() && backlog_queues_.empty() &&
-           sequence_to_backlog_map_.empty();
-  });
+    // Add the new batchers.
+    RETURN_IF_ERROR(CreateBatchers(added_instances));
 
-  // Flush all pending requests to the rate limiter.
-  lk.unlock();
-  //batchers_.clear();
-  for (auto& pair : removed_instances) {
-    batchers_.erase(pair.second.get());
-  }
-  lk.lock();
-
-  // Re-construct the scheduler with new instances.
-  //auto instance_count = model_->BackgroundInstances().size();
-  //queue_request_cnts_.resize(instance_count, 0);
-  //queue_request_cnts_.clear();
-  for (auto& pair : removed_instances) {
-    queue_request_cnts_.erase(pair.second.get());
-  }
-
-  /*std::priority_queue<
-      BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
-      BatcherSequenceSlotCompare> empty_ready_batcher_seq_slots;
-  ready_batcher_seq_slots_.swap(empty_ready_batcher_seq_slots);*/
-  std::priority_queue<
-      BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
-      BatcherSequenceSlotCompare> new_ready_batcher_seq_slots;
-  while (!ready_batcher_seq_slots_.empty()) {
-    auto& ready_batcher_seq_slot = ready_batcher_seq_slots_.top();
-    if (removed_instances.find(ready_batcher_seq_slot.model_instance_) == removed_instances.end()) {
-      new_ready_batcher_seq_slots.push(ready_batcher_seq_slot);
+    // All sequence slots of the removed instances are pending to be removed.
+    pending_removal_seq_slots_.clear();
+    for (auto& instance : removed_instances) {
+      pending_removal_seq_slots_.emplace(instance, seq_slot_cnt_);
     }
-    ready_batcher_seq_slots_.pop();
+
+    /*// Instruct 'Enqueue()' to begin pausing new sequence.
+    if (updating_) {
+      LOG_ERROR << "sequence batch scheduler is already updating";
+      return;
+    }
+    updating_ = true;*/
+
+    // Erase ready slots which its instance is pending removal.
+    std::priority_queue<
+        BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
+        BatcherSequenceSlotCompare> new_ready_batcher_seq_slots;
+    while (!ready_batcher_seq_slots_.empty()) {
+      auto& ready_batcher_seq_slot = ready_batcher_seq_slots_.top();
+      if (removed_instances.find(ready_batcher_seq_slot.model_instance_) == removed_instances.end()) {
+        // The ready slot is not being removed.
+        new_ready_batcher_seq_slots.push(ready_batcher_seq_slot);
+      }
+      else {
+        // The ready slot is removed, so update pending removal instances.
+        ErasePendingRemovalSequenceSlot(ready_batcher_seq_slot);
+      }
+      ready_batcher_seq_slots_.pop();
+    }
+    ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
+
+    /*// Wait until all in-flight and backlog sequence are queued.
+    update_enqueued_cv_.wait(lk, [this] {
+      return sequence_to_batcherseqslot_map_.empty() && backlog_queues_.empty() &&
+            sequence_to_backlog_map_.empty();
+    });*/
+
+    // Wait until all removed batchers have completed its assigned sequence.
+    pending_removal_seq_slots_cv_.wait(lk, [this] {
+      return pending_removal_seq_slots_.empty();
+    });
+
+    /*// Flush all pending requests to the rate limiter.
+    lk.unlock();
+    batchers_.clear();
+    lk.lock();*/
+
+    // Erase all removed batchers, outside the lock.
+    for (auto& instance : removed_instances) {
+      removed_batchers.emplace(removed_batchers.end(), nullptr);
+      auto it = batchers_.find(instance);
+      it->second.swap(removed_batchers.back());
+      batchers_.erase(std::move(it));
+    }
+
+    /*// Re-construct the scheduler with new instances.
+    auto instance_count = model_->BackgroundInstances().size();
+    queue_request_cnts_.resize(instance_count, 0);
+    queue_request_cnts_.clear();*/
+
+    // Update removed request count.
+    for (auto& instance : removed_instances) {
+      queue_request_cnts_.erase(instance);
+    }
+
+    /*std::priority_queue<
+        BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
+        BatcherSequenceSlotCompare> empty_ready_batcher_seq_slots;
+    ready_batcher_seq_slots_.swap(empty_ready_batcher_seq_slots);*/
+
+    /*// The update is completed.
+    updating_ = false;
+    update_complete_cv_.notify_all();*/
   }
-  ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
 
-  // Add the new batchers.
-  LOG_STATUS_ERROR(CreateBatchers(added_instances), "failed creating new batchers during update");
-
-  // The update is completed.
-  updating_ = false;
-  update_complete_cv_.notify_all();
+  return Status::Success;
 }
 
 void
 SequenceBatchScheduler::InstancesDiff(
     std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
-    std::unordered_map<TritonModelInstance*, std::shared_ptr<TritonModelInstance>>* removed_instances)
+    std::unordered_set<TritonModelInstance*>* removed_instances)
 {
   added_instances->clear();
   removed_instances->clear();
@@ -207,7 +239,7 @@ SequenceBatchScheduler::InstancesDiff(
   // Index currently serving instances.
   auto* curr_instances = removed_instances;  // rename the container
   for (auto& instance : model_->Instances()) {
-    curr_instances->emplace(instance.get(), instance);
+    curr_instances->emplace(instance.get());
   }
 
   // Compare the current set of serving instance against the next set.
@@ -220,6 +252,23 @@ SequenceBatchScheduler::InstancesDiff(
       // Remove overlappings from current, so any remainings are removed.
       curr_instances->erase(instance.get());
     }
+  }
+}
+
+void
+SequenceBatchScheduler::ErasePendingRemovalSequenceSlot(
+    const BatcherSequenceSlot& seq_slot)
+{
+  LOG_VERBOSE(1) << "Removing slot in batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)seq_slot.model_instance_ << ", slot " << seq_slot.seq_slot_;
+
+  auto it = pending_removal_seq_slots_.find(seq_slot.model_instance_);
+  if (it == pending_removal_seq_slots_.end()) {
+    LOG_ERROR << "Cannot find batcher " << /*batcher_seq_slot.batcher_idx_*/(size_t)seq_slot.model_instance_;
+    return;
+  }
+  // Subtract the number of slots, and erase the key if no more slots left.
+  if (--it->second == 0) {
+    pending_removal_seq_slots_.erase(std::move(it));
   }
 }
 
@@ -675,11 +724,11 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   std::unique_lock<std::mutex> lock(mu_);
 
-  // Check if the scheduler is about to be updated. Only allow in-flight or
+  /*// Check if the scheduler is about to be updated. Only allow in-flight or
   // backlog sequence, and block new sequence, during update.
   if (updating_ && seq_start) {
     update_complete_cv_.wait(lock, [this] { return !updating_; });
-  }
+  }*/
 
   // Check if the request is one of the in-flight sequence (not starting new
   // sequence), we consider sequences in backlog as also in-flight.
@@ -835,10 +884,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
                  << irequest->ModelName();
 
   batchers_[/*batcher_idx_*/model_instance]->Enqueue(seq_slot, correlation_id, irequest);
-  // If the sequence is ending, opportunity for update to proceed after enqueue.
-  if (seq_end) {
-    update_enqueued_cv_.notify_one();
-  }
   return Status::Success;
 }
 
@@ -849,8 +894,16 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 {
   std::unique_lock<std::mutex> lock(mu_);
 
-  // Opportunity for update to proceed after the release.
-  update_enqueued_cv_.notify_one();
+  /*// Opportunity for update to proceed after the release.
+  update_enqueued_cv_.notify_one();*/
+
+  // If the instance behind the slot is pending to be removed, do not add the
+  // slot back to ready.
+  if (pending_removal_seq_slots_.find(batcher_seq_slot.model_instance_) != pending_removal_seq_slots_.end()) {
+    ErasePendingRemovalSequenceSlot(batcher_seq_slot);
+    pending_removal_seq_slots_cv_.notify_one();
+    return InferenceRequest::SequenceId();
+  }
 
   // If there is a backlogged sequence and it is requested, return it
   // so that it can use the newly available sequence slot.
@@ -1036,9 +1089,6 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 
       // Update timestamp for next idle check
       idle_timestamp = now_us + wait_microseconds;
-
-      // Opportunity for update to proceed
-      update_enqueued_cv_.notify_one();
     }
 
     // Reap timed out backlog sequence
@@ -1084,9 +1134,6 @@ SequenceBatchScheduler::ReaperThread(const int nice)
           InferenceRequest::RespondIfError(req, rejected_status, true);
         }
       }
-
-      // Opportunity for update to proceed
-      update_enqueued_cv_.notify_one();
     }
 
     const auto wait_microseconds =
