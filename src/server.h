@@ -271,7 +271,7 @@ class InferenceServer {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model)
   {
-    // Allow model retrival while server exiting to provide graceful
+    // Allow model retrieval while server exiting to provide graceful
     // completion of inference sequence that spans multiple requests.
     if ((ready_state_ != ServerReadyState::SERVER_READY) &&
         (ready_state_ != ServerReadyState::SERVER_EXITING)) {
@@ -286,7 +286,7 @@ class InferenceServer {
       const ModelIdentifier& model_id, const int64_t model_version,
       std::shared_ptr<Model>* model)
   {
-    // Allow model retrival while server exiting to provide graceful
+    // Allow model retrieval while server exiting to provide graceful
     // completion of inference sequence that spans multiple requests.
     if ((ready_state_ != ServerReadyState::SERVER_READY) &&
         (ready_state_ != ServerReadyState::SERVER_EXITING)) {

@@ -499,7 +499,7 @@ class InferenceRequest {
       int64_t* memory_type_id);
 
   // Add a callback to be invoked on releasing the request object from Triton.
-  // Multile callbacks can be added by calling this function in order,
+  // Multiple callbacks can be added by calling this function in order,
   // and they will be invoked in reversed order.
   Status AddInternalReleaseCallback(std::function<void()>&& callback)
   {

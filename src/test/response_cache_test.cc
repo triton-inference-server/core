@@ -62,7 +62,7 @@ InferenceRequest::InferenceRequest(
 {
   // Unit test doesn't need actual response factory logic
   // or other priority/request_counting logic, it just needs
-  // a non-null reponse factory object.
+  // a non-null response factory object.
   response_factory_.reset(new InferenceResponseFactory());
 }
 
@@ -689,7 +689,7 @@ InsertLookupCompareBytes(std::shared_ptr<tc::TritonCache> cache)
       helpers::InsertLookupCompare(cache, entry, "TestCacheEntry"));
 }
 
-// Hash a collection of unique requests and assert no collisions occured
+// Hash a collection of unique requests and assert no collisions occurred
 void
 HashUnique(
     std::shared_ptr<tc::TritonCache> cache,

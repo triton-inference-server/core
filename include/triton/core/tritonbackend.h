@@ -610,7 +610,7 @@ TRITONBACKEND_ResponseFactorySendFlags(
 /// response using TRITONBACKEND_ResponseOutput and
 /// TRITONBACKEND_OutputBuffer *before* another response is created
 /// for the request. For a given response, outputs can be created in
-/// any order but they must be created sequentially/sychronously (for
+/// any order but they must be created sequentially/synchronously (for
 /// example, the backend cannot use multiple threads to simultaneously
 /// add multiple outputs to a response).
 ///
@@ -742,7 +742,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_StateNew(
     const int64_t* shape, const uint32_t dims_count);
 
 /// Update the state for the sequence. Calling this function will replace the
-/// state stored for this seqeunce in Triton with 'state' provided in the
+/// state stored for this sequence in Triton with 'state' provided in the
 /// function argument. If this function is called when sequence batching is not
 /// enabled or there is no 'states' section in the sequence batching section of
 /// the model configuration, this call will return an error. The backend is not
@@ -891,7 +891,7 @@ TRITONBACKEND_BackendSetExecutionPolicy(
 /// communicated to Triton as indicated by 'artifact_type'.
 ///
 ///   TRITONBACKEND_ARTIFACT_FILESYSTEM: The backend artifacts are
-///     made available to Triton via the local filesytem. 'location'
+///     made available to Triton via the local filesystem. 'location'
 ///     returns the full path to the directory containing this
 ///     backend's artifacts. The returned string is owned by Triton,
 ///     not the caller, and so should not be modified or freed.
@@ -959,7 +959,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelVersion(
 /// communicated to Triton as indicated by 'artifact_type'.
 ///
 ///   TRITONBACKEND_ARTIFACT_FILESYSTEM: The model artifacts are made
-///     available to Triton via the local filesytem. 'location'
+///     available to Triton via the local filesystem. 'location'
 ///     returns the full path to the directory in the model repository
 ///     that contains this model's artifacts. The returned string is
 ///     owned by Triton, not the caller, and so should not be modified
@@ -978,7 +978,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelRepository(
 /// the object. The configuration is available via this call even
 /// before the model is loaded and so can be used in
 /// TRITONBACKEND_ModelInitialize. TRITONSERVER_ServerModelConfig
-/// returns equivalent information but is not useable until after the
+/// returns equivalent information but is not usable until after the
 /// model loads.
 ///
 /// \param model The model.

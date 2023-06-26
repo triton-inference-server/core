@@ -56,7 +56,7 @@ class RateLimiter {
   /// the model instances. A typical lifetime of the model instance within
   /// RateLimiter transition from available -> staged -> allocated -> available.
   /// The transition from available to staged occurs when a request is
-  /// registered for the model. Depending upon the resource availabilty and
+  /// registered for the model. Depending upon the resource availability and
   /// priority, the RateLimiter will transition an instance to allocated state
   /// at some point in the future. The staged state is skipped when
   /// configured to ignore the resource constraints. The cycle in this case

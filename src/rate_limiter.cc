@@ -74,7 +74,7 @@ RateLimiter::RegisterModelInstance(
     model_context.AddSpecificRequestQueue(pair_it.first->second.get());
 
     if (!ignore_resources_and_priority_) {
-      // As there can be mulitple models being loaded concurrently, need
+      // As there can be multiple models being loaded concurrently, need
       // to hold a lock to protect the resource counts.
       // Without this serialization instances of other models might fail
       // to load because of the resource constraints in this instance.

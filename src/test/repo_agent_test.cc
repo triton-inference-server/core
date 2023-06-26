@@ -285,9 +285,9 @@ TEST_F(TritonRepoAgentTest, Create)
   ASSERT_TRUE(minimal_agent->AgentModelActionFn() != nullptr)
       << "Expect action function is provided";
   EXPECT_TRUE(minimal_agent->AgentModelInitFn() == nullptr)
-      << "Unexpect model init function is provided";
+      << "Unexpected model init function is provided";
   EXPECT_TRUE(minimal_agent->AgentModelFiniFn() == nullptr)
-      << "Unexpect model fini function is provided";
+      << "Unexpected model fini function is provided";
 
   auto err = minimal_agent->AgentModelActionFn()(
       reinterpret_cast<TRITONREPOAGENT_Agent*>(minimal_agent.get()), nullptr,
@@ -302,10 +302,10 @@ TEST_F(TritonRepoAgentTest, CreateFailInvalidSharedLibrary)
   std::shared_ptr<tc::TritonRepoAgent> invalid_agent;
   auto status = tc::TritonRepoAgent::Create(
       "invalid_agent", "invalid_agent_path", &invalid_agent);
-  ASSERT_FALSE(status.IsOk()) << "Unexpect successful agent creation";
+  ASSERT_FALSE(status.IsOk()) << "Unexpected successful agent creation";
   EXPECT_NE(
       status.Message().find("unable to load shared library"), std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'unable to load shared library...'";
 }
 
@@ -318,11 +318,11 @@ TEST_F(TritonRepoAgentTest, CreateFailMissingEndpoint)
   std::shared_ptr<tc::TritonRepoAgent> invalid_agent;
   auto status = tc::TritonRepoAgent::Create(
       "invalid_agent", "invalid_agent_path", &invalid_agent);
-  ASSERT_FALSE(status.IsOk()) << "Unexpect successful agent creation";
+  ASSERT_FALSE(status.IsOk()) << "Unexpected successful agent creation";
   EXPECT_NE(
       status.Message().find("unable to find required entrypoint"),
       std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'unable to find required entrypoint...'";
 }
 
@@ -374,9 +374,9 @@ TEST_F(TritonRepoAgentTest, Lifecycle)
   ASSERT_TRUE(agent->AgentModelActionFn() != nullptr)
       << "Expect action function is provided";
   EXPECT_TRUE(agent->AgentModelInitFn() == nullptr)
-      << "Unexpect model init function is provided";
+      << "Unexpected model init function is provided";
   EXPECT_TRUE(agent->AgentModelFiniFn() == nullptr)
-      << "Unexpect model fini function is provided";
+      << "Unexpected model fini function is provided";
 
   auto err = agent->AgentModelActionFn()(
       reinterpret_cast<TRITONREPOAGENT_Agent*>(agent.get()), nullptr,
@@ -548,9 +548,9 @@ TEST_F(TritonRepoAgentManagerTest, CreateFailureFileNotExist)
   std::shared_ptr<tc::TritonRepoAgent> invalid_agent;
   auto status = tc::TritonRepoAgentManager::CreateAgent(
       "invalid_agent_name", &invalid_agent);
-  ASSERT_FALSE(status.IsOk()) << "Unexpect successful agent creation";
+  ASSERT_FALSE(status.IsOk()) << "Unexpected successful agent creation";
   EXPECT_NE(status.Message().find("unable to find"), std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'unable to find...'";
 }
 
@@ -606,7 +606,7 @@ class TritonRepoAgentModelTest : public ::testing::Test {
   {
     simple_config_.set_name("simple_config");
 
-    // Add a simple agent handle for convinence
+    // Add a simple agent handle for convenience
     tc::TritonRepoAgent::TritonRepoAgentModelActionFn_t ActionFn =
         [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model,
            const TRITONREPOAGENT_ActionType action_type)
@@ -723,10 +723,10 @@ TEST_F(TritonRepoAgentModelTest, CreateFailure)
   status = tc::TritonRepoAgentModel::Create(
       original_type_, original_location_, simple_config_, agent,
       tc::TritonRepoAgent::Parameters(), &model);
-  ASSERT_FALSE(status.IsOk()) << "Unexpect successful model creation";
+  ASSERT_FALSE(status.IsOk()) << "Unexpected successful model creation";
   EXPECT_NE(
       status.Message().find("Model initialization error"), std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'Model initialization error...'";
 }
 
@@ -780,7 +780,7 @@ TEST_F(TritonRepoAgentModelTest, SetLocationFailure)
           "location can only be updated during TRITONREPOAGENT_ACTION_LOAD, "
           "current action type is not set"),
       std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'location can only be updated during "
          "TRITONREPOAGENT_ACTION_LOAD, current action type is not set'";
 }
@@ -857,7 +857,7 @@ TEST_F(TritonRepoAgentModelTest, SetLocationWrongActionFailure)
           "location can only be updated during TRITONREPOAGENT_ACTION_LOAD, "
           "current action type is TRITONREPOAGENT_ACTION_LOAD_COMPLETE"),
       std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'location can only be updated during "
          "TRITONREPOAGENT_ACTION_LOAD, current action type is "
          "TRITONREPOAGENT_ACTION_LOAD_COMPLETE'";
@@ -931,7 +931,7 @@ TEST_F(TritonRepoAgentModelTest, DeleteLocationBeforeAcquire)
   EXPECT_NE(
       status.Message().find("No mutable location to be deleted"),
       std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'No mutable location to be deleted'";
 }
 
@@ -961,7 +961,7 @@ TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationAndDelete)
   bool is_dir = false;
   status = tc::IsDirectory(acquired_location, &is_dir);
   ASSERT_TRUE(status.IsOk())
-      << "Expect location proprety can be checked: " << status.AsString();
+      << "Expect location property can be checked: " << status.AsString();
   EXPECT_TRUE(is_dir) << "Expect a directory is returned as mutable location";
   tc::FileSystemType type = tc::FileSystemType::LOCAL;
   status = tc::GetFileSystemType(acquired_location, &type);
@@ -978,7 +978,7 @@ TEST_F(TritonRepoAgentModelTest, AcquireLocalLocationAndDelete)
   bool exists = true;
   status = tc::FileExists(acquired_location, &exists);
   ASSERT_TRUE(status.IsOk())
-      << "Expect location proprety can be checked: " << status.AsString();
+      << "Expect location property can be checked: " << status.AsString();
   EXPECT_FALSE(exists) << "Expect the mutable location no longer exists";
 }
 
@@ -1047,7 +1047,7 @@ TEST_F(TritonRepoAgentModelTest, DeleteTwiceAfterAcquire)
   EXPECT_NE(
       status.Message().find("No mutable location to be deleted"),
       std::string::npos)
-      << "Unexpect error message: '" << status.Message()
+      << "Unexpected error message: '" << status.Message()
       << "', expect 'No mutable location to be deleted'";
 }
 
@@ -1076,7 +1076,7 @@ TEST_F(TritonRepoAgentModelTest, AcquireRemoteLocation)
   const std::string search_msg =
       "Unexpected artifact type, expects 'TRITONREPOAGENT_ARTIFACT_FILESYSTEM'";
   EXPECT_NE(status.Message().find(search_msg), std::string::npos)
-      << "Unexpect error message: '" << status.Message() << "', expect '"
+      << "Unexpected error message: '" << status.Message() << "', expect '"
       << search_msg << "'";
 }
 
@@ -1304,7 +1304,7 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
             }
           }
           ASSERT_FALSE(status.IsOk())
-              << "Unexpect successful agent invocation with "
+              << "Unexpected successful agent invocation with "
               << tc::TRITONREPOAGENT_ActionTypeString(action);
         }
         status = model->InvokeAgent(valid_lifecycle[0]);
@@ -1332,7 +1332,7 @@ TEST_F(TritonRepoAgentModelTest, WrongLifeCycle)
           }
         }
         ASSERT_FALSE(status.IsOk())
-            << "Unexpect successful agent invocation with "
+            << "Unexpected successful agent invocation with "
             << tc::TRITONREPOAGENT_ActionTypeString(action);
       }
       status = model->InvokeAgent(next_lifecycle_action);
@@ -1462,14 +1462,14 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ApiVersion)
         auto err = TRITONREPOAGENT_ApiVersion(&major, &minor);
         if (err != nullptr) {
           EXPECT_TRUE(false)
-              << "Expect successful TRITONREPOAGENT_ApiVersion() invokation: "
+              << "Expect successful TRITONREPOAGENT_ApiVersion() invocation: "
               << TRITONSERVER_ErrorMessage(err);
           TRITONSERVER_ErrorDelete(err);
         } else {
           EXPECT_EQ(major, (uint32_t)TRITONREPOAGENT_API_VERSION_MAJOR)
-              << "Unexpected major veresion";
+              << "Unexpected major version";
           EXPECT_EQ(minor, (uint32_t)TRITONREPOAGENT_API_VERSION_MINOR)
-              << "Unexpected major veresion";
+              << "Unexpected major version";
         }
       };
   agent_fini_fn_ = agent_init_fn_;
@@ -1480,14 +1480,14 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ApiVersion)
         auto err = TRITONREPOAGENT_ApiVersion(&major, &minor);
         if (err != nullptr) {
           EXPECT_TRUE(false)
-              << "Expect successful TRITONREPOAGENT_ApiVersion() invokation: "
+              << "Expect successful TRITONREPOAGENT_ApiVersion() invocation: "
               << TRITONSERVER_ErrorMessage(err);
           TRITONSERVER_ErrorDelete(err);
         } else {
           EXPECT_EQ(major, (uint32_t)TRITONREPOAGENT_API_VERSION_MAJOR)
-              << "Unexpected major veresion";
+              << "Unexpected major version";
           EXPECT_EQ(minor, (uint32_t)TRITONREPOAGENT_API_VERSION_MINOR)
-              << "Unexpected major veresion";
+              << "Unexpected major version";
         }
       };
   model_action_fn_ = model_init_fn_;
@@ -1578,7 +1578,7 @@ TEST_F(
           "Unexpected artifact type, expects "
           "'TRITONREPOAGENT_ARTIFACT_FILESYSTEM'";
       EXPECT_NE(err_msg.find(search_msg), std::string::npos)
-          << "Unexpect error message: '" << err_msg << "', expect '"
+          << "Unexpected error message: '" << err_msg << "', expect '"
           << search_msg << "'";
       TRITONSERVER_ErrorDelete(err);
     } else {
@@ -1670,7 +1670,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryLocationRelease)
 {
   model_init_fn_ =
       [](TRITONREPOAGENT_Agent* agent, TRITONREPOAGENT_AgentModel* model) {
-        // relase (fail), acquire, release
+        // release (fail), acquire, release
         const char* location = "nonexisting_location";
         auto err = TRITONREPOAGENT_ModelRepositoryLocationRelease(
             agent, model, location);
@@ -1678,7 +1678,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryLocationRelease)
           const std::string search_msg = "No mutable location to be deleted";
           const std::string err_msg = TRITONSERVER_ErrorMessage(err);
           EXPECT_NE(err_msg.find(search_msg), std::string::npos)
-              << "Unexpect error message: '" << err_msg << "', expect '"
+              << "Unexpected error message: '" << err_msg << "', expect '"
               << search_msg << "'";
           TRITONSERVER_ErrorDelete(err);
         } else {
@@ -1750,7 +1750,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryUpdate)
               "location can only be updated during TRITONREPOAGENT_ACTION_LOAD";
           const std::string err_msg = TRITONSERVER_ErrorMessage(err);
           EXPECT_NE(err_msg.find(search_msg), std::string::npos)
-              << "Unexpect error message: '" << err_msg << "', expect '"
+              << "Unexpected error message: '" << err_msg << "', expect '"
               << search_msg << "...'";
           TRITONSERVER_ErrorDelete(err);
         } else {
@@ -1802,7 +1802,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelRepositoryUpdate)
             "location can only be updated during TRITONREPOAGENT_ACTION_LOAD";
         const std::string err_msg = TRITONSERVER_ErrorMessage(err);
         EXPECT_NE(err_msg.find(search_msg), std::string::npos)
-            << "Unexpect error message: '" << err_msg << "', expect '"
+            << "Unexpected error message: '" << err_msg << "', expect '"
             << search_msg << "...'";
         TRITONSERVER_ErrorDelete(err);
       } else {
@@ -1895,7 +1895,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelParameter)
               "index out of range for model parameters";
           const std::string err_msg = TRITONSERVER_ErrorMessage(err);
           EXPECT_NE(err_msg.find(search_msg), std::string::npos)
-              << "Unexpect error message: '" << err_msg << "', expect '"
+              << "Unexpected error message: '" << err_msg << "', expect '"
               << search_msg << "...'";
           TRITONSERVER_ErrorDelete(err);
         } else {
@@ -1956,7 +1956,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelConfig)
               << "' in returned config: " << serialized_config;
         }
 
-        // unsupport version
+        // unsupported version
         err = TRITONREPOAGENT_ModelConfig(agent, model, 2, &config);
         if (err != nullptr) {
           const std::string search_msg =
@@ -1964,7 +1964,7 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_ModelConfig)
               "are: 1";
           const std::string err_msg = TRITONSERVER_ErrorMessage(err);
           EXPECT_NE(err_msg.find(search_msg), std::string::npos)
-              << "Unexpect error message: '" << err_msg << "', expect '"
+              << "Unexpected error message: '" << err_msg << "', expect '"
               << search_msg << "...'";
           TRITONSERVER_ErrorDelete(err);
         } else {

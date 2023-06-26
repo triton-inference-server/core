@@ -1173,7 +1173,7 @@ TRITONSERVER_InferenceRequestAddInput(
 ///
 /// \param inference_request The request object.
 /// \param name The name of the input. This name is only used as a reference
-/// of the raw input in other Tritonserver APIs. It doesn't assoicate with the
+/// of the raw input in other Tritonserver APIs. It doesn't associate with the
 /// name used in the model.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
@@ -1252,7 +1252,7 @@ TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
 /// \param inference_request The request object.
 /// \param name The name of the input.
 /// \param base The base address of the input data.
-/// \param buffer_attributes The buffer attrubutes of the input.
+/// \param buffer_attributes The buffer attributes of the input.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes(
@@ -1867,7 +1867,7 @@ TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
 /// Enable or disable exit-on-error in a server options.
 ///
 /// \param options The server options object.
-/// \param exit True to enable exiting on intialization error, false
+/// \param exit True to enable exiting on initialization error, false
 /// to continue.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
@@ -2157,7 +2157,7 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
 /// \param server The inference server object.
 /// \param repository_path The full path to the model repository.
 /// \param name_mapping List of name_mapping parameters. Each mapping has
-/// the model directory name as its key, overriden model name as its value.
+/// the model directory name as its key, overridden model name as its value.
 /// \param model_count Number of mappings provided.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
@@ -2219,7 +2219,7 @@ TRITONSERVER_ServerModelIsReady(
 ///
 ///   - TRITONSERVER_BATCH_UNKNOWN: Triton cannot determine the
 ///     batching properties of the model. This means that the model
-///     does not support batching in any way that is useable by
+///     does not support batching in any way that is usable by
 ///     Triton. The returned 'voidp' value is nullptr.
 ///
 ///   - TRITONSERVER_BATCH_FIRST_DIM: The model supports batching

@@ -141,7 +141,7 @@ class InferenceStatsAggregator {
       const uint64_t cache_miss_duration_ns);
 
   // Add durations to batch infer stats for a batch execution.
-  // 'success_request_count' is the number of sucess requests in the
+  // 'success_request_count' is the number of success requests in the
   // batch that have infer_stats attached.
   void UpdateInferBatchStats(
       MetricModelReporter* metric_reporter, const size_t batch_size,
@@ -149,7 +149,7 @@ class InferenceStatsAggregator {
       const uint64_t compute_output_start_ns, const uint64_t compute_end_ns);
 
   // Add durations to batch infer stats for a batch execution.
-  // 'success_request_count' is the number of sucess requests in the
+  // 'success_request_count' is the number of success requests in the
   // batch that have infer_stats attached.
   void UpdateInferBatchStatsWithDuration(
       MetricModelReporter* metric_reporter, size_t batch_size,

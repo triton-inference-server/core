@@ -177,7 +177,7 @@ class ModelLifeCycle {
 
   // Start loading model with specified versions asynchronously.
   // All versions that are being served will be unloaded only after
-  // the load is finished sucessfully.
+  // the load is finished successfully.
   Status AsyncLoad(
       const ModelIdentifier& model_id, const std::string& model_path,
       const inference::ModelConfig& model_config, const bool is_config_provided,
