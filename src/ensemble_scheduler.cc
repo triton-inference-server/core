@@ -632,7 +632,7 @@ EnsembleContext::ResponseComplete(
               if (type != TRITONSERVER_PARAMETER_BOOL) {
                 err = TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
-                    "expect paremeter 'sequence_start' to be "
+                    "expect parameter 'sequence_start' to be "
                     "TRITONSERVER_PARAMETER_BOOL");
               } else {
                 if (*reinterpret_cast<const bool*>(vvalue)) {
@@ -644,7 +644,7 @@ EnsembleContext::ResponseComplete(
               if (type != TRITONSERVER_PARAMETER_BOOL) {
                 err = TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
-                    "expect paremeter 'sequence_end' to be "
+                    "expect parameter 'sequence_end' to be "
                     "TRITONSERVER_PARAMETER_BOOL");
               } else {
                 if (*reinterpret_cast<const bool*>(vvalue)) {

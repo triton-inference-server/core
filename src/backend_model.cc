@@ -173,7 +173,7 @@ TritonModel::Create(
   // TritonModel object.
   if (backend->ModelInitFn() != nullptr) {
     // We must set set shared library path to point to the backend directory in
-    // case the backend library attempts to load additional shared libaries.
+    // case the backend library attempts to load additional shared libraries.
     // Currently, the set and reset function is effective only on Windows, so
     // there is no need to set path on non-Windows.
     // However, parallel model loading will not see any speedup on Windows and
@@ -199,7 +199,7 @@ TritonModel::Create(
 
   RETURN_IF_ERROR(local_model->GetExecutionPolicy(model_config));
 
-  // Initalize the custom batching library for the model, if provided.
+  // Initialize the custom batching library for the model, if provided.
   if (model_config.has_sequence_batching()) {
     if (model_config.parameters().contains("TRITON_BATCH_STRATEGY_PATH")) {
       return Status(

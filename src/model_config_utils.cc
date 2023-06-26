@@ -933,7 +933,7 @@ AutoCompleteBackendFields(
 
   // There must be at least one version directory that we can inspect to
   // attempt to determine the platform. If not, we skip autofill with file name.
-  // For now we allow multiple versions and only inspect the first verison
+  // For now we allow multiple versions and only inspect the first version
   // directory to ensure it is valid. We can add more aggressive checks later.
   const bool has_version = (version_dirs.size() != 0);
   const auto version_path =

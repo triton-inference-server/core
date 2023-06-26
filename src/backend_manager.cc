@@ -79,7 +79,7 @@ TritonBackend::Create(
   // Backend initialization is optional... The TRITONBACKEND_Backend
   // object is this TritonBackend object. We must set set shared
   // library path to point to the backend directory in case the
-  // backend library attempts to load additional shared libaries.
+  // backend library attempts to load additional shared libraries.
   if (local_backend->backend_init_fn_ != nullptr) {
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));

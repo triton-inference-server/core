@@ -83,8 +83,8 @@ struct ModelIdentifier {
     return (namespace_ + "::" + name_);
   }
 
-  // namespace is not a reflection of the model repository althought it is
-  // currently implmented to be the same as the repository of the model.
+  // namespace is not a reflection of the model repository although it is
+  // currently implemented to be the same as the repository of the model.
   std::string namespace_;
   // name is the name registered to Triton, it is the model directory name
   // by default and may be overwritten.
@@ -99,7 +99,7 @@ class hash<triton::core::ModelIdentifier> {
  public:
   size_t operator()(const triton::core::ModelIdentifier& model_id) const
   {
-    // trival hash for multiple entries
+    // trivial hash for multiple entries
     // https://en.cppreference.com/w/cpp/utility/hash
     return (
         hash<std::string>()(model_id.namespace_) ^

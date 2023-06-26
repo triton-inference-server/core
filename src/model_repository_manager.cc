@@ -538,7 +538,7 @@ ModelRepositoryManager::LoadModelByDependency(
   //        ensemble, the ensemble is requested to be re-loaded, at this point
   //        it is too late to revert model changes so the ensemble will not be
   //        available afterwards. In other words, ensemble is not covered in
-  //        the model availibility claim: if re-load results in model not
+  //        the model availability claim: if re-load results in model not
   //        available, the model state will be reverted)
   //  - Apply changes to lifecycle
   //  - Reflect the lifecycle change result to the dependency graph so that the
@@ -607,7 +607,7 @@ ModelRepositoryManager::LoadModelByDependency(
     }
     set_pair = ModelsToLoadUnload(loaded_models, res, dependency_graph);
   }
-  // Clear temporary stored agent model list after all loads are triggerred
+  // Clear temporary stored agent model list after all loads are triggered
   for (auto& info : *infos) {
     info.second->agent_model_list_.reset();
   }
@@ -736,7 +736,7 @@ ModelRepositoryManager::LoadUnloadModels(
     case ActionType::UNLOAD:
       for (const auto& model : models) {
         // Within the class, model is referred by ModelIdentifier, so it needs
-        // to check global map to find identifier assoicated with the name.
+        // to check global map to find identifier associated with the name.
         auto git = global_map_.find(model.first);
         if (git != global_map_.end()) {
           for (const auto& mid : git->second) {
@@ -772,7 +772,7 @@ ModelRepositoryManager::LoadUnloadModels(
       &retry_notify_cv);
   if (conflict_model) {
     // A collision is found. Since info is only written to local copy, so it is
-    // safe to rollback by simply returning the conflict infomation.
+    // safe to rollback by simply returning the conflict information.
     LOG_VERBOSE(2) << "Load/Unload conflict '" << conflict_model->str() << "'";
     if (no_parallel_conflict != nullptr) {
       *no_parallel_conflict = false;
@@ -1036,7 +1036,7 @@ ModelRepositoryManager::RepositoryIndex(
   ModelStateMap states = ModelStates();
 
   for (const auto& model_id : seen_models) {
-    // If the same model appears in multiple repostories then show it
+    // If the same model appears in multiple repositories then show it
     // as unavailable since duplicate models are not allowed to load.
     if (duplicate_models.find(model_id) != duplicate_models.end()) {
       index->emplace_back(
@@ -1258,8 +1258,8 @@ ModelRepositoryManager::Poll(
           }
         }
       }
-      // For an explicitly specified model that doesn't exist, we don't mark it
-      // as deleted, we simply mark that we couldn't poll all models.
+      // For an explicitly specified model that does not exist, we do not mark
+      // it as deleted, we simply mark that we could not poll all models.
       if (!exists) {
         *all_models_polled = false;
       }
@@ -1468,8 +1468,8 @@ ModelRepositoryManager::InitializeModelInfo(
       &linfo->model_config_));
 
   // Note that the model inputs and outputs are not validated until
-  // the model model is intialized as they may not be auto-completed
-  // until model is intialized.
+  // the model model is initialized as they may not be auto-completed
+  // until model is initialized.
   RETURN_IF_ERROR(
       ValidateModelConfig(linfo->model_config_, min_compute_capability_));
   if (!autofill_) {
@@ -1853,7 +1853,7 @@ ModelRepositoryManager::DependencyGraph::AddNodes(
     added_node->explicitly_load_ = info->explicitly_load_;
 
     // Check if this model name is needed for some nodes, simply mark those
-    // nodes affected to re-evalute them later
+    // nodes affected to re-evaluate them later
     auto it = missing_nodes_.find(model_id.name_);
     if (it != missing_nodes_.end()) {
       for (const auto& dependent_node_id : it->second) {

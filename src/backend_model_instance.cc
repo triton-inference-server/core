@@ -355,10 +355,10 @@ TritonModelInstance::CreateInstance(
 
   // Instance initialization is optional... We must set set shared
   // library path to point to the backend directory in case the
-  // backend library attempts to load additional shared libaries.
+  // backend library attempts to load additional shared libraries.
   if (model->Backend()->ModelInstanceInitFn() != nullptr) {
     // We must set set shared library path to point to the backend directory in
-    // case the backend library attempts to load additional shared libaries.
+    // case the backend library attempts to load additional shared libraries.
     // Currently, the set and reset function is effective only on Windows, so
     // there is no need to set path on non-Windows.
     // However, parallel model loading will not see any speedup on Windows and
