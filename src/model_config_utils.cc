@@ -1311,7 +1311,7 @@ ValidateModelConfig(
   }
 
   // Ensure both platform and backend are referring to known backend,
-  // or both referring to unknown backend for user-provided backend.
+  // and allow all platforms for a user-provided unknown backend.
   auto backend_type = GetBackendType(config.backend());
   if ((backend_type != BackendType::BACKEND_TYPE_UNKNOWN) &&
       (backend_type != GetBackendTypeFromPlatform(config.platform()))) {
