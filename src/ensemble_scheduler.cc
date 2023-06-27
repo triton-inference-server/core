@@ -1263,17 +1263,26 @@ EnsembleContext::ScheduleSteps(
       // the request ownership out of step here to avoid that
       std::unique_ptr<InferenceRequest> request = std::move(step->request_);
       auto step_status = context->is_->InferAsync(request);
-      if (!step_status.IsOk()) {
+      if (step_status.IsOk()) {
+        step.release();
+        continue;
+      } else {
         std::lock_guard<std::mutex> lock(context->mutex_);
         context->ensemble_status_ = step_status;
-        // The request is not sent to server properly, shouldn't expect its
-        // release function get called.
-        context->request_tracker_->DecrementCounter();
-        context->ensemble_status_ = context->FinishEnsemble();
-        break;
       }
     }
-    step.release();
+
+    // Reaching here means the step is not being scheduled, update corresponding
+    // counters and attempt to finish ensemble if it is the last step.
+    std::lock_guard<std::mutex> lock(context->mutex_);
+    // The request is not sent to server properly, shouldn't expect its
+    // release function get called.
+    context->request_tracker_->DecrementCounter();
+    --context->inflight_step_counter_;
+
+    if (context->inflight_step_counter_ == 0) {
+      context->ensemble_status_ = context->FinishEnsemble();
+    }
   }
 }
 
