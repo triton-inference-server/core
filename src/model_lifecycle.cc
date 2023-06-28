@@ -640,13 +640,7 @@ ModelLifeCycle::UpdateModelConfig(
   model_info->state_reason_.clear();
 
   // Downcast 'Model' to 'TritonModel'.
-  TritonModel* model = (TritonModel*)model_info->model_.get();
-  if (model == nullptr) {
-    model_info->state_reason_ =
-        "Unable to downcast '" + model_id.str() +
-        "' from 'Model' to 'TritonModel' during model update.";
-    return;
-  }
+  TritonModel* model = reinterpret_cast<TritonModel*>(model_info->model_.get());
 
   // Update model instance group. The 'model_info->mtx_' may be released while
   // the model is updating its instance group, because no model info from this

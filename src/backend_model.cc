@@ -275,13 +275,8 @@ TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
 
   // Update the scheduler if this is a sequence model.
   if (model_config.has_sequence_batching()) {
-    SequenceBatchScheduler* sched = (SequenceBatchScheduler*)scheduler_.get();
-    if (sched == nullptr) {
-      ClearBackgroundInstances();
-      return Status(
-          Status::Code::INTERNAL,
-          "Unable to downcast from Scheduler to SequenceBatchScheduler");
-    }
+    SequenceBatchScheduler* sched =
+        reinterpret_cast<SequenceBatchScheduler*>(scheduler_.get());
     Status status = sched->Update();
     if (!status.IsOk()) {
       ClearBackgroundInstances();
