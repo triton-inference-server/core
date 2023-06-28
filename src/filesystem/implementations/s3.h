@@ -526,13 +526,13 @@ S3FileSystem::GetDirectoryContents(
             Status::Code::INTERNAL,
             "Cannot handle item with empty name at " + true_path);
       }
-      // If there are more pages to retrieve, set the marker to the next page.
-      if (list_objects_result.GetIsTruncated()) {
-        objects_request.SetContinuationToken(
-            list_objects_result.GetNextContinuationToken());
-      } else {
-        done_listing = true;
-      }
+    }
+    // If there are more pages to retrieve, set the marker to the next page.
+    if (list_objects_result.GetIsTruncated()) {
+      objects_request.SetContinuationToken(
+          list_objects_result.GetNextContinuationToken());
+    } else {
+      done_listing = true;
     }
   }
   return Status::Success;
