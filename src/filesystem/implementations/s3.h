@@ -501,31 +501,30 @@ S3FileSystem::GetDirectoryContents(
               list_objects_outcome.GetError().GetExceptionName() +
               ", error message: " +
               list_objects_outcome.GetError().GetMessage());
-    } else {
-      const auto& list_objects_result = list_objects_outcome.GetResult();
-      for (const auto& s3_object : list_objects_result.GetContents()) {
-        // In the case of empty directories, the directory itself will appear
-        // here
-        if (s3_object.GetKey().c_str() == full_dir) {
-          continue;
-        }
+    }
+    const auto& list_objects_result = list_objects_outcome.GetResult();
+    for (const auto& s3_object : list_objects_result.GetContents()) {
+      // In the case of empty directories, the directory itself will appear
+      // here
+      if (s3_object.GetKey().c_str() == full_dir) {
+        continue;
+      }
 
-        // We have to make sure that subdirectory contents do not appear here
-        std::string name(s3_object.GetKey().c_str());
-        int item_start = name.find(full_dir) + full_dir.size();
-        // S3 response prepends parent directory name
-        int item_end = name.find("/", item_start);
+      // We have to make sure that subdirectory contents do not appear here
+      std::string name(s3_object.GetKey().c_str());
+      int item_start = name.find(full_dir) + full_dir.size();
+      // S3 response prepends parent directory name
+      int item_end = name.find("/", item_start);
 
-        // Let set take care of subdirectory contents
-        std::string item = name.substr(item_start, item_end - item_start);
-        contents->insert(item);
+      // Let set take care of subdirectory contents
+      std::string item = name.substr(item_start, item_end - item_start);
+      contents->insert(item);
 
-        // Fail-safe check to ensure the item name is not empty
-        if (item.empty()) {
-          return Status(
-              Status::Code::INTERNAL,
-              "Cannot handle item with empty name at " + true_path);
-        }
+      // Fail-safe check to ensure the item name is not empty
+      if (item.empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Cannot handle item with empty name at " + true_path);
       }
       // If there are more pages to retrieve, set the marker to the next page.
       if (list_objects_result.GetIsTruncated()) {
