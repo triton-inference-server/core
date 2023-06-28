@@ -633,6 +633,9 @@ TritonModel::~TritonModel()
   // Clear library handles.
   ClearHandles();
 
+  // Explicitly delete/finalize the scheduler before the model instances.
+  scheduler_.reset(nullptr);
+
   // Explicitly delete/finalize all model instances before finalizing
   // the model itself.
   instances_.clear();

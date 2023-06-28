@@ -1429,18 +1429,16 @@ DirectSequenceBatch::BatcherThread(const int nice)
 #ifndef _WIN32
   if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << model_instance_->Name() << " [" << (size_t)model_instance_
-                   << "] at nice " << nice << "...";
+                   << model_instance_->Name() << " at nice " << nice << "...";
   } else {
     LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << model_instance_->Name() << " [" << (size_t)model_instance_
-                   << "] at default nice (requested nice " << nice
+                   << model_instance_->Name()
+                   << " at default nice (requested nice " << nice
                    << " failed)...";
   }
 #else
   LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                 << model_instance_->Name() << " [" << (size_t)model_instance_
-                 << "] at default nice...";
+                 << model_instance_->Name() << " at default nice...";
 #endif
 
   // For debugging and testing, delay start of thread until queues
@@ -1742,7 +1740,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
   }  // end runner loop
 
   LOG_VERBOSE(1) << "Stopping Direct sequence-batch scheduler thread "
-                 << (size_t)model_instance_ << "...";
+                 << model_instance_->Name() << "...";
 }
 
 OldestSequenceBatch::OldestSequenceBatch(
