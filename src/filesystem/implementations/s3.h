@@ -38,7 +38,8 @@
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
-#include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/ListObjectsV2Request.h>
+#include <aws/s3/model/ListObjectsV2Result.h>
 
 namespace triton { namespace core {
 
@@ -419,10 +420,10 @@ S3FileSystem::IsDirectory(const std::string& path, bool* is_dir)
   }
 
   // List the objects in the bucket
-  s3::Model::ListObjectsRequest list_objects_request;
+  s3::Model::ListObjectsV2Request list_objects_request;
   list_objects_request.SetBucket(bucket.c_str());
   list_objects_request.SetPrefix(AppendSlash(object_path).c_str());
-  auto list_objects_outcome = client_->ListObjects(list_objects_request);
+  auto list_objects_outcome = client_->ListObjectsV2(list_objects_request);
 
   if (list_objects_outcome.IsSuccess()) {
     *is_dir = !list_objects_outcome.GetResult().GetContents().empty();
@@ -484,16 +485,27 @@ S3FileSystem::GetDirectoryContents(
   full_dir = AppendSlash(dir_path);
 
   // Issue request for objects with prefix
-  s3::Model::ListObjectsRequest objects_request;
+  s3::Model::ListObjectsV2Request objects_request;
   objects_request.SetBucket(bucket.c_str());
   objects_request.SetPrefix(full_dir.c_str());
-  auto list_objects_outcome = client_->ListObjects(objects_request);
 
-  if (list_objects_outcome.IsSuccess()) {
-    Aws::Vector<Aws::S3::Model::Object> object_list =
-        list_objects_outcome.GetResult().GetContents();
-    for (auto const& s3_object : object_list) {
-      // In the case of empty directories, the directory itself will appear here
+  bool done_listing = false;
+  while (!done_listing) {
+    auto list_objects_outcome = client_->ListObjectsV2(objects_request);
+
+    if (!list_objects_outcome.IsSuccess()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Could not list contents of directory at " + true_path +
+              " due to exception: " +
+              list_objects_outcome.GetError().GetExceptionName() +
+              ", error message: " +
+              list_objects_outcome.GetError().GetMessage());
+    }
+    const auto& list_objects_result = list_objects_outcome.GetResult();
+    for (const auto& s3_object : list_objects_result.GetContents()) {
+      // In the case of empty directories, the directory itself will appear
+      // here
       if (s3_object.GetKey().c_str() == full_dir) {
         continue;
       }
@@ -515,13 +527,13 @@ S3FileSystem::GetDirectoryContents(
             "Cannot handle item with empty name at " + true_path);
       }
     }
-  } else {
-    return Status(
-        Status::Code::INTERNAL,
-        "Could not list contents of directory at " + true_path +
-            " due to exception: " +
-            list_objects_outcome.GetError().GetExceptionName() +
-            ", error message: " + list_objects_outcome.GetError().GetMessage());
+    // If there are more pages to retrieve, set the marker to the next page.
+    if (list_objects_result.GetIsTruncated()) {
+      objects_request.SetContinuationToken(
+          list_objects_result.GetNextContinuationToken());
+    } else {
+      done_listing = true;
+    }
   }
   return Status::Success;
 }
