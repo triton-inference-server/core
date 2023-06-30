@@ -23,14 +23,16 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "gtest/gtest.h"
+#include "pinned_memory_manager.h"
 
 #include <cuda_runtime_api.h>
+
 #include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <vector>
-#include "pinned_memory_manager.h"
+
+#include "gtest/gtest.h"
 #include "tritonserver_apis.h"
 
 namespace tc = triton::core;

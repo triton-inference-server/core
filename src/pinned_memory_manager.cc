@@ -28,6 +28,7 @@
 #include "pinned_memory_manager.h"
 
 #include <sstream>
+
 #include "numa_utils.h"
 #include "triton/common/logging.h"
 

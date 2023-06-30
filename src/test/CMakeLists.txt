@@ -469,7 +469,7 @@ if(${TRITON_ENABLE_METRICS})
   )
 
   target_compile_definitions(
-    metrics_api_test 
+    metrics_api_test
     PRIVATE
       TRITON_ENABLE_LOGGING=1
       TRITON_ENABLE_METRICS=1

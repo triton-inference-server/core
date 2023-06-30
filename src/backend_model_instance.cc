@@ -181,9 +181,7 @@ TritonModelInstance::~TritonModelInstance()
     triton_backend_thread_->StopBackendThread();
   }
 
-  LOG_STATUS_ERROR(
-      model_->Server()->GetRateLimiter()->UnregisterModelInstance(this),
-      "failed unregistering model instance");
+  model_->Server()->GetRateLimiter()->UnregisterModelInstance(this);
 
   // Model finalization is optional...
   if (model_->Backend()->ModelInstanceFiniFn() != nullptr) {
@@ -221,9 +219,9 @@ TritonModelInstance::SetInstances(
           secondary_device.device_id());
     }
     for (int32_t c = 0; c < group.count(); ++c) {
-      std::string instance_name{group.count() > 1
-                                    ? group.name() + "_" + std::to_string(c)
-                                    : group.name()};
+      std::string instance_name{
+          group.count() > 1 ? group.name() + "_" + std::to_string(c)
+                            : group.name()};
       const bool passive = group.passive();
       std::vector<std::tuple<
           std::string, TRITONSERVER_InstanceGroupKind, int32_t,
@@ -357,10 +355,10 @@ TritonModelInstance::CreateInstance(
 
   // Instance initialization is optional... We must set set shared
   // library path to point to the backend directory in case the
-  // backend library attempts to load additional shared libaries.
+  // backend library attempts to load additional shared libraries.
   if (model->Backend()->ModelInstanceInitFn() != nullptr) {
     // We must set set shared library path to point to the backend directory in
-    // case the backend library attempts to load additional shared libaries.
+    // case the backend library attempts to load additional shared libraries.
     // Currently, the set and reset function is effective only on Windows, so
     // there is no need to set path on non-Windows.
     // However, parallel model loading will not see any speedup on Windows and
@@ -539,8 +537,9 @@ TritonModelInstance::GenerateWarmupData()
             warmup_data.provided_data_.emplace_back(new std::string());
             auto input_data = warmup_data.provided_data_.back().get();
             RETURN_IF_ERROR(ReadTextFile(
-                JoinPath({model_->LocalizedModelPath(), kWarmupDataFolder,
-                          input_meta.second.input_data_file()}),
+                JoinPath(
+                    {model_->LocalizedModelPath(), kWarmupDataFolder,
+                     input_meta.second.input_data_file()}),
                 input_data));
             if (input_meta.second.data_type() ==
                 inference::DataType::TYPE_STRING) {

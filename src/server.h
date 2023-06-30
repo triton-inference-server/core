@@ -27,12 +27,12 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include <atomic>
 #include <map>
 #include <string>
 #include <thread>
 #include <vector>
-
 #include "backend_manager.h"
 #include "cache_manager.h"
 #include "infer_parameter.h"
@@ -270,7 +270,7 @@ class InferenceServer {
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model)
   {
-    // Allow model retrival while server exiting to provide graceful
+    // Allow model retrieval while server exiting to provide graceful
     // completion of inference sequence that spans multiple requests.
     if ((ready_state_ != ServerReadyState::SERVER_READY) &&
         (ready_state_ != ServerReadyState::SERVER_EXITING)) {
@@ -285,7 +285,7 @@ class InferenceServer {
       const ModelIdentifier& model_id, const int64_t model_version,
       std::shared_ptr<Model>* model)
   {
-    // Allow model retrival while server exiting to provide graceful
+    // Allow model retrieval while server exiting to provide graceful
     // completion of inference sequence that spans multiple requests.
     if ((ready_state_ != ServerReadyState::SERVER_READY) &&
         (ready_state_ != ServerReadyState::SERVER_EXITING)) {

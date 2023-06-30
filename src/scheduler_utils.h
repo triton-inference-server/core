@@ -27,6 +27,7 @@
 
 #include <deque>
 #include <unordered_map>
+
 #include "scheduler.h"
 
 namespace triton { namespace core {
@@ -183,7 +184,7 @@ class PriorityQueue {
 
     // Apply the queue policy to the request at 'idx'.
     // 'rejected_count' will be incremented by the number of the newly rejected
-    // requets after applying the policy.
+    // requests after applying the policy.
     // 'rejected_batch_size' will be incremented by the total batch size of the
     // newly rejected requests after applying the policy.
     // Return true if the 'idx' still points to a request after applying the

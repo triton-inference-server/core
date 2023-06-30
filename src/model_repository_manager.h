@@ -31,6 +31,7 @@
 #include <map>
 #include <mutex>
 #include <set>
+
 #include "infer_parameter.h"
 #include "model_config.pb.h"
 #include "model_lifecycle.h"
@@ -361,7 +362,7 @@ class ModelRepositoryManager {
 
     std::unordered_map<std::string, std::set<ModelIdentifier>>* global_map_ptr_;
     std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>> nodes_;
-    // A list of model names that there are nodes depdending on but not present.
+    // A list of model names that there are nodes depending on but not present.
     // Note that the key is not ModelIdentifier to allow more flexible matching.
     std::unordered_map<std::string, std::set<ModelIdentifier>> missing_nodes_;
   };
@@ -587,11 +588,10 @@ class ModelRepositoryManager {
       DependencyGraph* dependency_graph);
 
   /// Check if the node is ready for the next iteration. A node is ready if the
-  /// node is invalid (containing invalid model config or its depdencies failed
-  /// to load) or all of its dependencies are satisfied.
-  /// \param node The node to be checked.
-  /// \param model_load_status For checking ensemble dependency(s) status.
-  /// \return True if the node is ready. False otherwise.
+  /// node is invalid (containing invalid model config or its dependencies
+  /// failed to load) or all of its dependencies are satisfied. \param node The
+  /// node to be checked. \param model_load_status For checking ensemble
+  /// dependency(s) status. \return True if the node is ready. False otherwise.
   bool CheckNode(
       DependencyNode* node,
       const std::map<ModelIdentifier, Status>& model_load_status);

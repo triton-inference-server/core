@@ -30,7 +30,6 @@ namespace triton { namespace core {
 // Currently there is just a global memory manager that is used for
 // all backends and which simply forwards requests on to the core
 // memory manager.
-struct TritonMemoryManager {
-};
+struct TritonMemoryManager {};
 
 }}  // namespace triton::core

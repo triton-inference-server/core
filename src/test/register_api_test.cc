@@ -26,6 +26,7 @@
 
 #include <iostream>
 #include <thread>
+
 #include "gtest/gtest.h"
 #include "triton/core/tritonserver.h"
 
@@ -275,7 +276,7 @@ TEST_F(RegisterApiTest, RegisterWithRepeatedMap2)
   // Registering a repository "models_1" where contains "model_0" and "model_1",
   // map both directories to the same name which creates confliction. Different
   // from 'RegisterWithRepeatedMap', the confliction within the mapping can't be
-  // resolved and error should be returend
+  // resolved and error should be returned
   std::vector<std::string> dir_names{"model_0", "model_1"};
   std::vector<std::shared_ptr<TRITONSERVER_Parameter>> managed_params;
   std::vector<const TRITONSERVER_Parameter*> name_map;
@@ -818,7 +819,7 @@ class PollingRegisterApiTest : public ::testing::Test {
   TRITONSERVER_Server* server_ = nullptr;
 };
 
-TEST_F(PollingRegisterApiTest, unsupport)
+TEST_F(PollingRegisterApiTest, unsupported)
 {
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerRegisterModelRepository(
@@ -878,7 +879,7 @@ class NoneRegisterApiTest : public ::testing::Test {
   TRITONSERVER_Server* server_ = nullptr;
 };
 
-TEST_F(NoneRegisterApiTest, unsupport)
+TEST_F(NoneRegisterApiTest, unsupported)
 {
   FAIL_TEST_IF_NOT_ERR(
       TRITONSERVER_ServerRegisterModelRepository(

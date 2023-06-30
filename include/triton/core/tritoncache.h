@@ -27,6 +27,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include "triton/core/tritonserver.h"
 
 #ifdef __cplusplus
@@ -197,7 +198,7 @@ TRITONCACHE_DECLSPEC TRITONSERVER_Error* TRITONCACHE_Copy(
 /// to load.
 ///
 
-/// Intialize a new cache object.
+/// Initialize a new cache object.
 ///
 /// This function is required to be implemented by the cache.
 ///

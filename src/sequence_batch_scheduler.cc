@@ -32,6 +32,7 @@
 #include <unistd.h>
 #endif
 #include <algorithm>
+
 #include "constants.h"
 #include "dynamic_batch_scheduler.h"
 #include "model_config_utils.h"
@@ -284,8 +285,9 @@ SequenceBatchScheduler::GenerateInitialStateData(
         kDataFile: {
       std::string file_input;
       RETURN_IF_ERROR(ReadTextFile(
-          JoinPath({model->LocalizedModelPath(), kInitialStateFolder,
-                    (initial_state.data_file())}),
+          JoinPath(
+              {model->LocalizedModelPath(), kInitialStateFolder,
+               (initial_state.data_file())}),
           &file_input));
       if (initial_state.data_type() == inference::DataType::TYPE_STRING) {
         total_byte_size = file_input.size();

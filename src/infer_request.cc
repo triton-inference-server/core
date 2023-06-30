@@ -361,7 +361,7 @@ InferenceRequest::Release(
 InferenceRequest*
 InferenceRequest::CopyAsNull(const InferenceRequest& from)
 {
-  // Create a copy of 'from' request with artifical inputs and no requested
+  // Create a copy of 'from' request with artificial inputs and no requested
   // outputs. Maybe more efficient to share inputs and other metadata,
   // but that binds the Null request with 'from' request's lifecycle.
   std::unique_ptr<InferenceRequest> lrequest(
@@ -475,7 +475,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
     *new_input->MutableShapeWithBatchDim() = input.second.ShapeWithBatchDim();
 
     // Note that the input that have max byte size will be responsible for
-    // holding the artifical data, while other inputs will hold a reference to
+    // holding the artificial data, while other inputs will hold a reference to
     // it with byte size that matches 'from'
     if (input.first == *max_input_name) {
       new_input->SetData(data);

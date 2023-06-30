@@ -30,6 +30,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+
 #include "status.h"
 #include "triton/common/model_config.h"
 
@@ -40,7 +41,7 @@ namespace triton { namespace core {
 // must be requested via functions provided by this class.
 class PinnedMemoryManager {
  public:
-  // Options to configure pinned memeory manager.
+  // Options to configure pinned memory manager.
   struct Options {
     Options(
         uint64_t b = 0,

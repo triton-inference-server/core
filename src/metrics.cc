@@ -30,6 +30,7 @@
 #include "metrics.h"
 
 #include <thread>
+
 #include "constants.h"
 #include "prometheus/detail/utils.h"
 #include "triton/common/logging.h"
@@ -37,6 +38,7 @@
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <cuda_runtime_api.h>
 #include <dcgm_agent.h>
+
 #include <cstring>
 #include <set>
 #include <string>

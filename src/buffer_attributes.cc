@@ -27,6 +27,7 @@
 #include "buffer_attributes.h"
 
 #include <cstring>
+
 #include "constants.h"
 
 namespace triton { namespace core {

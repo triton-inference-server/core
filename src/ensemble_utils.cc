@@ -29,6 +29,7 @@
 #include "ensemble_utils.h"
 
 #include <set>
+
 #include "constants.h"
 #include "model.h"
 #include "model_config_utils.h"
@@ -99,7 +100,7 @@ ValidateTensorConsistency(
 
   // Shapes must match or either one uses variable size shape, if one uses
   // variable size shape, shape consistency will be checked at runtime.
-  // If dims mismatch, compare agian with full dims in case the tensor is
+  // If dims mismatch, compare again with full dims in case the tensor is
   // used for both non-batching model and batching model. In that case, it
   // is acceptable if non-batching model shape is [-1, d_0, d_1, ..., d_n]
   // while the batching model shape is [d_0, d_1, ..., d_n].

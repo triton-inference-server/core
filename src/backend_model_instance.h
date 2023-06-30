@@ -31,6 +31,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+
 #include "constants.h"
 #include "memory.h"
 #include "metric_model_reporter.h"
@@ -65,7 +66,8 @@ class TritonModelInstance {
         const inference::ModelInstanceGroup& group_config, int32_t device_id)
         : group_config_(group_config), device_id_(device_id),
           hash_(std::hash<std::string>{}(
-              std::to_string(device_id_) + InstanceConfigSignature(group_config_)))
+              std::to_string(device_id_) +
+              InstanceConfigSignature(group_config_)))
     {
     }
     bool operator==(const Signature& rhs) const

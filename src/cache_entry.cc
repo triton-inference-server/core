@@ -25,6 +25,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "cache_entry.h"
+
 #include <iostream>
 
 namespace triton { namespace core {
@@ -123,7 +124,7 @@ CacheEntry::SetBufferSize(InferenceResponse* response)
   // 1. First the packed buffer will hold the number of outputs as a uint32_t
   packed_response_byte_size += sizeof(uint32_t);
   // These sizes will be used to request allocated buffers from the cache
-  // to copy direcly into
+  // to copy directly into
   for (const auto& output : response->Outputs()) {
     uint64_t packed_output_byte_size = 0;
     RETURN_IF_ERROR(GetByteSize(output, &packed_output_byte_size));

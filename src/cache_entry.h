@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <vector>
+
 #include "infer_response.h"
 #include "triton/common/logging.h"
 #include "tritonserver_apis.h"
@@ -86,7 +87,7 @@ class CacheEntry {
   /* Lookup helpers */
   Status DeserializeBuffers(boost::span<InferenceResponse*> responses);
 
-  // Typically, the cache entry will now own any associted buffers.
+  // Typically, the cache entry will now own any associated buffers.
   // However, if a CacheAllocator wants the entry to own the buffers, this
   // can be used to signal that the entry should free its buffers on destruction
   void FreeBuffersOnExit() { free_buffers_ = true; }

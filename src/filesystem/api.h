@@ -26,6 +26,7 @@
 #pragma once
 
 #include <string>
+
 #include "../status.h"
 #include "google/protobuf/message.h"
 
@@ -93,7 +94,7 @@ std::string BaseName(const std::string& path);
 std::string DirName(const std::string& path);
 
 /// Does a file or directory exist?
-/// \param path The path to check for existance.
+/// \param path The path to check for existence.
 /// \param exists Returns true if file/dir exists
 /// \return Error status if unable to perform the check
 Status FileExists(const std::string& path, bool* exists);

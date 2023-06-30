@@ -27,6 +27,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
 #include "triton/core/tritonserver.h"
 
 #ifdef __cplusplus
@@ -157,7 +158,7 @@ typedef enum TRITONREPOAGENT_actiontype_enum {
 ///
 ///   TRITONREPOAGENT_ARTIFACT_FILESYSTEM: The model artifacts are
 ///     made available to the agent via the local
-///     filesytem. 'location' returns the full path to the directory
+///     filesystem. 'location' returns the full path to the directory
 ///     in the model repository that contains the model's
 ///     artifacts. The returned location string is owned by Triton,
 ///     not the caller, and so should not be modified or freed. The
@@ -231,7 +232,7 @@ TRITONREPOAGENT_ModelRepositoryLocationRelease(
 /// communicated to Triton as indicated by 'artifact_type'.
 ///
 ///   TRITONREPOAGENT_ARTIFACT_FILESYSTEM: The model artifacts are
-///     made available to Triton via the local filesytem. 'location' returns
+///     made available to Triton via the local filesystem. 'location' returns
 ///     the full path to the directory. Ownership of the contents of the
 ///     returned directory are transferred to Triton and the agent should not
 ///     modified or freed the contents until TRITONREPOAGENT_ModelFinalize.

@@ -26,6 +26,7 @@
 #pragma once
 
 #include <vector>
+
 #include "buffer_attributes.h"
 #include "constants.h"
 #include "status.h"
@@ -160,7 +161,7 @@ class MutableMemory : public Memory {
 class AllocatedMemory : public MutableMemory {
  public:
   // Create a continuous data buffer with 'byte_size', 'memory_type' and
-  // 'memory_type_id'. Note that the buffer may be created on different memeory
+  // 'memory_type_id'. Note that the buffer may be created on different memory
   // type and memory type id if the original request type and id can not be
   // satisfied, thus the function caller should always check the actual memory
   // type and memory type id before use.

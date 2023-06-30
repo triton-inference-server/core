@@ -28,6 +28,7 @@
 
 #include <iostream>
 #include <thread>
+
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "metric_family.h"
