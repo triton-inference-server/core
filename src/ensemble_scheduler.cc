@@ -141,8 +141,8 @@ struct Step {
       gpu_output_map_;
   std::set<std::pair<std::string, IterationCount>> updated_tensors_;
 
-  // Location to store information convey through response callback,
-  // should be properly consumed by EnsembleContext and clean up before
+  // Storing information conveyed through response callback.
+  // This should be properly consumed by EnsembleContext and cleaned up before
   // returning from the callback.
   uint32_t response_flags_;
   TRITONSERVER_InferenceResponse* response_;
@@ -351,8 +351,8 @@ class EnsembleContext {
   Status ensemble_status_;
   RequestTracker* request_tracker_;
   // Use in conjunction with 'is_decoupled_' in EnsembleInfo to
-  // better distinguish ensemble ending behavior (see documentation in
-  // FinishEnsemble for detail).
+  // better distinguish ensemble ending behavior (see annotation in
+  // FinishEnsemble for details).
   bool response_sent_{false};
 
   // The allocator that will be used to allocate buffers for the
@@ -1048,7 +1048,10 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
       InferenceResponse::Send(std::move(response), flags);
       response_sent_ = true;
     } else if (flags != 0) {
-      // check if any response is sent, if no, decoupled must be specified
+      // check if any response is sent, if not, decoupled must be specified.
+      // For decoupled model, it may send 0 response. To emulate the same
+      // behavior, ensemble will not consider the below case a deadlock,
+      // instead, it will send only the flag in this case.
       if ((!info_->is_decoupled_) && (!response_sent_)) {
         ensemble_status_ = Status(
             Status::Code::INVALID_ARG,
