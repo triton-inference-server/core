@@ -124,7 +124,7 @@ struct Step {
       size_t step_idx, const InferenceRequest::SequenceId& correlation_id,
       uint32_t flags)
       : correlation_id_(correlation_id), flags_(flags), response_flags_(0),
-        infer_status_(nullptr), step_idx_(step_idx)
+        step_idx_(step_idx)
   {
   }
 
@@ -141,8 +141,13 @@ struct Step {
       int64_t, std::unordered_map<uintptr_t, std::shared_ptr<AllocatedMemory>>>
       gpu_output_map_;
   std::set<std::pair<std::string, IterationCount>> updated_tensors_;
+
+  // Storing information conveyed through response callback.
+  // This should be properly consumed by EnsembleContext and cleaned up before
+  // returning from the callback.
   uint32_t response_flags_;
-  TRITONSERVER_Error* infer_status_;
+  TRITONSERVER_InferenceResponse* response_;
+
 
   size_t step_idx_;
 };
@@ -283,6 +288,11 @@ class EnsembleContext {
       const std::unique_ptr<Step>& completed_step,
       std::set<std::pair<std::string, IterationCount>>* updated_tensors);
 
+  // Helper function of 'UpdateEnsembleState' to convert a
+  // TRITONSERVER_InferenceResponse captured in 'completed_step' into
+  // internal variables of this EnsembleContext object.
+  Status ConsumeResponse(const std::unique_ptr<Step>& completed_step);
+
   // Helper function that returns a list of 'steps' that should be run under
   // current ensemble state. 'updated_tensors' is used so that we don't need to
   // iterate all the tensors to determine which step can be run.
@@ -341,6 +351,10 @@ class EnsembleContext {
   // Objects related to the ensemble infer request
   Status ensemble_status_;
   RequestTracker* request_tracker_;
+  // Use in conjunction with 'is_decoupled_' in EnsembleInfo to
+  // better distinguish ensemble ending behavior (see annotation in
+  // FinishEnsemble for details).
+  bool response_sent_{false};
 
   // The allocator that will be used to allocate buffers for the
   // inference result tensors.
@@ -592,155 +606,148 @@ EnsembleContext::ResponseComplete(
 {
   auto step_ptr = std::unique_ptr<Step>(reinterpret_cast<Step*>(userp));
   step_ptr->response_flags_ = flags;
-
-  if (response != nullptr) {
-    auto err = TRITONSERVER_InferenceResponseError(response);
-    uint32_t count;
-    bool parameter_override = false;
-    InferenceRequest::SequenceId correlation_id{0};
-    uint32_t flags = 0;
-    if (err == nullptr) {
-      err = TRITONSERVER_InferenceResponseParameterCount(response, &count);
-      if (err == nullptr) {
-        for (uint32_t idx = 0; idx < count; idx++) {
-          const char* name;
-          TRITONSERVER_ParameterType type;
-          const void* vvalue;
-          err = TRITONSERVER_InferenceResponseParameter(
-              response, idx, &name, &type, &vvalue);
-          if (err == nullptr) {
-            if (!strcmp(name, "sequence_id")) {
-              switch (type) {
-                case TRITONSERVER_PARAMETER_INT:
-                  correlation_id = InferenceRequest::SequenceId(
-                      *reinterpret_cast<const uint64_t*>(vvalue));
-                  parameter_override = true;
-                  break;
-                case TRITONSERVER_PARAMETER_STRING:
-                  correlation_id = InferenceRequest::SequenceId(std::string(
-                      *reinterpret_cast<const char* const*>(vvalue)));
-                  parameter_override = true;
-                  break;
-                default:
-                  err = TRITONSERVER_ErrorNew(
-                      TRITONSERVER_ERROR_INVALID_ARG,
-                      "expected parameter 'sequence_id' to be "
-                      "TRITONSERVER_PARAMETER_INT or "
-                      "TRITONSERVER_PARAMETER_STRING");
-              }
-            } else if (!strcmp(name, "sequence_start")) {
-              if (type != TRITONSERVER_PARAMETER_BOOL) {
-                err = TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    "expect parameter 'sequence_start' to be "
-                    "TRITONSERVER_PARAMETER_BOOL");
-              } else {
-                if (*reinterpret_cast<const bool*>(vvalue)) {
-                  flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_START;
-                }
-                parameter_override = true;
-              }
-            } else if (!strcmp(name, "sequence_end")) {
-              if (type != TRITONSERVER_PARAMETER_BOOL) {
-                err = TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    "expect parameter 'sequence_end' to be "
-                    "TRITONSERVER_PARAMETER_BOOL");
-              } else {
-                if (*reinterpret_cast<const bool*>(vvalue)) {
-                  flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_END;
-                }
-                parameter_override = true;
-              }
-            }
-          }
-        }
-      }
-    }
-    if (err == nullptr) {
-      err = TRITONSERVER_InferenceResponseOutputCount(response, &count);
-      if (err == nullptr) {
-        std::lock_guard<std::mutex> lock(step_ptr->ctx_->mutex_);
-        auto& output_to_tensor =
-            step_ptr->ctx_->info_->steps_[step_ptr->step_idx_]
-                .output_to_tensor_;
-        for (uint32_t idx = 0; idx < count; idx++) {
-          const char* name;
-          TRITONSERVER_DataType datatype;
-          const int64_t* shape;
-          uint64_t dim_count;
-          const void* base;
-          size_t byte_size;
-          TRITONSERVER_MemoryType memory_type;
-          int64_t memory_type_id;
-          void* userp;
-          err = TRITONSERVER_InferenceResponseOutput(
-              response, idx, &name, &datatype, &shape, &dim_count, &base,
-              &byte_size, &memory_type, &memory_type_id, &userp);
-          if (err == nullptr) {
-            auto it = output_to_tensor.find(name);
-            if (it != output_to_tensor.end()) {
-              std::unique_ptr<InferenceRequest::Input> tensor(
-                  new InferenceRequest::Input(
-                      it->second, TritonToDataType(datatype), shape,
-                      dim_count));
-
-              if (byte_size != 0) {
-                std::lock_guard<std::mutex> output_lk(step_ptr->output_mtx_);
-                if (memory_type == TRITONSERVER_MEMORY_GPU) {
-                  auto& gpu_output_map =
-                      step_ptr->gpu_output_map_[memory_type_id];
-                  auto it =
-                      gpu_output_map.find(reinterpret_cast<uintptr_t>(base));
-                  tensor->SetData(std::move(it->second));
-                  gpu_output_map.erase(it);
-                } else {
-                  auto it = step_ptr->cpu_output_map_.find(
-                      reinterpret_cast<uintptr_t>(base));
-                  tensor->SetData(std::move(it->second));
-                  step_ptr->cpu_output_map_.erase(it);
-                }
-              }
-
-              auto& tensor_data = step_ptr->ctx_->tensor_data_[it->second];
-              if (parameter_override) {
-                step_ptr->updated_tensors_.emplace(
-                    it->second, tensor_data.AddTensor(
-                                    std::move(tensor), correlation_id, flags));
-              } else {
-                step_ptr->updated_tensors_.emplace(
-                    it->second,
-                    tensor_data.AddTensor(
-                        std::move(tensor), step_ptr->correlation_id_,
-                        step_ptr->flags_));
-              }
-            } else {
-              LOG_VERBOSE(1)
-                  << "in ensemble, an internal response header specified "
-                     "output '"
-                  << name << "' that does not map to any ensemble tensors";
-            }
-          }
-          if (err != nullptr) {
-            break;
-          }
-        }
-      }
-    }
-
-    if (err != nullptr) {
-      step_ptr->infer_status_ = err;
-    }
-    LOG_TRITONSERVER_ERROR(
-        TRITONSERVER_InferenceResponseDelete(response),
-        "deleting inference response");
-  }
+  step_ptr->response_ = response;
 
   EnsembleContext::Proceed(step_ptr->ctx_, step_ptr);
   // Expecting more responses
   if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) == 0) {
     step_ptr.release();
   }
+}
+
+Status
+EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
+{
+  // Scoped deleter for response
+  static auto res_dlt = [](TRITONSERVER_InferenceResponse* res) {
+    if (res != nullptr) {
+      LOG_TRITONSERVER_ERROR(
+          TRITONSERVER_InferenceResponseDelete(res),
+          "deleting inference response");
+    }
+  };
+  std::unique_ptr<TRITONSERVER_InferenceResponse, decltype(res_dlt)>
+      managed_response(completed_step->response_, res_dlt);
+  completed_step->response_ = nullptr;
+
+  auto response = managed_response.get();
+  auto step_ptr = completed_step.get();
+  if (response != nullptr) {
+    RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseError(response));
+    uint32_t count;
+    bool parameter_override = false;
+    InferenceRequest::SequenceId correlation_id{0};
+    uint32_t flags = 0;
+    RETURN_IF_TRITONSERVER_ERROR(
+        TRITONSERVER_InferenceResponseParameterCount(response, &count));
+    for (uint32_t idx = 0; idx < count; idx++) {
+      const char* name;
+      TRITONSERVER_ParameterType type;
+      const void* vvalue;
+      RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseParameter(
+          response, idx, &name, &type, &vvalue));
+      if (!strcmp(name, "sequence_id")) {
+        switch (type) {
+          case TRITONSERVER_PARAMETER_INT:
+            correlation_id = InferenceRequest::SequenceId(
+                *reinterpret_cast<const uint64_t*>(vvalue));
+            parameter_override = true;
+            break;
+          case TRITONSERVER_PARAMETER_STRING:
+            correlation_id = InferenceRequest::SequenceId(
+                std::string(*reinterpret_cast<const char* const*>(vvalue)));
+            parameter_override = true;
+            break;
+          default:
+            RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INVALID_ARG,
+                "expected parameter 'sequence_id' to be "
+                "TRITONSERVER_PARAMETER_INT or "
+                "TRITONSERVER_PARAMETER_STRING"));
+        }
+      } else if (!strcmp(name, "sequence_start")) {
+        if (type != TRITONSERVER_PARAMETER_BOOL) {
+          RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              "expect parameter 'sequence_start' to be "
+              "TRITONSERVER_PARAMETER_BOOL"));
+        } else {
+          if (*reinterpret_cast<const bool*>(vvalue)) {
+            flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_START;
+          }
+          parameter_override = true;
+        }
+      } else if (!strcmp(name, "sequence_end")) {
+        if (type != TRITONSERVER_PARAMETER_BOOL) {
+          RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
+              TRITONSERVER_ERROR_INVALID_ARG,
+              "expect parameter 'sequence_end' to be "
+              "TRITONSERVER_PARAMETER_BOOL"));
+        } else {
+          if (*reinterpret_cast<const bool*>(vvalue)) {
+            flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_END;
+          }
+          parameter_override = true;
+        }
+      }
+    }
+    RETURN_IF_TRITONSERVER_ERROR(
+        TRITONSERVER_InferenceResponseOutputCount(response, &count));
+    auto& output_to_tensor =
+        info_->steps_[step_ptr->step_idx_].output_to_tensor_;
+    for (uint32_t idx = 0; idx < count; idx++) {
+      const char* name;
+      TRITONSERVER_DataType datatype;
+      const int64_t* shape;
+      uint64_t dim_count;
+      const void* base;
+      size_t byte_size;
+      TRITONSERVER_MemoryType memory_type;
+      int64_t memory_type_id;
+      void* userp;
+      RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseOutput(
+          response, idx, &name, &datatype, &shape, &dim_count, &base,
+          &byte_size, &memory_type, &memory_type_id, &userp));
+      auto it = output_to_tensor.find(name);
+      if (it != output_to_tensor.end()) {
+        std::unique_ptr<InferenceRequest::Input> tensor(
+            new InferenceRequest::Input(
+                it->second, TritonToDataType(datatype), shape, dim_count));
+
+        if (byte_size != 0) {
+          std::lock_guard<std::mutex> output_lk(step_ptr->output_mtx_);
+          if (memory_type == TRITONSERVER_MEMORY_GPU) {
+            auto& gpu_output_map = step_ptr->gpu_output_map_[memory_type_id];
+            auto it = gpu_output_map.find(reinterpret_cast<uintptr_t>(base));
+            tensor->SetData(std::move(it->second));
+            gpu_output_map.erase(it);
+          } else {
+            auto it = step_ptr->cpu_output_map_.find(
+                reinterpret_cast<uintptr_t>(base));
+            tensor->SetData(std::move(it->second));
+            step_ptr->cpu_output_map_.erase(it);
+          }
+        }
+
+        auto& tensor_data = tensor_data_[it->second];
+        if (parameter_override) {
+          step_ptr->updated_tensors_.emplace(
+              it->second,
+              tensor_data.AddTensor(std::move(tensor), correlation_id, flags));
+        } else {
+          step_ptr->updated_tensors_.emplace(
+              it->second, tensor_data.AddTensor(
+                              std::move(tensor), step_ptr->correlation_id_,
+                              step_ptr->flags_));
+        }
+      } else {
+        LOG_VERBOSE(1) << "in ensemble, an internal response header specified "
+                          "output '"
+                       << name << "' that does not map to any ensemble tensors";
+      }
+    }
+  }
+  return Status::Success;
 }
 
 void
@@ -775,11 +782,13 @@ EnsembleContext::PrepareSteps(
         ensemble_status_ = GetNextSteps(updated_tensors, ready_steps);
       }
 
-      // Check and send ensemble response
-      if ((!ensemble_status_.IsOk()) || (inflight_step_counter_ == 0) ||
-          info_->is_decoupled_) {
+      // Reaching the end of processing completed step, check if the ensemble
+      // should send response / error.
+      if (!ensemble_status_.IsOk()) {
+        ensemble_status_ = FinishEnsemble();
+      } else {
         std::unique_ptr<InferenceResponse> response;
-        if (ensemble_status_.IsOk()) {
+        if (!updated_tensors.empty()) {
           ensemble_status_ =
               CheckAndSetEnsembleOutput(updated_tensors, &response);
         }
@@ -807,7 +816,7 @@ EnsembleContext::UpdateEnsembleState(
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
     }
-    RETURN_IF_TRITONSERVER_ERROR(completed_step->infer_status_);
+    RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
   }
   return Status::Success;
@@ -1033,18 +1042,31 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
   }
 
   if (ensemble_status_.IsOk()) {
-    if (info_->is_decoupled_) {
-      if (response != nullptr) {
-        InferenceResponse::Send(std::move(response), 0 /* flags */);
+    auto flags = (inflight_step_counter_ == 0)
+                     ? TRITONSERVER_RESPONSE_COMPLETE_FINAL
+                     : 0;
+    if (response != nullptr) {
+      InferenceResponse::Send(std::move(response), flags);
+      response_sent_ = true;
+    } else if (flags != 0) {
+      // check if any response is sent, if not, decoupled must be specified.
+      // For decoupled model, it may send 0 response. To emulate the same
+      // behavior, ensemble will not consider the below case a deadlock,
+      // instead, it will send only the flag in this case.
+      if ((!info_->is_decoupled_) && (!response_sent_)) {
+        ensemble_status_ = Status(
+            Status::Code::INVALID_ARG,
+            "in ensemble '" + info_->ensemble_name_ + "', " +
+                request_tracker_->Request()->LogRequest() +
+                "unexpected deadlock, at least one output is not set while no "
+                "more "
+                "ensemble steps can be made");
+        InferenceRequest::RespondIfError(
+            request_tracker_->Request(), ensemble_status_);
+      } else {
+        request_tracker_->Request()->ResponseFactory()->SendFlags(
+            TRITONSERVER_RESPONSE_COMPLETE_FINAL);
       }
-      if (inflight_step_counter_ != 0) {
-        return ensemble_status_;
-      }
-      request_tracker_->Request()->ResponseFactory()->SendFlags(
-          TRITONSERVER_RESPONSE_COMPLETE_FINAL);
-    } else {
-      InferenceResponse::Send(
-          std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     }
   } else {
     if (response != nullptr) {
@@ -1057,13 +1079,15 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
     }
   }
 
-  // Reach here when the ensemble execution comes to the end, 'ensemble_status_'
-  // at this point is representative.
-  request_tracker_->SetStatus(ensemble_status_);
-  if (request_tracker_->DecrementCounter()) {
-    delete request_tracker_;
+  if (inflight_step_counter_ == 0) {
+    // Reach here when the ensemble execution comes to the end,
+    // 'ensemble_status_' at this point is representative.
+    request_tracker_->SetStatus(ensemble_status_);
+    if (request_tracker_->DecrementCounter()) {
+      delete request_tracker_;
+    }
+    request_tracker_ = nullptr;
   }
-  request_tracker_ = nullptr;
   return ensemble_status_;
 }
 
@@ -1101,14 +1125,8 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     }
   }
   if (!ready) {
-    if (info_->is_decoupled_) {
-      return Status::Success;
-    }
-    return Status(
-        Status::Code::INVALID_ARG,
-        lrequest->LogRequest() +
-            "unexpected deadlock, at least one output is not set while no more "
-            "ensemble steps can be made");
+    // Do not create response if the actual response is not ready.
+    return Status::Success;
   }
 
   RETURN_IF_ERROR(lrequest->ResponseFactory()->CreateResponse(response));
@@ -1249,17 +1267,26 @@ EnsembleContext::ScheduleSteps(
       // the request ownership out of step here to avoid that
       std::unique_ptr<InferenceRequest> request = std::move(step->request_);
       auto step_status = context->is_->InferAsync(request);
-      if (!step_status.IsOk()) {
+      if (step_status.IsOk()) {
+        step.release();
+        continue;
+      } else {
         std::lock_guard<std::mutex> lock(context->mutex_);
         context->ensemble_status_ = step_status;
-        // The request is not sent to server properly, shouldn't expect its
-        // release function get called.
-        context->request_tracker_->DecrementCounter();
-        context->ensemble_status_ = context->FinishEnsemble();
-        break;
       }
     }
-    step.release();
+
+    // Reaching here means the step is not being scheduled, update corresponding
+    // counters and attempt to finish ensemble if it is the last step.
+    std::lock_guard<std::mutex> lock(context->mutex_);
+    // The request is not sent to server properly, shouldn't expect its
+    // release function get called.
+    context->request_tracker_->DecrementCounter();
+    --context->inflight_step_counter_;
+
+    if (context->inflight_step_counter_ == 0) {
+      context->ensemble_status_ = context->FinishEnsemble();
+    }
   }
 }
 
