@@ -288,23 +288,16 @@ bool EquivalentInNonInstanceGroupConfig(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config);
 
-/// Check if both model instance configs are equivalent. The 'count' field does
-/// not alter the functionality of the instance and hence excluded from
-/// checking.
+/// Check if both model instance configs are equivalent. The 'name' field may
+/// not reflect the actual instance name (i.e. when 'count' > 1) and the 'count'
+/// field does not alter the functionality of the instance, and hence they are
+/// excluded from checking.
 /// \param instance_config_lhs The left hand side instance config.
 /// \param instance_config_rhs The right hand side instance config.
-/// \return True if instance configs are the same without checking the 'count'
-/// fields. False if they are different without checking the field.
+/// \return True if instance configs are the same without checking the 'name'
+/// and 'count' fields. False if they are different without checking the fields.
 bool EquivalentInInstanceConfig(
     const inference::ModelInstanceGroup& instance_config_lhs,
     const inference::ModelInstanceGroup& instance_config_rhs);
-
-/// Obtain a signature identifying the instance config. The 'count' field does
-/// not alter the functionality of the instance and hence excluded from altering
-/// the signature.
-/// \param instance_config The instance config.
-/// \return Signature identifying the instance config.
-std::string InstanceConfigSignature(
-    const inference::ModelInstanceGroup& instance_config);
 
 }}  // namespace triton::core

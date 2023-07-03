@@ -255,7 +255,7 @@ TritonModelInstance::SetInstances(
         const auto& kind = std::get<1>(is);
         const auto& id = std::get<2>(is);
 
-        const Signature signature(group, id);
+        const Signature signature(instance_name, id, group);
         // Check if an existing instance can be re-used.
         if (!ShareBackendThread(model->DeviceBlocking(), kind)) {
           auto itr = existing_instances.find(signature);

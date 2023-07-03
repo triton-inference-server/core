@@ -63,24 +63,24 @@ class TritonModelInstance {
   class Signature {
    public:
     Signature(
-        const inference::ModelInstanceGroup& group_config, int32_t device_id)
-        : group_config_(group_config), device_id_(device_id),
-          hash_(std::hash<std::string>{}(
-              std::to_string(device_id_) +
-              InstanceConfigSignature(group_config_)))
+        const std::string& name, int32_t device_id,
+        const inference::ModelInstanceGroup& group_config)
+        : name_(name), device_id_(device_id), group_config_(group_config),
+          hash_(std::hash<std::string>{}(name_))
     {
     }
     bool operator==(const Signature& rhs) const
     {
-      return device_id_ == rhs.device_id_ &&
+      return name_ == rhs.name_ && device_id_ == rhs.device_id_ &&
              EquivalentInInstanceConfig(group_config_, rhs.group_config_);
     }
     bool operator!=(const Signature& rhs) const { return !(*this == rhs); }
     std::size_t Hash() const { return hash_; }
 
    private:
-    const inference::ModelInstanceGroup group_config_;
+    const std::string name_;
     const int32_t device_id_;
+    const inference::ModelInstanceGroup group_config_;
     const std::size_t hash_;
   };
 
