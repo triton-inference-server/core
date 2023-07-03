@@ -288,20 +288,20 @@ bool EquivalentInNonInstanceGroupConfig(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config);
 
-/// Check if both model instance configs are equivalent. 'name' and 'count'
-/// fields do not alter the functionality of the instance and hence excluded
-/// from checking.
+/// Check if both model instance configs are equivalent. The 'count' field does
+/// not alter the functionality of the instance and hence excluded from
+/// checking.
 /// \param instance_config_lhs The left hand side instance config.
 /// \param instance_config_rhs The right hand side instance config.
-/// \return True if instance configs are the same without checking 'name' and
-/// 'count' fields. False if they are different without checking the fields.
+/// \return True if instance configs are the same without checking the 'count'
+/// fields. False if they are different without checking the field.
 bool EquivalentInInstanceConfig(
     const inference::ModelInstanceGroup& instance_config_lhs,
     const inference::ModelInstanceGroup& instance_config_rhs);
 
-/// Obtain a signature identifying the instance config. 'name' and 'count'
-/// fields do not alter the functionality of the instance and hence excluded
-/// from altering the signature.
+/// Obtain a signature identifying the instance config. The 'count' field does
+/// not alter the functionality of the instance and hence excluded from altering
+/// the signature.
 /// \param instance_config The instance config.
 /// \return Signature identifying the instance config.
 std::string InstanceConfigSignature(

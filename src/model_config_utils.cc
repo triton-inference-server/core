@@ -2349,8 +2349,6 @@ EquivalentInInstanceConfig(
 {
   ::google::protobuf::util::MessageDifferencer pb_diff;
   pb_diff.IgnoreField(
-      instance_config_lhs.descriptor()->FindFieldByLowercaseName("name"));
-  pb_diff.IgnoreField(
       instance_config_lhs.descriptor()->FindFieldByLowercaseName("count"));
   return pb_diff.Compare(instance_config_lhs, instance_config_rhs);
 }
@@ -2359,7 +2357,6 @@ std::string
 InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
 {
   inference::ModelInstanceGroup config = instance_config;
-  *config.mutable_name() = "[Normalized]";
   config.set_count(1);
   return config.SerializeAsString();
 }
