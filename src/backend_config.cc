@@ -52,7 +52,7 @@ CheckTFSpecializedBackendName(
         return Status(
             Status::Code::INVALID_ARG,
             "unexpected TensorFlow library version '" + tf_version_str +
-                "', expects 2.");
+                "', expects 3.");
       }
     }
   }
