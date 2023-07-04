@@ -25,14 +25,15 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <list>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <list>
-#include "filesystem/api.h"
+
 #include "backend_config.h"
 #include "constants.h"
+#include "filesystem/api.h"
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/model_config.h"
@@ -155,8 +156,7 @@ class TritonBackend {
 //
 class TritonBackendManager {
  public:
-  static Status Create(
-      std::shared_ptr<TritonBackendManager>* manager);
+  static Status Create(std::shared_ptr<TritonBackendManager>* manager);
 
   Status CreateBackend(
       const std::string& name, const std::string& dir,

@@ -317,8 +317,7 @@ static std::weak_ptr<TritonBackendManager> backend_manager_;
 static std::mutex mu_;
 
 Status
-TritonBackendManager::Create(
-    std::shared_ptr<TritonBackendManager>* manager)
+TritonBackendManager::Create(std::shared_ptr<TritonBackendManager>* manager)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
