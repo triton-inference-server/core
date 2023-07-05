@@ -220,8 +220,7 @@ TritonModelInstance::SetInstances(
     }
     for (int32_t c = 0; c < group.count(); ++c) {
       std::string instance_name{
-          group.count() > 1 ? group.name() + "_" + std::to_string(c)
-                            : group.name()};
+          c > 0 ? group.name() + "_" + std::to_string(c) : group.name()};
       const bool passive = group.passive();
       std::vector<std::tuple<
           std::string, TRITONSERVER_InstanceGroupKind, int32_t,
