@@ -745,14 +745,10 @@ NormalizeInstanceGroup(
     group->set_name(config->name());
 
     for (const auto& pg : preferred_groups) {
-      group->set_kind(pg.kind());
-      group->set_count(pg.count());
       // handle preferred GPU setting differently based on kind
       if (pg.kind() == inference::ModelInstanceGroup::KIND_GPU) {
         // Don't use preferred group with KIND_GPU if there is no GPU.
         if (supported_gpus.empty()) {
-          group->set_kind(inference::ModelInstanceGroup::KIND_AUTO);
-          group->set_count(0);
           continue;
         }
         // If preferred group sets GPUs, limit deployment onto those that
@@ -764,16 +760,17 @@ NormalizeInstanceGroup(
             }
           }
         }
-        break;
       } else if (pg.kind() == inference::ModelInstanceGroup::KIND_AUTO) {
         // if AUTO, then set preferred GPU as is, to align with KIND_AUTO
         // deduction specified below
         for (const int32_t gid : pg.gpus()) {
           group->add_gpus(gid);
         }
-        break;
       }
-      // Other kind should not set GPUs
+      group->set_kind(pg.kind());
+      group->set_count(pg.count());
+
+      // Found a valid preferred group.
       break;
     }
   }
