@@ -751,6 +751,8 @@ NormalizeInstanceGroup(
       if (pg.kind() == inference::ModelInstanceGroup::KIND_GPU) {
         // Don't use preferred group with KIND_GPU if there is no GPU.
         if (supported_gpus.empty()) {
+          group->set_kind(inference::ModelInstanceGroup::KIND_AUTO);
+          group->set_count(0);
           continue;
         }
         // If preferred group sets GPUs, limit deployment onto those that
