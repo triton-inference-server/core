@@ -145,8 +145,7 @@ InferenceServer::Init()
   }
 
   // BackendManager
-  status = TritonBackendManager::Create(
-      &backend_manager_);
+  status = TritonBackendManager::Create(&backend_manager_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
