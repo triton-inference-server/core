@@ -323,7 +323,10 @@ class InferenceRequest {
   bool CacheKeyIsSet() const { return cache_key_is_set_; }
 
 #ifdef TRITON_ENABLE_TRACING
-  const std::shared_ptr<InferenceTraceProxy>& Trace() const { return trace_; }
+  const std::shared_ptr<InferenceTraceProxy>& TraceProxy() const
+  {
+    return trace_;
+  }
   std::shared_ptr<InferenceTraceProxy>* MutableTrace() { return &trace_; }
   void SetTrace(const std::shared_ptr<InferenceTraceProxy>& trace)
   {

@@ -138,6 +138,7 @@ class InferenceTraceProxy {
  public:
   InferenceTraceProxy(InferenceTrace* trace) : trace_(trace) {}
   ~InferenceTraceProxy() { trace_->Release(); }
+  InferenceTrace* Trace() { return trace_; }
   int64_t Id() const { return trace_->Id(); }
   int64_t ParentId() const { return trace_->ParentId(); }
   const std::string& ModelName() const { return trace_->ModelName(); }

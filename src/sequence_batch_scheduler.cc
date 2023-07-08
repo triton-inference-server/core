@@ -628,7 +628,7 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   // scheduling process
   irequest->CaptureQueueStartNs();
   INFER_TRACE_ACTIVITY(
-      irequest->Trace(), TRITONSERVER_TRACE_QUEUE_START,
+      irequest->TraceProxy(), TRITONSERVER_TRACE_QUEUE_START,
       irequest->QueueStartNs());
 
   // Record time at the beginning of the batcher queueing
