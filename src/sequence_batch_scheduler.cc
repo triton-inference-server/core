@@ -154,7 +154,8 @@ SequenceBatchScheduler::Update(
     // All sequence slots of the removed instances are pending to be removed.
     pending_removal_seq_slots_.clear();
     for (auto& instance : removed_instances_set) {
-      pending_removal_seq_slots_.emplace(instance, seq_slot_cnt_);
+      pending_removal_seq_slots_.emplace(
+          instance, batchers_[instance]->SeqSlotCnt());
     }
 
     // Erase ready slots which its instance is pending removal.

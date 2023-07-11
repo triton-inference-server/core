@@ -282,6 +282,8 @@ class SequenceBatch {
       const InferenceRequest::SequenceId& correlation_id,
       std::unique_ptr<InferenceRequest>& request) = 0;
 
+  size_t SeqSlotCnt() { return seq_slot_cnt_; }
+
  protected:
   bool CreateCorrelationIDControl(const inference::ModelConfig& config);
   void SetControlTensors(
