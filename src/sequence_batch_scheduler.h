@@ -389,6 +389,8 @@ class DirectSequenceBatch : public SequenceBatch {
   // queues, one for each sequence slot where requests assigned to
   // that slot are enqueued to wait for inferencing.
   std::vector<std::deque<std::unique_ptr<InferenceRequest>>> queues_;
+  // Notify when requests are removed from the queue.
+  std::condition_variable queues_cv_;
 
   // Is each sequence slot active or not? A zero or empty value indicates
   // inactive, a non-zero/non-empty value indicates active and is the

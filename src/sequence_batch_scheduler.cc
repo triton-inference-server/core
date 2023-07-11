@@ -1323,36 +1323,39 @@ DirectSequenceBatch::DirectSequenceBatch(
 
 DirectSequenceBatch::~DirectSequenceBatch()
 {
-  // Wait until all pending requests are completed.
-  bool waiting_for_requests = true;
-  while (waiting_for_requests) {
-    std::unique_lock<std::mutex> lk1(mu_);
-    std::unique_lock<std::mutex> lk2(payload_mu_);
-
-    // Wait until the last enqueued payload completes execution.
-    while (!exec_complete_ || curr_payload_->RequestCount() > 0) {
-      LOG_VERBOSE(1)
-          << "Waiting for current payload to complete execution before exiting";
-      payload_cv_.wait(lk2);
-    }
-
-    // Make sure there are no more queued requests.
-    waiting_for_requests = false;
-    for (uint32_t seq_slot = 0; seq_slot < queues_.size(); seq_slot++) {
-      if (!queues_[seq_slot].empty()) {
-        LOG_VERBOSE(1) << "Waiting for slot " << seq_slot
-                       << " to begin execution before exiting";
-        waiting_for_requests = true;
-        break;
+  // Wait until all queued requests begin execution.
+  {
+    std::unique_lock<std::mutex> lk(mu_);
+    queues_cv_.wait(lk, [this] {
+      for (uint32_t seq_slot = 0; seq_slot < queues_.size(); seq_slot++) {
+        if (!queues_[seq_slot].empty()) {
+          LOG_VERBOSE(1) << "Waiting for slot " << seq_slot
+                         << " to begin execution before exiting";
+          return false;
+        }
       }
-    }
-
-    // Signal the scheduler thread to exit.
-    if (!waiting_for_requests) {
-      scheduler_thread_exit_ = true;
-    }
+      return true;
+    });
   }
 
+  // Wait until the last enqueued payload completes execution.
+  {
+    std::unique_lock<std::mutex> lk(payload_mu_);
+    payload_cv_.wait(lk, [this] {
+      if (!exec_complete_ || curr_payload_->RequestCount() > 0) {
+        LOG_VERBOSE(1) << "Waiting for current payload to complete execution "
+                          "before exiting";
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // Signal the scheduler thread to exit.
+  {
+    std::lock_guard<std::mutex> lk(mu_);
+    scheduler_thread_exit_ = true;
+  }
   cv_.notify_one();
 
   // It is possible for the scheduler thread to be the last holder of
@@ -1697,6 +1700,10 @@ DirectSequenceBatch::BatcherThread(const int nice)
         scheduler_idle_ = false;
       }
     }
+
+    // Requests could be removed from the queue, so notify a thread waiting for
+    // requests removal from the queue.
+    queues_cv_.notify_one();
 
     if (curr_payload_->GetState() == Payload::State::READY) {
       // Add callback to signal the execution completion
