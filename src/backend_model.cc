@@ -241,10 +241,11 @@ TritonModel::Create(
   }
 
   // Create or update the model instances for this model.
-  RETURN_IF_ERROR(TritonModelInstance::SetInstances(
-      raw_local_model, backend_cmdline_config_map, host_policy_map,
-      model_config));
-  RETURN_IF_ERROR(local_model->SetConfiguredScheduler());
+  std::vector<std::shared_ptr<TritonModelInstance>> added_instances,
+      removed_instances;
+  RETURN_IF_ERROR(local_model->PrepareInstances(
+      model_config, &added_instances, &removed_instances));
+  RETURN_IF_ERROR(local_model->SetConfiguredScheduler(added_instances));
   local_model->CommitInstances();
 
   *model = std::move(local_model);
@@ -266,22 +267,20 @@ TritonModel::UpdateInstanceGroup(const inference::ModelConfig& new_model_config)
   RETURN_IF_ERROR(ValidateInstanceGroup(model_config, min_compute_capability_));
 
   // Prepare the new instances on the new config.
-  Status status = TritonModelInstance::SetInstances(
-      this, backend_cmdline_config_map_, host_policy_map_, model_config);
+  std::vector<std::shared_ptr<TritonModelInstance>> added_instances,
+      removed_instances;
+  Status status =
+      PrepareInstances(model_config, &added_instances, &removed_instances);
   if (!status.IsOk()) {
     ClearBackgroundInstances();
     return status;
   }
 
-  // Update the scheduler if this is a sequence model.
-  if (model_config.has_sequence_batching()) {
-    SequenceBatchScheduler* sched =
-        reinterpret_cast<SequenceBatchScheduler*>(scheduler_.get());
-    Status status = sched->Update();
-    if (!status.IsOk()) {
-      ClearBackgroundInstances();
-      return status;
-    }
+  // Update the scheduler.
+  status = UpdateConfiguredScheduler(added_instances, removed_instances);
+  if (!status.IsOk()) {
+    ClearBackgroundInstances();
+    return status;
   }
 
   // Commit the instance update.
@@ -394,13 +393,108 @@ TritonModel::IndexInstances() const
 }
 
 Status
-TritonModel::RegisterInstance(
-    std::shared_ptr<TritonModelInstance>&& instance, const bool passive)
+TritonModel::PrepareInstances(
+    const inference::ModelConfig& model_config,
+    std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
+    std::vector<std::shared_ptr<TritonModelInstance>>* removed_instances)
 {
-  if (passive) {
-    bg_passive_instances_.emplace_back(std::move(instance));
-  } else {
-    bg_instances_.emplace_back(std::move(instance));
+  added_instances->clear();
+  removed_instances->clear();
+
+  std::unordered_map<
+      TritonModelInstance::Signature,
+      std::vector<std::shared_ptr<TritonModelInstance>>>
+      existing_instances = IndexInstances();
+
+  for (const auto& group : model_config.instance_group()) {
+    std::vector<std::string> profile_names;
+    for (const auto& profile_name : group.profile()) {
+      profile_names.push_back(profile_name);
+    }
+    std::vector<TritonModelInstance::SecondaryDevice> secondary_devices;
+    for (const auto& secondary_device : group.secondary_devices()) {
+      secondary_devices.emplace_back(
+          inference::
+              ModelInstanceGroup_SecondaryDevice_SecondaryDeviceKind_Name(
+                  secondary_device.kind()),
+          secondary_device.device_id());
+    }
+    for (int32_t c = 0; c < group.count(); ++c) {
+      std::string instance_name{group.name() + "_" + std::to_string(c)};
+      const bool passive = group.passive();
+      std::vector<std::tuple<
+          std::string, TRITONSERVER_InstanceGroupKind, int32_t,
+          const inference::ModelRateLimiter*>>
+          instance_settings;
+      if (group.kind() == inference::ModelInstanceGroup::KIND_CPU) {
+        instance_settings.emplace_back(
+            group.host_policy().empty() ? "cpu" : group.host_policy(),
+            TRITONSERVER_INSTANCEGROUPKIND_CPU, 0 /* device_id */,
+            &group.rate_limiter());
+      } else if (group.kind() == inference::ModelInstanceGroup::KIND_GPU) {
+        for (const int32_t device_id : group.gpus()) {
+          instance_settings.emplace_back(
+              group.host_policy().empty() ? ("gpu_" + std::to_string(device_id))
+                                          : group.host_policy(),
+              TRITONSERVER_INSTANCEGROUPKIND_GPU, device_id,
+              &group.rate_limiter());
+        }
+      } else if (group.kind() == inference::ModelInstanceGroup::KIND_MODEL) {
+        instance_settings.emplace_back(
+            group.host_policy().empty() ? "model" : group.host_policy(),
+            TRITONSERVER_INSTANCEGROUPKIND_MODEL, 0 /* device_id */,
+            &group.rate_limiter());
+      } else {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string("instance_group kind ") +
+                ModelInstanceGroup_Kind_Name(group.kind()) + " not supported");
+      }
+      for (const auto& instance_setting : instance_settings) {
+        const std::string& policy_name = std::get<0>(instance_setting);
+        const auto& kind = std::get<1>(instance_setting);
+        const auto& device_id = std::get<2>(instance_setting);
+        const inference::ModelRateLimiter* rate_limiter_config =
+            std::get<3>(instance_setting);
+
+        // All the information for the reqested instance is ready. Create a
+        // signature that identifies the requested instance.
+        const TritonModelInstance::Signature signature(group, device_id);
+
+        // Check if the requested instance can reuse an existing instance.
+        if (!TritonModelInstance::ShareBackendThread(DeviceBlocking(), kind)) {
+          auto itr = existing_instances.find(signature);
+          if (itr != existing_instances.end() && !itr->second.empty()) {
+            auto existing_instance = itr->second.back();
+            itr->second.pop_back();
+            LOG_VERBOSE(2) << "Re-using model instance named '"
+                           << existing_instance->Name() << "' with device id '"
+                           << existing_instance->DeviceId() << "'";
+            RegisterBackgroundInstance(std::move(existing_instance), passive);
+
+            continue;
+          }
+        }
+
+        // The requested instance did not match an existing instance. Create a
+        // new instance.
+        std::shared_ptr<TritonModelInstance> new_instance;
+        LOG_VERBOSE(2) << "Creating model instance named '" << instance_name
+                       << "' with device id '" << device_id << "'";
+        RETURN_IF_ERROR(TritonModelInstance::CreateInstance(
+            this, instance_name, signature, kind, device_id, profile_names,
+            passive, policy_name, *rate_limiter_config, secondary_devices,
+            &new_instance));
+        added_instances->push_back(new_instance);
+        RegisterBackgroundInstance(std::move(new_instance), passive);
+      }
+    }
+  }
+
+  // Any existing instances not reused will be removed.
+  for (auto pair : existing_instances) {
+    removed_instances->insert(
+        removed_instances->end(), pair.second.begin(), pair.second.end());
   }
 
   return Status::Success;
@@ -412,6 +506,17 @@ TritonModel::CommitInstances()
   instances_.swap(bg_instances_);
   passive_instances_.swap(bg_passive_instances_);
   ClearBackgroundInstances();
+}
+
+void
+TritonModel::RegisterBackgroundInstance(
+    std::shared_ptr<TritonModelInstance>&& instance, const bool passive)
+{
+  if (passive) {
+    bg_passive_instances_.emplace_back(std::move(instance));
+  } else {
+    bg_instances_.emplace_back(std::move(instance));
+  }
 }
 
 void
@@ -487,7 +592,8 @@ TritonModel::UpdateModelConfig(
 }
 
 Status
-TritonModel::SetConfiguredScheduler()
+TritonModel::SetConfiguredScheduler(
+    const std::vector<std::shared_ptr<TritonModelInstance>>& new_instances)
 {
   std::unique_ptr<Scheduler> scheduler;
 
@@ -517,7 +623,7 @@ TritonModel::SetConfiguredScheduler()
                    "sequence batcher, using default batching strategy";
     }
     RETURN_IF_ERROR(SequenceBatchScheduler::Create(
-        this, enforce_equal_shape_tensors, &scheduler));
+        this, new_instances, enforce_equal_shape_tensors, &scheduler));
   } else if (config_.has_dynamic_batching()) {
     // Dynamic batcher
     RETURN_IF_ERROR(DynamicBatchScheduler::Create(
@@ -541,6 +647,27 @@ TritonModel::SetConfiguredScheduler()
   }
 
   return SetScheduler(std::move(scheduler));
+}
+
+Status
+TritonModel::UpdateConfiguredScheduler(
+    const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
+    const std::vector<std::shared_ptr<TritonModelInstance>>& removed_instances)
+{
+  if (config_.has_sequence_batching()) {
+    SequenceBatchScheduler* sched =
+        dynamic_cast<SequenceBatchScheduler*>(scheduler_.get());
+    if (sched == nullptr) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Unable to downcast from 'Scheduler' to 'SequenceBatchScheduler' "
+          "during scheduler update");
+    }
+    return sched->Update(added_instances, removed_instances);
+  }
+
+  // Non-sequence scheduler does not need to be updated.
+  return Status::Success;
 }
 
 Status

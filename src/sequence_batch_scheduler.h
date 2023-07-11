@@ -61,6 +61,7 @@ class SequenceBatchScheduler : public Scheduler {
   // function to call when a request is scheduled.
   static Status Create(
       TritonModel* model,
+      const std::vector<std::shared_ptr<TritonModelInstance>>& new_instances,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       std::unique_ptr<Scheduler>* scheduler);
 
@@ -77,12 +78,12 @@ class SequenceBatchScheduler : public Scheduler {
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
 
-  // Update the scheduler to the new set of model instances. When this function
-  // is called, the foreground instances on the TritonModel must represent the
-  // current set of instances that this scheduler is serving, and the background
-  // instances must represent the new set of instances that this scheduler will
-  // serve during/after the update. The function cannot be called concurrently.
-  Status Update();
+  // Update the scheduler to the new set of model instances. This function
+  // cannot be called concurrently.
+  Status Update(
+      const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
+      const std::vector<std::shared_ptr<TritonModelInstance>>&
+          removed_instances);
 
   // A batcher-sequence_slot combination. The batcher is represented
   // by the index into 'batchers_'.
@@ -157,11 +158,6 @@ class SequenceBatchScheduler : public Scheduler {
   // Create a batcher for each of the provided instances.
   Status CreateBatchers(
       const std::vector<std::shared_ptr<TritonModelInstance>>& instances);
-
-  // Return the added and removed instances for scheduler update purposes.
-  void InstancesDiff(
-      std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
-      std::unordered_set<TritonModelInstance*>* removed_instances);
 
   // Update the 'pending_removal_seq_slots_', when the provided sequence slot is
   // no longer pending removal.

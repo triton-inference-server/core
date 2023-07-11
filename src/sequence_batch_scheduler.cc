@@ -57,6 +57,7 @@ Now()
 Status
 SequenceBatchScheduler::Create(
     TritonModel* model,
+    const std::vector<std::shared_ptr<TritonModelInstance>>& new_instances,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     std::unique_ptr<Scheduler>* scheduler)
 {
@@ -115,7 +116,7 @@ SequenceBatchScheduler::Create(
   }
 
   // Create batchers.
-  RETURN_IF_ERROR(sched->CreateBatchers(model->BackgroundInstances()));
+  RETURN_IF_ERROR(sched->CreateBatchers(new_instances));
 
   // Create a reaper thread that watches for idle sequences. Run the
   // reaper a lower priority.
@@ -131,12 +132,15 @@ SequenceBatchScheduler::Create(
 }
 
 Status
-SequenceBatchScheduler::Update()
+SequenceBatchScheduler::Update(
+    const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
+    const std::vector<std::shared_ptr<TritonModelInstance>>& removed_instances)
 {
-  // Find added and removed instances for this update.
-  std::vector<std::shared_ptr<TritonModelInstance>> added_instances;
-  std::unordered_set<TritonModelInstance*> removed_instances;
-  InstancesDiff(&added_instances, &removed_instances);
+  // Index removed instances
+  std::unordered_set<TritonModelInstance*> removed_instances_set;
+  for (auto instance : removed_instances) {
+    removed_instances_set.emplace(instance.get());
+  }
 
   // Batchers should be destroyed outside the lock.
   std::vector<std::unique_ptr<SequenceBatch>> removed_batchers;
@@ -149,7 +153,7 @@ SequenceBatchScheduler::Update()
 
     // All sequence slots of the removed instances are pending to be removed.
     pending_removal_seq_slots_.clear();
-    for (auto& instance : removed_instances) {
+    for (auto& instance : removed_instances_set) {
       pending_removal_seq_slots_.emplace(instance, seq_slot_cnt_);
     }
 
@@ -160,8 +164,8 @@ SequenceBatchScheduler::Update()
         new_ready_batcher_seq_slots;
     while (!ready_batcher_seq_slots_.empty()) {
       auto& ready_batcher_seq_slot = ready_batcher_seq_slots_.top();
-      if (removed_instances.find(ready_batcher_seq_slot.model_instance_) ==
-          removed_instances.end()) {
+      if (removed_instances_set.find(ready_batcher_seq_slot.model_instance_) ==
+          removed_instances_set.end()) {
         // The ready slot is not being removed.
         new_ready_batcher_seq_slots.push(ready_batcher_seq_slot);
       } else {
@@ -177,7 +181,7 @@ SequenceBatchScheduler::Update()
         lk, [this] { return pending_removal_seq_slots_.empty(); });
 
     // Erase all removed batchers, outside the lock.
-    for (auto& instance : removed_instances) {
+    for (auto& instance : removed_instances_set) {
       removed_batchers.emplace(removed_batchers.end(), nullptr);
       auto it = batchers_.find(instance);
       it->second.swap(removed_batchers.back());
@@ -185,38 +189,12 @@ SequenceBatchScheduler::Update()
     }
 
     // Update removed request count.
-    for (auto& instance : removed_instances) {
+    for (auto& instance : removed_instances_set) {
       queue_request_cnts_.erase(instance);
     }
   }
 
   return Status::Success;
-}
-
-void
-SequenceBatchScheduler::InstancesDiff(
-    std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
-    std::unordered_set<TritonModelInstance*>* removed_instances)
-{
-  added_instances->clear();
-  removed_instances->clear();
-
-  // Index currently serving instances.
-  auto* curr_instances = removed_instances;  // rename the container
-  for (auto& instance : model_->Instances()) {
-    curr_instances->emplace(instance.get());
-  }
-
-  // Compare the current set of serving instance against the next set.
-  for (auto& instance : model_->BackgroundInstances()) {
-    if (curr_instances->find(instance.get()) == curr_instances->end()) {
-      // The instance is on the next set but not current, so it is added.
-      added_instances->push_back(instance);
-    } else {
-      // Remove overlappings from current, so any remainings are removed.
-      curr_instances->erase(instance.get());
-    }
-  }
 }
 
 void
