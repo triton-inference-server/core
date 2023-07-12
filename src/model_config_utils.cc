@@ -2355,4 +2355,13 @@ EquivalentInInstanceConfig(
   return pb_diff.Compare(instance_config_lhs, instance_config_rhs);
 }
 
+std::string
+InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
+{
+  inference::ModelInstanceGroup config = instance_config;
+  *config.mutable_name() = "[Normalized]";
+  config.set_count(1);
+  return config.SerializeAsString();
+}
+
 }}  // namespace triton::core
