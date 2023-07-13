@@ -1207,8 +1207,12 @@ TRITONBACKEND_RequestTrace(
 {
 #ifdef TRITON_ENABLE_TRACING
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  *trace =
-      reinterpret_cast<TRITONSERVER_InferenceTrace*>(tr->TraceProxy()->Trace());
+  if (tr->TraceProxy() != nullptr) {
+    *trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(
+        tr->TraceProxy()->Trace());
+  } else {
+    *trace = nullptr;
+  }
   return nullptr;  // success
 #else
   return TRITONSERVER_ErrorNew(
