@@ -406,6 +406,9 @@ TritonModel::PrepareInstances(
       std::vector<std::shared_ptr<TritonModelInstance>>>
       existing_instances = IndexInstances();
 
+  // Iterates over all the requested instances on the model config, and decides
+  // if each requested instance can reuse an existing instance or a new instance
+  // is needed.
   for (const auto& group : model_config.instance_group()) {
     std::vector<std::string> profile_names;
     for (const auto& profile_name : group.profile()) {
@@ -666,7 +669,9 @@ TritonModel::UpdateConfiguredScheduler(
     return sched->Update(added_instances, removed_instances);
   }
 
-  // Non-sequence scheduler does not need to be updated.
+  // Non-sequence scheduler does not need to be updated, because other
+  // schedulers do not require the information on model instances to function,
+  // and only interact with the rate limiter.
   return Status::Success;
 }
 

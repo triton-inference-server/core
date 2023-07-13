@@ -205,7 +205,7 @@ TritonModelInstance::CreateInstance(
   }
 
   RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
-  auto err = CreateInstance(
+  auto err = ConstructAndInitializeInstance(
       model, name, signature, kind, device_id, profile_names, passive,
       host_policy_name, *host_policy, rate_limiter_config, secondary_devices,
       triton_model_instance);
@@ -241,7 +241,7 @@ TritonModelInstance::CreateInstance(
 }
 
 Status
-TritonModelInstance::CreateInstance(
+TritonModelInstance::ConstructAndInitializeInstance(
     TritonModel* model, const std::string& name, const Signature& signature,
     const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
     const std::vector<std::string>& profile_names, const bool passive,

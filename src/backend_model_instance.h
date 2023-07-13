@@ -206,7 +206,7 @@ class TritonModelInstance {
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const TritonServerMessage& host_policy_message,
       const std::vector<SecondaryDevice>& secondary_devices);
-  static Status CreateInstance(
+  static Status ConstructAndInitializeInstance(
       TritonModel* model, const std::string& name, const Signature& signature,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,
