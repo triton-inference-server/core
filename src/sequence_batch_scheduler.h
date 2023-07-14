@@ -159,9 +159,10 @@ class SequenceBatchScheduler : public Scheduler {
   Status CreateBatchers(
       const std::vector<std::shared_ptr<TritonModelInstance>>& instances);
 
-  // Update the 'pending_removal_seq_slots_', when the provided sequence slot is
-  // no longer pending removal.
-  void ErasePendingRemovalSequenceSlot(const BatcherSequenceSlot& seq_slot);
+  // Erase the sequence slot from 'pending_removal_seq_slots_'. The batcher
+  // behind the sequence slot will be removed when all sequence slots of the
+  // batcher are removed.
+  void EraseBatcherSequenceSlot(const BatcherSequenceSlot& seq_slot);
 
   // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
   // created.
@@ -188,13 +189,15 @@ class SequenceBatchScheduler : public Scheduler {
   // the timeout may be shorten by new request
   uint64_t timeout_timestamp_;
 
-  // Map from model instance pointer to the number of sequence slots pending to
-  // be removed. The sequence slots corresponding to the model instance should
-  // be erased once it becomes ready (or already at ready).
-  std::unordered_map<const TritonModelInstance*, size_t>
+  // Map from a model instance pointer that is pending to be removed from this
+  // scheduler to a pair ["the number of sequence slots remaining for the
+  // instance batcher", "the shared_ptr of the instance"]. The shared_ptr is
+  // kept to ensure the instance is available until its sequence slots and
+  // batcher are removed from this scheduler.
+  std::unordered_map<
+      const TritonModelInstance*,
+      std::pair<size_t, std::shared_ptr<TritonModelInstance>>>
       pending_removal_seq_slots_;
-  // Signal all pending removal sequence slots are erased.
-  std::condition_variable pending_removal_seq_slots_cv_;
 
   // The SequenceBatchs being managed by this scheduler.
   std::unordered_map<const TritonModelInstance*, std::unique_ptr<SequenceBatch>>

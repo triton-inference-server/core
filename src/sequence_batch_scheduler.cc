@@ -136,84 +136,66 @@ SequenceBatchScheduler::Update(
     const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
     const std::vector<std::shared_ptr<TritonModelInstance>>& removed_instances)
 {
-  // Index removed instances
-  std::unordered_set<TritonModelInstance*> removed_instances_set;
-  for (auto instance : removed_instances) {
-    removed_instances_set.emplace(instance.get());
+  std::lock_guard<std::mutex> lk(mu_);
+
+  // Add the new batchers.
+  RETURN_IF_ERROR(CreateBatchers(added_instances));
+
+  // All sequence slots of the removed instances are pending to be removed.
+  // Track them in 'pending_removal_seq_slots_' and they will be erased once
+  // they become ready.
+  for (auto& instance : removed_instances) {
+    pending_removal_seq_slots_.emplace(
+        instance.get(),
+        std::make_pair(batchers_[instance.get()]->SeqSlotCnt(), instance));
   }
 
-  // Batchers should be destroyed outside the lock.
-  std::vector<std::unique_ptr<SequenceBatch>> removed_batchers;
-
-  {
-    std::unique_lock<std::mutex> lk(mu_);
-
-    // Add the new batchers.
-    RETURN_IF_ERROR(CreateBatchers(added_instances));
-
-    // All sequence slots of the removed instances are pending to be removed.
-    pending_removal_seq_slots_.clear();
-    for (auto& instance : removed_instances_set) {
-      pending_removal_seq_slots_.emplace(
-          instance, batchers_[instance]->SeqSlotCnt());
+  // Erase pending removal sequence slots that are already at ready.
+  std::priority_queue<
+      BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
+      BatcherSequenceSlotCompare>
+      new_ready_batcher_seq_slots;
+  while (!ready_batcher_seq_slots_.empty()) {
+    auto& ready_batcher_seq_slot = ready_batcher_seq_slots_.top();
+    if (pending_removal_seq_slots_.find(
+            ready_batcher_seq_slot.model_instance_) ==
+        pending_removal_seq_slots_.end()) {
+      // The ready slot is not being removed.
+      new_ready_batcher_seq_slots.push(ready_batcher_seq_slot);
+    } else {
+      // The ready slot is being removed, so erase the batcher sequence slot.
+      EraseBatcherSequenceSlot(ready_batcher_seq_slot);
     }
-
-    // Erase ready slots which its instance is pending removal.
-    std::priority_queue<
-        BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
-        BatcherSequenceSlotCompare>
-        new_ready_batcher_seq_slots;
-    while (!ready_batcher_seq_slots_.empty()) {
-      auto& ready_batcher_seq_slot = ready_batcher_seq_slots_.top();
-      if (removed_instances_set.find(ready_batcher_seq_slot.model_instance_) ==
-          removed_instances_set.end()) {
-        // The ready slot is not being removed.
-        new_ready_batcher_seq_slots.push(ready_batcher_seq_slot);
-      } else {
-        // The ready slot is removed, so update pending removal instances.
-        ErasePendingRemovalSequenceSlot(ready_batcher_seq_slot);
-      }
-      ready_batcher_seq_slots_.pop();
-    }
-    ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
-
-    // Wait until all removed batchers have completed its assigned sequence.
-    pending_removal_seq_slots_cv_.wait(
-        lk, [this] { return pending_removal_seq_slots_.empty(); });
-
-    // Erase all removed batchers, outside the lock.
-    for (auto& instance : removed_instances_set) {
-      removed_batchers.emplace(removed_batchers.end(), nullptr);
-      auto it = batchers_.find(instance);
-      it->second.swap(removed_batchers.back());
-      batchers_.erase(std::move(it));
-    }
-
-    // Update removed request count.
-    for (auto& instance : removed_instances_set) {
-      queue_request_cnts_.erase(instance);
-    }
+    ready_batcher_seq_slots_.pop();
   }
+  ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
 
   return Status::Success;
 }
 
 void
-SequenceBatchScheduler::ErasePendingRemovalSequenceSlot(
+SequenceBatchScheduler::EraseBatcherSequenceSlot(
     const BatcherSequenceSlot& seq_slot)
 {
-  LOG_VERBOSE(1) << "Removing slot in batcher "
+  LOG_VERBOSE(1) << "Removing slot for batcher "
                  << seq_slot.model_instance_->Name() << ", slot "
                  << seq_slot.seq_slot_;
 
+  // Find the entry on 'pending_removal_seq_slots_'.
   auto it = pending_removal_seq_slots_.find(seq_slot.model_instance_);
   if (it == pending_removal_seq_slots_.end()) {
     LOG_ERROR << "Batcher " << seq_slot.model_instance_->Name()
               << " is not pending removal";
     return;
   }
-  // Subtract the number of slots, and erase the key if no more slots left.
-  if (--it->second == 0) {
+
+  // Subtract the number of slots, and erase the batcher and entry if no more
+  // slots left.
+  if (--it->second.first == 0) {
+    LOG_VERBOSE(1) << "Removing batcher " << seq_slot.model_instance_->Name();
+
+    batchers_.erase(it->first);
+    queue_request_cnts_.erase(it->first);
     pending_removal_seq_slots_.erase(std::move(it));
   }
 }
@@ -830,11 +812,10 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
   std::unique_lock<std::mutex> lock(mu_);
 
   // If the instance behind the slot is pending to be removed, do not add the
-  // slot back to ready.
+  // slot back to ready and erase it instead.
   if (pending_removal_seq_slots_.find(batcher_seq_slot.model_instance_) !=
       pending_removal_seq_slots_.end()) {
-    ErasePendingRemovalSequenceSlot(batcher_seq_slot);
-    pending_removal_seq_slots_cv_.notify_one();
+    EraseBatcherSequenceSlot(batcher_seq_slot);
     return InferenceRequest::SequenceId();
   }
 
