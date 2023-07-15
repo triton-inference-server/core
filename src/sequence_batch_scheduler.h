@@ -161,8 +161,9 @@ class SequenceBatchScheduler : public Scheduler {
 
   // Erase the sequence slot from 'pending_removal_seq_slots_'. The batcher
   // behind the sequence slot will be removed when all sequence slots of the
-  // batcher are removed.
-  void EraseBatcherSequenceSlot(const BatcherSequenceSlot& seq_slot);
+  // batcher are removed. Return true if the sequence slot is pending removal.
+  // Otherwise, false is returned.
+  bool EraseBatcherSequenceSlot(const BatcherSequenceSlot& seq_slot);
 
   // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
   // created.
