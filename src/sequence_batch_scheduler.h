@@ -133,7 +133,8 @@ class SequenceBatchScheduler : public Scheduler {
   {
   }
 
-  void ReaperThread(const int nice);
+  void StartBackgroundThreads();
+  void StopBackgroundThreads();
 
   Status CreateBooleanControlTensors(
       const inference::ModelConfig& config,
@@ -165,6 +166,16 @@ class SequenceBatchScheduler : public Scheduler {
   // Otherwise, false is returned.
   bool EraseBatcherSequenceSlot(const BatcherSequenceSlot& seq_slot);
 
+  // A thread that monitors idle sequences. This thread is time sensitive that
+  // all operations should be completed as quickly as possible to avoid blocking
+  // the thread from starting its next iteration.
+  void ReaperThread(const int nice);
+
+  // A thread that asynchronously erase removed resources. This thread is
+  // intended to destruct resources that might take some time to complete,
+  // without preventing the scheduler from scheduling requests.
+  void CleanUpThread(const int nice);
+
   // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
   // created.
   TritonModel* model_;
@@ -189,6 +200,14 @@ class SequenceBatchScheduler : public Scheduler {
   // Need to share between enqueue thread and reaper thread because
   // the timeout may be shorten by new request
   uint64_t timeout_timestamp_;
+
+  // The clean-up thread
+  std::unique_ptr<std::thread> clean_up_thread_;
+  std::condition_variable clean_up_cv_;
+  bool clean_up_thread_exit_;
+  // Removed objects to be cleaned up
+  std::vector<std::shared_ptr<TritonModelInstance>> removed_instances_;
+  std::vector<std::unique_ptr<SequenceBatch>> removed_batchers_;
 
   // Map from a model instance pointer that is pending to be removed from this
   // scheduler to a pair ["the number of sequence slots remaining for the

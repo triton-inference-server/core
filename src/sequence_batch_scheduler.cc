@@ -118,14 +118,10 @@ SequenceBatchScheduler::Create(
   // Create batchers.
   RETURN_IF_ERROR(sched->CreateBatchers(new_instances));
 
-  // Create a reaper thread that watches for idle sequences. Run the
-  // reaper a lower priority.
+
   SequenceBatchScheduler* raw = sched.release();
-
-  raw->reaper_thread_exit_ = false;
-  raw->reaper_thread_.reset(
-      new std::thread([raw]() { raw->ReaperThread(10 /* nice */); }));
-
+  // Create background threads that watch for different sequence states.
+  raw->StartBackgroundThreads();
   scheduler->reset(raw);
 
   return Status::Success;
@@ -136,48 +132,38 @@ SequenceBatchScheduler::Update(
     const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
     const std::vector<std::shared_ptr<TritonModelInstance>>& removed_instances)
 {
-  // Sequence slots are to be destructed outside the lock.
-  std::vector<BatcherSequenceSlot> removed_seq_slots;
+  std::lock_guard<std::mutex> lk(mu_);
 
-  {
-    std::lock_guard<std::mutex> lk(mu_);
+  // Add the new batchers.
+  RETURN_IF_ERROR(CreateBatchers(added_instances));
 
-    // Add the new batchers.
-    RETURN_IF_ERROR(CreateBatchers(added_instances));
-
-    // All sequence slots of the removed instances are pending to be removed.
-    // Track them in 'pending_removal_seq_slots_' and they will be erased once
-    // they become ready.
-    for (auto& instance : removed_instances) {
-      pending_removal_seq_slots_.emplace(
-          instance.get(),
-          std::make_pair(batchers_[instance.get()]->SeqSlotCnt(), instance));
-    }
-
-    // Erase pending removal sequence slots that are already at ready.
-    std::priority_queue<
-        BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
-        BatcherSequenceSlotCompare>
-        new_ready_batcher_seq_slots;
-    while (!ready_batcher_seq_slots_.empty()) {
-      auto& ready_seq_slot = ready_batcher_seq_slots_.top();
-      if (pending_removal_seq_slots_.find(ready_seq_slot.model_instance_) ==
-          pending_removal_seq_slots_.end()) {
-        // The ready slot is not being removed.
-        new_ready_batcher_seq_slots.push(ready_seq_slot);
-      } else {
-        // The ready slot is being removed.
-        removed_seq_slots.push_back(ready_seq_slot);
-      }
-      ready_batcher_seq_slots_.pop();
-    }
-    ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
+  // All sequence slots of the removed instances are pending to be removed.
+  // Track them in 'pending_removal_seq_slots_' and they will be erased once
+  // they become ready.
+  for (auto& instance : removed_instances) {
+    pending_removal_seq_slots_.emplace(
+        instance.get(),
+        std::make_pair(batchers_[instance.get()]->SeqSlotCnt(), instance));
   }
 
-  // Erase removed sequence slots
-  for (const auto& seq_slot : removed_seq_slots) {
-    EraseBatcherSequenceSlot(seq_slot);
+  // Erase pending removal sequence slots that are already at ready.
+  std::priority_queue<
+      BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
+      BatcherSequenceSlotCompare>
+      new_ready_batcher_seq_slots;
+  while (!ready_batcher_seq_slots_.empty()) {
+    auto& ready_seq_slot = ready_batcher_seq_slots_.top();
+    if (pending_removal_seq_slots_.find(ready_seq_slot.model_instance_) ==
+        pending_removal_seq_slots_.end()) {
+      // The ready slot is not being removed.
+      new_ready_batcher_seq_slots.push(ready_seq_slot);
+    } else {
+      // The ready slot is being removed, erase the slot.
+      EraseBatcherSequenceSlot(ready_seq_slot);
+    }
+    ready_batcher_seq_slots_.pop();
   }
+  ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
 
   return Status::Success;
 }
@@ -186,8 +172,6 @@ bool
 SequenceBatchScheduler::EraseBatcherSequenceSlot(
     const BatcherSequenceSlot& seq_slot)
 {
-  std::unique_lock<std::mutex> lk(mu_);
-
   // Find the sequence slot from pending removal sequence slots.
   auto it = pending_removal_seq_slots_.find(seq_slot.model_instance_);
   if (it == pending_removal_seq_slots_.end()) {
@@ -203,25 +187,29 @@ SequenceBatchScheduler::EraseBatcherSequenceSlot(
   if (--it->second.first == 0) {
     LOG_VERBOSE(1) << "Removing batcher " << seq_slot.model_instance_->Name();
 
-    // Stop tracking the removed instance outside the lock.
-    std::shared_ptr<TritonModelInstance> removed_instance;
-    it->second.second.swap(removed_instance);
-
-    // Erase batcher and destruct it outside the lock.
+    // Erase batcher.
     std::unique_ptr<SequenceBatch> removed_batcher;
     auto batcher_it = batchers_.find(it->first);
     batcher_it->second.swap(removed_batcher);
     batchers_.erase(std::move(batcher_it));
+    removed_batchers_.emplace_back(std::move(removed_batcher));
 
-    // Erase sequence slot.
-    queue_request_cnts_.erase(it->first);  // update debugging/testing info
+    // Stop tracking the removed instance.
+    std::shared_ptr<TritonModelInstance> removed_instance;
+    it->second.second.swap(removed_instance);
+    removed_instances_.emplace_back(std::move(removed_instance));
+
+    // Erase from debugging/testing info.
+    queue_request_cnts_.erase(it->first);
+
+    // Erase sequence slot from pending.
     pending_removal_seq_slots_.erase(std::move(it));
 
-    // To destruct the removed objects outside the lock.
-    lk.unlock();
+    // Notify the clean-up thread.
+    clean_up_cv_.notify_one();
   }
 
-  // The sequence slot was pending removal and removed.
+  // The sequence slot was pending removal.
   return true;
 }
 
@@ -427,21 +415,13 @@ SequenceBatchScheduler::GenerateInitialStateData(
 
 SequenceBatchScheduler::~SequenceBatchScheduler()
 {
-  // Signal the reaper thread to exit...
-  {
-    std::unique_lock<std::mutex> lock(mu_);
-    reaper_thread_exit_ = true;
-  }
-
-  reaper_cv_.notify_one();
-  if ((reaper_thread_ != nullptr) && reaper_thread_->joinable()) {
-    reaper_thread_->join();
-  }
+  StopBackgroundThreads();
 
   // Release 'batchers_' before other member variables because 'batchers_'
   // can access 'this' and we need to make sure the member variables live
   // longer than 'batchers_'
   batchers_.clear();
+  removed_batchers_.clear();
 }
 
 
@@ -834,14 +814,14 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
     const BatcherSequenceSlot& batcher_seq_slot,
     std::deque<std::unique_ptr<InferenceRequest>>* requests)
 {
+  std::unique_lock<std::mutex> lock(mu_);
+
   // If the instance behind the slot is pending to be removed, do not add the
   // slot back to ready and erase it instead.
   if (EraseBatcherSequenceSlot(batcher_seq_slot)) {
     // The slot is erased.
     return InferenceRequest::SequenceId();
   }
-
-  std::unique_lock<std::mutex> lock(mu_);
 
   // If there is a backlogged sequence and it is requested, return it
   // so that it can use the newly available sequence slot.
@@ -924,6 +904,44 @@ SequenceBatchScheduler::DelayScheduler(
   }
 
   return false;
+}
+
+void
+SequenceBatchScheduler::StartBackgroundThreads()
+{
+  // Create a reaper thread that watches for idle sequences.
+  reaper_thread_exit_ = false;
+  reaper_thread_.reset(
+      new std::thread([this]() { ReaperThread(10 /* nice */); }));
+
+  // Create a clean-up thread that asynchronously erase removed resources.
+  clean_up_thread_exit_ = false;
+  clean_up_thread_.reset(
+      new std::thread([this]() { CleanUpThread(20 /* nice */); }));
+}
+
+void
+SequenceBatchScheduler::StopBackgroundThreads()
+{
+  // Exit the clean-up thread.
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    clean_up_thread_exit_ = true;
+  }
+  clean_up_cv_.notify_one();
+  if (clean_up_thread_ && clean_up_thread_->joinable()) {
+    clean_up_thread_->join();
+  }
+
+  // Exit the reaper thread.
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    reaper_thread_exit_ = true;
+  }
+  reaper_cv_.notify_one();
+  if (reaper_thread_ && reaper_thread_->joinable()) {
+    reaper_thread_->join();
+  }
 }
 
 void
@@ -1087,6 +1105,47 @@ SequenceBatchScheduler::ReaperThread(const int nice)
   }
 
   LOG_VERBOSE(1) << "Stopping sequence-batch reaper thread...";
+}
+
+void
+SequenceBatchScheduler::CleanUpThread(const int nice)
+{
+#ifndef _WIN32
+  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
+    LOG_VERBOSE(1) << "Starting sequence-batch clean-up thread at nice " << nice
+                   << "...";
+  } else {
+    LOG_VERBOSE(1) << "Starting sequence-batch clean-up thread at default nice "
+                      "(requested nice "
+                   << nice << " failed)...";
+  }
+#else
+  LOG_VERBOSE(1)
+      << "Starting sequence-batch clean-up thread at default nice...";
+#endif
+
+  while (!clean_up_thread_exit_) {
+    // Removed resources should be destructed outside the lock.
+    std::vector<std::shared_ptr<TritonModelInstance>> removed_instances;
+    std::vector<std::unique_ptr<SequenceBatch>> removed_batchers;
+
+    {
+      std::unique_lock<std::mutex> lk(mu_);
+
+      clean_up_cv_.wait(lk, [this] {
+        return clean_up_thread_exit_ || !removed_instances_.empty() ||
+               !removed_batchers_.empty();
+      });
+
+      removed_instances_.swap(removed_instances);
+      removed_batchers_.swap(removed_batchers);
+    }
+
+    LOG_VERBOSE(2)
+        << "Cleaning-up resources on sequence-batch clean-up thread...";
+  }
+
+  LOG_VERBOSE(1) << "Stopping sequence-batch clean-up thread...";
 }
 
 SequenceBatch::SequenceBatch(
