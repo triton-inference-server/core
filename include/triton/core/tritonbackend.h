@@ -563,7 +563,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestRelease(
 
 /// Get the trace associated with a request. The returned trace is owned by the
 /// request, not the caller, and so should not be modified or freed.
-/// If tracing is disabled, then `nullptr` will be returned.
+/// If the request is not being traced, then `nullptr` will be returned.
 ///
 /// \param request The inference request.
 /// \param trace Returns the trace associated with the request.
