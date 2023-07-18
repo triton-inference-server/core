@@ -1067,8 +1067,12 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 {
 #ifdef TRITON_ENABLE_TRACING
   tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  *child_trace =
-      reinterpret_cast<TRITONSERVER_InferenceTrace*>(ltrace->SpawnChildTrace());
+  if (trace != nullptr) {
+    *child_trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(
+        ltrace->SpawnChildTrace());
+  } else {
+    *child_trace = nullptr;
+  }
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
