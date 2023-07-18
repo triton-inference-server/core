@@ -460,7 +460,7 @@ TritonModel::PrepareInstances(
         const inference::ModelRateLimiter* rate_limiter_config =
             std::get<3>(instance_setting);
 
-        // All the information for the reqested instance is ready. Create a
+        // All the information for the requested instance is ready. Create a
         // signature that identifies the requested instance.
         const TritonModelInstance::Signature signature(group, device_id);
 
