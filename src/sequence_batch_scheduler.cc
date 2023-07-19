@@ -115,7 +115,7 @@ SequenceBatchScheduler::Create(
         config.sequence_batching().oldest().max_candidate_sequences();
   }
 
-  // Create batchers.
+  // Create a batcher for each instance.
   RETURN_IF_ERROR(sched->CreateBatchers(new_instances));
 
 
