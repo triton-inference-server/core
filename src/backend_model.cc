@@ -425,10 +425,21 @@ TritonModel::PrepareInstances(
     for (int32_t c = 0; c < group.count(); ++c) {
       std::string instance_name{group.name() + "_" + std::to_string(c)};
       const bool passive = group.passive();
-      std::vector<std::tuple<
-          std::string, TRITONSERVER_InstanceGroupKind, int32_t,
-          const inference::ModelRateLimiter*>>
-          instance_settings;
+      struct InstanceSetting {
+        InstanceSetting(
+            const std::string& policy_name, TRITONSERVER_InstanceGroupKind kind,
+            int32_t device_id,
+            const inference::ModelRateLimiter* rate_limiter_config)
+            : policy_name_(policy_name), kind_(kind), device_id_(device_id),
+              rate_limiter_config_(rate_limiter_config)
+        {
+        }
+        const std::string policy_name_;
+        const TRITONSERVER_InstanceGroupKind kind_;
+        const int32_t device_id_;
+        const inference::ModelRateLimiter* rate_limiter_config_;
+      };
+      std::vector<InstanceSetting> instance_settings;
       if (group.kind() == inference::ModelInstanceGroup::KIND_CPU) {
         instance_settings.emplace_back(
             group.host_policy().empty() ? "cpu" : group.host_policy(),
@@ -453,19 +464,14 @@ TritonModel::PrepareInstances(
             std::string("instance_group kind ") +
                 ModelInstanceGroup_Kind_Name(group.kind()) + " not supported");
       }
-      for (const auto& instance_setting : instance_settings) {
-        const std::string& policy_name = std::get<0>(instance_setting);
-        const auto& kind = std::get<1>(instance_setting);
-        const auto& device_id = std::get<2>(instance_setting);
-        const inference::ModelRateLimiter* rate_limiter_config =
-            std::get<3>(instance_setting);
-
+      for (const auto& is : instance_settings) {
         // All the information for the requested instance is ready. Create a
         // signature that identifies the requested instance.
-        const TritonModelInstance::Signature signature(group, device_id);
+        const TritonModelInstance::Signature signature(group, is.device_id_);
 
         // Check if the requested instance can reuse an existing instance.
-        if (!TritonModelInstance::ShareBackendThread(DeviceBlocking(), kind)) {
+        if (!TritonModelInstance::ShareBackendThread(
+                DeviceBlocking(), is.kind_)) {
           auto itr = existing_instances.find(signature);
           if (itr != existing_instances.end() && !itr->second.empty()) {
             auto existing_instance = itr->second.back();
@@ -483,11 +489,11 @@ TritonModel::PrepareInstances(
         // new instance.
         std::shared_ptr<TritonModelInstance> new_instance;
         LOG_VERBOSE(2) << "Creating model instance named '" << instance_name
-                       << "' with device id '" << device_id << "'";
+                       << "' with device id '" << is.device_id_ << "'";
         RETURN_IF_ERROR(TritonModelInstance::CreateInstance(
-            this, instance_name, signature, kind, device_id, profile_names,
-            passive, policy_name, *rate_limiter_config, secondary_devices,
-            &new_instance));
+            this, instance_name, signature, is.kind_, is.device_id_,
+            profile_names, passive, is.policy_name_, *is.rate_limiter_config_,
+            secondary_devices, &new_instance));
         added_instances->push_back(new_instance);
         RegisterBackgroundInstance(std::move(new_instance), passive);
       }
