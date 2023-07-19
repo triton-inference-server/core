@@ -196,12 +196,11 @@ TritonModelInstance::CreateInstance(
     std::shared_ptr<TritonModelInstance>* triton_model_instance)
 {
   static triton::common::HostPolicyCmdlineConfig empty_host_policy;
-  const triton::common::HostPolicyCmdlineConfig* host_policy;
+  const triton::common::HostPolicyCmdlineConfig* host_policy =
+      &empty_host_policy;
   const auto policy_it = model->HostPolicyMap().find(host_policy_name);
   if (policy_it != model->HostPolicyMap().end()) {
     host_policy = &policy_it->second;
-  } else {
-    host_policy = &empty_host_policy;
   }
 
   RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
