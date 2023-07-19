@@ -134,6 +134,32 @@ WarmupRequestComplete(
   }
 }
 
+// Helper function for creating an instance
+Status
+VerifyModelLoadGpuFraction(
+    const std::string& name, TRITONSERVER_InstanceGroupKind kind,
+    int32_t device_id,
+    const triton::common::BackendCmdlineConfigMap& backend_config_map)
+{
+  size_t free, total;
+  double memory_limit;
+  RETURN_IF_ERROR(GetDeviceMemoryInfo(device_id, &free, &total));
+  RETURN_IF_ERROR(BackendConfigurationModelLoadGpuFraction(
+      backend_config_map, device_id, &memory_limit));
+  const size_t allow = total * memory_limit;
+  const size_t used = total - free;
+  if (used > allow) {
+    return Status(
+        Status::Code::UNAVAILABLE,
+        std::string("can not create model '") + name +
+            "': memory limit set for " +
+            TRITONSERVER_InstanceGroupKindString(kind) + " " +
+            std::to_string(device_id) +
+            " has exceeded, model loading is rejected.");
+  }
+  return Status::Success;
+}
+
 }  // namespace
 
 TritonModelInstance::TritonModelInstance(
@@ -218,22 +244,8 @@ TritonModelInstance::CreateInstance(
   // the limit. If we check before loading, we may create instance
   // that occupies the rest of available memory which against the purpose
   if (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-    size_t free, total;
-    double memory_limit;
-    RETURN_IF_ERROR(GetDeviceMemoryInfo(device_id, &free, &total));
-    RETURN_IF_ERROR(BackendConfigurationModelLoadGpuFraction(
-        model->BackendConfigMap(), device_id, &memory_limit));
-    const size_t allow = total * memory_limit;
-    const size_t used = total - free;
-    if (used > allow) {
-      return Status(
-          Status::Code::UNAVAILABLE,
-          std::string("can not create model '") + name +
-              "': memory limit set for " +
-              TRITONSERVER_InstanceGroupKindString(kind) + " " +
-              std::to_string(device_id) +
-              " has exceeded, model loading is rejected.");
-    }
+    RETURN_IF_ERROR(VerifyModelLoadGpuFraction(
+        name, kind, device_id, model->BackendConfigMap()));
   }
 
   return Status::Success;
