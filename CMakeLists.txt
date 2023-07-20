@@ -33,6 +33,26 @@ project(tritoncore LANGUAGES C CXX)
 # TRITON_CORE_HEADERS_ONLY=OFF to also build libtritonserver.so.
 option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 
+#
+# C++ standard
+#
+
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard whose features are requested to build this target.")
+
+# Unset CMAKE_CXX_STANDARD if it's too low and in the CMakeCache.txt
+if($CACHE{CMAKE_CXX_STANDARD} AND $CACHE{CMAKE_CXX_STANDARD} LESS ${TRITON_MIN_CXX_STANDARD})
+  message(WARNING "Resetting cache value for CMAKE_CXX_STANDARD to ${TRITON_MIN_CXX_STANDARD}")
+  unset(CMAKE_CXX_STANDARD CACHE)
+endif()
+
+# Allow manually specified CMAKE_CXX_STANDARD if it's greater than the minimum
+# required C++ version
+if(DEFINED CMAKE_CXX_STANDARD AND CMAKE_CXX_STANDARD LESS ${TRITON_MIN_CXX_STANDARD})
+  message(FATAL_ERROR "Requested CMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD} which is less than the minimum C++ standard ${TRITON_MIN_CXX_STANDARD}")
+endif()
+
+set(CMAKE_CXX_STANDARD ${TRITON_MIN_CXX_STANDARD} CACHE STRING "C++ standard to conform to")
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #
 # Triton Server API
@@ -121,7 +141,6 @@ add_library(
   TritonCore::triton-core-serverstub ALIAS triton-core-serverstub
 )
 
-target_compile_features(triton-core-serverstub PRIVATE cxx_std_11)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
@@ -337,6 +356,9 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DTRITON_ENABLE_AZURE_STORAGE:BOOL=${TRITON_ENABLE_AZURE_STORAGE}
       -DTRITON_ENABLE_S3:BOOL=${TRITON_ENABLE_S3}
       -DTRITON_ENABLE_ENSEMBLE:BOOL=${TRITON_ENABLE_ENSEMBLE}
+      -DTRITON_MIN_CXX_STANDARD:STRING=${TRITON_MIN_CXX_STANDARD}
+      -DCMAKE_CXX_STANDARD:STRING=${CMAKE_CXX_STANDARD}
+      -DCMAKE_CXX_STANDARD_REQUIRED:BOOL=${CMAKE_CXX_STANDARD_REQUIRED}
       -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
       -DCMAKE_INSTALL_PREFIX:PATH=${TRITON_INSTALL_PREFIX}
       -DTRITON_VERSION:STRING=${TRITON_VERSION}

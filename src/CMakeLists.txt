@@ -28,6 +28,12 @@ cmake_minimum_required(VERSION 3.18)
 
 project(libtritonserver LANGUAGES C CXX)
 
+# C++ standard
+#
+if(DEFINED CMAKE_CXX_STANDARD AND CMAKE_CXX_STANDARD)
+  message(STATUS "C++ standard for core libraries: ${CMAKE_CXX_STANDARD}")
+endif()
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -246,7 +252,6 @@ add_library(
   TritonCore::triton-core ALIAS triton-core
 )
 
-target_compile_features(triton-core PRIVATE cxx_std_11)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
