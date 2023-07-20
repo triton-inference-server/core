@@ -52,6 +52,23 @@ Now()
       .count();
 }
 
+void
+SetThreadPriority(const int nice, const char* thread_name)
+{
+#ifndef _WIN32
+  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
+    LOG_VERBOSE(1) << "Starting " << thread_name << " thread at nice " << nice
+                   << "...";
+  } else {
+    LOG_VERBOSE(1) << "Starting " << thread_name
+                   << " thread at default nice (requested nice " << nice
+                   << " failed)...";
+  }
+#else
+  LOG_VERBOSE(1) << "Starting " << thread_name << " thread at default nice...";
+#endif
+}
+
 }  // namespace
 
 Status
@@ -949,18 +966,7 @@ SequenceBatchScheduler::StopBackgroundThreads()
 void
 SequenceBatchScheduler::ReaperThread(const int nice)
 {
-#ifndef _WIN32
-  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
-    LOG_VERBOSE(1) << "Starting sequence-batch reaper thread at nice " << nice
-                   << "...";
-  } else {
-    LOG_VERBOSE(1) << "Starting sequence-batch reaper thread at default nice "
-                      "(requested nice "
-                   << nice << " failed)...";
-  }
-#else
-  LOG_VERBOSE(1) << "Starting sequence-batch reaper thread at default nice...";
-#endif
+  SetThreadPriority(nice, "sequence-batch reaper" /* thread_name */);
 
   const uint64_t backlog_idle_wait_microseconds = 50 * 1000;
 
@@ -1112,19 +1118,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 void
 SequenceBatchScheduler::CleanUpThread(const int nice)
 {
-#ifndef _WIN32
-  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
-    LOG_VERBOSE(1) << "Starting sequence-batch clean-up thread at nice " << nice
-                   << "...";
-  } else {
-    LOG_VERBOSE(1) << "Starting sequence-batch clean-up thread at default nice "
-                      "(requested nice "
-                   << nice << " failed)...";
-  }
-#else
-  LOG_VERBOSE(1)
-      << "Starting sequence-batch clean-up thread at default nice...";
-#endif
+  SetThreadPriority(nice, "sequence-batch clean-up" /* thread_name */);
 
   while (!clean_up_thread_exit_) {
     // Removed resources should be destructed outside the lock.
@@ -1474,20 +1468,7 @@ DirectSequenceBatch::NewPayload()
 void
 DirectSequenceBatch::BatcherThread(const int nice)
 {
-#ifndef _WIN32
-  if (setpriority(PRIO_PROCESS, syscall(SYS_gettid), nice) == 0) {
-    LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << model_instance_->Name() << " at nice " << nice << "...";
-  } else {
-    LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                   << model_instance_->Name()
-                   << " at default nice (requested nice " << nice
-                   << " failed)...";
-  }
-#else
-  LOG_VERBOSE(1) << "Starting Direct sequence-batch scheduler thread "
-                 << model_instance_->Name() << " at default nice...";
-#endif
+  SetThreadPriority(nice, "Direct sequence-batch scheduler" /* thread_name */);
 
   // For debugging and testing, delay start of thread until queues
   // contain the specified number of entries (across all
