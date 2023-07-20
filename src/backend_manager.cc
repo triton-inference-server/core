@@ -120,6 +120,7 @@ TritonBackend::UpdateAttributes()
   if (!latest.preferred_groups_.empty()) {
     attributes_.preferred_groups_ = latest.preferred_groups_;
   }
+  attributes_.parallel_instance_loading_ = latest.parallel_instance_loading_;
   return Status::Success;
 }
 

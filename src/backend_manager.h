@@ -47,9 +47,15 @@ namespace triton { namespace core {
 class TritonBackend {
  public:
   struct Attribute {
-    Attribute() : exec_policy_(TRITONBACKEND_EXECUTION_BLOCKING) {}
+    Attribute()
+        : exec_policy_(TRITONBACKEND_EXECUTION_BLOCKING),
+          parallel_instance_loading_(false)
+    {
+    }
     TRITONBACKEND_ExecutionPolicy exec_policy_;
     std::vector<inference::ModelInstanceGroup> preferred_groups_;
+    // Whether the backend supports loading model instances in parallel
+    bool parallel_instance_loading_;
   };
   typedef TRITONSERVER_Error* (*TritonModelInitFn_t)(
       TRITONBACKEND_Model* model);

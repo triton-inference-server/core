@@ -1531,6 +1531,16 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
   return nullptr;
 }
 
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BackendAttributeSetParallelInstanceLoading(
+    TRITONBACKEND_BackendAttribute* backend_attributes, bool enabled)
+{
+  auto ba = reinterpret_cast<TritonBackend::Attribute*>(backend_attributes);
+  ba->parallel_instance_loading_ = enabled;
+  return nullptr;
+}
+
 }  // extern C
 
 }}  // namespace triton::core
