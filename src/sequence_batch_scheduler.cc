@@ -943,20 +943,14 @@ void
 SequenceBatchScheduler::StopBackgroundThreads()
 {
   // Exit the clean-up thread.
-  {
-    std::lock_guard<std::mutex> lock(mu_);
-    clean_up_thread_exit_ = true;
-  }
+  clean_up_thread_exit_ = true;
   clean_up_cv_.notify_one();
   if (clean_up_thread_ && clean_up_thread_->joinable()) {
     clean_up_thread_->join();
   }
 
   // Exit the reaper thread.
-  {
-    std::lock_guard<std::mutex> lock(mu_);
-    reaper_thread_exit_ = true;
-  }
+  reaper_thread_exit_ = true;
   reaper_cv_.notify_one();
   if (reaper_thread_ && reaper_thread_->joinable()) {
     reaper_thread_->join();
@@ -1412,10 +1406,7 @@ DirectSequenceBatch::~DirectSequenceBatch()
   }
 
   // Signal the scheduler thread to exit.
-  {
-    std::lock_guard<std::mutex> lk(mu_);
-    scheduler_thread_exit_ = true;
-  }
+  scheduler_thread_exit_ = true;
   cv_.notify_one();
 
   // It is possible for the scheduler thread to be the last holder of

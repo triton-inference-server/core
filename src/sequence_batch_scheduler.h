@@ -196,7 +196,7 @@ class SequenceBatchScheduler : public Scheduler {
   // The reaper thread
   std::unique_ptr<std::thread> reaper_thread_;
   std::condition_variable reaper_cv_;
-  bool reaper_thread_exit_;
+  std::atomic<bool> reaper_thread_exit_;
   // Need to share between enqueue thread and reaper thread because
   // the timeout may be shorten by new request
   uint64_t timeout_timestamp_;
@@ -204,7 +204,7 @@ class SequenceBatchScheduler : public Scheduler {
   // The clean-up thread
   std::unique_ptr<std::thread> clean_up_thread_;
   std::condition_variable clean_up_cv_;
-  bool clean_up_thread_exit_;
+  std::atomic<bool> clean_up_thread_exit_;
   // Removed objects to be cleaned up
   std::vector<std::shared_ptr<TritonModelInstance>> removed_instances_;
   std::vector<std::unique_ptr<SequenceBatch>> removed_batchers_;
@@ -394,7 +394,7 @@ class DirectSequenceBatch : public SequenceBatch {
 
   // The thread scheduling requests that are queued in this batch.
   std::unique_ptr<std::thread> scheduler_thread_;
-  bool scheduler_thread_exit_;
+  std::atomic<bool> scheduler_thread_exit_;
   bool scheduler_idle_;
 
   // Mutex protecting correlation queues, etc.
