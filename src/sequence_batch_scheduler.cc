@@ -207,22 +207,18 @@ SequenceBatchScheduler::EraseBatcherSequenceSlot(
     // Erase batcher.
     auto batcher_it = batchers_.find(seq_slot.model_instance_);
     auto& pending_removal_batcher = batcher_it->second;
-    std::unique_ptr<SequenceBatch> removed_batcher;
-    removed_batcher.swap(pending_removal_batcher);
-    removed_batchers_.emplace_back(std::move(removed_batcher));
-    batchers_.erase(std::move(batcher_it));
+    removed_batchers_.emplace_back(std::move(pending_removal_batcher));
+    batchers_.erase(batcher_it);
 
     // Stop tracking the removed instance.
     auto& pending_removal_instance = it->second.second;
-    std::shared_ptr<TritonModelInstance> removed_instance;
-    removed_instance.swap(pending_removal_instance);
-    removed_instances_.emplace_back(std::move(removed_instance));
+    removed_instances_.emplace_back(std::move(pending_removal_instance));
 
     // Erase from debugging/testing info.
     queue_request_cnts_.erase(seq_slot.model_instance_);
 
     // Erase sequence slot from pending.
-    pending_removal_seq_slots_.erase(std::move(it));
+    pending_removal_seq_slots_.erase(it);
 
     // Notify the clean-up thread.
     clean_up_cv_.notify_one();
