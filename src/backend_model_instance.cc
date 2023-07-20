@@ -26,6 +26,8 @@
 
 #include "backend_model_instance.h"
 
+#include <future>
+
 #ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -204,6 +206,17 @@ TritonModelInstance::SetInstances(
       existing_instances = model->IndexInstances();
 
   static triton::common::HostPolicyCmdlineConfig empty_host_policy;
+  std::vector<std::future<Status>> creation_results;
+
+  // Deferred will be lazily evaluated when the result is requested. Since the
+  // creation_results are requested serially below, this is equivalent to making
+  // the calls serially.
+  auto launch_policy = std::launch::deferred;
+  // If the backend supports it, std::launch::async will allow the calls to be
+  // made concurrently.
+  if (model->Backend()->BackendAttributes().parallel_instance_loading_) {
+    launch_policy = std::launch::async;
+  }
 
   for (const auto& group : model_config.instance_group()) {
     std::vector<std::string> profile_names;
@@ -252,6 +265,7 @@ TritonModelInstance::SetInstances(
       for (const auto& is : instance_setting) {
         const auto& kind = std::get<1>(is);
         const auto& id = std::get<2>(is);
+        const auto rate_limiter_config_ptr = std::get<3>(is);
 
         const Signature signature(group, id);
         // Check if an existing instance can be re-used.
@@ -271,53 +285,90 @@ TritonModelInstance::SetInstances(
 
         // No matching instance for re-using, so create the instance.
         const std::string& policy_name = std::get<0>(is);
-        const triton::common::HostPolicyCmdlineConfig* host_policy;
+        const triton::common::HostPolicyCmdlineConfig* host_policy =
+            &empty_host_policy;
         const auto policy_it = host_policy_map.find(policy_name);
         if (policy_it != host_policy_map.end()) {
           host_policy = &policy_it->second;
-        } else {
-          host_policy = &empty_host_policy;
         }
-        std::shared_ptr<TritonModelInstance> new_instance;
-        RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
-        auto err = CreateInstance(
-            model, instance_name, signature, kind, id, profile_names, passive,
-            policy_name, *host_policy, *(std::get<3>(is)), secondary_devices,
-            &new_instance);
-        RETURN_IF_ERROR(ResetNumaMemoryPolicy());
-        RETURN_IF_ERROR(err);
-        RETURN_IF_ERROR(
-            model->RegisterInstance(std::move(new_instance), passive));
 
-        // When deploying on GPU, we want to make sure the GPU memory usage
-        // is within allowed range, otherwise, stop the creation to ensure
-        // there is sufficient GPU memory for other use.
-        // We check the usage after loading the instance to better enforcing
-        // the limit. If we check before loading, we may create instance
-        // that occupies the rest of available memory which against the purpose
-        if (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
-          size_t free, total;
-          double memory_limit;
-          RETURN_IF_ERROR(GetDeviceMemoryInfo(id, &free, &total));
-          RETURN_IF_ERROR(BackendConfigurationModelLoadGpuFraction(
-              backend_cmdline_config_map, id, &memory_limit));
-          const size_t allow = total * memory_limit;
-          const size_t used = total - free;
-          if (used > allow) {
-            return Status(
-                Status::Code::UNAVAILABLE,
-                std::string("can not create model '") + instance_name +
-                    "': memory limit set for " +
-                    TRITONSERVER_InstanceGroupKindString(kind) + " " +
-                    std::to_string(id) +
-                    " has exceeded, model loading is rejected.");
-          }
+        // TODO: Will conflict with Jacky's changes, need to fix
+        // TODO: May have other thread-safety fixes to add from
+        // rmccormick-instance branch std::async can fail to start a new thread
+        try {
+          // Note that
+          // the local variables should be captured by value
+          // TODO: May want to use model load thread pool or a new thread pool
+          creation_results.emplace_back(std::async(
+              launch_policy,
+              [host_policy, model, instance_name, signature, kind, id,
+               profile_names, passive, policy_name, rate_limiter_config_ptr,
+               secondary_devices, &backend_cmdline_config_map]() {
+                std::shared_ptr<TritonModelInstance> new_instance;
+                RETURN_IF_ERROR(SetNumaConfigOnThread(*host_policy));
+                // NOTE [thread-safety]: CreateInstance can modify bg_instances
+                // via SetBackendThread
+                auto err = CreateInstance(
+                    model, instance_name, signature, kind, id, profile_names,
+                    passive, policy_name, *host_policy,
+                    *rate_limiter_config_ptr, secondary_devices, &new_instance);
+                RETURN_IF_ERROR(ResetNumaMemoryPolicy());
+                RETURN_IF_ERROR(err);
+                // NOTE [thread-safety]: RegisterInstance modifies bg/bg_passive
+                // instances
+                RETURN_IF_ERROR(
+                    model->RegisterInstance(std::move(new_instance), passive));
+
+                // When deploying on GPU, we want to make sure the GPU memory
+                // usage is within allowed range, otherwise, stop the creation
+                // to ensure there is sufficient GPU memory for other use. We
+                // check the usage after loading the instance to better
+                // enforcing the limit. If we check before loading, we may
+                // create instance that occupies the rest of available memory
+                // which against the purpose
+                if (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+                  size_t free, total;
+                  double memory_limit;
+                  RETURN_IF_ERROR(GetDeviceMemoryInfo(id, &free, &total));
+                  RETURN_IF_ERROR(BackendConfigurationModelLoadGpuFraction(
+                      backend_cmdline_config_map, id, &memory_limit));
+                  const size_t allow = total * memory_limit;
+                  const size_t used = total - free;
+                  if (used > allow) {
+                    return Status(
+                        Status::Code::UNAVAILABLE,
+                        std::string("can not create model '") + instance_name +
+                            "': memory limit set for " +
+                            TRITONSERVER_InstanceGroupKindString(kind) + " " +
+                            std::to_string(id) +
+                            " has exceeded, model loading is rejected.");
+                  }
+                }
+
+                // TODO: Remove logging
+                LOG_INFO << "Successfully created instance: " << instance_name;
+                return Status::Success;
+              }));
+        }
+        catch (const std::exception& ex) {
+          return Status(
+              Status::Code::INTERNAL,
+              "ERROR: Failed to create instance: " + std::string(ex.what()));
         }
       }
     }
   }
 
-  return Status::Success;
+  auto res = Status::Success;
+  for (auto& cr : creation_results) {
+    auto lres = cr.get();
+    // TODO: Remove logging
+    if (!lres.IsOk()) {
+      LOG_ERROR << "ERROR: Failed to create instance: " << lres.Message();
+      res = lres;
+    }
+  }
+  return res;
 }
 
 Status
