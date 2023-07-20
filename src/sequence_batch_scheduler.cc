@@ -118,11 +118,10 @@ SequenceBatchScheduler::Create(
   // Create a batcher for each instance.
   RETURN_IF_ERROR(sched->CreateBatchers(new_instances));
 
-
-  SequenceBatchScheduler* raw = sched.release();
   // Create background threads that watch for different sequence states.
-  raw->StartBackgroundThreads();
-  scheduler->reset(raw);
+  sched->StartBackgroundThreads();
+
+  scheduler->reset(sched.release());
 
   return Status::Success;
 }
