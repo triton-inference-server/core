@@ -292,7 +292,7 @@ TritonModelInstance::SetInstances(
           host_policy = &policy_it->second;
         }
 
-        // NOTE: std::async can raise an exception on failure to start threads
+        // Note std::async can raise an exception on failure to start threads
         try {
           // Note that the local variables should be captured by value
           creation_results.emplace_back(std::async(
