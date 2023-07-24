@@ -55,13 +55,13 @@ class SequenceBatchScheduler : public Scheduler {
  public:
   using ControlInputs = std::vector<std::shared_ptr<InferenceRequest::Input>>;
 
-  SequenceBatchScheduler() = default;
   ~SequenceBatchScheduler();
 
   // Create a scheduler to support a given number of runners and a run
   // function to call when a request is scheduled.
   static Status Create(
       TritonModel* model,
+      const std::vector<std::shared_ptr<TritonModelInstance>>& new_instances,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       std::unique_ptr<Scheduler>* scheduler);
 
@@ -78,13 +78,23 @@ class SequenceBatchScheduler : public Scheduler {
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
 
+  // Update the scheduler to the new set of model instances. This function
+  // cannot be called concurrently.
+  Status Update(
+      const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
+      const std::vector<std::shared_ptr<TritonModelInstance>>&
+          removed_instances);
+
   // A batcher-sequence_slot combination. The batcher is represented
   // by the index into 'batchers_'.
   struct BatcherSequenceSlot {
     BatcherSequenceSlot() = default;
     BatcherSequenceSlot(const BatcherSequenceSlot&) = default;
-    BatcherSequenceSlot(size_t b, uint32_t s) : batcher_idx_(b), seq_slot_(s) {}
-    size_t batcher_idx_;
+    BatcherSequenceSlot(TritonModelInstance* i, uint32_t s)
+        : model_instance_(i), seq_slot_(s)
+    {
+    }
+    TritonModelInstance* model_instance_;
     uint32_t seq_slot_;
   };
 
@@ -97,7 +107,8 @@ class SequenceBatchScheduler : public Scheduler {
   // For debugging/testing, batcher reports how many waiting requests
   // and returns true if the batcher should continue waiting.
   bool DelayScheduler(
-      const uint32_t batcher_idx, const size_t cnt, const size_t total);
+      const TritonModelInstance* model_instance, const size_t cnt,
+      const size_t total);
 
   const std::unordered_map<
       std::string, const inference::ModelSequenceBatching_State&>&
@@ -114,7 +125,16 @@ class SequenceBatchScheduler : public Scheduler {
   }
 
  private:
-  void ReaperThread(const int nice);
+  SequenceBatchScheduler(
+      TritonModel* model,
+      const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
+      : model_(model),
+        enforce_equal_shape_tensors_(enforce_equal_shape_tensors), stop_(false)
+  {
+  }
+
+  void StartBackgroundThreads();
+  void StopBackgroundThreads();
 
   Status CreateBooleanControlTensors(
       const inference::ModelConfig& config,
@@ -136,9 +156,38 @@ class SequenceBatchScheduler : public Scheduler {
     }
   };
 
+  // Create a batcher for each of the provided instances.
+  Status CreateBatchers(
+      const std::vector<std::shared_ptr<TritonModelInstance>>& instances);
+
+  // Erase the sequence slot from 'pending_removal_seq_slots_'. The batcher
+  // behind the sequence slot will be removed when all sequence slots of the
+  // batcher are removed. Return true if the sequence slot is pending removal.
+  // Otherwise, false is returned.
+  bool EraseBatcherSequenceSlot(const BatcherSequenceSlot& seq_slot);
+
+  // A thread that monitors idle sequences. This thread is time sensitive that
+  // all operations should be completed as quickly as possible to avoid blocking
+  // the thread from starting its next iteration.
+  void ReaperThread(const int nice);
+
+  // A thread that asynchronously erase removed resources. This thread is
+  // intended to destruct resources that might take some time to complete,
+  // without preventing the scheduler from scheduling requests.
+  void CleanUpThread(const int nice);
+
+  // The 'TritonModel' and 'enforce_equal_shape_tensors' when this scheduler is
+  // created.
+  TritonModel* model_;
+  std::unordered_map<std::string, bool> enforce_equal_shape_tensors_;
+
+  // The number of candidate sequence slots.
+  size_t seq_slot_cnt_;
+
   // The max_sequence_idle_microseconds value for this scheduler.
   uint64_t max_sequence_idle_microseconds_;
 
+  // Whether this scheduler has stopped accepting new inference requests.
   bool stop_;
 
   // Mutex
@@ -147,13 +196,32 @@ class SequenceBatchScheduler : public Scheduler {
   // The reaper thread
   std::unique_ptr<std::thread> reaper_thread_;
   std::condition_variable reaper_cv_;
-  bool reaper_thread_exit_;
+  std::atomic<bool> reaper_thread_exit_;
   // Need to share between enqueue thread and reaper thread because
   // the timeout may be shorten by new request
   uint64_t timeout_timestamp_;
 
+  // The clean-up thread
+  std::unique_ptr<std::thread> clean_up_thread_;
+  std::condition_variable clean_up_cv_;
+  std::atomic<bool> clean_up_thread_exit_;
+  // Removed objects to be cleaned up
+  std::vector<std::shared_ptr<TritonModelInstance>> removed_instances_;
+  std::vector<std::unique_ptr<SequenceBatch>> removed_batchers_;
+
+  // Map from a model instance pointer that is pending to be removed from this
+  // scheduler to a pair ["the number of sequence slots remaining for the
+  // instance batcher", "the shared_ptr of the instance"]. The shared_ptr is
+  // kept to ensure the instance is available until its sequence slots and
+  // batcher are removed from this scheduler.
+  std::unordered_map<
+      const TritonModelInstance*,
+      std::pair<size_t, std::shared_ptr<TritonModelInstance>>>
+      pending_removal_seq_slots_;
+
   // The SequenceBatchs being managed by this scheduler.
-  std::vector<std::unique_ptr<SequenceBatch>> batchers_;
+  std::unordered_map<const TritonModelInstance*, std::unique_ptr<SequenceBatch>>
+      batchers_;
 
   // Map from a request's correlation ID to the BatcherSequenceSlot
   // assigned to that correlation ID.
@@ -196,7 +264,7 @@ class SequenceBatchScheduler : public Scheduler {
 
   // Used for debugging/testing.
   size_t backlog_delay_cnt_;
-  std::vector<size_t> queue_request_cnts_;
+  std::unordered_map<const TritonModelInstance*, size_t> queue_request_cnts_;
 
   // IO mapping between the output state name and the state configuration.
   std::unordered_map<std::string, const inference::ModelSequenceBatching_State&>
@@ -213,7 +281,7 @@ class SequenceBatchScheduler : public Scheduler {
 class SequenceBatch {
  public:
   SequenceBatch(
-      SequenceBatchScheduler* base, const uint32_t batcher_idx,
+      SequenceBatchScheduler* base, TritonModelInstance* model_instance,
       const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
@@ -237,6 +305,8 @@ class SequenceBatch {
       const InferenceRequest::SequenceId& correlation_id,
       std::unique_ptr<InferenceRequest>& request) = 0;
 
+  size_t SeqSlotCnt() { return seq_slot_cnt_; }
+
  protected:
   bool CreateCorrelationIDControl(const inference::ModelConfig& config);
   void SetControlTensors(
@@ -251,8 +321,8 @@ class SequenceBatch {
   // The controlling scheduler.
   SequenceBatchScheduler* const base_;
 
-  // The index of this batcher within the controlling scheduler.
-  const uint32_t batcher_idx_;
+  // The identifier of this batcher within the controlling scheduler.
+  TritonModelInstance* const model_instance_;
 
   // The number of candidate sequence slots.
   const size_t seq_slot_cnt_;
@@ -294,8 +364,8 @@ class SequenceBatch {
 class DirectSequenceBatch : public SequenceBatch {
  public:
   DirectSequenceBatch(
-      SequenceBatchScheduler* base, const uint32_t batcher_idx,
-      const size_t seq_slot_cnt, TritonModelInstance* model_instance,
+      SequenceBatchScheduler* base, TritonModelInstance* model_instance,
+      const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
       const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -321,11 +391,10 @@ class DirectSequenceBatch : public SequenceBatch {
   void NewPayload();
 
   std::shared_ptr<Payload> curr_payload_;
-  TritonModelInstance* model_instance_;
 
   // The thread scheduling requests that are queued in this batch.
   std::unique_ptr<std::thread> scheduler_thread_;
-  bool scheduler_thread_exit_;
+  std::atomic<bool> scheduler_thread_exit_;
   bool scheduler_idle_;
 
   // Mutex protecting correlation queues, etc.
@@ -343,6 +412,8 @@ class DirectSequenceBatch : public SequenceBatch {
   // queues, one for each sequence slot where requests assigned to
   // that slot are enqueued to wait for inferencing.
   std::vector<std::deque<std::unique_ptr<InferenceRequest>>> queues_;
+  // Notify when requests are removed from the queue.
+  std::condition_variable queues_cv_;
 
   // Is each sequence slot active or not? A zero or empty value indicates
   // inactive, a non-zero/non-empty value indicates active and is the
@@ -365,8 +436,8 @@ class DirectSequenceBatch : public SequenceBatch {
 class OldestSequenceBatch : public SequenceBatch {
  public:
   OldestSequenceBatch(
-      SequenceBatchScheduler* base, const uint32_t batcher_idx,
-      const size_t seq_slot_cnt, TritonModelInstance* model_instance,
+      SequenceBatchScheduler* base, TritonModelInstance* model_instance,
+      const size_t seq_slot_cnt,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const bool has_optional_input,
       const std::shared_ptr<SequenceBatchScheduler::ControlInputs>&
@@ -393,10 +464,11 @@ class OldestSequenceBatch : public SequenceBatch {
   // The dynamic batcher for this scheduler
   std::unique_ptr<Scheduler> dynamic_batcher_;
 
-  TritonModelInstance* model_instance_;
-
   // Mutex protecting queues, etc.
   std::mutex mu_;
+
+  // Condition variable notifying request queueing and/or in-flight completion.
+  std::condition_variable cv_;
 
   // For each sequence slot, true if there is a request for that
   // sequence in-flight in the dynamic batcher. Used to ensure that at
