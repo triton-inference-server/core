@@ -84,11 +84,14 @@ class TritonModelInstance {
     const std::size_t hash_;
   };
 
-  static Status SetInstances(
-      TritonModel* model,
-      const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const inference::ModelConfig& model_config);
+  static Status CreateInstance(
+      TritonModel* model, const std::string& name, const Signature& signature,
+      TRITONSERVER_InstanceGroupKind kind, int32_t device_id,
+      const std::vector<std::string>& profile_names, const bool passive,
+      const std::string& host_policy_name,
+      const inference::ModelRateLimiter& rate_limiter_config,
+      const std::vector<SecondaryDevice>& secondary_devices,
+      std::shared_ptr<TritonModelInstance>* triton_model_instance);
   ~TritonModelInstance();
 
   const std::string& Name() const { return name_; }
@@ -139,6 +142,12 @@ class TritonModelInstance {
   {
     std::lock_guard<std::mutex> lk(usage_mtx_);
     return memory_usage_;
+  }
+
+  static bool ShareBackendThread(
+      const bool device_blocking, const TRITONSERVER_InstanceGroupKind kind)
+  {
+    return device_blocking && (kind == TRITONSERVER_INSTANCEGROUPKIND_GPU);
   }
 
  private:
@@ -197,7 +206,7 @@ class TritonModelInstance {
       const triton::common::HostPolicyCmdlineConfig& host_policy,
       const TritonServerMessage& host_policy_message,
       const std::vector<SecondaryDevice>& secondary_devices);
-  static Status CreateInstance(
+  static Status ConstructAndInitializeInstance(
       TritonModel* model, const std::string& name, const Signature& signature,
       const TRITONSERVER_InstanceGroupKind kind, const int32_t device_id,
       const std::vector<std::string>& profile_names, const bool passive,

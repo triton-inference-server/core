@@ -80,10 +80,15 @@ class TritonModel : public Model {
       TRITONSERVER_Message* updated_config_message);
   // Return the underlying backend.
   const std::shared_ptr<TritonBackend>& Backend() const { return backend_; }
-  // Return the foreground instances, excluding passive instances.
-  const std::vector<std::shared_ptr<TritonModelInstance>>& Instances() const
+  // Return the backend command line config map.
+  const triton::common::BackendCmdlineConfigMap& BackendConfigMap() const
   {
-    return instances_;
+    return backend_cmdline_config_map_;
+  }
+  // Return the host policy command line config map.
+  const triton::common::HostPolicyCmdlineConfigMap& HostPolicyMap() const
+  {
+    return host_policy_map_;
   }
 
   // True if different instances should be grouped by device; false otherwise.
@@ -96,21 +101,8 @@ class TritonModel : public Model {
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
 
-  // Return all foreground instances indexed by its respective signature.
-  std::unordered_map<
-      TritonModelInstance::Signature,
-      std::vector<std::shared_ptr<TritonModelInstance>>>
-  IndexInstances() const;
-  // Register new instances into the background.
-  Status RegisterInstance(
-      std::shared_ptr<TritonModelInstance>&& instance, const bool passive);
-
-  // Update instance group. 'caller_lock' will be released when creating new
-  // instances and re-held when returning, to allow atomic switch over to the
-  // new instances.
-  Status UpdateInstanceGroup(
-      const inference::ModelConfig& new_model_config,
-      std::unique_lock<std::mutex>* caller_lock);
+  // Update instance group.
+  Status UpdateInstanceGroup(const inference::ModelConfig& new_model_config);
 
   // Custom batching function getters.
   TritonModelBatchInclFn_t ModelBatchInclFn() const { return batch_incl_fn_; }
@@ -130,8 +122,27 @@ class TritonModel : public Model {
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
 
+  // Prepare the next set of instances on the background. Returns the instances
+  // that will be added and removed if the next set of instances is to be
+  // committed.
+  Status PrepareInstances(
+      const inference::ModelConfig& model_config,
+      std::vector<std::shared_ptr<TritonModelInstance>>* added_instances,
+      std::vector<std::shared_ptr<TritonModelInstance>>* removed_instances);
   // Replace the foreground instances with background instances.
-  Status CommitInstances();
+  void CommitInstances();
+
+  // Return all foreground instances indexed by its respective signature.
+  std::unordered_map<
+      TritonModelInstance::Signature,
+      std::vector<std::shared_ptr<TritonModelInstance>>>
+  IndexInstances() const;
+
+  // Add a new instance into the background.
+  void RegisterBackgroundInstance(
+      std::shared_ptr<TritonModelInstance>&& instance, const bool passive);
+  // Clear all background instances.
+  void ClearBackgroundInstances();
 
   // Gets the execution policy setting from the backend.
   Status GetExecutionPolicy(const inference::ModelConfig& model_config);
@@ -157,9 +168,15 @@ class TritonModel : public Model {
     return res;
   }
 
-  // Set the scheduler based on the model configuration and foreground
-  // 'instances'.
-  Status SetConfiguredScheduler();
+  // Set the scheduler based on the model configuration and the provided
+  // instances.
+  Status SetConfiguredScheduler(
+      const std::vector<std::shared_ptr<TritonModelInstance>>& new_instances);
+  // Update the set scheduler to the new set of instances.
+  Status UpdateConfiguredScheduler(
+      const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
+      const std::vector<std::shared_ptr<TritonModelInstance>>&
+          removed_instances);
 
   // Set the batching strategy, if custom functions provided by user.
   // This function should only be called with the dynamic batcher.

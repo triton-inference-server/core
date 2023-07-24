@@ -478,11 +478,7 @@ ModelLifeCycle::AsyncLoad(
       if (serving_model->state_ == ModelReadyState::READY) {
         // The model is currently being served. Check if the model load could
         // be completed with a simple config update.
-        // Models with sequence batching is currently disabled from model
-        // update, because a solution on preventing update in the middle of an
-        // in-flight sequence is currently being developed. [FIXME: DLIS-4829]
         if (!is_model_file_updated && !serving_model->is_ensemble_ &&
-            !model_config.has_sequence_batching() &&
             EquivalentInNonInstanceGroupConfig(
                 serving_model->model_config_, model_config)) {
           // Update the model
@@ -644,7 +640,7 @@ ModelLifeCycle::UpdateModelConfig(
   model_info->state_reason_.clear();
 
   // Downcast 'Model' to 'TritonModel'.
-  TritonModel* model = (TritonModel*)model_info->model_.get();
+  TritonModel* model = dynamic_cast<TritonModel*>(model_info->model_.get());
   if (model == nullptr) {
     model_info->state_reason_ =
         "Unable to downcast '" + model_id.str() +
@@ -652,9 +648,15 @@ ModelLifeCycle::UpdateModelConfig(
     return;
   }
 
-  // Update model instance group.
-  Status status =
-      model->UpdateInstanceGroup(new_model_config, &model_info_lock);
+  // Update model instance group. The 'model_info->mtx_' may be released while
+  // the model is updating its instance group, because no model info from this
+  // model lifecycle object is being accessed by the model during the update,
+  // and model repository manager will ensure no concurrent update on the same
+  // model may take place. Therefore, releasing the lock allows the model to be
+  // accessed which enables inference during update.
+  model_info_lock.unlock();
+  Status status = model->UpdateInstanceGroup(new_model_config);
+  model_info_lock.lock();
   if (!status.IsOk()) {
     model_info->state_reason_ = status.AsString();
     return;
