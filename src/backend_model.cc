@@ -423,9 +423,10 @@ TritonModel::PrepareInstances(
     std::string s_env = std::string(env);
     if (!s_env.empty()) {
       parallel = (s_env == "1") ? true : false;
-      LOG_INFO << "Using TRITON_PARALLEL_INSTANCE_LOADING environment variable "
-                  "override: "
-               << parallel;
+      LOG_VERBOSE(1)
+          << "Using TRITON_PARALLEL_INSTANCE_LOADING environment variable "
+             "override: "
+          << parallel;
     }
   }
 
@@ -433,12 +434,6 @@ TritonModel::PrepareInstances(
   if (parallel) {
     launch_policy = std::launch::async;
   }
-
-  // TODO: Remove
-  auto start_ts =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::high_resolution_clock::now().time_since_epoch())
-          .count();
 
   // Iterates over all the requested instances on the model config, and decides
   // if each requested instance can reuse an existing instance or a new instance
@@ -559,15 +554,6 @@ TritonModel::PrepareInstances(
       status = lstatus;
     }
   }
-
-  // TODO: Remove
-  auto end_ts =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::high_resolution_clock::now().time_since_epoch())
-          .count();
-
-  // TODO: Remove
-  LOG_INFO << "INSTANCE LOADING TIME: " << end_ts - start_ts;
 
   return status;
 }
