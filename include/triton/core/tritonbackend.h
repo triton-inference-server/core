@@ -1497,7 +1497,7 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 /// \param enabled Whether or not the backend supports loading model instances
 /// in parallel.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BackendAttributeSetParallelInstanceLoading(
+TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
     TRITONBACKEND_BackendAttribute* backend_attributes, bool enabled);
 
 /// TRITONBACKEND Batching

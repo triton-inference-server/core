@@ -1016,7 +1016,7 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 }
 
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_BackendAttributeSetParallelInstanceLoading()
+TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading()
 {
 }
 

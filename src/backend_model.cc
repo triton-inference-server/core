@@ -1740,7 +1740,7 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
 
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_BackendAttributeSetParallelInstanceLoading(
+TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
     TRITONBACKEND_BackendAttribute* backend_attributes, bool enabled)
 {
   auto ba = reinterpret_cast<TritonBackend::Attribute*>(backend_attributes);
