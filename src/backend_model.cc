@@ -533,10 +533,12 @@ TritonModel::PrepareInstances(
                 std::lock_guard<std::mutex> lk(instance_mu);
                 added_instances->push_back(new_instance);
                 RegisterBackgroundInstance(std::move(new_instance), passive);
-                LOG_VERBOSE(2)
-                    << "Created model instance named '" << instance_name
-                    << "' with device id '" << is.device_id_ << "'";
               }
+              // Keep logging to a single stream operator to avoid interweaving
+              const auto msg = "Created model instance named '" +
+                               instance_name + "' with device id '" +
+                               std::to_string(is.device_id_) + "'";
+              LOG_VERBOSE(2) << msg;
               return Status::Success;
             }));
       }
