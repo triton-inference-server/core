@@ -406,6 +406,35 @@ TritonModel::PrepareInstances(
       std::vector<std::shared_ptr<TritonModelInstance>>>
       existing_instances = IndexInstances();
 
+
+  std::vector<std::future<Status>> creation_results;
+  // Used to protect shared states for parallel instance loading
+  std::mutex instance_mu;
+
+  // Deferred will be lazily evaluated when the result is requested. Since the
+  // creation_results are requested serially below, this is equivalent to making
+  // the calls serially.
+  auto launch_policy = std::launch::deferred;
+
+  // Override for testing/debugging purposes
+  bool parallel = backend_->BackendAttributes().parallel_instance_loading_;
+  const char* env = std::getenv("TRITON_PARALLEL_INSTANCE_LOADING");
+  if (env != nullptr) {
+    std::string s_env = std::string(env);
+    if (!s_env.empty()) {
+      parallel = (s_env == "1") ? true : false;
+      LOG_VERBOSE(1)
+          << "Using TRITON_PARALLEL_INSTANCE_LOADING environment variable "
+             "override: "
+          << parallel;
+    }
+  }
+
+  // If the backend supports it, std::launch::async will allow concurrent calls
+  if (parallel) {
+    launch_policy = std::launch::async;
+  }
+
   // Iterates over all the requested instances on the model config, and decides
   // if each requested instance can reuse an existing instance or a new instance
   // is needed.
@@ -485,17 +514,28 @@ TritonModel::PrepareInstances(
           }
         }
 
-        // The requested instance did not match an existing instance. Create a
-        // new instance.
-        std::shared_ptr<TritonModelInstance> new_instance;
-        LOG_VERBOSE(2) << "Creating model instance named '" << instance_name
-                       << "' with device id '" << is.device_id_ << "'";
-        RETURN_IF_ERROR(TritonModelInstance::CreateInstance(
-            this, instance_name, signature, is.kind_, is.device_id_,
-            profile_names, passive, is.policy_name_, *is.rate_limiter_config_,
-            secondary_devices, &new_instance));
-        added_instances->push_back(new_instance);
-        RegisterBackgroundInstance(std::move(new_instance), passive);
+        // Note that the local variables should be captured by value
+        creation_results.emplace_back(
+            std::async(launch_policy, [=, &instance_mu]() {
+              // The requested instance did not match an existing instance.
+              // Create a new instance.
+              std::shared_ptr<TritonModelInstance> new_instance;
+              RETURN_IF_ERROR(TritonModelInstance::CreateInstance(
+                  this, instance_name, signature, is.kind_, is.device_id_,
+                  profile_names, passive, is.policy_name_,
+                  *is.rate_limiter_config_, secondary_devices, &new_instance));
+              {
+                std::lock_guard<std::mutex> lk(instance_mu);
+                added_instances->push_back(new_instance);
+                RegisterBackgroundInstance(std::move(new_instance), passive);
+              }
+              // Keep logging to a single stream operator to avoid interweaving
+              const auto msg = "Created model instance named '" +
+                               instance_name + "' with device id '" +
+                               std::to_string(is.device_id_) + "'";
+              LOG_VERBOSE(2) << msg;
+              return Status::Success;
+            }));
       }
     }
   }
@@ -506,7 +546,16 @@ TritonModel::PrepareInstances(
         removed_instances->end(), pair.second.begin(), pair.second.end());
   }
 
-  return Status::Success;
+  auto status = Status::Success;
+  for (auto& cr : creation_results) {
+    auto lstatus = cr.get();
+    if (!lstatus.IsOk()) {
+      LOG_ERROR << "ERROR: Failed to create instance: " << lstatus.Message();
+      status = lstatus;
+    }
+  }
+
+  return status;
 }
 
 void
@@ -1672,6 +1721,16 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
       pg.add_gpus(device_ids[i]);
     }
   }
+  return nullptr;
+}
+
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
+    TRITONBACKEND_BackendAttribute* backend_attributes, bool enabled)
+{
+  auto ba = reinterpret_cast<TritonBackend::Attribute*>(backend_attributes);
+  ba->parallel_instance_loading_ = enabled;
   return nullptr;
 }
 

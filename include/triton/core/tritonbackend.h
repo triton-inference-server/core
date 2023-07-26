@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 13
+#define TRITONBACKEND_API_VERSION_MINOR 14
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -1479,6 +1479,26 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup(
     TRITONBACKEND_BackendAttribute* backend_attributes,
     const TRITONSERVER_InstanceGroupKind kind, const uint64_t count,
     const uint64_t* device_ids, const uint64_t id_count);
+
+/// Sets whether or not the backend supports concurrently loading multiple
+/// TRITONBACKEND_ModelInstances in a thread-safe manner.
+///
+/// Most backends are thread-safe for parallel execution of model instances as
+/// that is the primary use of concurrency in backends. However, not all
+/// backends are thread-safe when initializing or finalizing model instances. In
+/// order for Triton to know that it can safely load instances concurrently, the
+/// backend needs to opt-in by setting this backend attribute to true. By
+/// default, this attribute is false and calls to the
+/// TRITONBACKEND_ModelInstanceInitialize function will be made serially. If
+/// this attribute is set to true, then Triton will make calls to
+/// TRITONBACKEND_ModelInstanceInitialize concurrently.
+///
+/// \param backend_attributes The backend attributes object.
+/// \param enabled Whether or not the backend supports loading model instances
+/// in parallel.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
+    TRITONBACKEND_BackendAttribute* backend_attributes, bool enabled);
 
 /// TRITONBACKEND Batching
 ///

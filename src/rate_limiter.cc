@@ -389,12 +389,18 @@ RateLimiter::InitializePayloadQueues(const TritonModelInstance* instance)
     }
     payload_queue = payload_queues_[instance->Model()].get();
   }
-  if (payload_queue->specific_queues_.find(instance) ==
-      payload_queue->specific_queues_.end()) {
-    payload_queue->specific_queues_.emplace(
-        instance,
-        new InstanceQueue(
-            config.max_batch_size(), max_queue_delay_microseconds * 1000));
+  {
+    // NOTE: payload_queue can have a data race because instance->Model()
+    // is the same for multiple instances of same model, so protect it when
+    // creating model instances in parallel.
+    std::lock_guard<std::mutex> lk(payload_queue->mu_);
+    if (payload_queue->specific_queues_.find(instance) ==
+        payload_queue->specific_queues_.end()) {
+      payload_queue->specific_queues_.emplace(
+          instance,
+          new InstanceQueue(
+              config.max_batch_size(), max_queue_delay_microseconds * 1000));
+    }
   }
 }
 

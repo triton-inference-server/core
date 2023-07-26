@@ -1016,6 +1016,11 @@ TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONCACHE_ApiVersion()
 {
 }
