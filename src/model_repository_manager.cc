@@ -2156,10 +2156,10 @@ ModelRepositoryManager::DependencyGraph::Writeback(
   for (const auto& model_id : affected_models) {
     // An affected model can be deleted, so the presence of the model must be
     // checked.
-    auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
-    if (node != nullptr) {
-      auto updated_node = updated_dependency_graph.FindNode(
-          model_id, false /* allow_fuzzy_matching */);
+    auto* updated_node = updated_dependency_graph.FindNode(
+        model_id, false /* allow_fuzzy_matching */);
+    if (updated_node != nullptr) {
+      auto* node = FindNode(model_id, false /* allow_fuzzy_matching */);
       // Writeback
       node->status_ = updated_node->status_;
       node->checked_ = updated_node->checked_;
@@ -2195,10 +2195,10 @@ ModelRepositoryManager::ModelInfoMap::Writeback(
   for (auto& model_id : affected_models) {
     // An affected model can be deleted, so the presence of the model must be
     // checked.
-    auto itr = map_.find(model_id);
-    if (itr != map_.end()) {
-      auto info = itr->second.get();
-      auto updated_info = updated_model_info.map_.at(model_id).get();
+    auto itr = updated_model_info.map_.find(model_id);
+    if (itr != updated_model_info.map_.end()) {
+      auto* updated_info = itr->second.get();
+      auto* info = map_.at(model_id).get();
       // Writeback
       info->mtime_nsec_ = updated_info->mtime_nsec_;
     }
