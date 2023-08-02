@@ -253,8 +253,11 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
       // equal to next preferred batch size, then wake batcher up to service
       // this request. We do the actual wake outside of the lock to avoid
       // having the woken thread immediately block on the lock
-      wake_batcher =
-          model_->Server()->GetRateLimiter()->PayloadSlotAvailable(model_);
+      // Explicitly force non-blocking to prevent waiting for the slot to
+      // be available.
+      wake_batcher = model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+          model_, model_instance_, queue_.SupportPrefetching(),
+          true /*force_non_blocking*/);
 
       // We may wake up runner less often if we don't enforce equal shape
       // within a batch, otherwise must always wake up runner to check it
@@ -313,7 +316,8 @@ DynamicBatchScheduler::BatcherThread(const int nice)
   }
 
   auto wait_for_slots = [this]() {
-    return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(model_);
+    return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+        model_, model_instance_, queue_.SupportPrefetching());
   };
   const uint64_t default_wait_microseconds = 500 * 1000;
 
