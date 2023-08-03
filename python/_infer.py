@@ -99,16 +99,20 @@ class RequestFlag(IntEnum):
 # Release callback is hidden, user don't need to be exposed to
 # Triton request detail.
 # Variables should not be changed until "consumed", an callback may be
-# provided to be invoked when the request is no longer in used
+# provided to be invoked when the request is no longer in used.
+# Similarly, a response callback may be provided when response has arrived
+# or completed
 class InferenceRequest:
 
     def __init__(self,
                  name: str,
                  version: int = -1,
-                 consumed_callback: Callable = None) -> None:
+                 consumed_callback: Callable = None,
+                 response_callabck: Callable = None) -> None:
         self.name = name
         self.version = version
         self.consumed_callback = consumed_callback
+        self.response_callback = response_callabck
 
         self.request_id: str = ""
         self.timeout_ms: int = 0
@@ -189,6 +193,7 @@ class InferenceResponse:
 #         if isinstance(output, NumpyTensor):
 #             res.append(output.as_numpy())
 #         else:
+#             # May also interact with Tensor attributes directly
 #             res.append(numpy.from_dlpack(output))
 import numpy
 class NumpyTensor(Tensor):

@@ -111,7 +111,7 @@ class Options:
 
 class TritonCore:
 
-    def __init__(self, option: Options = None) -> None:
+    def __init__(self, options: Options = None) -> None:
         self._stop = True
         # Create TRITONSERVER_ServerOptions
         # TRITONSERVER_ServerNew
@@ -228,3 +228,25 @@ class TritonCore:
         # If 'allocator' not provided, use DefaultAllocator
         # set with pre-define callbacks..
         raise "Not Implemented"
+
+
+# Example usage of the module:
+#   # Init
+#   options = Options()
+#   options.model_repositories = ["/path/to/models"]
+#   triton = TritonCore(options)
+#
+#   # Prepare inference
+#   request = InferenceRequest("simple")
+#   request.inputs["INPUT"] = numpy.ones([16,16])
+#
+#   # infer
+#   res = triton.infer_async(request)
+#
+#   # read result
+#   for response in res:
+#       if isinstance(response, TritonException):
+#           raise response # response has error
+#       for output in res.outputs:
+#           # default allocator is numpy based.. see ._infer
+#           print(output.as_numpy())
