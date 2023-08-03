@@ -1,5 +1,6 @@
 from enum import IntEnum, Enum
 from ._common import *
+from ._infer import Tensor
 from typing import Iterable, Any, Union
 import abc
 
@@ -78,13 +79,9 @@ class TraceReportor(abc.ABC):
         # is TRITONSERVER_InferenceTraceActivityFn_t
         raise "Not Implemented"
 
-    # [FIXME] optional
-    # [WIP] Tensor abstraction
-    @abc.abstractmethod
+    @optional_callabck
     def trace_tensor(self, activity: TraceTensorActivity, name: str,
-                     data_type: DataType, base: int, byte_size: int,
-                     shape: Iterable[int], memory_type: MemoryType,
-                     memory_type_id: int, trace: Trace):
+                     tensor: Tensor, trace: Trace):
         # is TRITONSERVER_InferenceTraceTensorActivityFn_t
         raise "Not Implemented"
 

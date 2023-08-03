@@ -1,7 +1,8 @@
 from enum import Enum, IntEnum
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Tuple
 from typing import Any, Union
 from ._infer import *
+from ._trace import *
 
 
 class ModelControlMode(Enum):
@@ -52,7 +53,7 @@ class RateLimiterOptions:
 
 class Options:
     # in-process API doesn't provide proper getter,
-    # there is no way to reflect actual default value.
+    # can't reflect the default / current value.
     # NOTE: TRITONSERVER_ServerOptions creation will be in place
     # during server initialization
     def __init__(self) -> None:
@@ -76,7 +77,7 @@ class Options:
         self.strict_model_config: bool = None
         self.model_load_thread_count: int = None
         self.model_namespacing: bool = None
-        # [FIXME] proper type specification
+        # [WIP] proper type specification
         self.model_load_device_limit: Any = None
 
         # Rate limiter
@@ -99,14 +100,12 @@ class Options:
 
         # Backends
         self.backend_directory: str = None
-        # [FIXME] proper type
         self.backend_config: dict[str, list[tuple[str, str]]] = None
 
         self.host_policy: dict[str, list[tuple[str, str]]] = None
 
         self.repoagent_directory: str = None
 
-        # [WIP] log? should be moved out (global like metric..)
         pass
 
 
@@ -181,18 +180,18 @@ class TritonCore:
         # TRITONSERVER_ServerModelIsReady
         raise "Not Implemented"
 
-    def model_batch_properties(self,
-                               name: str,
-                               version: int = -1) -> Mapping[BatchProperty,
-                                                             Any]:
+    def model_batch_properties(
+            self,
+            name: str,
+            version: int = -1) -> Tuple[Iterable[BatchProperty], Any]:
         # TRITONSERVER_ServerModelBatchProperties
         # demultiplex the properties
         raise "Not Implemented"
 
-    def model_transaction_properties(self,
-                                     name: str,
-                                     version: int = -1
-                                    ) -> Mapping[BatchProperty, Any]:
+    def model_transaction_properties(
+            self,
+            name: str,
+            version: int = -1) -> Tuple[Iterable[TransactionProperty], Any]:
         # TRITONSERVER_ServerModelTransactionProperties
         # demultiplex the properties
         raise "Not Implemented"
@@ -223,11 +222,9 @@ class TritonCore:
 
     def infer_async(self,
                     request: InferenceRequest,
-                    allocator: ResponseAllocator = None) -> ResponseHandle:
+                    allocator: ResponseAllocator = None,
+                    trace_reportor: TraceReportor = None) -> ResponseHandle:
         # TRITONSERVER_InferenceRequestNew and initialization
         # If 'allocator' not provided, use DefaultAllocator
         # set with pre-define callbacks..
         raise "Not Implemented"
-
-
-# [FIXME][WIP] trace

@@ -81,8 +81,8 @@ class DataType(Enum):
         raise "Not implemented"
         return 0
 
-# [FIXME] TRITONSERVER_Parameter will be implicit to the actual API calls
-# [FIXME] Triton API reflection of the error object, not expose to user
+# [FIXME] Triton API reflection of the error object, not expose to user.
+# User should interact with TritonException above.
 class Code(Enum):
     UNKNOWN: int = 0
     INTERNAL: int = 1
@@ -111,6 +111,8 @@ class Error:
         raise "Not implemented"
 
 def raise_if_triton_error(err: Error = None):
+    if err is None:
+        return
     match err.code:
         case Code.UNKNOWN:
             raise TritonErrorUnknown(err.message)

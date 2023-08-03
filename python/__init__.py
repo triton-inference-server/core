@@ -1,7 +1,10 @@
 # Import higher-level Python wrappers
 from ._common import *
+from ._infer import *
+from ._logger import *
 from ._metrics import *
 from ._server import *
+from ._trace import *
 
 # [FIXME] exposing the actual C API binding below for users who want
 # more customization over what the Python wrapper provides.
