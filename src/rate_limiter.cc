@@ -166,8 +166,8 @@ RateLimiter::WaitForConsumer(
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(model) == payload_queues_.end()) {
-      LOG_ERROR << "Should not print this! Waiting for the consumer for an "
-                   "unknown model";
+      LOG_ERROR << "Unable to find the payload queue for the model "
+                << model->Name();
       return;
     }
     payload_queue = payload_queues_[model].get();
@@ -189,8 +189,8 @@ RateLimiter::WaitingConsumerCount(
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(model) == payload_queues_.end()) {
-      LOG_ERROR << "Should not print this! Waiting for the consumer for an "
-                   "unknown model";
+      LOG_ERROR << "Unable to find the payload queue for the model "
+                << model->Name();
       return 0;
     }
     payload_queue = payload_queues_[model].get();
@@ -218,9 +218,13 @@ RateLimiter::PayloadSlotAvailable(
     }
     {
       std::lock_guard<std::mutex> lk(payload_queue->mu_);
-      auto multiplier = (model_instance == nullptr)
-                            ? payload_queue->specific_queues_.size()
-                            : 1;
+      // The logic below sets cap on the number of payloads that
+      // can be pre-fetched. For per-model batcher the cap is
+      // twice the number of model instances. For per-instance
+      // batcher the cap is 2.
+      size_t multiplier = (model_instance == nullptr)
+                              ? payload_queue->specific_queues_.size()
+                              : 1;
       result = payload_queue->queue_->Size() < (2 * multiplier);
     }
   } else {
@@ -245,7 +249,7 @@ RateLimiter::EnqueuePayload(
     if (payload_queues_.find(model) == payload_queues_.end()) {
       return Status(
           Status::Code::INTERNAL,
-          "Should not print this! Enqueuing payload with an unknown model.");
+          "Unable to find the payload queue for the model " + model->Name());
     }
     payload_queue = payload_queues_[model].get();
   }
@@ -301,8 +305,8 @@ RateLimiter::DequeuePayload(
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     if (payload_queues_.find(model) == payload_queues_.end()) {
-      LOG_ERROR << "Should not print this! Dequeuing payload with an unknown "
-                   "instance.";
+      LOG_ERROR << "Unable to find the payload queue for the model "
+                << model->Name();
       return;
     }
     payload_queue = payload_queues_[model].get();
@@ -364,9 +368,11 @@ RateLimiter::DequeuePayload(
   // Decrement the counts from the remaining specific
   // instance handling as there will be no consumer for
   // these queues.
-  // FIXME: For more accurate handling, these instances
-  // should be removed in enqueue function itself. This
-  // will need instance association to be derived via
+  // FIXME: DLIS-5238 For more accurate handling, the
+  // consumer count for the instances that were not
+  // requested should be decremented upon the
+  // EnqueuePayload too. This will need instance
+  // association to be derived via instances fed into
   // DequeuePayload call.
   // However, as multiple instances are provided to
   // DequeuePayload call only when using device-blocking

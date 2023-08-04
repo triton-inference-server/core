@@ -91,7 +91,14 @@ class RateLimiter {
   void UnregisterModel(const TritonModel* model);
 
   /// Returns true if there is a payload slot available for the given model.
-  /// \param model The pointer to TritonModel object to be removed.
+  /// Note the function can be a blocking call when support_prefetching is
+  /// false. In this case, the function will block until a slot is available to
+  /// start building the payload. force_non_blocking option can be set to True
+  /// to allow function to return back with availability. \param model The
+  /// pointer to TritonModel object to query for . \param model_instance The
+  /// pointer to TritonMode \param support_prefetching Whether or not
+  /// pre-fetching of payloads is enabled. \param force_non_blocking When set
+  /// true, function will not block for for the avialability of the slot.
   /// \return slot availability in boolean.
   bool PayloadSlotAvailable(
       const TritonModel* model, const TritonModelInstance* model_instance,
