@@ -45,6 +45,11 @@ class InstanceQueue {
       std::shared_ptr<Payload>* payload,
       std::vector<std::shared_ptr<Payload>>* merged_payloads);
 
+  void IncrementConsumerCount();
+  void DecrementConsumerCount();
+  void WaitForConsumer();
+  int WaitingConsumerCount();
+
  private:
   size_t max_batch_size_;
   uint64_t max_queue_delay_ns_;
@@ -52,6 +57,10 @@ class InstanceQueue {
   std::deque<std::shared_ptr<Payload>> payload_queue_;
   std::shared_ptr<Payload> staged_payload_;
   std::mutex mu_;
+
+  int waiting_consumer_count_;
+  std::mutex waiting_consumer_mu_;
+  std::condition_variable waiting_consumer_cv_;
 };
 
 }}  // namespace triton::core

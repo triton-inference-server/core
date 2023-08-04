@@ -91,9 +91,20 @@ class RateLimiter {
   void UnregisterModel(const TritonModel* model);
 
   /// Returns true if there is a payload slot available for the given model.
-  /// \param model The pointer to TritonModel object to be removed.
+  /// Note the function can be a blocking call when support_prefetching is
+  /// false. In this case, the function will block until a slot is available to
+  /// start building the payload. force_non_blocking option can be set to True
+  /// to allow function to return back with availability.
+  /// \param model The pointer to TritonModel object to query for.
+  /// \param model_instance The pointer to TritonMode
+  /// \param support_prefetching Whether or not pre-fetching of payloads is
+  /// enabled.
+  /// \param force_non_blocking When set true, function will not block for
+  /// the availability of the slot.
   /// \return slot availability in boolean.
-  bool PayloadSlotAvailable(const TritonModel* model);
+  bool PayloadSlotAvailable(
+      const TritonModel* model, const TritonModelInstance* model_instance,
+      const bool support_prefetching, const bool force_non_blocking = false);
 
   /// Enqueues the payload to rate limiter for scheduling on the given model.
   /// \param model The pointer to TritonModel object to be removed.
@@ -280,6 +291,17 @@ class RateLimiter {
   // Initializes payload queues for the given model instance. The queue
   // holds payloads that get scheduled by rate limiter.
   void InitializePayloadQueues(const TritonModelInstance* instance);
+
+  // Should wait till a consumer registers a pending dequeue request
+  // for the given instance(s) of the model. This implies that the
+  // call will wait for an idle runner.
+  void WaitForConsumer(
+      const TritonModel* model, const TritonModelInstance* model_instance);
+  // Returns the number of consumers who have a pending dequeue request for
+  // the given instance(s) of the model.
+  int WaitingConsumerCount(
+      const TritonModel* model, const TritonModelInstance* model_instance);
+
   // Defers scheduling of the payload to the future. Rate Limiter will
   // schedule the payload execution based upon the resource availability/
   // Note that OnSchedule function should only schedule(enqueued in payload

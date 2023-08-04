@@ -148,6 +148,9 @@ class PriorityQueue {
   // Return the number of requests in pending batch.
   size_t PendingBatchCount() { return pending_cursor_.pending_batch_count_; }
 
+  // Whether the queue supports pre-fetching of the requests.
+  bool SupportPrefetching() { return support_prefetching_; }
+
  private:
   class PolicyQueue {
    public:
@@ -260,6 +263,9 @@ class PriorityQueue {
 
   Cursor pending_cursor_;
   Cursor current_mark_;
+
+  // Whether requests can be pre-fetched from the queue.
+  bool support_prefetching_{true};
 };
 
 }}  // namespace triton::core

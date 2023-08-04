@@ -158,19 +158,82 @@ RateLimiter::UnregisterModel(const TritonModel* model)
   }
 }
 
-bool
-RateLimiter::PayloadSlotAvailable(const TritonModel* model)
+void
+RateLimiter::WaitForConsumer(
+    const TritonModel* model, const TritonModelInstance* model_instance)
 {
-  bool result;
   PayloadQueue* payload_queue = nullptr;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
+    if (payload_queues_.find(model) == payload_queues_.end()) {
+      LOG_ERROR << "Unable to find the payload queue for the model "
+                << model->Name();
+      return;
+    }
     payload_queue = payload_queues_[model].get();
   }
+
+  if (model_instance == nullptr) {
+    payload_queue->queue_->WaitForConsumer();
+  } else {
+    payload_queue->specific_queues_[model_instance]->WaitForConsumer();
+  }
+}
+
+
+int
+RateLimiter::WaitingConsumerCount(
+    const TritonModel* model, const TritonModelInstance* model_instance)
+{
+  PayloadQueue* payload_queue = nullptr;
   {
-    std::lock_guard<std::mutex> lk(payload_queue->mu_);
-    result = payload_queue->queue_->Size() <
-             2 * payload_queue->specific_queues_.size();
+    std::lock_guard<std::mutex> lk(payload_queues_mu_);
+    if (payload_queues_.find(model) == payload_queues_.end()) {
+      LOG_ERROR << "Unable to find the payload queue for the model "
+                << model->Name();
+      return 0;
+    }
+    payload_queue = payload_queues_[model].get();
+  }
+
+  if (model_instance == nullptr) {
+    return payload_queue->queue_->WaitingConsumerCount();
+  } else {
+    return payload_queue->specific_queues_[model_instance]
+        ->WaitingConsumerCount();
+  }
+}
+
+bool
+RateLimiter::PayloadSlotAvailable(
+    const TritonModel* model, const TritonModelInstance* model_instance,
+    const bool support_prefetching, const bool force_non_blocking)
+{
+  bool result;
+  if (support_prefetching) {
+    PayloadQueue* payload_queue = nullptr;
+    {
+      std::lock_guard<std::mutex> lk(payload_queues_mu_);
+      payload_queue = payload_queues_[model].get();
+    }
+    {
+      std::lock_guard<std::mutex> lk(payload_queue->mu_);
+      // The logic below sets cap on the number of payloads that
+      // can be pre-fetched. For per-model batcher the cap is
+      // twice the number of model instances. For per-instance
+      // batcher the cap is 2.
+      size_t multiplier = (model_instance == nullptr)
+                              ? payload_queue->specific_queues_.size()
+                              : 1;
+      result = payload_queue->queue_->Size() < (2 * multiplier);
+    }
+  } else {
+    result = true;
+    if (force_non_blocking) {
+      result = (WaitingConsumerCount(model, model_instance) > 0);
+    } else {
+      WaitForConsumer(model, model_instance);
+    }
   }
   return result;
 }
@@ -186,10 +249,18 @@ RateLimiter::EnqueuePayload(
     if (payload_queues_.find(model) == payload_queues_.end()) {
       return Status(
           Status::Code::INTERNAL,
-          "Should not print this! Enqueuing payload with an unknown model.");
+          "Unable to find the payload queue for the model " + model->Name());
     }
     payload_queue = payload_queues_[model].get();
   }
+
+  // Update the pending consumer counts to prevent additional
+  // requests from getting enqueued.
+  if (pinstance != nullptr) {
+    payload_queue->specific_queues_[pinstance]->DecrementConsumerCount();
+  }
+  payload_queue->queue_->DecrementConsumerCount();
+
   {
     std::lock_guard<std::mutex> lk(payload_queue->mu_);
     payload->SetState(Payload::State::REQUESTED);
@@ -230,15 +301,24 @@ RateLimiter::DequeuePayload(
 {
   payload->reset();
   PayloadQueue* payload_queue = nullptr;
+  auto model = instances[0]->Model();
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
-    if (payload_queues_.find(instances[0]->Model()) == payload_queues_.end()) {
-      LOG_ERROR << "Should not print this! Dequeuing payload with an unknown "
-                   "instance.";
+    if (payload_queues_.find(model) == payload_queues_.end()) {
+      LOG_ERROR << "Unable to find the payload queue for the model "
+                << model->Name();
       return;
     }
-    payload_queue = payload_queues_[instances[0]->Model()].get();
+    payload_queue = payload_queues_[model].get();
   }
+
+  // Update the queue to reflect availability of a waiting
+  // consumer.
+  payload_queue->queue_->IncrementConsumerCount();
+  for (const auto instance : instances) {
+    payload_queue->specific_queues_[instance]->IncrementConsumerCount();
+  }
+
   std::vector<std::shared_ptr<Payload>> merged_payloads;
   size_t instance_index = std::numeric_limits<std::size_t>::max();
   {
@@ -274,9 +354,32 @@ RateLimiter::DequeuePayload(
   (*payload)->Callback();
   if ((*payload)->GetInstance() == nullptr) {
     (*payload)->SetInstance(instances.front());
+    // Enqueue did not specify the specific instance to
+    // run with the payload. Hence, need to explicitly
+    // decrement the consumer count for the instance
+    // which got allocated.
+    payload_queue->specific_queues_[instances.front()]
+        ->DecrementConsumerCount();
     instances.pop_front();
   } else {
     instances.erase(instances.begin() + instance_index);
+  }
+
+  // Decrement the counts from the remaining specific
+  // instance handling as there will be no consumer for
+  // these queues.
+  // FIXME: DLIS-5238 For more accurate handling, the
+  // consumer count for the instances that were not
+  // requested should be decremented upon the
+  // EnqueuePayload too. This will need instance
+  // association to be derived via instances fed into
+  // DequeuePayload call.
+  // However, as multiple instances are provided to
+  // DequeuePayload call only when using device-blocking
+  // and a single consumer thread, we are decrementing the
+  // specific instance consumer count as an approximation.
+  for (const auto instance : instances) {
+    payload_queue->specific_queues_[instance]->DecrementConsumerCount();
   }
 }
 

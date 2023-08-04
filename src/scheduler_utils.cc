@@ -273,6 +273,10 @@ PriorityQueue::PriorityQueue(
   if (priority_levels == 0) {
     // Only default policy is instantiated
     queues_.emplace(0, PolicyQueue(default_policy_, true));
+    support_prefetching_ =
+        (default_policy_.default_timeout_microseconds() == 0) &&
+        (!default_policy_.allow_timeout_override()) &&
+        (default_policy_.max_queue_size() == 0);
   } else {
     // All priorities with user-given policy are instantiated. We do not
     // permanently add default PolicyQueue because those will be dynamically
@@ -280,6 +284,7 @@ PriorityQueue::PriorityQueue(
     for (const auto& qp : queue_policy_map) {
       queues_.emplace(qp.first, PolicyQueue(qp.second, true));
     }
+    support_prefetching_ = false;
   }
   front_priority_level_ = queues_.empty() ? 0 : queues_.begin()->first;
   ResetCursor();
