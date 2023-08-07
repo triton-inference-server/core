@@ -1060,6 +1060,26 @@ TRITONSERVER_InferenceTraceModelVersion(
 #endif  // TRITON_ENABLE_TRACING
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSpawnChildTrace(
+    TRITONSERVER_InferenceTrace* trace,
+    TRITONSERVER_InferenceTrace** child_trace)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  if (trace != nullptr) {
+    *child_trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(
+        ltrace->SpawnChildTrace());
+  } else {
+    *child_trace = nullptr;
+  }
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
+
 //
 // TRITONSERVER_ServerOptions
 //

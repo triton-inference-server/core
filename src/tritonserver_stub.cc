@@ -178,6 +178,10 @@ TRITONSERVER_InferenceTraceRequestId()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceSpawnChildTrace()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestNew()
 {
 }
@@ -688,6 +692,10 @@ TRITONBACKEND_RequestOutputBufferProperties()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestRelease()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestTrace()
 {
 }
 TRITONAPI_DECLSPEC void

@@ -963,12 +963,12 @@ EnsembleContext::InitStep(
   RETURN_IF_ERROR(irequest->PrepareForInference());
 
 #ifdef TRITON_ENABLE_TRACING
-  auto& parent_trace = request_tracker_->Request()->Trace();
+  auto& parent_trace = request_tracker_->Request()->TraceProxy();
   if (parent_trace != nullptr) {
     irequest->SetTrace(parent_trace->SpawnChildTrace());
-    irequest->Trace()->SetModelName(irequest->ModelName());
-    irequest->Trace()->SetRequestId(irequest->Id());
-    irequest->Trace()->SetModelVersion(irequest->ActualModelVersion());
+    irequest->TraceProxy()->SetModelName(irequest->ModelName());
+    irequest->TraceProxy()->SetRequestId(irequest->Id());
+    irequest->TraceProxy()->SetModelVersion(irequest->ActualModelVersion());
   }
 #endif
 
@@ -1309,7 +1309,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   // scheduling process
   request->CaptureQueueStartNs();
   INFER_TRACE_ACTIVITY(
-      request->Trace(), TRITONSERVER_TRACE_QUEUE_START,
+      request->TraceProxy(), TRITONSERVER_TRACE_QUEUE_START,
       request->QueueStartNs());
 #ifdef TRITON_ENABLE_TRACING
   request->TraceInputTensors(

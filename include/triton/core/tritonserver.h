@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 23
+#define TRITONSERVER_API_VERSION_MINOR 24
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -878,6 +878,19 @@ TRITONSERVER_InferenceTraceModelVersion(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceRequestId(
     struct TRITONSERVER_InferenceTrace* trace, const char** request_id);
+
+/// Get the child trace, spawned from the parent trace. The caller owns
+/// the returned object and must call TRITONSERVER_InferenceTraceDelete
+/// to release the object, unless ownership is transferred through
+/// other APIs (see TRITONSERVER_ServerInferAsync).
+///
+/// \param trace The trace.
+/// \param child_trace Returns the child trace, spawned from the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSpawnChildTrace(
+    struct TRITONSERVER_InferenceTrace* trace,
+    struct TRITONSERVER_InferenceTrace** child_trace);
 
 /// TRITONSERVER_InferenceRequest
 ///
