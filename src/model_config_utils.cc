@@ -246,12 +246,16 @@ ValidateEnsembleSchedulingConfig(const inference::ModelConfig& config)
       // recurrsively check 'prev_nodes' for the source of not-ready state
       std::vector<EnsembleTensor*>* prev_nodes = &it->second.prev_nodes;
       auto last_not_ready_node = &it->second;
+      // there can be circular dependency so remember seen names to break it
+      std::set<std::string> seen_names;
       while ((prev_nodes != nullptr) && (!prev_nodes->empty())) {
         const auto& nodes = *prev_nodes;
         // make sure while loop will terminate if no not-ready source is seen
         prev_nodes = nullptr;
         for (const auto& node : nodes) {
-          if (!node->ready) {
+          if ((!node->ready) &&
+              (seen_names.find(node->name) == seen_names.end())) {
+            seen_names.emplace(node->name);
             last_not_ready_node = node;
             prev_nodes = &node->prev_nodes;
             break;
