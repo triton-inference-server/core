@@ -55,9 +55,14 @@ namespace {
 #ifdef TRITON_ENABLE_ENSEMBLE
 
 struct EnsembleTensor {
-  EnsembleTensor(bool isOutput) : ready(false), isOutput(isOutput) {}
-  bool ready;
-  bool isOutput;
+  EnsembleTensor(const std::string& name, bool isOutput)
+      : name{name}, isOutput(isOutput)
+  {
+  }
+  const std::string name;
+
+  bool isOutput{false};
+  bool ready{false};
   std::vector<EnsembleTensor*> prev_nodes;
   std::vector<EnsembleTensor*> next_nodes;
 };
@@ -112,10 +117,11 @@ BuildEnsembleGraph(
           it->second.isOutput = true;
         }
       } else {
-        it = keyed_ensemble_graph
-                 .emplace(
-                     std::make_pair(output_map.second, EnsembleTensor(true)))
-                 .first;
+        it =
+            keyed_ensemble_graph
+                .emplace(std::make_pair(
+                    output_map.second, EnsembleTensor(output_map.second, true)))
+                .first;
       }
       tensor_as_output.push_back(&(it->second));
     }
@@ -135,8 +141,8 @@ BuildEnsembleGraph(
       auto it = keyed_ensemble_graph.find(input_map.second);
       if (it == keyed_ensemble_graph.end()) {
         it = keyed_ensemble_graph
-                 .emplace(
-                     std::make_pair(input_map.second, EnsembleTensor(false)))
+                 .emplace(std::make_pair(
+                     input_map.second, EnsembleTensor(input_map.second, false)))
                  .first;
       }
       for (auto output : tensor_as_output) {
@@ -233,10 +239,35 @@ ValidateEnsembleSchedulingConfig(const inference::ModelConfig& config)
                                          "' is not used");
     }
     if (!it->second.ready) {
-      return Status(
-          Status::Code::INVALID_ARG, "output '" + output.name() +
-                                         "' for ensemble '" + config.name() +
-                                         "' is not written");
+      std::string error_message = "output '" + output.name() +
+                                  "' for ensemble '" + config.name() +
+                                  "' is not written";
+
+      // recurrsively check 'prev_nodes' for the source of not-ready state
+      std::vector<EnsembleTensor*>* prev_nodes = &it->second.prev_nodes;
+      auto last_not_ready_node = &it->second;
+      // there can be circular dependency so remember seen names to break it
+      std::set<std::string> seen_names;
+      while ((prev_nodes != nullptr) && (!prev_nodes->empty())) {
+        const auto& nodes = *prev_nodes;
+        // make sure while loop will terminate if no not-ready source is seen
+        prev_nodes = nullptr;
+        for (const auto& node : nodes) {
+          if ((!node->ready) &&
+              (seen_names.find(node->name) == seen_names.end())) {
+            seen_names.emplace(node->name);
+            last_not_ready_node = node;
+            prev_nodes = &node->prev_nodes;
+            break;
+          }
+        }
+      }
+      // there is not-ready source
+      if (last_not_ready_node->name != it->second.name) {
+        error_message += ": at least one of its depending tensors, '" +
+                         last_not_ready_node->name + "', is not connected";
+      }
+      return Status(Status::Code::INVALID_ARG, error_message);
     } else {
       outputs.insert(it->first);
     }
