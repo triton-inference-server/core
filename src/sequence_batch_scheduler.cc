@@ -1805,11 +1805,14 @@ OldestSequenceBatch::OldestSequenceBatch(
 
   // TODO: Provide appropriate request_cache_enable flag when caching
   // is enabled for sequence models.
+  // TODO: Check if preserve ordering is manually specified or not,
+  // will give default value of true if unspecified to keep current behavior.
+  // May need to wrap the field in a message to allow checking for emptiness.
   Status status = DynamicBatchScheduler::Create(
       model_instance->Model(), model_instance,
       triton::common::GetCpuNiceLevel(config),
       true /* dynamic_batching_enabled */, config.max_batch_size(),
-      enforce_equal_shape_tensors_, true /* preserve_ordering */,
+      enforce_equal_shape_tensors_, config.sequence_batching().oldest().preserve_ordering(),
       false /* response_cache_enable */, preferred_batch_sizes,
       config.sequence_batching().oldest().max_queue_delay_microseconds(),
       &dynamic_batcher_);
