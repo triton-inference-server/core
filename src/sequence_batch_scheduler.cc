@@ -1805,9 +1805,6 @@ OldestSequenceBatch::OldestSequenceBatch(
 
   // TODO: Provide appropriate request_cache_enable flag when caching
   // is enabled for sequence models.
-  // TODO: Check if preserve ordering is manually specified or not,
-  // will give default value of true if unspecified to keep current behavior.
-  // May need to wrap the field in a message to allow checking for emptiness.
   Status status = DynamicBatchScheduler::Create(
       model_instance->Model(), model_instance,
       triton::common::GetCpuNiceLevel(config),
