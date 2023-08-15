@@ -946,13 +946,13 @@ InferenceRequest::Normalize()
     if (input.DType() != input_config->data_type()) {
       return Status(
           Status::Code::INVALID_ARG,
-          LogRequest() + "inference input data-type is '" +
+          LogRequest() + "inference input '" + pr.first + "' data-type is '" +
               std::string(
                   triton::common::DataTypeToProtocolString(input.DType())) +
-              "', model expects '" +
+              "', but model '" + ModelName() + "' expects '" +
               std::string(triton::common::DataTypeToProtocolString(
                   input_config->data_type())) +
-              "' for '" + ModelName() + "'");
+              "'");
     }
 
     // Validate input shape
