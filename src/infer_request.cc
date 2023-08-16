@@ -807,7 +807,9 @@ InferenceRequest::Normalize()
       if (!has_one_element) {
         return Status(
             Status::Code::INVALID_ARG, LogRequest() +
-                                           "For BYTE datatype raw input, the "
+                                           "For BYTE datatype raw input '" +
+                                           config_input.name() +
+                                           "', the "
                                            "model must have input shape [1]");
       }
       // In the case of BYTE data type, we will prepend the byte size to follow
