@@ -1329,6 +1329,10 @@ TRITONSERVER_InferenceRequestSetReleaseCallback(
 /// tensors included in responses that are produced for this
 /// request. The response callback is called to return response
 /// objects representing responses produced for this request.
+/// Typically 'response_allocator_userp' and 'response_userp' will no
+/// longer be referenced after 'response_fn' is invoked with
+/// 'TRITONSERVER_RESPONSE_COMPLETE_FINAL' flag, therefore the user may
+/// release 'response_allocator_userp' and 'response_userp' at that point.
 ///
 /// \param inference_request The request object.
 /// \param response_allocator The TRITONSERVER_ResponseAllocator to use
