@@ -199,10 +199,6 @@ TRITONSERVER_InferenceTraceName()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_InferenceTraceSetName()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestNew()
 {
 }
