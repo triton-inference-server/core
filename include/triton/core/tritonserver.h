@@ -786,6 +786,16 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_InferenceTraceNew(
     TRITONSERVER_InferenceTraceActivityFn_t activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
+/// Get the name associated with a trace. The caller does
+/// not own the returned string and must not modify or delete it. The
+/// lifetime of the returned string extends only as long as 'trace'.
+///
+/// \param trace The trace.
+/// \param trace_name Returns the name associated with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceName(
+    TRITONSERVER_InferenceTrace* trace, const char** trace_name);
+
 /// Create a new inference trace object. The caller takes ownership of
 /// the TRITONSERVER_InferenceTrace object and must call
 /// TRITONSERVER_InferenceTraceDelete to release the object.
@@ -819,14 +829,16 @@ TRITONSERVER_InferenceTraceTensorNew(
     TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
-/// Report a trace activity.
+/// Report a trace activity. All the traces reported using this API will be
+/// using TRITONSERVER_TRACE_CUSTOM_ACTIVITY type.
 ///
 /// \param trace The trace object.
 /// \param timestamp The timestamp associated with the trace activity.
+/// \param name The trace activity name.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceReportActivity(
-    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp);
+    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp, const char* name);
 
 /// Delete a trace object.
 ///
@@ -866,24 +878,6 @@ TRITONSERVER_InferenceTraceParentId(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelName(
     struct TRITONSERVER_InferenceTrace* trace, const char** model_name);
-
-/// Set the name associated with a trace.
-///
-/// \param trace The trace.
-/// \param trace_name The name associated with the trace.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceSetName(
-    TRITONSERVER_InferenceTrace* trace, const char* trace_name);
-
-/// Get the name associated with a trace. The caller does
-/// not own the returned string and must not modify or delete it. The
-/// lifetime of the returned string extends only as long as 'trace'.
-///
-/// \param trace The trace.
-/// \param trace_name Returns the name associated with the trace.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONSERVER_InferenceTraceName(
-    TRITONSERVER_InferenceTrace* trace, const char** trace_name);
 
 /// Get the version of the model associated with a trace.
 ///
