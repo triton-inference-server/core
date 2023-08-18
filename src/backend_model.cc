@@ -1191,7 +1191,6 @@ TRITONBACKEND_RequestOutputBufferProperties(
   return nullptr;  // success
 }
 
-
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestTrace(
     TRITONBACKEND_Request* request, TRITONSERVER_InferenceTrace** trace)
@@ -1215,25 +1214,6 @@ TRITONBACKEND_RequestRelease(
   std::unique_ptr<InferenceRequest> ur(tr);
   InferenceRequest::Release(std::move(ur), release_flags);
   return nullptr;  // success
-}
-
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_RequestTrace(
-    TRITONBACKEND_Request* request, TRITONSERVER_InferenceTrace** trace)
-{
-#ifdef TRITON_ENABLE_TRACING
-  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  if (tr->TraceProxy() != nullptr) {
-    *trace = reinterpret_cast<TRITONSERVER_InferenceTrace*>(
-        tr->TraceProxy()->Trace());
-  } else {
-    *trace = nullptr;
-  }
-  return nullptr;  // success
-#else
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "tracing is not supported");
-#endif  // TRITON_ENABLE_TRACING
 }
 
 ///
