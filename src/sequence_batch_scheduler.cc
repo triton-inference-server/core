@@ -79,7 +79,7 @@ AddRequestToPayload(
   payload->AddRequest(std::move(request));
   // Decrement queue size when payload is released to backend for execution
   if (reporter) {
-    auto cb = [&]() { reporter->DecrementGauge(kQueueSizeMetricName, 1); };
+    auto cb = [=]() { reporter->DecrementGauge(kQueueSizeMetricName, 1); };
     payload->AddInternalReleaseCallback(cb);
   }
 }
@@ -1700,9 +1700,9 @@ DirectSequenceBatch::BatcherThread(const int nice)
                   null_irequest->GetSequenceStates());
               ni->SetSequenceStates(sequence_states);
             }
-            // TODO: Is this request considered in queue?
-            AddRequestToPayload(
-                curr_payload_, std::move(ni), base_->MetricReporter());
+            // NOTE: No need to update queue size metric for null requests used
+            // to pad slots in batch.
+            curr_payload_->AddRequest(std::move(ni));
           } else {
             std::unique_ptr<InferenceRequest>& irequest = queue.front();
 

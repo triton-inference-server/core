@@ -165,7 +165,6 @@ MetricModelReporter::~MetricModelReporter()
     }
   }
 
-  // TODO: Can we consolidate all 3?
   for (auto& iter : gauge_families_) {
     const auto& name = iter.first;
     auto family_ptr = iter.second;
@@ -343,38 +342,35 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
   counter->Increment(value);
 }
 
-void
-MetricModelReporter::SetGauge(const std::string& name, double value)
+prometheus::Gauge*
+MetricModelReporter::GetGauge(const std::string& name)
 {
   auto iter = gauges_.find(name);
   if (iter == gauges_.end()) {
     // No gauge metric exists with this name
-    return;
+    return nullptr;
   }
 
   auto gauge = iter->second;
-  if (!gauge) {
-    // gauge is uninitialized/nullptr
-    return;
+  return gauge;
+}
+
+void
+MetricModelReporter::SetGauge(const std::string& name, double value)
+{
+  auto gauge = GetGauge(name);
+  if (gauge) {
+    gauge->Set(value);
   }
-  gauge->Set(value);
 }
 
 void
 MetricModelReporter::IncrementGauge(const std::string& name, double value)
 {
-  auto iter = gauges_.find(name);
-  if (iter == gauges_.end()) {
-    // No gauge metric exists with this name
-    return;
+  auto gauge = GetGauge(name);
+  if (gauge) {
+    gauge->Increment(value);
   }
-
-  auto gauge = iter->second;
-  if (!gauge) {
-    // gauge is uninitialized/nullptr
-    return;
-  }
-  gauge->Increment(value);
 }
 
 

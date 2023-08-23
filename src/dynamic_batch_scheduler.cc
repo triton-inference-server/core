@@ -226,7 +226,6 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
         std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
 
     // Decrement inflight count early when returning cached response
-    // TODO: Double counting in sequence batcher?
     if (reporter_) {
       reporter_->DecrementGauge(kQueueSizeMetricName, 1);
     }
@@ -246,7 +245,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
       // Decrement queue size when payload is released to backend for execution.
       // This should be decremented even if a child scheduler, as the parent
       // scheduler shouldn't have enqueued another payload for the same request.
-      auto cb = [&]() { reporter_->DecrementGauge(kQueueSizeMetricName, 1); };
+      auto cb = [=]() { reporter_->DecrementGauge(kQueueSizeMetricName, 1); };
       payload->AddInternalReleaseCallback(cb);
     }
     RETURN_IF_ERROR(
@@ -377,9 +376,6 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
           auto payload_state = curr_payload_->GetState();
           if (IsStaleState(payload_state)) {
-            std::cout
-                << "[DEBUG] ~~~~~~~~~ PAYLOAD STATE STALE!!! SKIPPING SIZE: "
-                << curr_payload_->RequestCount() << std::endl;
             continue;
           }
 
@@ -401,15 +397,12 @@ DynamicBatchScheduler::BatcherThread(const int nice)
                   DelegateResponse(request);
                 }
                 curr_payload_->AddRequest(std::move(request));
-                // TODO: Could do subtract N requests of batch when payload has
-                // stopped adding requests instead of -1 for efficiency, but
-                // can't get the numbers to line up currently when doing so. It
-                // seems like requests get added after the payload gets
-                // enqueued, or a race condition not being handled.
+                // FIXME: Should be able to do subtract N requests in payload
+                // all at once instead of one at a time.
                 // Decrement queue size when payload is released to backend for
                 // execution.
                 if (reporter_) {
-                  auto cb = [&]() {
+                  auto cb = [=]() {
                     reporter_->DecrementGauge(kQueueSizeMetricName, 1);
                   };
                   curr_payload_->AddInternalReleaseCallback(cb);

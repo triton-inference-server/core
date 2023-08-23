@@ -81,9 +81,13 @@ class MetricModelReporter {
   const MetricReporterConfig& Config();
   // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
-  // Lookup gauge metric by name, and set its value if it exists.
+  // Lookup gauge metric by name. Return gauge if found, nullptr otherwise.
+  prometheus::Gauge* GetGauge(const std::string& name);
+  // Set gauge to value.
   void SetGauge(const std::string& name, double value);
+  // Increase gauge by value.
   void IncrementGauge(const std::string& name, double value);
+  // Decrease gauge by value.
   void DecrementGauge(const std::string& name, double value);
   // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
