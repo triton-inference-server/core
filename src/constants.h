@@ -79,6 +79,9 @@ constexpr char kMetricsLabelGpuUuid[] = "gpu_uuid";
 constexpr char kWarmupDataFolder[] = "warmup";
 constexpr char kInitialStateFolder[] = "initial_state";
 
+// Metric names
+constexpr char kQueueSizeMetricName[] = "inf_queue_size";
+
 constexpr uint64_t NANOS_PER_SECOND = 1000000000;
 constexpr uint64_t NANOS_PER_MILLIS = 1000000;
 constexpr int MAX_GRPC_MESSAGE_SIZE = INT32_MAX;
@@ -90,7 +93,7 @@ constexpr size_t CUDA_IPC_STRUCT_SIZE = 64;
 // MetricModelReporter expects a device ID for GPUs, but we reuse this device
 // ID for other metrics as well such as for CPU and Response Cache metrics
 constexpr int METRIC_REPORTER_ID_CPU = -1;
-constexpr int METRIC_REPORTER_ID_RESPONSE_CACHE = -2;
+constexpr int METRIC_REPORTER_ID_UTILITY = -2;
 #endif
 
 // Note: This can be replaced with std::byte starting in c++17

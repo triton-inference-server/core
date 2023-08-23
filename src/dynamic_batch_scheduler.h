@@ -88,8 +88,6 @@ class DynamicBatchScheduler : public Scheduler {
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
 
-  MetricModelReporter* MetricReporter() const { return reporter_.get(); }
-
  private:
   DynamicBatchScheduler(
       TritonModel* model, TritonModelInstance* model_instance,

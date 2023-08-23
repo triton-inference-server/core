@@ -82,12 +82,9 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   response_cache_enabled_ =
       response_cache_enable && model_->Server()->ResponseCacheEnabled();
 #ifdef TRITON_ENABLE_METRICS
-  // Initialize metric reporter for cache statistics if cache enabled
-  if (response_cache_enabled_) {
-    MetricModelReporter::Create(
-        model_name_, model_->Version(), METRIC_REPORTER_ID_RESPONSE_CACHE,
-        response_cache_enabled_, model_->Config().metric_tags(), &reporter_);
-  }
+  MetricModelReporter::Create(
+      model_name_, model_->Version(), METRIC_REPORTER_ID_UTILITY,
+      response_cache_enabled_, model_->Config().metric_tags(), &reporter_);
 #endif  // TRITON_ENABLE_METRICS
   max_preferred_batch_size_ = 0;
   for (const auto size : preferred_batch_sizes_) {
@@ -184,7 +181,8 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   // the beginning of the queueing and scheduling process. Otherwise,
   // dynamic batcher is used as component of another batcher and should not
   // overwrite the queue start timestamp.
-  if (request->QueueStartNs() == 0) {
+  const bool is_child_scheduler = (request->QueueStartNs() != 0);
+  if (!is_child_scheduler) {
     request->CaptureQueueStartNs();
     INFER_TRACE_ACTIVITY(
         request->TraceProxy(), TRITONSERVER_TRACE_QUEUE_START,
@@ -193,6 +191,10 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     request->TraceInputTensors(
         TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT, "DynamicBatchScheduler Enqueue");
 #endif  // TRITON_ENABLE_TRACING
+    if (reporter_) {
+      // Only increment when not a child scheduler to avoid double counting.
+      reporter_->IncrementGauge(kQueueSizeMetricName, 1);
+    }
   }
 
   // Record time at the beginning of the batcher queueing. In the case of
@@ -223,6 +225,11 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     InferenceRequest::Release(
         std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
 
+    // Decrement inflight count early when returning cached response
+    // TODO: Double counting in sequence batcher?
+    if (reporter_) {
+      reporter_->DecrementGauge(kQueueSizeMetricName, 1);
+    }
     return Status::Success;
   }
 
@@ -235,6 +242,13 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     auto payload = model_->Server()->GetRateLimiter()->GetPayload(
         Payload::Operation::INFER_RUN, nullptr /* TritonModelInstance*/);
     payload->AddRequest(std::move(request));
+    if (reporter_) {
+      // Decrement queue size when payload is released to backend for execution.
+      // This should be decremented even if a child scheduler, as the parent
+      // scheduler shouldn't have enqueued another payload for the same request.
+      auto cb = [&]() { reporter_->DecrementGauge(kQueueSizeMetricName, 1); };
+      payload->AddInternalReleaseCallback(cb);
+    }
     RETURN_IF_ERROR(
         model_->Server()->GetRateLimiter()->EnqueuePayload(model_, payload));
 
@@ -363,6 +377,9 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
           auto payload_state = curr_payload_->GetState();
           if (IsStaleState(payload_state)) {
+            std::cout
+                << "[DEBUG] ~~~~~~~~~ PAYLOAD STATE STALE!!! SKIPPING SIZE: "
+                << curr_payload_->RequestCount() << std::endl;
             continue;
           }
 
@@ -384,6 +401,19 @@ DynamicBatchScheduler::BatcherThread(const int nice)
                   DelegateResponse(request);
                 }
                 curr_payload_->AddRequest(std::move(request));
+                // TODO: Could do subtract N requests of batch when payload has
+                // stopped adding requests instead of -1 for efficiency, but
+                // can't get the numbers to line up currently when doing so. It
+                // seems like requests get added after the payload gets
+                // enqueued, or a race condition not being handled.
+                // Decrement queue size when payload is released to backend for
+                // execution.
+                if (reporter_) {
+                  auto cb = [&]() {
+                    reporter_->DecrementGauge(kQueueSizeMetricName, 1);
+                  };
+                  curr_payload_->AddInternalReleaseCallback(cb);
+                }
               } else {
                 // The queue is empty which conflicts with pending batch
                 // count. Send the current batch if any and reset related

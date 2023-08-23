@@ -81,6 +81,10 @@ class MetricModelReporter {
   const MetricReporterConfig& Config();
   // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
+  // Lookup gauge metric by name, and set its value if it exists.
+  void SetGauge(const std::string& name, double value);
+  void IncrementGauge(const std::string& name, double value);
+  void DecrementGauge(const std::string& name, double value);
   // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
 
@@ -106,11 +110,14 @@ class MetricModelReporter {
   // Metric Families
   std::unordered_map<std::string, prometheus::Family<prometheus::Counter>*>
       counter_families_;
+  std::unordered_map<std::string, prometheus::Family<prometheus::Gauge>*>
+      gauge_families_;
   std::unordered_map<std::string, prometheus::Family<prometheus::Summary>*>
       summary_families_;
 
   // Metrics
   std::unordered_map<std::string, prometheus::Counter*> counters_;
+  std::unordered_map<std::string, prometheus::Gauge*> gauges_;
   std::unordered_map<std::string, prometheus::Summary*> summaries_;
 
   // Config

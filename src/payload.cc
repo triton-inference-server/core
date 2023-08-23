@@ -75,6 +75,12 @@ Payload::MergePayload(std::shared_ptr<Payload>& payload)
       requests_.end(), std::make_move_iterator(payload->Requests().begin()),
       std::make_move_iterator(payload->Requests().end()));
 
+  // TODO: Merge internal release callbacks here too?
+  std::cout << "[DEBUG]~~~~~~~~ MERGING PAYLOAD OF SIZE: "
+            << payload->RequestCount()
+            << " INTO CURRENT PAYLOAD. NEW TOTAL SIZE: " << this->RequestCount()
+            << std::endl;
+
   payload->Callback();
 
   return Status::Success;

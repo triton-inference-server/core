@@ -165,6 +165,15 @@ MetricModelReporter::~MetricModelReporter()
     }
   }
 
+  // TODO: Can we consolidate all 3?
+  for (auto& iter : gauge_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      family_ptr->Remove(gauges_[name]);
+    }
+  }
+
   for (auto& iter : summary_families_) {
     const auto& name = iter.first;
     auto family_ptr = iter.second;
@@ -184,6 +193,7 @@ MetricModelReporter::InitializeCounters(
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
   counter_families_["inf_exec_count"] =
       &Metrics::FamilyInferenceExecutionCount();
+  gauge_families_[kQueueSizeMetricName] = &Metrics::FamilyInferenceQueueSize();
 
   // Latency metrics will be initialized based on config
   if (config_.latency_counters_enabled_) {
@@ -216,6 +226,14 @@ MetricModelReporter::InitializeCounters(
     auto family_ptr = iter.second;
     if (family_ptr) {
       counters_[name] = CreateMetric<prometheus::Counter>(*family_ptr, labels);
+    }
+  }
+
+  for (auto& iter : gauge_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      gauges_[name] = CreateMetric<prometheus::Gauge>(*family_ptr, labels);
     }
   }
 }
@@ -323,6 +341,47 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
     return;
   }
   counter->Increment(value);
+}
+
+void
+MetricModelReporter::SetGauge(const std::string& name, double value)
+{
+  auto iter = gauges_.find(name);
+  if (iter == gauges_.end()) {
+    // No gauge metric exists with this name
+    return;
+  }
+
+  auto gauge = iter->second;
+  if (!gauge) {
+    // gauge is uninitialized/nullptr
+    return;
+  }
+  gauge->Set(value);
+}
+
+void
+MetricModelReporter::IncrementGauge(const std::string& name, double value)
+{
+  auto iter = gauges_.find(name);
+  if (iter == gauges_.end()) {
+    // No gauge metric exists with this name
+    return;
+  }
+
+  auto gauge = iter->second;
+  if (!gauge) {
+    // gauge is uninitialized/nullptr
+    return;
+  }
+  gauge->Increment(value);
+}
+
+
+void
+MetricModelReporter::DecrementGauge(const std::string& name, double value)
+{
+  IncrementGauge(name, -1 * value);
 }
 
 void

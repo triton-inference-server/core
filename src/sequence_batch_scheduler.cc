@@ -26,6 +26,8 @@
 
 #include "sequence_batch_scheduler.h"
 
+#include "infer_request.h"
+
 #ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -69,7 +71,35 @@ SetThreadPriority(const int nice, const char* thread_name)
 #endif
 }
 
+void
+AddRequestToPayload(
+    std::shared_ptr<Payload> payload, std::unique_ptr<InferenceRequest> request,
+    std::shared_ptr<MetricModelReporter> reporter)
+{
+  payload->AddRequest(std::move(request));
+  // Decrement queue size when payload is released to backend for execution
+  if (reporter) {
+    auto cb = [&]() { reporter->DecrementGauge(kQueueSizeMetricName, 1); };
+    payload->AddInternalReleaseCallback(cb);
+  }
+}
+
 }  // namespace
+
+
+SequenceBatchScheduler::SequenceBatchScheduler(
+    TritonModel* model,
+    const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
+    : model_(model), enforce_equal_shape_tensors_(enforce_equal_shape_tensors),
+      stop_(false)
+{
+#ifdef TRITON_ENABLE_METRICS
+  MetricModelReporter::Create(
+      model->Name(), model_->Version(), METRIC_REPORTER_ID_UTILITY,
+      false /* response_cache_enabled */, model_->Config().metric_tags(),
+      &reporter_);
+#endif  // TRITON_ENABLE_METRICS
+}
 
 Status
 SequenceBatchScheduler::Create(
@@ -633,6 +663,10 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   // Record time at the beginning of the batcher queueing
   irequest->CaptureBatcherStartNs();
+
+  if (reporter_) {
+    reporter_->IncrementGauge(kQueueSizeMetricName, 1);
+  }
 
   // For now the request must have batch-size 1 since the sequence
   // batcher does not yet support requests that are statically
@@ -1666,8 +1700,9 @@ DirectSequenceBatch::BatcherThread(const int nice)
                   null_irequest->GetSequenceStates());
               ni->SetSequenceStates(sequence_states);
             }
-
-            curr_payload_->AddRequest(std::move(ni));
+            // TODO: Is this request considered in queue?
+            AddRequestToPayload(
+                curr_payload_, std::move(ni), base_->MetricReporter());
           } else {
             std::unique_ptr<InferenceRequest>& irequest = queue.front();
 
@@ -1681,8 +1716,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
                 0) {
               end_of_sequence = true;
             }
-            curr_payload_->AddRequest(std::move(irequest));
-
+            AddRequestToPayload(
+                curr_payload_, std::move(irequest), base_->MetricReporter());
             queue.pop_front();
           }
 

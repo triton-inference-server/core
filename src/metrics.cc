@@ -101,6 +101,13 @@ Metrics::Metrics()
                     "microseconds (does not include cached requests)")
               .Register(*registry_)),
 
+      inf_queue_size_family_(
+          prometheus::BuildGauge()
+              .Name("nv_inference_queue_size")
+              .Help("Instantaneous size of request queue per-model, measured "
+                    "with each new request.")
+              .Register(*registry_)),
+
       // Per-model cache metric families
       // NOTE: These are used in infer_stats for perf_analyzer
       cache_num_hits_model_family_(prometheus::BuildCounter()
