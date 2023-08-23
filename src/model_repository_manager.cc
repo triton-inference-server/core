@@ -1255,13 +1255,15 @@ ModelRepositoryManager::Poll(
                         << "': not unique across all model repositories";
               break;
             }
-          }
+          }  // else: model doesn't exist in this repository_path
         }
       }
       // For an explicitly specified model that does not exist, we do not mark
       // it as deleted, we simply mark that we could not poll all models.
       if (!exists) {
         *all_models_polled = false;
+        LOG_ERROR << "failed to poll model '" << model.first
+                  << "': model not found in any model repository.";
       }
     }
   }
