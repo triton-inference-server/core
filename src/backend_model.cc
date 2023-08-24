@@ -1753,6 +1753,21 @@ TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
   return nullptr;
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_OutputShapeAndDType(
+    TRITONBACKEND_Response* response, const char* name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint32_t* dim_count)
+{
+  InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
+  Status status = tr->OutputShapeAndDType(name, datatype, shape, dim_count);
+  if (!status.IsOk()) {
+    return TRITONSERVER_ErrorNew(
+        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+  }
+
+  return nullptr;  // success
+}
+
 }  // extern C
 
 }}  // namespace triton::core

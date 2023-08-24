@@ -1078,4 +1078,9 @@ TRITONCACHE_Copy()
 {
 }
 
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_OutputShapeAndDType()
+{
+}
+
 } /* extern "C" */

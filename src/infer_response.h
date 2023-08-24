@@ -284,6 +284,12 @@ class InferenceResponse {
       std::unique_ptr<InferenceResponse>&& response, const uint32_t flags,
       const Status& status);
 
+  // Get the data type, shape, and dimensionality associated with
+  // an output. Return error status if tensor is not found.
+  Status OutputShapeAndDType(
+      const char* name, TRITONSERVER_DataType* datatype, const int64_t** shape,
+      uint64_t* dim_count);
+
 #ifdef TRITON_ENABLE_TRACING
   const std::shared_ptr<InferenceTraceProxy>& Trace() const { return trace_; }
   void SetTrace(const std::shared_ptr<InferenceTraceProxy>& trace)

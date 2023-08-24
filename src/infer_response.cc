@@ -275,6 +275,28 @@ InferenceResponse::TraceOutputTensors(
 }
 #endif  // TRITON_ENABLE_TRACING
 
+Status
+InferenceResponse::OutputShapeAndDType(
+    const char* tensor_name, TRITONSERVER_DataType* datatype,
+    const int64_t** shape, uint64_t* dim_count)
+{
+  const auto& outputs = this->Outputs();
+  uint32_t output_count = outputs.size();
+  std::string output_name = std::string(name);
+
+  for (uint32_t idx = 0; idx < output_count; ++idx) {
+    if (outputs[idx].Name() == output_name) {
+      const std::vector<int64_t>& output_shape = outputs[idx].Shape();
+      *shape = &output_shape[0];
+      *dim_count = output_shape.size();
+      *datatype = DataTypeToTriton(outputs[idx].DType());
+      return Status::Success;
+    }
+  }
+  return Status(
+      Status::Code::NOT_FOUND, "Output name '" + output_name + "' not found");
+}
+
 //
 // InferenceResponse::Output
 //

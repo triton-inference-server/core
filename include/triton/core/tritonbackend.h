@@ -1569,6 +1569,20 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
 TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(
     void* userp);
 
+/// Accessor function to obtain the shape and data type of a particular output.
+///
+/// \param response The response.
+/// \param name The name of the output tensor to extract shape and data
+/// type information.
+/// \param datatype Returns the tensor datatype.
+/// \param shape Returns the tensor shape.
+/// \param dim_count Returns the number of dimensions in the tensor shape.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_OutputShapeAndDType(
+    TRITONBACKEND_Response* response, const char* name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint32_t* dim_count);
+
 #ifdef __cplusplus
 }
 #endif
