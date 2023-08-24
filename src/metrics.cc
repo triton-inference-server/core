@@ -105,7 +105,7 @@ Metrics::Metrics()
           prometheus::BuildGauge()
               .Name("nv_inference_queue_size")
               .Help("Instantaneous size of request queue per-model, measured "
-                    "with each new request.")
+                    "when requests enter or exit the model's queue.")
               .Register(*registry_)),
 
       // Per-model cache metric families
