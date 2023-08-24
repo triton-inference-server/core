@@ -356,15 +356,6 @@ MetricModelReporter::GetGauge(const std::string& name)
 }
 
 void
-MetricModelReporter::SetGauge(const std::string& name, double value)
-{
-  auto gauge = GetGauge(name);
-  if (gauge) {
-    gauge->Set(value);
-  }
-}
-
-void
 MetricModelReporter::IncrementGauge(const std::string& name, double value)
 {
   auto gauge = GetGauge(name);

@@ -83,8 +83,6 @@ class MetricModelReporter {
   void IncrementCounter(const std::string& name, double value);
   // Lookup gauge metric by name. Return gauge if found, nullptr otherwise.
   prometheus::Gauge* GetGauge(const std::string& name);
-  // Set gauge to value.
-  void SetGauge(const std::string& name, double value);
   // Increase gauge by value.
   void IncrementGauge(const std::string& name, double value);
   // Decrease gauge by value.
