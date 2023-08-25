@@ -225,6 +225,12 @@ class Model {
 
   uint64_t MaxPriorityLevel() const { return max_priority_level_; }
 
+  // Returns the scheduler's metric reporter
+  std::shared_ptr<MetricModelReporter> MetricReporter()
+  {
+    return scheduler_->MetricReporter();
+  }
+
  protected:
   virtual std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>>
   AccumulatedInstanceMemoryUsage() const

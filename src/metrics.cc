@@ -101,11 +101,11 @@ Metrics::Metrics()
                     "microseconds (does not include cached requests)")
               .Register(*registry_)),
 
-      inf_queue_size_family_(
+      inf_pending_request_count_family_(
           prometheus::BuildGauge()
-              .Name("nv_inference_queue_size")
-              .Help("Instantaneous size of request queue per-model, measured "
-                    "when requests enter or exit the model's queue.")
+              .Name("nv_inference_pending_request_count")
+              .Help("Instantaneous number of pending requests awaiting "
+                    "execution per-model.")
               .Register(*registry_)),
 
       // Per-model cache metric families

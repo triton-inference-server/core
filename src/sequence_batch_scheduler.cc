@@ -71,19 +71,6 @@ SetThreadPriority(const int nice, const char* thread_name)
 #endif
 }
 
-void
-AddRequestToPayload(
-    std::shared_ptr<Payload> payload, std::unique_ptr<InferenceRequest> request,
-    std::shared_ptr<MetricModelReporter> reporter)
-{
-  payload->AddRequest(std::move(request));
-  // Decrement queue size when payload is released to backend for execution
-  if (reporter) {
-    auto cb = [=]() { reporter->DecrementGauge(kQueueSizeMetricName, 1); };
-    payload->AddInternalReleaseCallback(cb);
-  }
-}
-
 }  // namespace
 
 
@@ -158,8 +145,8 @@ SequenceBatchScheduler::Create(
   const size_t model_batch_size = std::max(1, config.max_batch_size());
   sched->seq_slot_cnt_ = model_batch_size;
   if (config.sequence_batching().has_oldest()) {
-    sched->seq_slot_cnt_ =
-        config.sequence_batching().oldest().max_candidate_sequences();
+    sched->seq_slot_cnt_ = std::max(
+        1, config.sequence_batching().oldest().max_candidate_sequences());
   }
 
   // Create a batcher for each instance.
@@ -663,10 +650,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   // Record time at the beginning of the batcher queueing
   irequest->CaptureBatcherStartNs();
-
-  if (reporter_) {
-    reporter_->IncrementGauge(kQueueSizeMetricName, 1);
-  }
 
   // For now the request must have batch-size 1 since the sequence
   // batcher does not yet support requests that are statically
@@ -1700,8 +1683,6 @@ DirectSequenceBatch::BatcherThread(const int nice)
                   null_irequest->GetSequenceStates());
               ni->SetSequenceStates(sequence_states);
             }
-            // NOTE: No need to update queue size metric for null requests used
-            // to pad slots in batch.
             curr_payload_->AddRequest(std::move(ni));
           } else {
             std::unique_ptr<InferenceRequest>& irequest = queue.front();
@@ -1716,8 +1697,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
                 0) {
               end_of_sequence = true;
             }
-            AddRequestToPayload(
-                curr_payload_, std::move(irequest), base_->MetricReporter());
+            curr_payload_->AddRequest(std::move(irequest));
             queue.pop_front();
           }
 

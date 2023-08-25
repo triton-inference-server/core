@@ -208,7 +208,7 @@ class Metrics {
   // Metric family of instantaneous inference queue size per model
   static prometheus::Family<prometheus::Gauge>& FamilyInferenceQueueSize()
   {
-    return GetSingleton()->inf_queue_size_family_;
+    return GetSingleton()->inf_pending_request_count_family_;
   }
 
   // Metric families of per-model response cache metrics
@@ -293,7 +293,7 @@ class Metrics {
       inf_compute_infer_duration_us_family_;
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
-  prometheus::Family<prometheus::Gauge>& inf_queue_size_family_;
+  prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
 
   // Per-model Response Cache metrics
   // NOTE: Per-model metrics are used in infer_stats for perf_analyzer. Global

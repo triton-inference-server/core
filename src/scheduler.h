@@ -28,6 +28,7 @@
 #include <functional>
 
 #include "infer_request.h"
+#include "infer_stats.h"
 #include "status.h"
 
 namespace triton { namespace core {
@@ -76,6 +77,9 @@ class Scheduler {
   // Instruct the scheduler to stop processing future requests unless they are
   // considered as in-flight.
   virtual void Stop() = 0;
+
+  // Return the metric model reporter for the scheduler..
+  virtual std::shared_ptr<MetricModelReporter> MetricReporter() const = 0;
 };
 
 }}  // namespace triton::core

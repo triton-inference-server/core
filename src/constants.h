@@ -80,7 +80,7 @@ constexpr char kWarmupDataFolder[] = "warmup";
 constexpr char kInitialStateFolder[] = "initial_state";
 
 // Metric names
-constexpr char kQueueSizeMetricName[] = "inf_queue_size";
+constexpr char kPendingRequestMetric[] = "inf_pending_request_count";
 
 constexpr uint64_t NANOS_PER_SECOND = 1000000000;
 constexpr uint64_t NANOS_PER_MILLIS = 1000000;

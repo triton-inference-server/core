@@ -349,6 +349,8 @@ RateLimiter::DequeuePayload(
     }
   }
   for (auto& merge_payload : merged_payloads) {
+    // TODO: Maybe call OnExecute() here
+    LOG_WARNING << "RELEASING MERGED PAYLOAD";
     PayloadRelease(merge_payload);
   }
   (*payload)->Callback();

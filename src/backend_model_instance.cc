@@ -546,6 +546,8 @@ TritonModelInstance::Schedule(
   for (auto& r : requests) {
     // Load the input states for the inference request.
     r->LoadInputStates();
+    // Set request state to signtify that request is no longer pending.
+    r->SetState(InferenceRequest::State::EXECUTING);
     triton_requests.push_back(
         reinterpret_cast<TRITONBACKEND_Request*>(r.release()));
   }

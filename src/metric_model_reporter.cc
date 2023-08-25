@@ -186,13 +186,13 @@ void
 MetricModelReporter::InitializeCounters(
     const std::map<std::string, std::string>& labels)
 {
-  // Always setup these counters, regardless of config
+  // Always setup these inference request metrics, regardless of config
   counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
   counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
   counter_families_["inf_exec_count"] =
       &Metrics::FamilyInferenceExecutionCount();
-  gauge_families_[kQueueSizeMetricName] = &Metrics::FamilyInferenceQueueSize();
+  gauge_families_[kPendingRequestMetric] = &Metrics::FamilyInferenceQueueSize();
 
   // Latency metrics will be initialized based on config
   if (config_.latency_counters_enabled_) {
