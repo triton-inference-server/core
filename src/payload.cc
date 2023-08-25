@@ -87,7 +87,6 @@ Payload::Reset(const Operation op_type, TritonModelInstance* instance)
   requests_.clear();
   OnCallback_ = []() {};
   release_callbacks_.clear();
-  execute_callbacks_.clear();
   instance_ = instance;
   state_ = State::UNINITIALIZED;
   status_.reset(new std::promise<Status>());
@@ -104,7 +103,6 @@ Payload::Release()
   requests_.clear();
   OnCallback_ = []() {};
   release_callbacks_.clear();
-  execute_callbacks_.clear();
   instance_ = nullptr;
   state_ = State::RELEASED;
   required_equal_inputs_ = RequiredEqualInputs();
@@ -158,12 +156,6 @@ Payload::AddInternalReleaseCallback(std::function<void()>&& callback)
 }
 
 void
-Payload::AddInternalExecuteCallback(std::function<void()>&& callback)
-{
-  execute_callbacks_.emplace_back(std::move(callback));
-}
-
-void
 Payload::MarkSaturated()
 {
   saturated_ = true;
@@ -200,20 +192,8 @@ Payload::OnRelease()
 }
 
 void
-Payload::OnExecute()
-{
-  // Invoke the execute callbacks added internally before executing the payload.
-  for (auto it = execute_callbacks_.rbegin(); it != execute_callbacks_.rend();
-       it++) {
-    (*it)();
-  }
-  execute_callbacks_.clear();
-}
-
-void
 Payload::Execute(bool* should_exit)
 {
-  OnExecute();
   *should_exit = false;
 
   Status status;

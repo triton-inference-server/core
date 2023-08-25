@@ -181,8 +181,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   // the beginning of the queueing and scheduling process. Otherwise,
   // dynamic batcher is used as component of another batcher and should not
   // overwrite the queue start timestamp.
-  const bool is_child_scheduler = (request->QueueStartNs() != 0);
-  if (!is_child_scheduler) {
+  if (request->QueueStartNs() == 0) {
     request->CaptureQueueStartNs();
     INFER_TRACE_ACTIVITY(
         request->TraceProxy(), TRITONSERVER_TRACE_QUEUE_START,
