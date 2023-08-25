@@ -1753,14 +1753,72 @@ TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
   return nullptr;
 }
 
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_OutputShapeAndDType(
-    TRITONBACKEND_Response* response, const char* name,
-    TRITONSERVER_DataType* datatype, const int64_t** shape, uint32_t* dim_count)
+TRITONAPI_DECLSPEC TRITONSERVER_Error* 
+TRITONBACKEND_InferenceResponseOutputByName(
+    TRITONBACKEND_Response* response,
+    const char* name, TRITONSERVER_DataType* datatype,
+    const int64_t** shape, uint64_t* dim_count, const void** base,
+    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+    int64_t* memory_type_id, void** userp)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
-  Status status = tr->OutputShapeAndDType(name, datatype, shape, dim_count);
+
+  const auto& outputs = tr->Outputs();
+  uint32_t output_count = outputs.size();
+  std::string output_name = std::string(name);
+
+  for (uint32_t idx = 0; idx < output_count; ++idx) {
+    if (outputs[idx].Name() == output_name) {
+      *datatype = DataTypeToTriton(outputs[idx].DType());
+      const std::vector<int64_t>& oshape = outputs[idx].Shape();
+      *shape = &oshape[0];
+      *dim_count = oshape.size();
+      Status status = outputs[idx].DataBuffer(base, byte_size, memory_type, memory_type_id, userp);
+      if (!status.IsOk()) {
+        *base = nullptr;
+        *byte_size = 0;
+        return TRITONSERVER_ErrorNew(
+            StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+      }
+      return nullptr; // success
+    }
+  }
+  return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_NOT_FOUND,
+        ("Output name " + output_name + "not found.").c_str());
+
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceResponseOutput(
+    TRITONBACKEND_Response* response, const uint32_t index,
+    const char** name, TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint64_t* dim_count, const void** base, size_t* byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id, void** userp)
+{
+  InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
+
+  const auto& outputs = tr->Outputs();
+  if (index >= outputs.size()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        ("out of bounds index " + std::to_string(index) +
+            std::string(": response has ") + std::to_string(outputs.size()) +
+            " outputs").c_str());
+  }
+
+  const InferenceResponse::Output& output = outputs[index];
+
+  *name = output.Name().c_str()
+  *datatype = DataTypeToTriton(output.DType());
+
+  const std::vector<int64_t>& oshape = output.Shape();
+  *shape = &oshape[0];
+  *dim_count = oshape.size();
+  Status status = output.DataBuffer(base, byte_size, memory_type, memory_type_id, userp);
   if (!status.IsOk()) {
+    *base = nullptr;
+    *byte_size = 0;
     return TRITONSERVER_ErrorNew(
         StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
   }
