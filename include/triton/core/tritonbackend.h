@@ -1588,11 +1588,11 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(
 /// \param userp The user-specified value associated with the buffer
 /// in TRITONSERVER_ResponseAllocatorAllocFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_InferenceResponseOutputByName(
-    TRITONBACKEND_Response* response,
-    const char* name, TRITONSERVER_DataType* datatype,
-    const int64_t** shape, uint64_t* dim_count, const void** base,
-    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceResponseOutputByName(
+    TRITONBACKEND_Response* response, const char* name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count,
+    const void** base, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id, void** userp);
 
 /// Get all information about an output tensor by index. The tensor data is
@@ -1617,12 +1617,10 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_InferenceResponseOutputByN
 /// \param userp The user-specified value associated with the buffer
 /// in TRITONSERVER_ResponseAllocatorAllocFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_InferenceResponseOutput(
-    TRITONBACKEND_Response* response,
-    const uint32_t index, const char** name, TRITONSERVER_DataType* datatype,
-    const int64_t** shape, uint64_t* dim_count, const void** base,
-    size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InferenceResponseOutput(
+    TRITONBACKEND_Response* response, const uint32_t index, const char** name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count,
+    const void** base, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id, void** userp);
 
 #ifdef __cplusplus
