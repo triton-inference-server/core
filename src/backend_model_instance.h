@@ -116,7 +116,7 @@ class TritonModelInstance {
 
   Status Initialize();
   Status WarmUp();
-  void Schedule(
+  Status Schedule(
       std::vector<std::unique_ptr<InferenceRequest>>&& requests,
       const std::function<void()>& OnCompletion);
 

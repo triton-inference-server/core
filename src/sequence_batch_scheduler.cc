@@ -145,8 +145,11 @@ SequenceBatchScheduler::Create(
   const size_t model_batch_size = std::max(1, config.max_batch_size());
   sched->seq_slot_cnt_ = model_batch_size;
   if (config.sequence_batching().has_oldest()) {
-    sched->seq_slot_cnt_ = std::max(
-        1, config.sequence_batching().oldest().max_candidate_sequences());
+    const auto& max_candidate_seqs =
+        config.sequence_batching().oldest().max_candidate_sequences();
+    if (max_candidate_seqs > 0) {
+      sched->seq_slot_cnt_ = max_candidate_seqs;
+    }
   }
 
   // Create a batcher for each instance.

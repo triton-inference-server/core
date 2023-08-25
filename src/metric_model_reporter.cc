@@ -151,6 +151,7 @@ MetricModelReporter::MetricModelReporter(
 
   // Initialize families and metrics
   InitializeCounters(labels);
+  InitializeGauges(labels);
   InitializeSummaries(labels);
 }
 
@@ -192,7 +193,6 @@ MetricModelReporter::InitializeCounters(
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
   counter_families_["inf_exec_count"] =
       &Metrics::FamilyInferenceExecutionCount();
-  gauge_families_[kPendingRequestMetric] = &Metrics::FamilyInferenceQueueSize();
 
   // Latency metrics will be initialized based on config
   if (config_.latency_counters_enabled_) {
@@ -227,6 +227,14 @@ MetricModelReporter::InitializeCounters(
       counters_[name] = CreateMetric<prometheus::Counter>(*family_ptr, labels);
     }
   }
+}
+
+void
+MetricModelReporter::InitializeGauges(
+    const std::map<std::string, std::string>& labels)
+{
+  // Always setup these inference request metrics, regardless of config
+  gauge_families_[kPendingRequestMetric] = &Metrics::FamilyInferenceQueueSize();
 
   for (auto& iter : gauge_families_) {
     const auto& name = iter.first;

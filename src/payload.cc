@@ -199,7 +199,7 @@ Payload::Execute(bool* should_exit)
   Status status;
   switch (op_type_) {
     case Operation::INFER_RUN:
-      instance_->Schedule(std::move(requests_), OnCallback_);
+      status = instance_->Schedule(std::move(requests_), OnCallback_);
       break;
     case Operation::INIT:
       status = instance_->Initialize();

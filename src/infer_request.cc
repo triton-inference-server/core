@@ -106,7 +106,8 @@ InferenceRequest::InferenceRequest(
     : needs_normalization_(true), model_raw_(model),
       requested_model_version_(requested_model_version), flags_(0),
       correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true),
-      state_(InferenceRequest::State::INITIALIZED)
+      state_(InferenceRequest::State::INITIALIZED),
+      decrement_pending_count_(false)
 {
   SetPriority(0);
 }
@@ -116,9 +117,7 @@ InferenceRequest::~InferenceRequest()
   // If request has been enqueued but hasn't started executing by destruction
   // time, an error occurred and the pending request count will need to be
   // decremented.
-  if (state_ == InferenceRequest::State::STARTED) {
-    DecrementPendingRequestCount();
-  }
+  DecrementPendingRequestCount();
 }
 
 
@@ -126,20 +125,30 @@ Status
 InferenceRequest::SetState(InferenceRequest::State new_state)
 {
   // No-op if this is the current state.
-  if (state_ == new_state) {
+  if (new_state == state_) {
     return Status::Success;
   }
 
-  // Define state transitions
-  std::stringstream ss;
-  ss << LogRequest() << "Invalid request state transition from " << state_
-     << " to " << new_state;
-  const auto error_status = Status(Status::Code::INVALID_ARG, ss.str());
+  // Allow RELEASED state transition from any state for now.
+  // Not all requests will follow linear transition, such as null requests
+  // used for padding batches, and ensemble requests.
+  if (new_state == InferenceRequest::State::RELEASED) {
+    return Status::Success;
+  }
 
+  // Generate error when called rather than copying it into every case below.
+  const auto generate_error = [&]() {
+    std::stringstream ss;
+    ss << "Invalid request state transition from " << state_ << " to "
+       << new_state;
+    return Status(Status::Code::INVALID_ARG, ss.str());
+  };
+
+  // Define state transitions
   switch (state_) {
     case InferenceRequest::State::INITIALIZED: {
       if (new_state != InferenceRequest::State::STARTED) {
-        return error_status;
+        return generate_error();
       }
       state_ = new_state;
       IncrementPendingRequestCount();
@@ -147,7 +156,7 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
     }
     case InferenceRequest::State::STARTED: {
       if (new_state != InferenceRequest::State::EXECUTING) {
-        return error_status;
+        return generate_error();
       }
       state_ = new_state;
       DecrementPendingRequestCount();
@@ -155,14 +164,14 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
     }
     case InferenceRequest::State::EXECUTING: {
       if (new_state != InferenceRequest::State::RELEASED) {
-        return error_status;
+        return generate_error();
       }
       state_ = new_state;
       break;
     }
     case InferenceRequest::State::RELEASED: {
       // No state transition currently supported after release.
-      return error_status;
+      return generate_error();
     }
   }
   return Status::Success;
@@ -171,19 +180,28 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
 void
 InferenceRequest::IncrementPendingRequestCount()
 {
+#ifdef TRITON_ENABLE_METRICS
   auto reporter = model_raw_->MetricReporter();
   if (reporter) {
     reporter->IncrementGauge(kPendingRequestMetric, 1);
+    decrement_pending_count_ = true;
   }
+#endif  // TRITON_ENABLE_METRICS
 }
 
 void
 InferenceRequest::DecrementPendingRequestCount()
 {
-  auto reporter = model_raw_->MetricReporter();
-  if (reporter) {
-    reporter->DecrementGauge(kPendingRequestMetric, 1);
+#ifdef TRITON_ENABLE_METRICS
+  // Only decrement if count has been incremented, and not already decremented.
+  if (decrement_pending_count_) {
+    auto reporter = model_raw_->MetricReporter();
+    if (reporter) {
+      reporter->DecrementGauge(kPendingRequestMetric, 1);
+    }
+    decrement_pending_count_ = false;
   }
+#endif  // TRITON_ENABLE_METRICS
 }
 
 const std::string&

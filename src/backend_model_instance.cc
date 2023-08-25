@@ -534,7 +534,7 @@ TritonModelInstance::GenerateWarmupData()
   return Status::Success;
 }
 
-void
+Status
 TritonModelInstance::Schedule(
     std::vector<std::unique_ptr<InferenceRequest>>&& requests,
     const std::function<void()>& OnCompletion)
@@ -545,16 +545,17 @@ TritonModelInstance::Schedule(
   triton_requests.clear();
   for (auto& r : requests) {
     // Load the input states for the inference request.
-    r->LoadInputStates();
+    RETURN_IF_ERROR(r->LoadInputStates());
     // Set request state to signtify that request is no longer pending.
-    r->SetState(InferenceRequest::State::EXECUTING);
+    RETURN_IF_ERROR(r->SetState(InferenceRequest::State::EXECUTING));
     triton_requests.push_back(
         reinterpret_cast<TRITONBACKEND_Request*>(r.release()));
   }
 
   Execute(triton_requests);
-
   OnCompletion();
+
+  return Status::Success;
 }
 
 Status

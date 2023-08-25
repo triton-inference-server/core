@@ -796,6 +796,9 @@ class InferenceRequest {
 
   // The state of the request.
   InferenceRequest::State state_;
+  // Catch-all to correctly decrement pending count if needed on destruction
+  // if request doesn't follow normal execution path (error, unused, ensembles)
+  bool decrement_pending_count_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceRequest& request);
