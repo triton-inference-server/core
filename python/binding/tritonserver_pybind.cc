@@ -346,6 +346,8 @@ class PyResponseAllocator {
     return allocator_;
   }
 
+  TRITONSERVER_ResponseAllocator* Ptr() { return allocator_; }
+
   PyResponseAllocator(AllocFn alloc, ReleaseFn release, StartFn start)
       : alloc_fn_(alloc), release_fn_(release), start_fn_(start)
   {
@@ -613,11 +615,14 @@ class PyTrace {
   DISALLOW_COPY_AND_ASSIGN(PyTrace);
 
   // Use internally when interacting with C APIs that takes ownership
-  // TRITONSERVER_InferenceTrace* Release()
-  // {
-  //   owned_ = false;
-  //   return trace_;
-  // }
+  TRITONSERVER_InferenceTrace* Release()
+  {
+    owned_ = false;
+    callback_resource_.release();
+    return trace_;
+  }
+
+  TRITONSERVER_InferenceTrace* Ptr() { return trace_; }
 
   PyTrace(
       TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
@@ -759,6 +764,11 @@ class PyInferenceResponse {
  public:
   using CompleteFn = std::function<void(py::object, uint32_t, py::object)>;
   struct CallbackResource {
+    CallbackResource(
+        CompleteFn c, PyResponseAllocator::CallbackResource* a, py::object u)
+        : complete_fn(c), allocator_resource(a), user_object(u)
+    {
+    }
     // During 'TRITONSERVER_InferenceRequestSetResponseCallback', a
     // PyResponseAllocator::CallbackResource is allocated and passed as
     // 'response_allocator_userp', which is used during any output buffer
@@ -770,6 +780,7 @@ class PyInferenceResponse {
     // responses to be generated and so does output allocation, therefore
     // 'allocator_resource' may be released as part of releasing
     // 'PyInferenceResponse::CallbackResource'
+    CompleteFn complete_fn;
     PyResponseAllocator::CallbackResource* allocator_resource;
     py::object user_object;
   };
@@ -919,6 +930,20 @@ class PyInferenceRequest {
     }
   }
 
+  // Use internally when interacting with C APIs that takes ownership,
+  // this function releases the ownership of the C object and the callback
+  // resources tracked.
+  TRITONSERVER_InferenceRequest* Release()
+  {
+    owned_ = false;
+    request_callback_resource_.release();
+    allocator_callback_resource_.release();
+    response_callback_resource_.release();
+    return request_;
+  }
+
+  TRITONSERVER_InferenceRequest* Ptr() { return request_; }
+
   struct CallbackResource {
     CallbackResource(ReleaseFn r, py::object uo)
         : release_fn(r), user_object(uo)
@@ -954,11 +979,29 @@ class PyInferenceRequest {
       py::object allocator, py::object allocater_user_object,
       PyInferenceResponse::CompleteFn response, py::object response_user_object)
   {
-    // request_callback_resource_.reset(new CallbackResource(release,
-    // user_object));
-    // ThrowIfError(TRITONSERVER_InferenceRequestSetReleaseCallback(
-    //     request_, PyTritonRequestReleaseCallback,
-    //     request_callback_resource_.get()));
+    allocator_callback_resource_.reset(
+        new PyResponseAllocator::CallbackResource(
+            allocator, allocater_user_object));
+    response_callback_resource_.reset(new PyInferenceResponse::CallbackResource(
+        response, allocator_callback_resource_.get(), response_user_object));
+    ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
+        request_, allocator.cast<PyResponseAllocator*>()->Ptr(),
+        allocator_callback_resource_.get(), PyTritonResponseCompleteCallback,
+        response_callback_resource_.get()));
+  }
+  // [WIP] move to response?
+  static void PyTritonResponseCompleteCallback(
+      struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
+      void* userp)
+  {
+    auto managed_pt =
+        std::make_shared<PyInferenceResponse>(response, true /* owned */);
+    auto cr = reinterpret_cast<PyInferenceResponse::CallbackResource*>(userp);
+    cr->complete_fn(py::cast(managed_pt), flags, cr->user_object);
+    if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
+      delete cr->allocator_resource;
+      delete cr;
+    }
   }
 
   // Trivial setters / getters
@@ -1526,7 +1569,14 @@ class PyServer {
     return std::make_shared<PyMetrics>(metrics, true /* owned */);
   }
 
-  // [WIP] TRITONSERVER_ServerInferAsync
+  void InferAsync(PyInferenceRequest& request, PyTrace& trace)
+  {
+    ThrowIfError(
+        TRITONSERVER_ServerInferAsync(server_, request.Ptr(), trace.Ptr()));
+    // Ownership of the internal C object is transferred.
+    request.Release();
+    trace.Release();
+  }
 
  private:
   struct TRITONSERVER_Server* server_{nullptr};
@@ -1947,7 +1997,8 @@ PYBIND11_MODULE(triton_bindings, m)
       m, "TRITONSERVER_ResponseCompleteFlag")
       .value("FINAL", TRITONSERVER_RESPONSE_COMPLETE_FINAL)
       .export_values();
-  py::class_<PyInferenceResponse>(m, "TRITONSERVER_InferenceResponse")
+  py::class_<PyInferenceResponse, std::shared_ptr<PyInferenceResponse>>(
+      m, "TRITONSERVER_InferenceResponse")
       .def(
           "throw_if_response_error", &PyInferenceResponse::ThrowIfResponseError)
       .def("model", &PyInferenceResponse::Model)
@@ -2045,7 +2096,8 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("load_model_with_parameters", &PyServer::LoadModelWithParameters)
       .def("unload_model", &PyServer::UnloadModel)
       .def("unload_model_and_dependents", &PyServer::UnloadModelAndDependents)
-      .def("metrics", &PyServer::Metrics);
+      .def("metrics", &PyServer::Metrics)
+      .def("infer_async", &PyServer::InferAsync);
 
   // TRITONSERVER_MetricFamily
   py::class_<PyMetricFamily>(m, "TRITONSERVER_MetricFamily")
