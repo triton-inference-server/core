@@ -187,7 +187,7 @@ void
 MetricModelReporter::InitializeCounters(
     const std::map<std::string, std::string>& labels)
 {
-  // Always setup these inference request metrics, regardless of config
+  // Always setup these counters, regardless of config
   counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
   counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
@@ -371,7 +371,6 @@ MetricModelReporter::IncrementGauge(const std::string& name, double value)
     gauge->Increment(value);
   }
 }
-
 
 void
 MetricModelReporter::DecrementGauge(const std::string& name, double value)

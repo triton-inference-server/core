@@ -26,8 +26,6 @@
 
 #include "sequence_batch_scheduler.h"
 
-#include "infer_request.h"
-
 #ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -72,7 +70,6 @@ SetThreadPriority(const int nice, const char* thread_name)
 }
 
 }  // namespace
-
 
 Status
 SequenceBatchScheduler::Create(
@@ -1672,6 +1669,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
                   null_irequest->GetSequenceStates());
               ni->SetSequenceStates(sequence_states);
             }
+
             curr_payload_->AddRequest(std::move(ni));
           } else {
             std::unique_ptr<InferenceRequest>& irequest = queue.front();
@@ -1687,6 +1685,7 @@ DirectSequenceBatch::BatcherThread(const int nice)
               end_of_sequence = true;
             }
             curr_payload_->AddRequest(std::move(irequest));
+
             queue.pop_front();
           }
 

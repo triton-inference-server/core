@@ -136,7 +136,7 @@ class Model {
   // Get the configuration of model being served.
   const inference::ModelConfig& Config() const { return config_; }
 
-  // Get / set whether response cache is enabled for this model.
+  // Get whether response cache is enabled for this model.
   bool ResponseCacheEnabled() const
   {
     return config_.response_cache().enable();
@@ -232,7 +232,7 @@ class Model {
 
   uint64_t MaxPriorityLevel() const { return max_priority_level_; }
 
-  // Returns the scheduler's metric reporter
+  // Returns the model's metric reporter
   std::shared_ptr<MetricModelReporter> MetricReporter() const
   {
     return reporter_;

@@ -28,7 +28,6 @@
 #include <functional>
 
 #include "infer_request.h"
-#include "infer_stats.h"
 #include "status.h"
 
 namespace triton { namespace core {
