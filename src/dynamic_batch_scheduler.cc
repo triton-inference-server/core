@@ -59,7 +59,7 @@ DynamicBatchScheduler::DynamicBatchScheduler(
     TritonModel* model, TritonModelInstance* model_instance,
     const bool dynamic_batching_enabled, const int32_t max_batch_size,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
-    const bool preserve_ordering, const bool response_cache_enable,
+    const bool preserve_ordering,
     const std::set<int32_t>& preferred_batch_sizes,
     const uint64_t max_queue_delay_microseconds,
     const inference::ModelQueuePolicy& default_queue_policy,
@@ -79,13 +79,8 @@ DynamicBatchScheduler::DynamicBatchScheduler(
   rate_limiter_ = model_->Server()->GetRateLimiter();
   // Both the server and model config should specify
   // caching enabled for model to utilize response cache.
-  response_cache_enabled_ =
-      response_cache_enable && model_->Server()->ResponseCacheEnabled();
-#ifdef TRITON_ENABLE_METRICS
-  MetricModelReporter::Create(
-      model_name_, model_->Version(), METRIC_REPORTER_ID_UTILITY,
-      response_cache_enabled_, model_->Config().metric_tags(), &reporter_);
-#endif  // TRITON_ENABLE_METRICS
+  response_cache_enabled_ = model_->ResponseCacheEnabled() &&
+                            model_->Server()->ResponseCacheEnabled();
   max_preferred_batch_size_ = 0;
   for (const auto size : preferred_batch_sizes_) {
     max_preferred_batch_size_ =
@@ -105,7 +100,7 @@ DynamicBatchScheduler::Create(
     TritonModel* model, TritonModelInstance* model_instance, const int nice,
     const bool dynamic_batching_enabled, const int32_t max_batch_size,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
-    const bool preserve_ordering, const bool response_cache_enable,
+    const bool preserve_ordering,
     const std::set<int32_t>& preferred_batch_sizes,
     const uint64_t max_queue_delay_microseconds,
     std::unique_ptr<Scheduler>* scheduler)
@@ -119,8 +114,7 @@ DynamicBatchScheduler::Create(
 
   return Create(
       model, model_instance, nice, dynamic_batching_enabled, max_batch_size,
-      enforce_equal_shape_tensors, batcher_config, response_cache_enable,
-      scheduler);
+      enforce_equal_shape_tensors, batcher_config, scheduler);
 }
 
 Status
@@ -129,7 +123,7 @@ DynamicBatchScheduler::Create(
     const bool dynamic_batching_enabled, const int32_t max_batch_size,
     const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
     const inference::ModelDynamicBatching& batcher_config,
-    const bool response_cache_enable, std::unique_ptr<Scheduler>* scheduler)
+    std::unique_ptr<Scheduler>* scheduler)
 {
   std::set<int32_t> preferred_batch_sizes;
   for (const auto size : batcher_config.preferred_batch_size()) {
@@ -139,8 +133,7 @@ DynamicBatchScheduler::Create(
   DynamicBatchScheduler* dyna_sched = new DynamicBatchScheduler(
       model, model_instance, dynamic_batching_enabled, max_batch_size,
       enforce_equal_shape_tensors, batcher_config.preserve_ordering(),
-      response_cache_enable, preferred_batch_sizes,
-      batcher_config.max_queue_delay_microseconds(),
+      preferred_batch_sizes, batcher_config.max_queue_delay_microseconds(),
       batcher_config.default_queue_policy(), batcher_config.priority_levels(),
       batcher_config.priority_queue_policy());
   std::unique_ptr<DynamicBatchScheduler> sched(dyna_sched);
@@ -678,7 +671,7 @@ DynamicBatchScheduler::DelegateResponse(
             // Use model_ to update stats directly because request object can be
             // released by the backend before getting to this callback.
             model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
-                reporter_.get(), cache_miss_ns);
+                model_->MetricReporter().get(), cache_miss_ns);
 #endif  // TRITON_ENABLE_STATS
             if (!status.IsOk()) {
               LOG_ERROR << "Failed to insert key [" << key
@@ -733,7 +726,7 @@ DynamicBatchScheduler::CacheLookUp(
 #ifdef TRITON_ENABLE_STATS
     // Update model metrics/stats on cache hits
     // Backends will update metrics as normal on cache misses
-    request->ReportStatisticsCacheHit(reporter_.get());
+    request->ReportStatisticsCacheHit(model_->MetricReporter().get());
 #endif  // TRITON_ENABLE_STATS
   }
 }

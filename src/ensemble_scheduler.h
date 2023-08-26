@@ -102,11 +102,6 @@ class EnsembleScheduler : public Scheduler {
   // \see Scheduler::Stop()
   void Stop() override {}
 
-  std::shared_ptr<MetricModelReporter> MetricReporter() const
-  {
-    return metric_reporter_;
-  }
-
  private:
   EnsembleScheduler(
       InferenceStatsAggregator* const stats_aggregator,

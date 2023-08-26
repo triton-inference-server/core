@@ -1444,6 +1444,15 @@ ValidateModelConfig(
   // If sequence batching is specified make sure the control is
   // specified correctly.
   if (config.has_sequence_batching()) {
+    // FIXME: DLIS-4034 - Response Cache does not yet support sequence batcher.
+    if (config.response_cache().enable()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Response Cache does not currently support model " + config.name() +
+              " with sequence batching scheduler. Please disable the response "
+              "cache.");
+    }
+
     const auto& batcher = config.sequence_batching();
 
     // Check boolean controls...

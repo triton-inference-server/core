@@ -124,15 +124,14 @@ class SequenceBatchScheduler : public Scheduler {
     return initial_state_;
   }
 
-  std::shared_ptr<MetricModelReporter> MetricReporter() const
-  {
-    return reporter_;
-  }
-
  private:
   SequenceBatchScheduler(
       TritonModel* model,
-      const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors);
+      const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
+      : model_(model),
+        enforce_equal_shape_tensors_(enforce_equal_shape_tensors), stop_(false)
+  {
+  }
 
   void StartBackgroundThreads();
   void StopBackgroundThreads();
@@ -275,9 +274,6 @@ class SequenceBatchScheduler : public Scheduler {
   // Initial state used for implicit state.
   std::unordered_map<std::string, SequenceStates::InitialStateData>
       initial_state_;
-
-  // Reporter for metrics, or nullptr if no metrics should be reported
-  std::shared_ptr<MetricModelReporter> reporter_;
 };
 
 // Base class for a scheduler that implements a particular scheduling

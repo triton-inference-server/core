@@ -74,20 +74,6 @@ SetThreadPriority(const int nice, const char* thread_name)
 }  // namespace
 
 
-SequenceBatchScheduler::SequenceBatchScheduler(
-    TritonModel* model,
-    const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors)
-    : model_(model), enforce_equal_shape_tensors_(enforce_equal_shape_tensors),
-      stop_(false)
-{
-#ifdef TRITON_ENABLE_METRICS
-  MetricModelReporter::Create(
-      model->Name(), model_->Version(), METRIC_REPORTER_ID_UTILITY,
-      false /* response_cache_enabled */, model_->Config().metric_tags(),
-      &reporter_);
-#endif  // TRITON_ENABLE_METRICS
-}
-
 Status
 SequenceBatchScheduler::Create(
     TritonModel* model,
@@ -1829,7 +1815,7 @@ OldestSequenceBatch::OldestSequenceBatch(
       true /* dynamic_batching_enabled */, config.max_batch_size(),
       enforce_equal_shape_tensors_,
       config.sequence_batching().oldest().preserve_ordering(),
-      false /* response_cache_enable */, preferred_batch_sizes,
+      preferred_batch_sizes,
       config.sequence_batching().oldest().max_queue_delay_microseconds(),
       &dynamic_batcher_);
   if (!status.IsOk()) {

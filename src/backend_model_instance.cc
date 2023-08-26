@@ -185,7 +185,7 @@ TritonModelInstance::TritonModelInstance(
     // Let every metric reporter know if caching is enabled to correctly include
     // cache miss time into request duration on cache misses.
     const bool response_cache_enabled =
-        model_->Config().response_cache().enable() &&
+        model_->ResponseCacheEnabled() &&
         model_->Server()->ResponseCacheEnabled();
     MetricModelReporter::Create(
         model_->Name(), model_->Version(), id, response_cache_enabled,

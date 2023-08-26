@@ -55,7 +55,7 @@ class DynamicBatchScheduler : public Scheduler {
       TritonModel* model, TritonModelInstance* model_instance, const int nice,
       const bool dynamic_batching_enabled, const int32_t max_batch_size,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
-      const bool preserve_ordering, const bool response_cache_enable,
+      const bool preserve_ordering,
       const std::set<int32_t>& preferred_batch_sizes,
       const uint64_t max_queue_delay_microseconds,
       std::unique_ptr<Scheduler>* scheduler);
@@ -68,7 +68,7 @@ class DynamicBatchScheduler : public Scheduler {
       const bool dynamic_batching_enabled, const int32_t max_batch_size,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
       const inference::ModelDynamicBatching& batcher_config,
-      const bool response_cache_enable, std::unique_ptr<Scheduler>* scheduler);
+      std::unique_ptr<Scheduler>* scheduler);
 
   ~DynamicBatchScheduler();
 
@@ -88,17 +88,12 @@ class DynamicBatchScheduler : public Scheduler {
   // \see Scheduler::Stop()
   void Stop() override { stop_ = true; }
 
-  std::shared_ptr<MetricModelReporter> MetricReporter() const
-  {
-    return reporter_;
-  }
-
  private:
   DynamicBatchScheduler(
       TritonModel* model, TritonModelInstance* model_instance,
       const bool dynamic_batching_enabled, const int32_t max_batch_size,
       const std::unordered_map<std::string, bool>& enforce_equal_shape_tensors,
-      const bool preserve_ordering, const bool response_cache_enable,
+      const bool preserve_ordering,
       const std::set<int32_t>& preferred_batch_sizes,
       const uint64_t max_queue_delay_microseconds,
       const inference::ModelQueuePolicy& default_queue_policy,
@@ -191,9 +186,6 @@ class DynamicBatchScheduler : public Scheduler {
 
   // Preserves the order in which responses are finalized
   std::mutex finalize_mtx_;
-
-  // Reporter for metrics, or nullptr if no metrics should be reported
-  std::shared_ptr<MetricModelReporter> reporter_;
 };
 
 }}  // namespace triton::core

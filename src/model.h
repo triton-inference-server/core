@@ -29,6 +29,7 @@
 
 #include "infer_stats.h"
 #include "label_provider.h"
+#include "metric_model_reporter.h"
 #include "model_config.pb.h"
 #include "scheduler.h"
 #include "status.h"
@@ -135,6 +136,12 @@ class Model {
   // Get the configuration of model being served.
   const inference::ModelConfig& Config() const { return config_; }
 
+  // Get / set whether response cache is enabled for this model.
+  bool ResponseCacheEnabled() const
+  {
+    return config_.response_cache().enable();
+  }
+
   // Get the number of required inputs
   size_t RequiredInputCount() const { return required_input_count_; }
 
@@ -226,9 +233,9 @@ class Model {
   uint64_t MaxPriorityLevel() const { return max_priority_level_; }
 
   // Returns the scheduler's metric reporter
-  std::shared_ptr<MetricModelReporter> MetricReporter()
+  std::shared_ptr<MetricModelReporter> MetricReporter() const
   {
-    return scheduler_->MetricReporter();
+    return reporter_;
   }
 
  protected:
@@ -287,6 +294,9 @@ class Model {
 
   // Whether or not model config has been set.
   bool set_model_config_;
+
+  // Reporter for metrics, or nullptr if no metrics should be reported
+  std::shared_ptr<MetricModelReporter> reporter_;
 };
 
 }}  // namespace triton::core
