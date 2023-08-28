@@ -448,8 +448,9 @@ InferenceRequest::Release(
   }
 #endif  // TRITON_ENABLE_TRACING
 
-  auto status = request->SetState(InferenceRequest::State::RELEASED);
-  LOG_STATUS_ERROR(status, status.Message());
+  LOG_STATUS_ERROR(
+      request->SetState(InferenceRequest::State::RELEASED),
+      "Failed to set released state");
   void* userp = request->release_userp_;
   auto& release_fn = request->release_fn_;
   release_fn(
