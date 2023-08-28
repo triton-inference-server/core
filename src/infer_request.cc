@@ -106,7 +106,7 @@ InferenceRequest::InferenceRequest(
     : needs_normalization_(true), model_raw_(model),
       requested_model_version_(requested_model_version), flags_(0),
       correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true),
-      state_(InferenceRequest::State::INITIALIZED),
+      state_(InferenceRequest::State::INITIALIZED), null_request_(false),
       decrement_pending_count_(false)
 {
   SetPriority(0);
@@ -124,8 +124,8 @@ InferenceRequest::~InferenceRequest()
 Status
 InferenceRequest::SetState(InferenceRequest::State new_state)
 {
-  // No-op if this is the current state.
-  if (new_state == state_) {
+  // No-op if this is already the current state, or if this is a null request.
+  if (new_state == state_ || null_request_) {
     return Status::Success;
   }
 
@@ -133,6 +133,7 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
   // Not all requests will follow linear transition, such as null requests
   // used for padding batches, and ensemble requests.
   if (new_state == InferenceRequest::State::RELEASED) {
+    state_ = new_state;
     return Status::Success;
   }
 
@@ -464,6 +465,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
   // but that binds the Null request with 'from' request's lifecycle.
   std::unique_ptr<InferenceRequest> lrequest(
       new InferenceRequest(from.model_raw_, from.requested_model_version_));
+  lrequest->null_request_ = true;
   lrequest->needs_normalization_ = false;
   lrequest->batch_size_ = from.batch_size_;
   lrequest->collect_stats_ = false;

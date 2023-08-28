@@ -753,6 +753,7 @@ TritonModelInstance::TritonBackendThread::BackendThread()
         model_instances_, &payload);
     NVTX_RANGE(nvtx_, "BackendThread " + name_);
     payload->Execute(&should_exit);
+    // LOG_STATUS_ERROR(payload->Wait(), "Failed to execute payload");
     model_instances_.push_back(payload->GetInstance());
     // Release the payload to the RateLimiter
     model_->Server()->GetRateLimiter()->PayloadRelease(payload);
