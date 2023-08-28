@@ -298,6 +298,9 @@ class PyResponseAllocator
   DESTRUCTOR_WITH_LOG(
       PyResponseAllocator, TRITONSERVER_ResponseAllocatorDelete);
 
+  // Callback resource that holds Python user provided buffer and
+  // Triton C callback wrappers. This struct will be used for both
+  // 'allocator_userp' and 'buffer_userp'
   struct CallbackResource {
     CallbackResource(py::object a, py::object uo)
         : allocator(a), user_object(uo)
@@ -382,7 +385,7 @@ class PyResponseAllocator
     catch (py::error_already_set& ex) {
       err = CreateTRITONSERVER_ErrorFrom(ex);
     }
-    // Done with CallbackResource
+    // Done with CallbackResource associated with this buffer
     delete cr;
     return err;
   }
@@ -558,7 +561,12 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
     std::set<uintptr_t> seen_traces;
   };
 
-  // Use internally when interacting with C APIs that takes ownership
+  // Use internally when interacting with C APIs that takes ownership,
+  // this function will also release the ownership of the callback resource
+  // because once the ownership is transferred, the callback resource
+  // will be accessed in the callback pipeline and should not be tied to the
+  // PyWrapper's lifecycle. The callback resource will be released in the
+  // Triton C callback wrapper.
   struct TRITONSERVER_InferenceTrace* Release()
   {
     owned_ = false;
@@ -705,6 +713,7 @@ class PyInferenceResponse
         : complete_fn(c), allocator_resource(a), user_object(u)
     {
     }
+    CompleteFn complete_fn;
     // During 'TRITONSERVER_InferenceRequestSetResponseCallback', a
     // PyResponseAllocator::CallbackResource is allocated and passed as
     // 'response_allocator_userp', which is used during any output buffer
@@ -716,7 +725,6 @@ class PyInferenceResponse
     // responses to be generated and so does output allocation, therefore
     // 'allocator_resource' may be released as part of releasing
     // 'PyInferenceResponse::CallbackResource'
-    CompleteFn complete_fn;
     PyResponseAllocator::CallbackResource* allocator_resource;
     py::object user_object;
   };
@@ -854,8 +862,11 @@ class PyInferenceRequest
 
 
   // Use internally when interacting with C APIs that takes ownership,
-  // this function releases the ownership of the C object and the callback
-  // resources tracked.
+  // this function will also release the ownership of the callback resource
+  // because once the ownership is transferred, the callback resource
+  // will be accessed in the callback pipeline and should not be tied to the
+  // PyWrapper's lifecycle. The callback resource will be released in the
+  // Triton C callback wrapper.
   struct TRITONSERVER_InferenceRequest* Release()
   {
     owned_ = false;
@@ -909,7 +920,6 @@ class PyInferenceRequest
         allocator_callback_resource_.get(), PyTritonResponseCompleteCallback,
         response_callback_resource_.get()));
   }
-  // [WIP] move to response?
   static void PyTritonResponseCompleteCallback(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
