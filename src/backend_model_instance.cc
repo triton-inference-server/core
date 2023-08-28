@@ -26,6 +26,8 @@
 
 #include "backend_model_instance.h"
 
+#include "status.h"
+
 #ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -535,19 +537,49 @@ TritonModelInstance::GenerateWarmupData()
 }
 
 Status
+TritonModelInstance::PrepareRequestsForExecution(
+    std::vector<std::unique_ptr<InferenceRequest>>& requests)
+{
+  for (auto& r : requests) {
+    // Load the input states for the inference request.
+    RETURN_IF_ERROR(r->LoadInputStates());
+    // Set request state to signify that request is no longer pending.
+    RETURN_IF_ERROR(r->SetState(InferenceRequest::State::EXECUTING));
+  }
+
+  return Status::Success;
+}
+
+Status
+TritonModelInstance::PrepareRequestsOrRespond(
+    std::vector<std::unique_ptr<InferenceRequest>>& requests)
+{
+  auto status = PrepareRequestsForExecution(requests);
+  // If any errors occurred, respond with error for each request.
+  if (!status.IsOk()) {
+    for (auto& r : requests) {
+      InferenceRequest::RespondIfError(r, status, true /* release_requests */);
+    }
+    // Log a single error for batch of requests for better visibility
+    LOG_STATUS_ERROR(status, "Requests failed pre-execution checks");
+  }
+
+  return status;
+}
+
+Status
 TritonModelInstance::Schedule(
     std::vector<std::unique_ptr<InferenceRequest>>&& requests,
     const std::function<void()>& OnCompletion)
 {
+  // Prepare requests for execution, respond to requests if any error occur.
+  RETURN_IF_ERROR(PrepareRequestsOrRespond(requests));
+
   // Use a thread local vector to avoid needing to malloc each
   // time an inference is run.
   thread_local std::vector<TRITONBACKEND_Request*> triton_requests(1024);
   triton_requests.clear();
   for (auto& r : requests) {
-    // Load the input states for the inference request.
-    RETURN_IF_ERROR(r->LoadInputStates());
-    // Set request state to signtify that request is no longer pending.
-    RETURN_IF_ERROR(r->SetState(InferenceRequest::State::EXECUTING));
     triton_requests.push_back(
         reinterpret_cast<TRITONBACKEND_Request*>(r.release()));
   }
@@ -753,7 +785,6 @@ TritonModelInstance::TritonBackendThread::BackendThread()
         model_instances_, &payload);
     NVTX_RANGE(nvtx_, "BackendThread " + name_);
     payload->Execute(&should_exit);
-    // LOG_STATUS_ERROR(payload->Wait(), "Failed to execute payload");
     model_instances_.push_back(payload->GetInstance());
     // Release the payload to the RateLimiter
     model_->Server()->GetRateLimiter()->PayloadRelease(payload);

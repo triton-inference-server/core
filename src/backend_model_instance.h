@@ -220,6 +220,10 @@ class TritonModelInstance {
       const bool device_blocking);
   Status GenerateWarmupData();
 
+  Status PrepareRequestsForExecution(
+      std::vector<std::unique_ptr<InferenceRequest>>& requests);
+  Status PrepareRequestsOrRespond(
+      std::vector<std::unique_ptr<InferenceRequest>>& requests);
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
 
   std::shared_ptr<TritonBackendThread> triton_backend_thread_;

@@ -140,8 +140,8 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
   // Generate error when called rather than copying it into every case below.
   const auto generate_error = [&]() {
     std::stringstream ss;
-    ss << "Invalid request state transition from " << state_ << " to "
-       << new_state;
+    ss << LogRequest() << "Invalid request state transition from " << state_
+       << " to " << new_state;
     return Status(Status::Code::INVALID_ARG, ss.str());
   };
 
