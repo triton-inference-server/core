@@ -37,7 +37,8 @@
 // sections. However, there are a few exceptions to better transit to Python:
 // Structs:
 //  * Triton structs are encapsulated in a thin wrapper to isolate raw pointer
-//    operations which is not supported in pure Python.
+//    operations which is not supported in pure Python. A thin 'PyWrapper' base
+//    class is defined with common utilities
 //  * Trival getters and setters are grouped to be a Python class property.
 //    However, this creates asymmetry that some APIs are called like function
 //    while some like member variables. So I am open to expose getter / setter
@@ -66,14 +67,24 @@
 namespace py = pybind11;
 namespace triton { namespace core { namespace python {
 
+// Macro used by PyWrapper
 #define DISALLOW_COPY(TypeName) TypeName(const TypeName&) = delete;
 #define DISALLOW_ASSIGN(TypeName) void operator=(const TypeName&) = delete;
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \
   DISALLOW_COPY(TypeName)                  \
   DISALLOW_ASSIGN(TypeName)
-
-// [FIXME] GIL
-
+#define DESTRUCTOR_WITH_LOG(TypeName, DeleteFunction)    \
+  ~TypeName()                                            \
+  {                                                      \
+    if (owned_ && triton_object_) {                      \
+      auto err__ = (DeleteFunction(triton_object_));     \
+      if (err__) {                                       \
+        std::shared_ptr<TRITONSERVER_Error> managed_err( \
+            err__, TRITONSERVER_ErrorDelete);            \
+        py::print(TRITONSERVER_ErrorMessage(err__));     \
+      }                                                  \
+    }                                                    \
+  }
 // base exception for all Triton error code
 struct TritonError : public std::runtime_error {
   explicit TritonError(const std::string& what) : std::runtime_error(what) {}
@@ -159,116 +170,92 @@ ThrowIfError(TRITONSERVER_Error* err)
   }
 }
 
-void
-LogIfError(TRITONSERVER_Error* err)
-{
-  if (err == nullptr) {
-    return;
-  }
-  std::shared_ptr<TRITONSERVER_Error> managed_err(
-      err, TRITONSERVER_ErrorDelete);
-  py::print(TRITONSERVER_ErrorMessage(err));
-}
-
-class PyParameter {
+template <typename TritonStruct>
+class PyWrapper {
  public:
-  PyParameter(
-      TRITONSERVER_Parameter* parameter,
-      const bool owned /* [FIXME] check if needed*/)
-      : parameter_(parameter_), owned_(owned)
+  explicit PyWrapper(TritonStruct* to, bool o) : triton_object_(to), owned_(o)
+  {
+  }
+  PyWrapper() = default;
+  // Destructor will be defined per specialization for now as a few
+  // Triton object delete functions have different signatures, which
+  // requires a function wrapper to generalize the destructor.
+
+  // Use internally to get the pointer of the underlying Triton object
+  TritonStruct* Ptr() { return triton_object_; }
+
+  DISALLOW_COPY_AND_ASSIGN(PyWrapper);
+
+ protected:
+  TritonStruct* triton_object_{nullptr};
+  bool owned_{false};
+};
+
+class PyParameter : public PyWrapper<struct TRITONSERVER_Parameter> {
+ public:
+  explicit PyParameter(struct TRITONSERVER_Parameter* p, const bool owned)
+      : PyWrapper(p, owned)
   {
   }
 
   PyParameter(
       const char* name, TRITONSERVER_ParameterType type, const void* value)
-      : parameter_(TRITONSERVER_ParameterNew(name, type, value)), owned_(true)
+      : PyWrapper(TRITONSERVER_ParameterNew(name, type, value), true)
   {
   }
 
   PyParameter(const char* name, const void* byte_ptr, uint64_t size)
-      : parameter_(TRITONSERVER_ParameterBytesNew(name, byte_ptr, size)),
-        owned_(true)
+      : PyWrapper(TRITONSERVER_ParameterBytesNew(name, byte_ptr, size), true)
   {
   }
 
   ~PyParameter()
   {
-    if (owned_ && parameter_) {
-      TRITONSERVER_ParameterDelete(parameter_);
+    if (owned_ && triton_object_) {
+      TRITONSERVER_ParameterDelete(triton_object_);
     }
   }
-
-  DISALLOW_COPY_AND_ASSIGN(PyParameter);
-
-  // Use internally when interacting with C APIs that takes ownership
-  struct TRITONSERVER_Parameter* Release()
-  {
-    owned_ = false;
-    return parameter_;
-  }
-
-  struct TRITONSERVER_Parameter* Ptr() const { return parameter_; }
-
- private:
-  struct TRITONSERVER_Parameter* parameter_{nullptr};
-  // [FIXME] may need to transfer ownership
-  bool owned_{false};
 };
 
-class PyBufferAttributes {
+class PyBufferAttributes
+    : public PyWrapper<struct TRITONSERVER_BufferAttributes> {
  public:
-  // [WIP] need this?
-  explicit PyBufferAttributes()
+  DESTRUCTOR_WITH_LOG(PyBufferAttributes, TRITONSERVER_BufferAttributesDelete);
+
+  PyBufferAttributes()
   {
-    ThrowIfError(TRITONSERVER_BufferAttributesNew(&buffer_attributes_));
+    ThrowIfError(TRITONSERVER_BufferAttributesNew(&triton_object_));
     owned_ = true;
   }
 
-  PyBufferAttributes(
-      TRITONSERVER_BufferAttributes* ba,
-      const bool owned /* [FIXME] check if needed*/)
-      : buffer_attributes_(ba), owned_(owned)
+  explicit PyBufferAttributes(
+      struct TRITONSERVER_BufferAttributes* ba, const bool owned)
+      : PyWrapper(ba, owned)
   {
-  }
-
-  // Use internally when interacting with C APIs that takes ownership
-  TRITONSERVER_BufferAttributes* Release()
-  {
-    owned_ = false;
-    return buffer_attributes_;
-  }
-
-  TRITONSERVER_BufferAttributes* Ptr() { return buffer_attributes_; }
-
-  ~PyBufferAttributes()
-  {
-    if (owned_ && buffer_attributes_) {
-      LogIfError(TRITONSERVER_BufferAttributesDelete(buffer_attributes_));
-    }
   }
 
   void SetMemoryTypeId(int64_t memory_type_id)
   {
     ThrowIfError(TRITONSERVER_BufferAttributesSetMemoryTypeId(
-        buffer_attributes_, memory_type_id));
+        triton_object_, memory_type_id));
   }
 
   void SetMemoryType(TRITONSERVER_MemoryType memory_type)
   {
     ThrowIfError(TRITONSERVER_BufferAttributesSetMemoryType(
-        buffer_attributes_, memory_type));
+        triton_object_, memory_type));
   }
 
   void SetCudaIpcHandle(size_t cuda_ipc_handle)
   {
     ThrowIfError(TRITONSERVER_BufferAttributesSetCudaIpcHandle(
-        buffer_attributes_, reinterpret_cast<void*>(cuda_ipc_handle)));
+        triton_object_, reinterpret_cast<void*>(cuda_ipc_handle)));
   }
 
   void SetByteSize(size_t byte_size)
   {
-    ThrowIfError(TRITONSERVER_BufferAttributesSetByteSize(
-        buffer_attributes_, byte_size));
+    ThrowIfError(
+        TRITONSERVER_BufferAttributesSetByteSize(triton_object_, byte_size));
   }
 
   // Define methods to get buffer attribute fields
@@ -276,15 +263,15 @@ class PyBufferAttributes {
   {
     int64_t memory_type_id = 0;
     ThrowIfError(TRITONSERVER_BufferAttributesMemoryTypeId(
-        buffer_attributes_, &memory_type_id));
+        triton_object_, &memory_type_id));
     return memory_type_id;
   }
 
   TRITONSERVER_MemoryType MemoryType()
   {
     TRITONSERVER_MemoryType memory_type = TRITONSERVER_MEMORY_CPU;
-    ThrowIfError(TRITONSERVER_BufferAttributesMemoryType(
-        buffer_attributes_, &memory_type));
+    ThrowIfError(
+        TRITONSERVER_BufferAttributesMemoryType(triton_object_, &memory_type));
     return memory_type;
   }
 
@@ -292,7 +279,7 @@ class PyBufferAttributes {
   {
     void* cuda_ipc_handle = nullptr;
     ThrowIfError(TRITONSERVER_BufferAttributesCudaIpcHandle(
-        buffer_attributes_, &cuda_ipc_handle));
+        triton_object_, &cuda_ipc_handle));
     return reinterpret_cast<size_t>(cuda_ipc_handle);
   }
 
@@ -300,17 +287,17 @@ class PyBufferAttributes {
   {
     size_t byte_size;
     ThrowIfError(
-        TRITONSERVER_BufferAttributesByteSize(buffer_attributes_, &byte_size));
+        TRITONSERVER_BufferAttributesByteSize(triton_object_, &byte_size));
     return byte_size;
   }
-
- private:
-  struct TRITONSERVER_BufferAttributes* buffer_attributes_{nullptr};
-  bool owned_{false};
 };
 
-class PyResponseAllocator {
+class PyResponseAllocator
+    : public PyWrapper<struct TRITONSERVER_ResponseAllocator> {
  public:
+  DESTRUCTOR_WITH_LOG(
+      PyResponseAllocator, TRITONSERVER_ResponseAllocatorDelete);
+
   struct CallbackResource {
     CallbackResource(py::object a, py::object uo)
         : allocator(a), user_object(uo)
@@ -337,22 +324,12 @@ class PyResponseAllocator {
   using BufferAttributesFn = std::function<py::object(
       py::object, std::string, py::object, py::object, py::object)>;
 
-  DISALLOW_COPY_AND_ASSIGN(PyResponseAllocator);
-
-  // Use internally when interacting with C APIs that takes ownership
-  TRITONSERVER_ResponseAllocator* Release()
-  {
-    owned_ = false;
-    return allocator_;
-  }
-
-  TRITONSERVER_ResponseAllocator* Ptr() { return allocator_; }
 
   PyResponseAllocator(AllocFn alloc, ReleaseFn release, StartFn start)
       : alloc_fn_(alloc), release_fn_(release), start_fn_(start)
   {
     ThrowIfError(TRITONSERVER_ResponseAllocatorNew(
-        &allocator_, PyTritonAllocFn, PyTritonReleaseFn, PyTritonStartFn));
+        &triton_object_, PyTritonAllocFn, PyTritonReleaseFn, PyTritonStartFn));
     owned_ = true;
   }
 
@@ -366,7 +343,7 @@ class PyResponseAllocator {
       TRITONSERVER_MemoryType* actual_memory_type,
       int64_t* actual_memory_type_id)
   {
-    TRITONSERVER_Error* err = nullptr;
+    struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     try {
       auto res = cr->allocator.cast<PyResponseAllocator*>()->alloc_fn_(
@@ -395,7 +372,7 @@ class PyResponseAllocator {
       void* buffer_userp, size_t byte_size, TRITONSERVER_MemoryType memory_type,
       int64_t memory_type_id)
   {
-    TRITONSERVER_Error* err = nullptr;
+    struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(buffer_userp);
     try {
       cr->allocator.cast<PyResponseAllocator*>()->release_fn_(
@@ -413,7 +390,7 @@ class PyResponseAllocator {
   static TRITONSERVER_Error* PyTritonStartFn(
       struct TRITONSERVER_ResponseAllocator* allocator, void* userp)
   {
-    TRITONSERVER_Error* err = nullptr;
+    struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     try {
       cr->allocator.cast<PyResponseAllocator*>()->start_fn_(
@@ -430,7 +407,7 @@ class PyResponseAllocator {
       const char* tensor_name, size_t* byte_size,
       TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
   {
-    TRITONSERVER_Error* err = nullptr;
+    struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     try {
       std::optional<size_t> bs;
@@ -454,7 +431,7 @@ class PyResponseAllocator {
       struct TRITONSERVER_BufferAttributes* buffer_attributes, void* userp,
       void* buffer_userp)
   {
-    TRITONSERVER_Error* err = nullptr;
+    struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     auto bcr = reinterpret_cast<CallbackResource*>(buffer_userp);
     PyBufferAttributes pba{buffer_attributes, false /* owned_ */};
@@ -489,29 +466,17 @@ class PyResponseAllocator {
   {
     buffer_attributes_fn_ = baf;
     ThrowIfError(TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
-        allocator_, PyTritonBufferAttributesFn));
+        triton_object_, PyTritonBufferAttributesFn));
   }
 
   void SetQueryFunction(QueryFn qf)
   {
     query_fn_ = qf;
     ThrowIfError(TRITONSERVER_ResponseAllocatorSetQueryFunction(
-        allocator_, PyTritonQueryFn));
+        triton_object_, PyTritonQueryFn));
   }
 
-  ~PyResponseAllocator()
-  {
-    if (owned_ && allocator_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_ResponseAllocatorDelete(allocator_));
-    }
-  }
-
-  //  private:
-  TRITONSERVER_ResponseAllocator* allocator_{nullptr};
-  // [FIXME] may need to transfer ownership
-  bool owned_{false};
-
+ private:
   AllocFn alloc_fn_{nullptr};
   ReleaseFn release_fn_{nullptr};
   StartFn start_fn_{nullptr};
@@ -519,27 +484,20 @@ class PyResponseAllocator {
   BufferAttributesFn buffer_attributes_fn_{nullptr};
 };
 
-class PyMessage {
+class PyMessage : public PyWrapper<struct TRITONSERVER_Message> {
  public:
-  explicit PyMessage(const std::string& serialized_json) : owned_(true)
+  DESTRUCTOR_WITH_LOG(PyMessage, TRITONSERVER_MessageDelete);
+
+  PyMessage(const std::string& serialized_json)
   {
     ThrowIfError(TRITONSERVER_MessageNewFromSerializedJson(
-        &message_, serialized_json.c_str(), serialized_json.size()));
+        &triton_object_, serialized_json.c_str(), serialized_json.size()));
+    owned_ = true;
   }
 
-  PyMessage(
-      struct TRITONSERVER_Message* m,
-      const bool owned /* [FIXME] check if needed*/)
-      : message_(m), owned_(owned)
+  explicit PyMessage(struct TRITONSERVER_Message* m, const bool owned)
+      : PyWrapper(m, owned)
   {
-  }
-
-  ~PyMessage()
-  {
-    if (owned_ && message_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_MessageDelete(message_));
-    }
   }
 
   std::string SerializeToJson()
@@ -547,46 +505,34 @@ class PyMessage {
     const char* base = nullptr;
     size_t byte_size = 0;
     ThrowIfError(
-        TRITONSERVER_MessageSerializeToJson(message_, &base, &byte_size));
+        TRITONSERVER_MessageSerializeToJson(triton_object_, &base, &byte_size));
     return std::string(base, byte_size);
   }
-
- private:
-  struct TRITONSERVER_Message* message_{nullptr};
-  bool owned_{false};
 };
 
-class PyMetrics {
+class PyMetrics : public PyWrapper<struct TRITONSERVER_Metrics> {
  public:
-  explicit PyMetrics(struct TRITONSERVER_Metrics* metrics, bool owned)
-      : metrics_(metrics), owned_(owned)
-  {
-  }
+  DESTRUCTOR_WITH_LOG(PyMetrics, TRITONSERVER_MetricsDelete);
 
-  ~PyMetrics()
+  explicit PyMetrics(struct TRITONSERVER_Metrics* metrics, bool owned)
+      : PyWrapper(metrics, owned)
   {
-    if (owned_ && metrics_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_MetricsDelete(metrics_));
-    }
   }
 
   std::string Formatted(TRITONSERVER_MetricFormat format)
   {
     const char* base = nullptr;
     size_t byte_size = 0;
-    ThrowIfError(
-        TRITONSERVER_MetricsFormatted(metrics_, format, &base, &byte_size));
+    ThrowIfError(TRITONSERVER_MetricsFormatted(
+        triton_object_, format, &base, &byte_size));
     return std::string(base, byte_size);
   }
-
- private:
-  struct TRITONSERVER_Metrics* metrics_{nullptr};
-  bool owned_{false};
 };
 
-class PyTrace {
+class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
  public:
+  DESTRUCTOR_WITH_LOG(PyTrace, TRITONSERVER_InferenceTraceDelete);
+
   using TimestampActivityFn = std::function<void(
       py::object, TRITONSERVER_InferenceTraceActivity, uint64_t, py::object)>;
   using TensorActivityFn = std::function<void(
@@ -612,56 +558,45 @@ class PyTrace {
     std::set<uintptr_t> seen_traces;
   };
 
-  DISALLOW_COPY_AND_ASSIGN(PyTrace);
-
   // Use internally when interacting with C APIs that takes ownership
-  TRITONSERVER_InferenceTrace* Release()
+  struct TRITONSERVER_InferenceTrace* Release()
   {
     owned_ = false;
     callback_resource_.release();
-    return trace_;
+    return triton_object_;
   }
-
-  TRITONSERVER_InferenceTrace* Ptr() { return trace_; }
 
   PyTrace(
       TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
       TimestampActivityFn timestamp, ReleaseFn release, py::object user_object)
-      : owned_(true), callback_resource_(new CallbackResource(
-                          timestamp, nullptr, release, user_object))
+      : callback_resource_(
+            new CallbackResource(timestamp, nullptr, release, user_object))
   {
     ThrowIfError(TRITONSERVER_InferenceTraceNew(
-        &trace_, level, parent_id, PyTritonTraceTimestampActivityFn,
+        &triton_object_, level, parent_id, PyTritonTraceTimestampActivityFn,
         PyTritonTraceRelease, callback_resource_.get()));
+    owned_ = true;
   }
 
   PyTrace(
       TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
       TimestampActivityFn timestamp, TensorActivityFn tensor, ReleaseFn release,
       py::object user_object)
-      : owned_(true), callback_resource_(new CallbackResource(
-                          timestamp, tensor, release, user_object))
+      : callback_resource_(
+            new CallbackResource(timestamp, tensor, release, user_object))
   {
     ThrowIfError(TRITONSERVER_InferenceTraceTensorNew(
-        &trace_, level, parent_id, PyTritonTraceTimestampActivityFn,
+        &triton_object_, level, parent_id, PyTritonTraceTimestampActivityFn,
         PyTritonTraceTensorActivityFn, PyTritonTraceRelease,
         callback_resource_.get()));
+    owned_ = true;
   }
 
-  PyTrace(
-      struct TRITONSERVER_InferenceTrace* t,
-      const bool owned /* [FIXME] check if needed*/)
-      : trace_(t), owned_(owned)
+  explicit PyTrace(struct TRITONSERVER_InferenceTrace* t, const bool owned)
+      : PyWrapper(t, owned)
   {
   }
 
-  ~PyTrace()
-  {
-    if (owned_ && trace_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_InferenceTraceDelete(trace_));
-    }
-  }
   CallbackResource* ReleaseCallbackResource()
   {
     return callback_resource_.release();
@@ -670,35 +605,35 @@ class PyTrace {
   uint64_t Id()
   {
     uint64_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceTraceId(trace_, &val));
+    ThrowIfError(TRITONSERVER_InferenceTraceId(triton_object_, &val));
     return val;
   }
 
   uint64_t ParentId()
   {
     uint64_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceTraceParentId(trace_, &val));
+    ThrowIfError(TRITONSERVER_InferenceTraceParentId(triton_object_, &val));
     return val;
   }
 
   std::string ModelName()
   {
     const char* val = nullptr;
-    ThrowIfError(TRITONSERVER_InferenceTraceModelName(trace_, &val));
+    ThrowIfError(TRITONSERVER_InferenceTraceModelName(triton_object_, &val));
     return val;
   }
 
   int64_t ModelVersion()
   {
     int64_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceTraceModelVersion(trace_, &val));
+    ThrowIfError(TRITONSERVER_InferenceTraceModelVersion(triton_object_, &val));
     return val;
   }
 
   std::string RequestId()
   {
     const char* val = nullptr;
-    ThrowIfError(TRITONSERVER_InferenceTraceRequestId(trace_, &val));
+    ThrowIfError(TRITONSERVER_InferenceTraceRequestId(triton_object_, &val));
     return val;
   }
 
@@ -753,15 +688,16 @@ class PyTrace {
     }
   }
 
-  //  private:
-  TRITONSERVER_InferenceTrace* trace_{nullptr};
-  // [FIXME] may need to transfer ownership
-  bool owned_{false};
+ private:
   std::unique_ptr<CallbackResource> callback_resource_{nullptr};
 };
 
-class PyInferenceResponse {
+class PyInferenceResponse
+    : public PyWrapper<struct TRITONSERVER_InferenceResponse> {
  public:
+  DESTRUCTOR_WITH_LOG(
+      PyInferenceResponse, TRITONSERVER_InferenceResponseDelete);
+
   using CompleteFn = std::function<void(py::object, uint32_t, py::object)>;
   struct CallbackResource {
     CallbackResource(
@@ -785,22 +721,16 @@ class PyInferenceResponse {
     py::object user_object;
   };
 
-  PyInferenceResponse(TRITONSERVER_InferenceResponse* response, bool owned)
-      : response_(response), owned_(owned)
+  explicit PyInferenceResponse(
+      struct TRITONSERVER_InferenceResponse* response, bool owned)
+      : PyWrapper(response, owned)
   {
   }
 
-  ~PyInferenceResponse()
-  {
-    if (owned_ && response_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_InferenceResponseDelete(response_));
-    }
-  }
 
   void ThrowIfResponseError()
   {
-    ThrowIfError(TRITONSERVER_InferenceResponseError(response_));
+    ThrowIfError(TRITONSERVER_InferenceResponseError(triton_object_));
   }
 
   std::tuple<std::string, int64_t> Model()
@@ -808,21 +738,22 @@ class PyInferenceResponse {
     const char* model_name = nullptr;
     int64_t model_version = 0;
     ThrowIfError(TRITONSERVER_InferenceResponseModel(
-        response_, &model_name, &model_version));
+        triton_object_, &model_name, &model_version));
     return {model_name, model_version};
   }
 
   std::string Id()
   {
     const char* val = nullptr;
-    ThrowIfError(TRITONSERVER_InferenceResponseId(response_, &val));
+    ThrowIfError(TRITONSERVER_InferenceResponseId(triton_object_, &val));
     return val;
   }
 
   uint32_t ParameterCount(uint32_t* count)
   {
     uint32_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceResponseParameterCount(response_, &val));
+    ThrowIfError(
+        TRITONSERVER_InferenceResponseParameterCount(triton_object_, &val));
     return val;
   }
 
@@ -833,7 +764,7 @@ class PyInferenceResponse {
     TRITONSERVER_ParameterType type = TRITONSERVER_PARAMETER_STRING;
     const void* value = nullptr;
     ThrowIfError(TRITONSERVER_InferenceResponseParameter(
-        response_, index, &name, &type, &value));
+        triton_object_, index, &name, &type, &value));
     py::object py_value;
     switch (type) {
       case TRITONSERVER_PARAMETER_STRING:
@@ -858,7 +789,8 @@ class PyInferenceResponse {
   uint32_t OutputCount()
   {
     uint32_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceResponseOutputCount(response_, &val));
+    ThrowIfError(
+        TRITONSERVER_InferenceResponseOutputCount(triton_object_, &val));
     return val;
   }
 
@@ -877,7 +809,7 @@ class PyInferenceResponse {
     int64_t memory_type_id = 0;
     void* userp = nullptr;
     ThrowIfError(TRITONSERVER_InferenceResponseOutput(
-        response_, index, &name, &datatype, &shape, &dim_count, &base,
+        triton_object_, index, &name, &datatype, &shape, &dim_count, &base,
         &byte_size, &memory_type, &memory_type_id, &userp));
     return {name,
             datatype,
@@ -894,20 +826,19 @@ class PyInferenceResponse {
   {
     const char* val = nullptr;
     ThrowIfError(TRITONSERVER_InferenceResponseOutputClassificationLabel(
-        response_, index, class_index, &val));
+        triton_object_, index, class_index, &val));
     return val;
   }
-
- private:
-  TRITONSERVER_InferenceResponse* response_;
-  bool owned_;
 };
 
 // forward declaration
 class PyServer;
 
-class PyInferenceRequest {
+class PyInferenceRequest
+    : public PyWrapper<struct TRITONSERVER_InferenceRequest> {
  public:
+  DESTRUCTOR_WITH_LOG(PyInferenceRequest, TRITONSERVER_InferenceRequestDelete);
+
   using ReleaseFn = std::function<void(py::object, uint32_t, py::object)>;
 
   // Defer definition until PyServer is defined
@@ -915,34 +846,24 @@ class PyInferenceRequest {
       PyServer& server, const std::string& model_name,
       const int64_t model_version);
 
-  PyInferenceRequest(
-      struct TRITONSERVER_InferenceRequest* r,
-      const bool owned /* [FIXME] check if needed*/)
-      : request_(r), owned_(owned)
+  explicit PyInferenceRequest(
+      struct TRITONSERVER_InferenceRequest* r, const bool owned)
+      : PyWrapper(r, owned)
   {
   }
 
-  ~PyInferenceRequest()
-  {
-    if (owned_ && request_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_InferenceRequestDelete(request_));
-    }
-  }
 
   // Use internally when interacting with C APIs that takes ownership,
   // this function releases the ownership of the C object and the callback
   // resources tracked.
-  TRITONSERVER_InferenceRequest* Release()
+  struct TRITONSERVER_InferenceRequest* Release()
   {
     owned_ = false;
     request_callback_resource_.release();
     allocator_callback_resource_.release();
     response_callback_resource_.release();
-    return request_;
+    return triton_object_;
   }
-
-  TRITONSERVER_InferenceRequest* Ptr() { return request_; }
 
   struct CallbackResource {
     CallbackResource(ReleaseFn r, py::object uo)
@@ -959,7 +880,7 @@ class PyInferenceRequest {
     request_callback_resource_.reset(
         new CallbackResource(release, user_object));
     ThrowIfError(TRITONSERVER_InferenceRequestSetReleaseCallback(
-        request_, PyTritonRequestReleaseCallback,
+        triton_object_, PyTritonRequestReleaseCallback,
         request_callback_resource_.get()));
   }
 
@@ -974,7 +895,6 @@ class PyInferenceRequest {
     delete cr;
   }
 
-  // [WIP] below
   void SetResponseCallback(
       py::object allocator, py::object allocater_user_object,
       PyInferenceResponse::CompleteFn response, py::object response_user_object)
@@ -985,7 +905,7 @@ class PyInferenceRequest {
     response_callback_resource_.reset(new PyInferenceResponse::CallbackResource(
         response, allocator_callback_resource_.get(), response_user_object));
     ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
-        request_, allocator.cast<PyResponseAllocator*>()->Ptr(),
+        triton_object_, allocator.cast<PyResponseAllocator*>()->Ptr(),
         allocator_callback_resource_.get(), PyTritonResponseCompleteCallback,
         response_callback_resource_.get()));
   }
@@ -1007,83 +927,87 @@ class PyInferenceRequest {
   // Trivial setters / getters
   void SetId(const std::string& id)
   {
-    ThrowIfError(TRITONSERVER_InferenceRequestSetId(request_, id.c_str()));
+    ThrowIfError(
+        TRITONSERVER_InferenceRequestSetId(triton_object_, id.c_str()));
   }
   std::string Id()
   {
     const char* val = nullptr;
-    ThrowIfError(TRITONSERVER_InferenceRequestId(request_, &val));
+    ThrowIfError(TRITONSERVER_InferenceRequestId(triton_object_, &val));
     return val;
   }
 
   void SetFlags(uint32_t flags)
   {
-    ThrowIfError(TRITONSERVER_InferenceRequestSetFlags(request_, flags));
+    ThrowIfError(TRITONSERVER_InferenceRequestSetFlags(triton_object_, flags));
   }
 
   uint32_t Flags()
   {
     uint32_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceRequestFlags(request_, &val));
+    ThrowIfError(TRITONSERVER_InferenceRequestFlags(triton_object_, &val));
     return val;
   }
 
   void SetCorrelationId(uint64_t correlation_id)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetCorrelationId(
-        request_, correlation_id));
+        triton_object_, correlation_id));
   }
   uint64_t CorrelationId()
   {
     uint64_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceRequestCorrelationId(request_, &val));
+    ThrowIfError(
+        TRITONSERVER_InferenceRequestCorrelationId(triton_object_, &val));
     return val;
   }
   void SetCorrelationIdString(const std::string& correlation_id)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetCorrelationIdString(
-        request_, correlation_id.c_str()));
+        triton_object_, correlation_id.c_str()));
   }
   std::string CorrelationIdString()
   {
     const char* val = nullptr;
     ThrowIfError(
-        TRITONSERVER_InferenceRequestCorrelationIdString(request_, &val));
+        TRITONSERVER_InferenceRequestCorrelationIdString(triton_object_, &val));
     return val;
   }
 
   void SetPriority(uint32_t priority)
   {
-    ThrowIfError(TRITONSERVER_InferenceRequestSetPriority(request_, priority));
+    ThrowIfError(
+        TRITONSERVER_InferenceRequestSetPriority(triton_object_, priority));
   }
   void SetPriorityUint64(uint64_t priority)
   {
-    ThrowIfError(
-        TRITONSERVER_InferenceRequestSetPriorityUInt64(request_, priority));
+    ThrowIfError(TRITONSERVER_InferenceRequestSetPriorityUInt64(
+        triton_object_, priority));
   }
   uint32_t Priority()
   {
     uint32_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceRequestPriority(request_, &val));
+    ThrowIfError(TRITONSERVER_InferenceRequestPriority(triton_object_, &val));
     return val;
   }
   uint64_t PriorityUint64()
   {
     uint64_t val = 0;
-    ThrowIfError(TRITONSERVER_InferenceRequestPriorityUInt64(request_, &val));
+    ThrowIfError(
+        TRITONSERVER_InferenceRequestPriorityUInt64(triton_object_, &val));
     return val;
   }
 
   void SetTimeoutMicroseconds(uint64_t timeout_us)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetTimeoutMicroseconds(
-        request_, timeout_us));
+        triton_object_, timeout_us));
   }
   uint64_t TimeoutMicroseconds()
   {
     uint64_t val = 0;
     ThrowIfError(
-        TRITONSERVER_InferenceRequestTimeoutMicroseconds(request_, &val));
+        TRITONSERVER_InferenceRequestTimeoutMicroseconds(triton_object_, &val));
     return val;
   }
 
@@ -1092,29 +1016,29 @@ class PyInferenceRequest {
       std::vector<int64_t> shape)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestAddInput(
-        request_, name.c_str(), data_type, shape.data(), shape.size()));
+        triton_object_, name.c_str(), data_type, shape.data(), shape.size()));
   }
   void AddRawInput(const std::string& name)
   {
     ThrowIfError(
-        TRITONSERVER_InferenceRequestAddRawInput(request_, name.c_str()));
+        TRITONSERVER_InferenceRequestAddRawInput(triton_object_, name.c_str()));
   }
   void RemoveInput(const std::string& name)
   {
     ThrowIfError(
-        TRITONSERVER_InferenceRequestRemoveInput(request_, name.c_str()));
+        TRITONSERVER_InferenceRequestRemoveInput(triton_object_, name.c_str()));
   }
   void RemoveAllInputs()
   {
-    ThrowIfError(TRITONSERVER_InferenceRequestRemoveAllInputs(request_));
+    ThrowIfError(TRITONSERVER_InferenceRequestRemoveAllInputs(triton_object_));
   }
   void AppendInputData(
       const std::string& name, size_t base, size_t byte_size,
       TRITONSERVER_MemoryType memory_type, int64_t memory_type_id)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestAppendInputData(
-        request_, name.c_str(), reinterpret_cast<const char*>(base), byte_size,
-        memory_type, memory_type_id));
+        triton_object_, name.c_str(), reinterpret_cast<const char*>(base),
+        byte_size, memory_type, memory_type_id));
   }
   void AppendInputDataWithHostPolicy(
       const std::string name, size_t base, size_t byte_size,
@@ -1122,8 +1046,8 @@ class PyInferenceRequest {
       const std::string& host_policy_name)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestAppendInputDataWithHostPolicy(
-        request_, name.c_str(), reinterpret_cast<const char*>(base), byte_size,
-        memory_type, memory_type_id, host_policy_name.c_str()));
+        triton_object_, name.c_str(), reinterpret_cast<const char*>(base),
+        byte_size, memory_type, memory_type_id, host_policy_name.c_str()));
   }
   void AppendInputDataWithBufferAttributes(
       const std::string& name, size_t base,
@@ -1131,50 +1055,48 @@ class PyInferenceRequest {
   {
     ThrowIfError(
         TRITONSERVER_InferenceRequestAppendInputDataWithBufferAttributes(
-            request_, name.c_str(), reinterpret_cast<const char*>(base),
+            triton_object_, name.c_str(), reinterpret_cast<const char*>(base),
             buffer_attributes->Ptr()));
   }
   void RemoveAllInputData(const std::string& name)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestRemoveAllInputData(
-        request_, name.c_str()));
+        triton_object_, name.c_str()));
   }
 
   void AddRequestedOutput(const std::string& name)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestAddRequestedOutput(
-        request_, name.c_str()));
+        triton_object_, name.c_str()));
   }
   void RemoveRequestedOutput(const std::string& name)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestRemoveRequestedOutput(
-        request_, name.c_str()));
+        triton_object_, name.c_str()));
   }
   void RemoveAllRequestedOutputs()
   {
     ThrowIfError(
-        TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(request_));
+        TRITONSERVER_InferenceRequestRemoveAllRequestedOutputs(triton_object_));
   }
 
   void SetStringParameter(const std::string& key, const std::string& value)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetStringParameter(
-        request_, key.c_str(), value.c_str()));
+        triton_object_, key.c_str(), value.c_str()));
   }
   void SetIntParameter(const std::string& key, int64_t value)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetIntParameter(
-        request_, key.c_str(), value));
+        triton_object_, key.c_str(), value));
   }
   void SetBoolParameter(const std::string& key, bool value)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetBoolParameter(
-        request_, key.c_str(), value));
+        triton_object_, key.c_str(), value));
   }
 
  private:
-  struct TRITONSERVER_InferenceRequest* request_{nullptr};
-  bool owned_{false};
   std::unique_ptr<CallbackResource> request_callback_resource_{nullptr};
   std::unique_ptr<PyResponseAllocator::CallbackResource>
       allocator_callback_resource_{nullptr};
@@ -1182,200 +1104,200 @@ class PyInferenceRequest {
       response_callback_resource_{nullptr};
 };
 
-class PyServerOptions {
+class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
  public:
-  PyServerOptions() : owned_(true)
+  DESTRUCTOR_WITH_LOG(PyServerOptions, TRITONSERVER_ServerOptionsDelete);
+  PyServerOptions()
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsNew(&options_));
+    ThrowIfError(TRITONSERVER_ServerOptionsNew(&triton_object_));
+    owned_ = true;
   }
-
-  ~PyServerOptions()
-  {
-    if (owned_ && options_)
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_ServerOptionsDelete(options_));
-  }
-
-  struct TRITONSERVER_ServerOptions* Ptr() { return options_; }
 
   void SetServerId(const std::string& server_id)
   {
-    ThrowIfError(
-        TRITONSERVER_ServerOptionsSetServerId(options_, server_id.c_str()));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetServerId(
+        triton_object_, server_id.c_str()));
   }
 
   void SetModelRepositoryPath(const std::string& model_repository_path)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetModelRepositoryPath(
-        options_, model_repository_path.c_str()));
+        triton_object_, model_repository_path.c_str()));
   }
 
   void SetModelControlMode(TRITONSERVER_ModelControlMode mode)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetModelControlMode(options_, mode));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetModelControlMode(triton_object_, mode));
   }
 
   void SetStartupModel(const std::string& model_name)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetStartupModel(
-        options_, model_name.c_str()));
+        triton_object_, model_name.c_str()));
   }
 
   void SetStrictModelConfig(bool strict)
   {
     ThrowIfError(
-        TRITONSERVER_ServerOptionsSetStrictModelConfig(options_, strict));
+        TRITONSERVER_ServerOptionsSetStrictModelConfig(triton_object_, strict));
   }
   void SetRateLimiterMode(TRITONSERVER_RateLimitMode mode)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetRateLimiterMode(options_, mode));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetRateLimiterMode(triton_object_, mode));
   }
 
   void AddRateLimiterResource(
       const std::string& resource_name, size_t resource_count, int device)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsAddRateLimiterResource(
-        options_, resource_name.c_str(), resource_count, device));
+        triton_object_, resource_name.c_str(), resource_count, device));
   }
 
   void SetPinnedMemoryPoolByteSize(uint64_t size)
   {
-    ThrowIfError(
-        TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(options_, size));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
+        triton_object_, size));
   }
 
   void SetCudaMemoryPoolByteSize(int gpu_device, uint64_t size)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
-        options_, gpu_device, size));
+        triton_object_, gpu_device, size));
   }
   void SetResponseCacheByteSize(uint64_t size)
   {
-    ThrowIfError(
-        TRITONSERVER_ServerOptionsSetResponseCacheByteSize(options_, size));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetResponseCacheByteSize(
+        triton_object_, size));
   }
 
   void SetCacheConfig(
       const std::string& cache_name, const std::string& config_json)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetCacheConfig(
-        options_, cache_name.c_str(), config_json.c_str()));
+        triton_object_, cache_name.c_str(), config_json.c_str()));
   }
 
   void SetCacheDirectory(const std::string& cache_dir)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetCacheDirectory(
-        options_, cache_dir.c_str()));
+        triton_object_, cache_dir.c_str()));
   }
 
   void SetMinSupportedComputeCapability(double cc)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability(
-        options_, cc));
+        triton_object_, cc));
   }
 
   void SetExitOnError(bool exit)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetExitOnError(options_, exit));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetExitOnError(triton_object_, exit));
   }
 
   void SetStrictReadiness(bool strict)
   {
     ThrowIfError(
-        TRITONSERVER_ServerOptionsSetStrictReadiness(options_, strict));
+        TRITONSERVER_ServerOptionsSetStrictReadiness(triton_object_, strict));
   }
 
   void SetExitTimeout(unsigned int timeout)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetExitTimeout(options_, timeout));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetExitTimeout(triton_object_, timeout));
   }
   void SetBufferManagerThreadCount(unsigned int thread_count)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
-        options_, thread_count));
+        triton_object_, thread_count));
   }
 
   void SetModelLoadThreadCount(unsigned int thread_count)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
-        options_, thread_count));
+        triton_object_, thread_count));
   }
 
   void SetModelNamespacing(bool enable_namespace)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetModelNamespacing(
-        options_, enable_namespace));
+        triton_object_, enable_namespace));
   }
 
   void SetLogFile(const std::string& file)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetLogFile(options_, file.c_str()));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetLogFile(triton_object_, file.c_str()));
   }
 
   void SetLogInfo(bool log)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetLogInfo(options_, log));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetLogInfo(triton_object_, log));
   }
 
   void SetLogWarn(bool log)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetLogWarn(options_, log));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetLogWarn(triton_object_, log));
   }
 
   void SetLogError(bool log)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetLogError(options_, log));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetLogError(triton_object_, log));
   }
 
   void SetLogFormat(TRITONSERVER_LogFormat format)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetLogFormat(options_, format));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetLogFormat(triton_object_, format));
   }
 
   void SetLogVerbose(int level)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetLogVerbose(options_, level));
+    ThrowIfError(
+        TRITONSERVER_ServerOptionsSetLogVerbose(triton_object_, level));
   }
   void SetMetrics(bool metrics)
   {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetMetrics(options_, metrics));
+    ThrowIfError(TRITONSERVER_ServerOptionsSetMetrics(triton_object_, metrics));
   }
 
   void SetGpuMetrics(bool gpu_metrics)
   {
     ThrowIfError(
-        TRITONSERVER_ServerOptionsSetGpuMetrics(options_, gpu_metrics));
+        TRITONSERVER_ServerOptionsSetGpuMetrics(triton_object_, gpu_metrics));
   }
 
   void SetCpuMetrics(bool cpu_metrics)
   {
     ThrowIfError(
-        TRITONSERVER_ServerOptionsSetCpuMetrics(options_, cpu_metrics));
+        TRITONSERVER_ServerOptionsSetCpuMetrics(triton_object_, cpu_metrics));
   }
 
   void SetMetricsInterval(uint64_t metrics_interval_ms)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetMetricsInterval(
-        options_, metrics_interval_ms));
+        triton_object_, metrics_interval_ms));
   }
 
   void SetBackendDirectory(const std::string& backend_dir)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetBackendDirectory(
-        options_, backend_dir.c_str()));
+        triton_object_, backend_dir.c_str()));
   }
 
   void SetRepoAgentDirectory(const std::string& repoagent_dir)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
-        options_, repoagent_dir.c_str()));
+        triton_object_, repoagent_dir.c_str()));
   }
 
   void SetModelLoadDeviceLimit(
       TRITONSERVER_InstanceGroupKind kind, int device_id, double fraction)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit(
-        options_, kind, device_id, fraction));
+        triton_object_, kind, device_id, fraction));
   }
 
   void SetBackendConfig(
@@ -1383,7 +1305,7 @@ class PyServerOptions {
       const std::string& value)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetBackendConfig(
-        options_, backend_name.c_str(), setting.c_str(), value.c_str()));
+        triton_object_, backend_name.c_str(), setting.c_str(), value.c_str()));
   }
 
   void SetHostPolicy(
@@ -1391,7 +1313,7 @@ class PyServerOptions {
       const std::string& value)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetHostPolicy(
-        options_, policy_name.c_str(), setting.c_str(), value.c_str()));
+        triton_object_, policy_name.c_str(), setting.c_str(), value.c_str()));
   }
 
   void SetMetricsConfig(
@@ -1399,32 +1321,21 @@ class PyServerOptions {
       const std::string& value)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetMetricsConfig(
-        options_, name.c_str(), setting.c_str(), value.c_str()));
+        triton_object_, name.c_str(), setting.c_str(), value.c_str()));
   }
-
- private:
-  struct TRITONSERVER_ServerOptions* options_{nullptr};
-  bool owned_{false};
 };
 
-class PyServer {
+class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
  public:
-  struct TRITONSERVER_Server* Ptr() { return server_; }
+  DESTRUCTOR_WITH_LOG(PyServer, TRITONSERVER_ServerDelete);
 
-  PyServer(PyServerOptions& options) : owned_(true)
+  PyServer(PyServerOptions& options)
   {
-    ThrowIfError(TRITONSERVER_ServerNew(&server_, options.Ptr()));
+    ThrowIfError(TRITONSERVER_ServerNew(&triton_object_, options.Ptr()));
+    owned_ = true;
   }
 
-  ~PyServer()
-  {
-    if (owned_ && server_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_ServerDelete(server_));
-    }
-  }
-
-  void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(server_)); }
+  void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(triton_object_)); }
 
   void RegisterModelRepository(
       const std::string& repository_path,
@@ -1435,31 +1346,31 @@ class PyServer {
       params.emplace_back(nm->Ptr());
     }
     ThrowIfError(TRITONSERVER_ServerRegisterModelRepository(
-        server_, repository_path.c_str(), params.data(), params.size()));
+        triton_object_, repository_path.c_str(), params.data(), params.size()));
   }
 
   void UnregisterModelRepository(const std::string& repository_path) const
   {
     ThrowIfError(TRITONSERVER_ServerUnregisterModelRepository(
-        server_, repository_path.c_str()));
+        triton_object_, repository_path.c_str()));
   }
 
   void PollModelRepository() const
   {
-    ThrowIfError(TRITONSERVER_ServerPollModelRepository(server_));
+    ThrowIfError(TRITONSERVER_ServerPollModelRepository(triton_object_));
   }
 
   bool IsLive() const
   {
     bool live;
-    ThrowIfError(TRITONSERVER_ServerIsLive(server_, &live));
+    ThrowIfError(TRITONSERVER_ServerIsLive(triton_object_, &live));
     return live;
   }
 
   bool IsReady() const
   {
     bool ready;
-    ThrowIfError(TRITONSERVER_ServerIsReady(server_, &ready));
+    ThrowIfError(TRITONSERVER_ServerIsReady(triton_object_, &ready));
     return ready;
   }
 
@@ -1467,7 +1378,7 @@ class PyServer {
   {
     bool ready;
     ThrowIfError(TRITONSERVER_ServerModelIsReady(
-        server_, model_name.c_str(), model_version, &ready));
+        triton_object_, model_name.c_str(), model_version, &ready));
     return ready;
   }
 
@@ -1477,7 +1388,7 @@ class PyServer {
     uint32_t flags;
     void* voidp;
     ThrowIfError(TRITONSERVER_ServerModelBatchProperties(
-        server_, model_name.c_str(), model_version, &flags, &voidp));
+        triton_object_, model_name.c_str(), model_version, &flags, &voidp));
     return {flags, reinterpret_cast<size_t>(voidp)};
   }
 
@@ -1487,14 +1398,14 @@ class PyServer {
     uint32_t txn_flags;
     void* voidp;
     ThrowIfError(TRITONSERVER_ServerModelTransactionProperties(
-        server_, model_name.c_str(), model_version, &txn_flags, &voidp));
+        triton_object_, model_name.c_str(), model_version, &txn_flags, &voidp));
     return {txn_flags, reinterpret_cast<size_t>(voidp)};
   }
 
   std::shared_ptr<PyMessage> Metadata() const
   {
     struct TRITONSERVER_Message* server_metadata;
-    ThrowIfError(TRITONSERVER_ServerMetadata(server_, &server_metadata));
+    ThrowIfError(TRITONSERVER_ServerMetadata(triton_object_, &server_metadata));
     return std::make_shared<PyMessage>(server_metadata, true /* owned */);
   }
 
@@ -1503,7 +1414,7 @@ class PyServer {
   {
     struct TRITONSERVER_Message* model_metadata;
     ThrowIfError(TRITONSERVER_ServerModelMetadata(
-        server_, model_name.c_str(), model_version, &model_metadata));
+        triton_object_, model_name.c_str(), model_version, &model_metadata));
     return std::make_shared<PyMessage>(model_metadata, true /* owned */);
   }
 
@@ -1512,7 +1423,7 @@ class PyServer {
   {
     struct TRITONSERVER_Message* model_stats;
     ThrowIfError(TRITONSERVER_ServerModelStatistics(
-        server_, model_name.c_str(), model_version, &model_stats));
+        triton_object_, model_name.c_str(), model_version, &model_stats));
     return std::make_shared<PyMessage>(model_stats, true /* owned */);
   }
 
@@ -1522,7 +1433,7 @@ class PyServer {
   {
     struct TRITONSERVER_Message* model_config;
     ThrowIfError(TRITONSERVER_ServerModelConfig(
-        server_, model_name.c_str(), model_version, config_version,
+        triton_object_, model_name.c_str(), model_version, config_version,
         &model_config));
     return std::make_shared<PyMessage>(model_config, true /* owned */);
   }
@@ -1530,13 +1441,15 @@ class PyServer {
   std::shared_ptr<PyMessage> ModelIndex(uint32_t flags) const
   {
     struct TRITONSERVER_Message* model_index;
-    ThrowIfError(TRITONSERVER_ServerModelIndex(server_, flags, &model_index));
+    ThrowIfError(
+        TRITONSERVER_ServerModelIndex(triton_object_, flags, &model_index));
     return std::make_shared<PyMessage>(model_index, true /* owned */);
   }
 
   void LoadModel(const std::string& model_name)
   {
-    ThrowIfError(TRITONSERVER_ServerLoadModel(server_, model_name.c_str()));
+    ThrowIfError(
+        TRITONSERVER_ServerLoadModel(triton_object_, model_name.c_str()));
   }
 
   void LoadModelWithParameters(
@@ -1548,139 +1461,107 @@ class PyServer {
       params.emplace_back(p->Ptr());
     }
     ThrowIfError(TRITONSERVER_ServerLoadModelWithParameters(
-        server_, model_name.c_str(), params.data(), params.size()));
+        triton_object_, model_name.c_str(), params.data(), params.size()));
   }
 
   void UnloadModel(const std::string& model_name)
   {
-    ThrowIfError(TRITONSERVER_ServerUnloadModel(server_, model_name.c_str()));
+    ThrowIfError(
+        TRITONSERVER_ServerUnloadModel(triton_object_, model_name.c_str()));
   }
 
   void UnloadModelAndDependents(const std::string& model_name)
   {
     ThrowIfError(TRITONSERVER_ServerUnloadModelAndDependents(
-        server_, model_name.c_str()));
+        triton_object_, model_name.c_str()));
   }
 
   std::shared_ptr<PyMetrics> Metrics() const
   {
     struct TRITONSERVER_Metrics* metrics;
-    ThrowIfError(TRITONSERVER_ServerMetrics(server_, &metrics));
+    ThrowIfError(TRITONSERVER_ServerMetrics(triton_object_, &metrics));
     return std::make_shared<PyMetrics>(metrics, true /* owned */);
   }
 
   void InferAsync(PyInferenceRequest& request, PyTrace& trace)
   {
-    ThrowIfError(
-        TRITONSERVER_ServerInferAsync(server_, request.Ptr(), trace.Ptr()));
+    ThrowIfError(TRITONSERVER_ServerInferAsync(
+        triton_object_, request.Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
     request.Release();
     trace.Release();
   }
-
- private:
-  struct TRITONSERVER_Server* server_{nullptr};
-  bool owned_{false};
 };
 
-class PyMetricFamily {
+class PyMetricFamily : public PyWrapper<struct TRITONSERVER_MetricFamily> {
  public:
+  DESTRUCTOR_WITH_LOG(PyMetricFamily, TRITONSERVER_MetricFamilyDelete);
+
   PyMetricFamily(
       TRITONSERVER_MetricKind kind, const std::string& name,
       const std::string& description)
-      : owned_(true)
   {
     TRITONSERVER_MetricFamilyNew(
-        &family_, kind, name.c_str(), description.c_str());
+        &triton_object_, kind, name.c_str(), description.c_str());
+    owned_ = true;
   }
-
-  ~PyMetricFamily()
-  {
-    if (owned_ && family_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_MetricFamilyDelete(family_));
-    }
-  }
-
-  TRITONSERVER_MetricFamily* Ptr() const { return family_; }
-
- private:
-  struct TRITONSERVER_MetricFamily* family_{nullptr};
-  bool owned_{false};
 };
 
-class PyMetric {
+class PyMetric : public PyWrapper<struct TRITONSERVER_Metric> {
  public:
+  DESTRUCTOR_WITH_LOG(PyMetric, TRITONSERVER_MetricDelete);
   PyMetric(
       PyMetricFamily& family,
       const std::vector<std::shared_ptr<PyParameter>>& labels)
-      : owned_(true)
   {
     std::vector<const struct TRITONSERVER_Parameter*> params;
     for (const auto& label : labels) {
       params.emplace_back(label->Ptr());
     }
     ThrowIfError(TRITONSERVER_MetricNew(
-        &metric_, family.Ptr(), params.data(), params.size()));
+        &triton_object_, family.Ptr(), params.data(), params.size()));
+    owned_ = true;
   }
-
-  ~PyMetric()
-  {
-    if (owned_ && metric_) {
-      // Only log error in destructor.
-      LogIfError(TRITONSERVER_MetricDelete(metric_));
-    }
-  }
-
-  struct TRITONSERVER_Metric* Ptr() const { return metric_; }
 
   double Value() const
   {
     double val = 0;
-    ThrowIfError(TRITONSERVER_MetricValue(metric_, &val));
+    ThrowIfError(TRITONSERVER_MetricValue(triton_object_, &val));
     return val;
   }
 
   void Increment(double val) const
   {
-    ThrowIfError(TRITONSERVER_MetricIncrement(metric_, val));
+    ThrowIfError(TRITONSERVER_MetricIncrement(triton_object_, val));
   }
 
   void SetValue(double val) const
   {
-    ThrowIfError(TRITONSERVER_MetricSet(metric_, val));
+    ThrowIfError(TRITONSERVER_MetricSet(triton_object_, val));
   }
 
   TRITONSERVER_MetricKind Kind() const
   {
     TRITONSERVER_MetricKind val = TRITONSERVER_METRIC_KIND_COUNTER;
-    ThrowIfError(TRITONSERVER_GetMetricKind(metric_, &val));
+    ThrowIfError(TRITONSERVER_GetMetricKind(triton_object_, &val));
     return val;
   }
-
- private:
-  struct TRITONSERVER_Metric* metric_{nullptr};
-  bool owned_{false};
 };
 
 // Deferred definitions..
 PyInferenceRequest::PyInferenceRequest(
     PyServer& server, const std::string& model_name,
     const int64_t model_version)
-    : owned_(true)
 {
   ThrowIfError(TRITONSERVER_InferenceRequestNew(
-      &request_, server.Ptr(), model_name.c_str(), model_version));
+      &triton_object_, server.Ptr(), model_name.c_str(), model_version));
+  owned_ = true;
 }
 
 // [FIXME] module name?
 PYBIND11_MODULE(triton_bindings, m)
 {
   m.doc() = "Python bindings for Triton Inference Server";
-  // [FIXME] testing field
-  // ========================================================
-  auto mt = m.def_submodule("testing", "For testing purpose");
-  // ========================================================
 
   // [FIXME] if dynamic linking, should have version check here as well to
   // make sure the binding is compatible with the Triton library loaded
@@ -1829,53 +1710,7 @@ PYBIND11_MODULE(triton_bindings, m)
           py::arg("buffer_attributes_function"))
       .def(
           "set_query_function", &PyResponseAllocator::SetQueryFunction,
-          py::arg("query_function"))
-      // ========================================================
-      .def(
-          "invoke_allocator",
-          [](py::object alloc, py::object user_object) {
-            py::print("abc");
-            void* buffer = nullptr;
-            void* buffer_userp = nullptr;
-            TRITONSERVER_MemoryType actual_memory_type =
-                TRITONSERVER_MEMORY_CPU;
-            int64_t actual_memory_type_id = 0;
-            auto callback_resource =
-                new PyResponseAllocator::CallbackResource(alloc, user_object);
-            ThrowIfError(PyResponseAllocator::PyTritonAllocFn(
-                alloc.cast<PyResponseAllocator*>()->allocator_, "abc", 10,
-                TRITONSERVER_MEMORY_CPU_PINNED, 1, callback_resource, &buffer,
-                &buffer_userp, &actual_memory_type, &actual_memory_type_id));
-            py::handle bu = static_cast<PyResponseAllocator::CallbackResource*>(
-                                buffer_userp)
-                                ->user_object;
-            return py::make_tuple(
-                reinterpret_cast<size_t>(buffer), bu, actual_memory_type,
-                actual_memory_type_id);
-          })
-      .def(
-          "invoke_query",
-          [](py::object alloc, py::object user_object) {
-            void* buffer = nullptr;
-            void* buffer_userp = nullptr;
-            TRITONSERVER_MemoryType actual_memory_type =
-                TRITONSERVER_MEMORY_CPU;
-            int64_t actual_memory_type_id = 0;
-            auto callback_resource =
-                new PyResponseAllocator::CallbackResource(alloc, user_object);
-            ThrowIfError(PyResponseAllocator::PyTritonAllocFn(
-                alloc.cast<PyResponseAllocator*>()->allocator_, "abc", 10,
-                TRITONSERVER_MEMORY_CPU_PINNED, 1, callback_resource, &buffer,
-                &buffer_userp, &actual_memory_type, &actual_memory_type_id));
-            py::handle bu = static_cast<PyResponseAllocator::CallbackResource*>(
-                                buffer_userp)
-                                ->user_object;
-            return py::make_tuple(
-                reinterpret_cast<size_t>(buffer), bu, actual_memory_type,
-                actual_memory_type_id);
-          })
-      // ========================================================
-      ;
+          py::arg("query_function"));
 
   // TRITONSERVER_Message
   py::class_<PyMessage, std::shared_ptr<PyMessage>>(m, "TRITONSERVER_Message")
