@@ -199,7 +199,7 @@ Payload::Execute(bool* should_exit)
   Status status;
   switch (op_type_) {
     case Operation::INFER_RUN:
-      status = instance_->Schedule(std::move(requests_), OnCallback_);
+      status = instance_->Schedule(std::move(requests_));
       break;
     case Operation::INIT:
       status = instance_->Initialize();
@@ -212,6 +212,8 @@ Payload::Execute(bool* should_exit)
   }
 
   status_->set_value(status);
+  // Call specified callback, notifying that execution has completed.
+  Callback();
 }
 
 }}  // namespace triton::core

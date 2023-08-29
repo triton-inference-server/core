@@ -65,10 +65,18 @@ class Payload {
     return requests_;
   }
   uint64_t BatcherStartNs() { return batcher_start_ns_; }
-  void SetCallback(std::function<void()> OnCallback);
+  // Callback used for internal optimizations around payload dequeueing and
+  // execution, such as informing schedulers that payload slot(s) are available.
+  // Only a single callback of this form is used. For resource cleanup, see
+  // the OnRelease callbacks.
   void Callback();
-  void AddInternalReleaseCallback(std::function<void()>&& callback);
+  void SetCallback(std::function<void()> OnCallback);
+  // Callbacks used for any resource cleanup when a payload is about to be
+  // released. Some payloads may be released early before execution, such as
+  // paylods can be merged together for efficiency. Multiple release callbacks
+  // may be specified.
   void OnRelease();
+  void AddInternalReleaseCallback(std::function<void()>&& callback);
   void SetInstance(TritonModelInstance* model_instance);
   TritonModelInstance* GetInstance() { return instance_; }
   void MarkSaturated();

@@ -569,8 +569,7 @@ TritonModelInstance::PrepareRequestsOrRespond(
 
 Status
 TritonModelInstance::Schedule(
-    std::vector<std::unique_ptr<InferenceRequest>>&& requests,
-    const std::function<void()>& OnCompletion)
+    std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
   // Prepare requests for execution, respond to requests if any error occur.
   RETURN_IF_ERROR(PrepareRequestsOrRespond(requests));
@@ -585,8 +584,6 @@ TritonModelInstance::Schedule(
   }
 
   Execute(triton_requests);
-  OnCompletion();
-
   return Status::Success;
 }
 
