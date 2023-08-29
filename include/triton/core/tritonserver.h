@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 24
+#define TRITONSERVER_API_VERSION_MINOR 25
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1090,6 +1090,19 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationIdString(
     struct TRITONSERVER_InferenceRequest* inference_request,
     const char* correlation_id);
+
+/// Query whether the request is cancelled or not.
+///
+/// If possible the backend should terminate any processing and 
+/// send an error response with cancelled status.
+///
+/// \param inference_request The request object.
+/// \param is_cancelled Returns whether the inference request is cancelled or not.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestIsCancelled(
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    bool* is_cancelled);
 
 /// Deprecated. See TRITONSERVER_InferenceRequestPriorityUInt64 instead.
 ///
