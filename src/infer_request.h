@@ -57,6 +57,22 @@ class MetricModelReporter;
 //
 class InferenceRequest {
  public:
+  /// State for the request object.
+  enum class State {
+    // The request has been initialized, but not yet enqueued.
+    INITIALIZED,
+
+    // The request has been enqueued, but is not yet executing.
+    STARTED,
+
+    // The request has been picked up by a backend model instance for execution,
+    // but hasn't been released yet.
+    EXECUTING,
+
+    // The request has been released.
+    RELEASED
+  };
+
   // Input tensor
   class Input {
    public:
@@ -275,6 +291,7 @@ class InferenceRequest {
       const int64_t requested_model_version);
 
   InferenceRequest(Model* model, const int64_t requested_model_version);
+  ~InferenceRequest();
 
   const std::string& ModelName() const;
   int64_t RequestedModelVersion() const { return requested_model_version_; }
@@ -321,6 +338,9 @@ class InferenceRequest {
     cache_key_is_set_ = true;
   }
   bool CacheKeyIsSet() const { return cache_key_is_set_; }
+
+  // Define and validate state transitions for request.
+  Status SetState(InferenceRequest::State state);
 
 #ifdef TRITON_ENABLE_TRACING
   const std::shared_ptr<InferenceTraceProxy>& TraceProxy() const
@@ -666,8 +686,15 @@ class InferenceRequest {
   DISALLOW_COPY_AND_ASSIGN(InferenceRequest);
   friend std::ostream& operator<<(
       std::ostream& out, const InferenceRequest& request);
+  friend std::ostream& operator<<(
+      std::ostream& out, const InferenceRequest::State& state);
+
 
   Status Normalize();
+
+  // Helpers for pending request metrics
+  void IncrementPendingRequestCount();
+  void DecrementPendingRequestCount();
 
   // Has anything in the request potentially changed in a way that
   // causes normalization to be required when preparing the request
@@ -766,6 +793,15 @@ class InferenceRequest {
 
   // Sequence I/O states used for implicit state.
   std::shared_ptr<SequenceStates> sequence_states_;
+
+  // The state of the request.
+  InferenceRequest::State state_;
+  // Whether this is a null request used for direct sequence batch padding or
+  // not.
+  bool null_request_;
+  // Catch-all to correctly decrement pending count if needed on destruction
+  // if request doesn't follow normal execution path (error, unused, ensembles)
+  bool decrement_pending_count_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceRequest& request);

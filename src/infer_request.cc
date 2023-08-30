@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <deque>
 
+#include "constants.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "server.h"
@@ -104,9 +105,104 @@ InferenceRequest::InferenceRequest(
     Model* model, const int64_t requested_model_version)
     : needs_normalization_(true), model_raw_(model),
       requested_model_version_(requested_model_version), flags_(0),
-      correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true)
+      correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true),
+      state_(InferenceRequest::State::INITIALIZED), null_request_(false),
+      decrement_pending_count_(false)
 {
   SetPriority(0);
+}
+
+InferenceRequest::~InferenceRequest()
+{
+  // If request has been enqueued but hasn't started executing by destruction
+  // time, an error occurred and the pending request count will need to be
+  // decremented.
+  DecrementPendingRequestCount();
+}
+
+
+Status
+InferenceRequest::SetState(InferenceRequest::State new_state)
+{
+  // No-op if this is already the current state, or if this is a null request.
+  if (new_state == state_ || null_request_) {
+    return Status::Success;
+  }
+
+  // Allow RELEASED state transition from any state for now.
+  // Not all requests will follow linear transition, such as null requests
+  // used for padding batches, and ensemble requests.
+  if (new_state == InferenceRequest::State::RELEASED) {
+    state_ = new_state;
+    return Status::Success;
+  }
+
+  // Generate error when called rather than copying it into every case below.
+  const auto generate_error = [&]() {
+    std::stringstream ss;
+    ss << LogRequest() << "Invalid request state transition from " << state_
+       << " to " << new_state;
+    return Status(Status::Code::INVALID_ARG, ss.str());
+  };
+
+  // Define state transitions
+  switch (state_) {
+    case InferenceRequest::State::INITIALIZED: {
+      if (new_state != InferenceRequest::State::STARTED) {
+        return generate_error();
+      }
+      state_ = new_state;
+      IncrementPendingRequestCount();
+      break;
+    }
+    case InferenceRequest::State::STARTED: {
+      if (new_state != InferenceRequest::State::EXECUTING) {
+        return generate_error();
+      }
+      state_ = new_state;
+      DecrementPendingRequestCount();
+      break;
+    }
+    case InferenceRequest::State::EXECUTING: {
+      if (new_state != InferenceRequest::State::RELEASED) {
+        return generate_error();
+      }
+      state_ = new_state;
+      break;
+    }
+    case InferenceRequest::State::RELEASED: {
+      // No state transition currently supported after release.
+      return generate_error();
+    }
+  }
+  return Status::Success;
+}
+
+void
+InferenceRequest::IncrementPendingRequestCount()
+{
+#ifdef TRITON_ENABLE_METRICS
+  auto reporter = model_raw_->MetricReporter();
+  if (reporter) {
+    reporter->IncrementGauge(kPendingRequestMetric, 1);
+    decrement_pending_count_ = true;
+  }
+#endif  // TRITON_ENABLE_METRICS
+}
+
+void
+InferenceRequest::DecrementPendingRequestCount()
+{
+#ifdef TRITON_ENABLE_METRICS
+  // Only decrement if count has been incremented, and not already decremented.
+  if (decrement_pending_count_) {
+    auto reporter = model_raw_->MetricReporter();
+    if (reporter) {
+      reporter->DecrementGauge(kPendingRequestMetric, 1);
+    }
+    decrement_pending_count_ = false;
+  }
+#endif  // TRITON_ENABLE_METRICS
 }
 
 const std::string&
@@ -280,6 +376,7 @@ InferenceRequest::OutputBufferProperties(
 Status
 InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
 {
+  RETURN_IF_ERROR(request->SetState(InferenceRequest::State::STARTED));
   return request->model_raw_->Enqueue(request);
 }
 
@@ -351,6 +448,9 @@ InferenceRequest::Release(
   }
 #endif  // TRITON_ENABLE_TRACING
 
+  LOG_STATUS_ERROR(
+      request->SetState(InferenceRequest::State::RELEASED),
+      "Failed to set released state");
   void* userp = request->release_userp_;
   auto& release_fn = request->release_fn_;
   release_fn(
@@ -366,6 +466,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
   // but that binds the Null request with 'from' request's lifecycle.
   std::unique_ptr<InferenceRequest> lrequest(
       new InferenceRequest(from.model_raw_, from.requested_model_version_));
+  lrequest->null_request_ = true;
   lrequest->needs_normalization_ = false;
   lrequest->batch_size_ = from.batch_size_;
   lrequest->collect_stats_ = false;
@@ -1467,6 +1568,32 @@ operator<<(std::ostream& out, const InferenceRequest::SequenceId& sequence_id)
     default:
       out << sequence_id.UnsignedIntValue();
       break;
+  }
+  return out;
+}
+
+std::ostream&
+operator<<(std::ostream& out, const InferenceRequest::State& state)
+{
+  switch (state) {
+    case InferenceRequest::State::INITIALIZED: {
+      out << "INITIALIZED";
+      break;
+    }
+    case InferenceRequest::State::STARTED: {
+      out << "STARTED";
+      break;
+    }
+    case InferenceRequest::State::EXECUTING: {
+      out << "EXECUTING";
+      break;
+    }
+    case InferenceRequest::State::RELEASED: {
+      out << "RELEASED";
+      break;
+    }
+    default:
+      out << "UNKNOWN";
   }
   return out;
 }

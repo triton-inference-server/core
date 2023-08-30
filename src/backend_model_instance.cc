@@ -26,6 +26,8 @@
 
 #include "backend_model_instance.h"
 
+#include "status.h"
+
 #ifndef _WIN32
 #include <sys/resource.h>
 #include <sys/syscall.h>
@@ -185,7 +187,7 @@ TritonModelInstance::TritonModelInstance(
     // Let every metric reporter know if caching is enabled to correctly include
     // cache miss time into request duration on cache misses.
     const bool response_cache_enabled =
-        model_->Config().response_cache().enable() &&
+        model_->ResponseCacheEnabled() &&
         model_->Server()->ResponseCacheEnabled();
     MetricModelReporter::Create(
         model_->Name(), model_->Version(), id, response_cache_enabled,
@@ -534,25 +536,55 @@ TritonModelInstance::GenerateWarmupData()
   return Status::Success;
 }
 
-void
-TritonModelInstance::Schedule(
-    std::vector<std::unique_ptr<InferenceRequest>>&& requests,
-    const std::function<void()>& OnCompletion)
+Status
+TritonModelInstance::PrepareRequestsForExecution(
+    std::vector<std::unique_ptr<InferenceRequest>>& requests)
 {
+  for (auto& r : requests) {
+    // Load the input states for the inference request.
+    RETURN_IF_ERROR(r->LoadInputStates());
+    // Set request state to signify that request is no longer pending.
+    RETURN_IF_ERROR(r->SetState(InferenceRequest::State::EXECUTING));
+  }
+
+  return Status::Success;
+}
+
+Status
+TritonModelInstance::PrepareRequestsOrRespond(
+    std::vector<std::unique_ptr<InferenceRequest>>& requests)
+{
+  auto status = PrepareRequestsForExecution(requests);
+  // If any errors occurred, respond with error for each request.
+  if (!status.IsOk()) {
+    for (auto& r : requests) {
+      InferenceRequest::RespondIfError(r, status, true /* release_requests */);
+    }
+    // Log a single error for batch of requests for better visibility
+    LOG_STATUS_ERROR(status, "Requests failed pre-execution checks");
+  }
+
+  return status;
+}
+
+Status
+TritonModelInstance::Schedule(
+    std::vector<std::unique_ptr<InferenceRequest>>&& requests)
+{
+  // Prepare requests for execution, respond to requests if any error occur.
+  RETURN_IF_ERROR(PrepareRequestsOrRespond(requests));
+
   // Use a thread local vector to avoid needing to malloc each
   // time an inference is run.
   thread_local std::vector<TRITONBACKEND_Request*> triton_requests(1024);
   triton_requests.clear();
   for (auto& r : requests) {
-    // Load the input states for the inference request.
-    r->LoadInputStates();
     triton_requests.push_back(
         reinterpret_cast<TRITONBACKEND_Request*>(r.release()));
   }
 
   Execute(triton_requests);
-
-  OnCompletion();
+  return Status::Success;
 }
 
 Status

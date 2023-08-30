@@ -351,6 +351,7 @@ RateLimiter::DequeuePayload(
   for (auto& merge_payload : merged_payloads) {
     PayloadRelease(merge_payload);
   }
+  // Call specified callback, notifying that payloads have been dequeued/merged.
   (*payload)->Callback();
   if ((*payload)->GetInstance() == nullptr) {
     (*payload)->SetInstance(instances.front());

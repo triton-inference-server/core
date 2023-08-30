@@ -81,6 +81,10 @@ class MetricModelReporter {
   const MetricReporterConfig& Config();
   // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
+  // Increase gauge by value.
+  void IncrementGauge(const std::string& name, double value);
+  // Decrease gauge by value.
+  void DecrementGauge(const std::string& name, double value);
   // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
 
@@ -101,16 +105,24 @@ class MetricModelReporter {
       const std::map<std::string, std::string>& labels, Args&&... args);
 
   void InitializeCounters(const std::map<std::string, std::string>& labels);
+  void InitializeGauges(const std::map<std::string, std::string>& labels);
   void InitializeSummaries(const std::map<std::string, std::string>& labels);
+
+  // Lookup gauge metric by name. Return gauge if found, nullptr otherwise.
+  prometheus::Gauge* GetGauge(const std::string& name);
+
 
   // Metric Families
   std::unordered_map<std::string, prometheus::Family<prometheus::Counter>*>
       counter_families_;
+  std::unordered_map<std::string, prometheus::Family<prometheus::Gauge>*>
+      gauge_families_;
   std::unordered_map<std::string, prometheus::Family<prometheus::Summary>*>
       summary_families_;
 
   // Metrics
   std::unordered_map<std::string, prometheus::Counter*> counters_;
+  std::unordered_map<std::string, prometheus::Gauge*> gauges_;
   std::unordered_map<std::string, prometheus::Summary*> summaries_;
 
   // Config

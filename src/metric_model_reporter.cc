@@ -151,6 +151,7 @@ MetricModelReporter::MetricModelReporter(
 
   // Initialize families and metrics
   InitializeCounters(labels);
+  InitializeGauges(labels);
   InitializeSummaries(labels);
 }
 
@@ -162,6 +163,14 @@ MetricModelReporter::~MetricModelReporter()
     auto family_ptr = iter.second;
     if (family_ptr) {
       family_ptr->Remove(counters_[name]);
+    }
+  }
+
+  for (auto& iter : gauge_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      family_ptr->Remove(gauges_[name]);
     }
   }
 
@@ -216,6 +225,22 @@ MetricModelReporter::InitializeCounters(
     auto family_ptr = iter.second;
     if (family_ptr) {
       counters_[name] = CreateMetric<prometheus::Counter>(*family_ptr, labels);
+    }
+  }
+}
+
+void
+MetricModelReporter::InitializeGauges(
+    const std::map<std::string, std::string>& labels)
+{
+  // Always setup these inference request metrics, regardless of config
+  gauge_families_[kPendingRequestMetric] = &Metrics::FamilyInferenceQueueSize();
+
+  for (auto& iter : gauge_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      gauges_[name] = CreateMetric<prometheus::Gauge>(*family_ptr, labels);
     }
   }
 }
@@ -323,6 +348,34 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
     return;
   }
   counter->Increment(value);
+}
+
+prometheus::Gauge*
+MetricModelReporter::GetGauge(const std::string& name)
+{
+  auto iter = gauges_.find(name);
+  if (iter == gauges_.end()) {
+    // No gauge metric exists with this name
+    return nullptr;
+  }
+
+  auto gauge = iter->second;
+  return gauge;
+}
+
+void
+MetricModelReporter::IncrementGauge(const std::string& name, double value)
+{
+  auto gauge = GetGauge(name);
+  if (gauge) {
+    gauge->Increment(value);
+  }
+}
+
+void
+MetricModelReporter::DecrementGauge(const std::string& name, double value)
+{
+  IncrementGauge(name, -1 * value);
 }
 
 void

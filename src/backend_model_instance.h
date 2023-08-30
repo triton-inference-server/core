@@ -116,9 +116,7 @@ class TritonModelInstance {
 
   Status Initialize();
   Status WarmUp();
-  void Schedule(
-      std::vector<std::unique_ptr<InferenceRequest>>&& requests,
-      const std::function<void()>& OnCompletion);
+  Status Schedule(std::vector<std::unique_ptr<InferenceRequest>>&& requests);
 
   TritonModel* Model() const { return model_; }
   void* State() { return state_; }
@@ -220,6 +218,10 @@ class TritonModelInstance {
       const bool device_blocking);
   Status GenerateWarmupData();
 
+  Status PrepareRequestsForExecution(
+      std::vector<std::unique_ptr<InferenceRequest>>& requests);
+  Status PrepareRequestsOrRespond(
+      std::vector<std::unique_ptr<InferenceRequest>>& requests);
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
 
   std::shared_ptr<TritonBackendThread> triton_backend_thread_;
