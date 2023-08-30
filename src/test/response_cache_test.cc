@@ -66,6 +66,8 @@ InferenceRequest::InferenceRequest(
   response_factory_.reset(new InferenceResponseFactory());
 }
 
+InferenceRequest::~InferenceRequest() {}
+
 InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count)

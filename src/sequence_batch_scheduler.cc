@@ -128,8 +128,11 @@ SequenceBatchScheduler::Create(
   const size_t model_batch_size = std::max(1, config.max_batch_size());
   sched->seq_slot_cnt_ = model_batch_size;
   if (config.sequence_batching().has_oldest()) {
-    sched->seq_slot_cnt_ =
+    const auto& max_candidate_seqs =
         config.sequence_batching().oldest().max_candidate_sequences();
+    if (max_candidate_seqs > 0) {
+      sched->seq_slot_cnt_ = max_candidate_seqs;
+    }
   }
 
   // Create a batcher for each instance.
@@ -1811,7 +1814,7 @@ OldestSequenceBatch::OldestSequenceBatch(
       true /* dynamic_batching_enabled */, config.max_batch_size(),
       enforce_equal_shape_tensors_,
       config.sequence_batching().oldest().preserve_ordering(),
-      false /* response_cache_enable */, preferred_batch_sizes,
+      preferred_batch_sizes,
       config.sequence_batching().oldest().max_queue_delay_microseconds(),
       &dynamic_batcher_);
   if (!status.IsOk()) {

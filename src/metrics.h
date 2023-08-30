@@ -29,16 +29,17 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include <atomic>
+#include <istream>
 #include <mutex>
 #include <thread>
 
-#include "cache_manager.h"
 #include "prometheus/counter.h"
 #include "prometheus/gauge.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
 #include "prometheus/summary.h"
 #include "prometheus/text_serializer.h"
+#include "status.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <dcgm_agent.h>
@@ -203,6 +204,13 @@ class Metrics {
   {
     return GetSingleton()->inf_compute_output_duration_us_family_;
   }
+
+  // Metric family of instantaneous inference queue size per model
+  static prometheus::Family<prometheus::Gauge>& FamilyInferenceQueueSize()
+  {
+    return GetSingleton()->inf_pending_request_count_family_;
+  }
+
   // Metric families of per-model response cache metrics
   // NOTE: These are used in infer_stats for perf_analyzer
   static prometheus::Family<prometheus::Counter>& FamilyCacheHitCount()
@@ -285,6 +293,7 @@ class Metrics {
       inf_compute_infer_duration_us_family_;
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
+  prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
 
   // Per-model Response Cache metrics
   // NOTE: Per-model metrics are used in infer_stats for perf_analyzer. Global
@@ -341,7 +350,7 @@ class Metrics {
   CpuInfo last_cpu_info_;
 #endif  // TRITON_ENABLE_METRICS_CPU
 
-  // Thread for polling cache/gpu metrics periodically
+  // Thread for polling cpu/gpu metrics periodically
   std::unique_ptr<std::thread> poll_thread_;
   std::atomic<bool> poll_thread_exit_;
   bool metrics_enabled_;

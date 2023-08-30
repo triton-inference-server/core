@@ -59,11 +59,15 @@ InstanceQueue::Dequeue(
     std::shared_ptr<Payload>* payload,
     std::vector<std::shared_ptr<Payload>>* merged_payloads)
 {
+  // Dequeue frontmost payload and mark it for execution.
   *payload = payload_queue_.front();
   payload_queue_.pop_front();
   {
     std::lock_guard<std::mutex> exec_lock(*((*payload)->GetExecMutex()));
     (*payload)->SetState(Payload::State::EXECUTING);
+    // If the payload isn't saturated and a queue delay is set, attempt to
+    // pop and merge additional payloads from the front of the queue into the
+    // largest batch <= max_batch_size until saturated or queue delay is hit.
     if ((!payload_queue_.empty()) && (max_queue_delay_ns_ > 0) &&
         (max_batch_size_ > 1) && (!(*payload)->IsSaturated())) {
       bool continue_merge;
@@ -85,6 +89,8 @@ InstanceQueue::Dequeue(
           if ((batch_size + front_batch_size) <= max_batch_size_) {
             const auto& status =
                 (*payload)->MergePayload(payload_queue_.front());
+            // If a payload is merged, remove it from the queue and mark it as
+            // merged so it can be released and cleaned up.
             if (status.IsOk()) {
               merged_payloads->push_back(payload_queue_.front());
               payload_queue_.pop_front();

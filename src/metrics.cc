@@ -101,6 +101,13 @@ Metrics::Metrics()
                     "microseconds (does not include cached requests)")
               .Register(*registry_)),
 
+      inf_pending_request_count_family_(
+          prometheus::BuildGauge()
+              .Name("nv_inference_pending_request_count")
+              .Help("Instantaneous number of pending requests awaiting "
+                    "execution per-model.")
+              .Register(*registry_)),
+
       // Per-model cache metric families
       // NOTE: These are used in infer_stats for perf_analyzer
       cache_num_hits_model_family_(prometheus::BuildCounter()

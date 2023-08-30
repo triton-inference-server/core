@@ -222,7 +222,7 @@ struct TensorData {
 // scope after the step's callback is finished. The step's callback will
 // schedule new steps if available and the last step will finish the ensemble
 // request.
-// So we don't have to maintian the context in scheduler as the shared_ptr
+// So we don't have to maintain the context in scheduler as the shared_ptr
 // will destroy the context for us if there are no "in-flight" steps.
 class EnsembleContext {
  public:
@@ -1319,6 +1319,9 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   // Add additional callback to keep track of in-flight count
   ++inflight_count_;
   request->AddInternalReleaseCallback([this]() { --inflight_count_; });
+  // Consider the top-level "ensemble" request executing once passed to a
+  // composing model. Composing model requests will track their own states.
+  RETURN_IF_ERROR(request->SetState(InferenceRequest::State::EXECUTING));
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
