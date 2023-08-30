@@ -1569,11 +1569,10 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
 TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(
     void* userp);
 
-/// Get all information about an output tensor by name.  The tensor data is
-/// returned as the base pointer to the data and the size, in bytes, of the
-/// data. The caller does not own any of the returned values and must not
-/// modify or delete them. The lifetime of all returned values extends until
-/// 'response' is deleted.
+/// Get all information about an output tensor by its name. The caller does
+/// not own any of the referenced return values and must not modify or delete
+/// them. The lifetime of all returned values extends until 'response' is
+/// deleted.
 ///
 /// \param response The response object.
 /// \param name The name of the output.
@@ -1581,25 +1580,17 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(
 /// \param shape Returns the shape of the output.
 /// \param dim_count Returns the number of dimensions of the returned
 /// shape.
-/// \param base Returns the tensor data for the output.
-/// \param byte_size Returns the size, in bytes, of the data.
-/// \param memory_type Returns the memory type of the data.
-/// \param memory_type_id Returns the memory type id of the data.
-/// \param userp The user-specified value associated with the buffer
-/// in TRITONSERVER_ResponseAllocatorAllocFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_ISPEC TRITONSERVER_Error*
 TRITONBACKEND_InferenceResponseOutputByName(
     TRITONBACKEND_Response* response, const char* name,
-    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count,
-    const void** base, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id, void** userp);
+    TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint64_t* dim_count);
 
-/// Get all information about an output tensor by index. The tensor data is
-/// returned as the base pointer to the data and the size, in bytes, of the
-/// data. The caller does not own any of the returned values and must not
-/// modify or delete them. The lifetime of all returned values extends
-/// until 'response' is deleted.
+/// Get all information about an output tensor by its index. The caller does
+/// not own any of the referenced return values and must not modify or delete
+/// them. The lifetime of all returned values extends until 'response' is
+/// deleted.
 ///
 /// \param response The response object.
 /// \param index The index of the output tensor, must be 0 <= index <
@@ -1610,18 +1601,11 @@ TRITONBACKEND_InferenceResponseOutputByName(
 /// \param shape Returns the shape of the output.
 /// \param dim_count Returns the number of dimensions of the returned
 /// shape.
-/// \param base Returns the tensor data for the output.
-/// \param byte_size Returns the size, in bytes, of the data.
-/// \param memory_type Returns the memory type of the data.
-/// \param memory_type_id Returns the memory type id of the data.
-/// \param userp The user-specified value associated with the buffer
-/// in TRITONSERVER_ResponseAllocatorAllocFn_t.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InferenceResponseOutput(
     TRITONBACKEND_Response* response, const uint32_t index, const char** name,
-    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count,
-    const void** base, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id, void** userp);
+    TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint64_t* dim_count);
 
 #ifdef __cplusplus
 }

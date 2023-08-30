@@ -1756,9 +1756,7 @@ TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InferenceResponseOutputByName(
     TRITONBACKEND_Response* response, const char* name,
-    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count,
-    const void** base, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id, void** userp)
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
 
@@ -1772,15 +1770,6 @@ TRITONBACKEND_InferenceResponseOutputByName(
       const std::vector<int64_t>& oshape = outputs[idx].Shape();
       *shape = &oshape[0];
       *dim_count = oshape.size();
-      Status status = outputs[idx].DataBuffer(
-          base, byte_size, memory_type, memory_type_id, userp);
-      if (!status.IsOk()) {
-        *base = nullptr;
-        *byte_size = 0;
-        return TRITONSERVER_ErrorNew(
-            StatusCodeToTritonCode(status.StatusCode()),
-            status.Message().c_str());
-      }
       return nullptr;  // success
     }
   }
@@ -1792,9 +1781,7 @@ TRITONBACKEND_InferenceResponseOutputByName(
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_InferenceResponseOutput(
     TRITONBACKEND_Response* response, const uint32_t index, const char** name,
-    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count,
-    const void** base, size_t* byte_size, TRITONSERVER_MemoryType* memory_type,
-    int64_t* memory_type_id, void** userp)
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
 
@@ -1816,14 +1803,6 @@ TRITONBACKEND_InferenceResponseOutput(
   const std::vector<int64_t>& oshape = output.Shape();
   *shape = &oshape[0];
   *dim_count = oshape.size();
-  Status status =
-      output.DataBuffer(base, byte_size, memory_type, memory_type_id, userp);
-  if (!status.IsOk()) {
-    *base = nullptr;
-    *byte_size = 0;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
 
   return nullptr;  // success
 }
