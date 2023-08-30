@@ -1091,13 +1091,24 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
     struct TRITONSERVER_InferenceRequest* inference_request,
     const char* correlation_id);
 
+/// Cancel an inference request. Requests are canceled on a best
+/// effort basis and no guarantee is provided that cancelling a
+/// request will result in early termination.
+///
+/// \param inference_request The request object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestCancel(
+    struct TRITONSERVER_InferenceRequest* inference_request);
+
 /// Query whether the request is cancelled or not.
 ///
-/// If possible the backend should terminate any processing and 
+/// If possible the backend should terminate any processing and
 /// send an error response with cancelled status.
 ///
 /// \param inference_request The request object.
-/// \param is_cancelled Returns whether the inference request is cancelled or not.
+/// \param is_cancelled Returns whether the inference request is cancelled or
+/// not.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestIsCancelled(

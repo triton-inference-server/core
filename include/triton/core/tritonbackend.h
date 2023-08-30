@@ -377,7 +377,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
 
 /// Query whether the request is cancelled or not.
 ///
-/// If possible the backend should terminate any processing and 
+/// If possible the backend should terminate any processing and
 /// send an error response with cancelled status.
 ///
 /// \param request The inference request.
@@ -389,7 +389,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestIsCancelled(
 
 /// Query whether the response factory is cancelled or not.
 ///
-/// If possible the backend should terminate any processing and 
+/// If possible the backend should terminate any processing and
 /// send an error response with cancelled status.
 ///
 /// \param factory The response factory

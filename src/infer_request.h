@@ -679,6 +679,14 @@ class InferenceRequest {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
 
+  void Cancel()
+  {
+    response_factory_->Cancel();
+    is_cancelled_ = true;
+  }
+
+  bool IsCancelled() { return is_cancelled_; }
+
 #endif  // TRITON_ENABLE_STATS
 
  private:
