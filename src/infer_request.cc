@@ -124,6 +124,8 @@ InferenceRequest::~InferenceRequest()
 Status
 InferenceRequest::SetState(InferenceRequest::State new_state)
 {
+  LOG_VERBOSE(1) << LogRequest() << "Setting state from " << state_ << " to "
+                 << new_state;
   // No-op if this is already the current state, or if this is a null request.
   if (new_state == state_ || null_request_) {
     return Status::Success;
@@ -142,7 +144,7 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
     std::stringstream ss;
     ss << LogRequest() << "Invalid request state transition from " << state_
        << " to " << new_state;
-    return Status(Status::Code::INVALID_ARG, ss.str());
+    return Status(Status::Code::INTERNAL, ss.str());
   };
 
   // Define state transitions
@@ -151,7 +153,6 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       if (new_state != InferenceRequest::State::STARTED) {
         return generate_error();
       }
-      state_ = new_state;
       IncrementPendingRequestCount();
       break;
     }
@@ -159,7 +160,6 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       if (new_state != InferenceRequest::State::EXECUTING) {
         return generate_error();
       }
-      state_ = new_state;
       DecrementPendingRequestCount();
       break;
     }
@@ -167,14 +167,18 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       if (new_state != InferenceRequest::State::RELEASED) {
         return generate_error();
       }
-      state_ = new_state;
       break;
     }
     case InferenceRequest::State::RELEASED: {
-      // No state transition currently supported after release.
-      return generate_error();
+      if (new_state != InferenceRequest::State::STARTED) {
+        // Only transition currently supported after release is to start again
+        // when re-using request objects for multiple inferences.
+        return generate_error();
+      }
+      break;
     }
   }
+  state_ = new_state;
   return Status::Success;
 }
 
@@ -182,9 +186,13 @@ void
 InferenceRequest::IncrementPendingRequestCount()
 {
 #ifdef TRITON_ENABLE_METRICS
-  auto reporter = model_raw_->MetricReporter();
-  if (reporter) {
-    reporter->IncrementGauge(kPendingRequestMetric, 1);
+  // Only increment once and do not increment again until decremented.
+  const bool increment_pending_count = !decrement_pending_count_;
+  if (increment_pending_count) {
+    auto reporter = model_raw_->MetricReporter();
+    if (reporter) {
+      reporter->IncrementGauge(kPendingRequestMetric, 1);
+    }
     decrement_pending_count_ = true;
   }
 #endif  // TRITON_ENABLE_METRICS
