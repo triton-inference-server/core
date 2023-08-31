@@ -31,7 +31,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "backend_config.h"
 #include "constants.h"
 #include "filesystem/api.h"
 #include "server_message.h"
@@ -170,10 +169,6 @@ class TritonBackendManager {
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
       std::shared_ptr<TritonBackend>* backend);
 
-  Status PreloadBackend(
-      const std::string& backend_name,
-      const triton::common::BackendCmdlineConfigMap& config_map);
-
   Status BackendState(
       std::unique_ptr<
           std::unordered_map<std::string, std::vector<std::string>>>*
@@ -182,7 +177,6 @@ class TritonBackendManager {
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonBackendManager);
   TritonBackendManager() = default;
-
   std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
 };
 
