@@ -88,6 +88,13 @@ class RequestCancellationTest : public ::testing::Test {
 
 TRITONSERVER_Server* RequestCancellationTest::server_ = nullptr;
 
+void
+ReleaseCallback(
+    struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
+    void* userp)
+{
+  // no-op
+}
 
 TEST_F(RequestCancellationTest, Cancellation)
 {
@@ -123,6 +130,50 @@ TEST_F(RequestCancellationTest, Cancellation)
   FAIL_TEST_IF_ERR(
       TRITONBACKEND_RequestIsCancelled(backend_request, &is_cancelled));
   ASSERT_TRUE(is_cancelled);
+
+  is_cancelled = false;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestIsCancelled(request, &is_cancelled));
+  ASSERT_TRUE(is_cancelled);
+
+  is_cancelled = false;
+  FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryIsCancelled(
+      response_factory, &is_cancelled));
+  ASSERT_TRUE(is_cancelled);
+
+  FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryDelete(response_factory));
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestDelete(request));
+}
+
+TEST_F(RequestCancellationTest, CancellationAfterRelease)
+{
+  TRITONSERVER_InferenceRequest* request;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(&request, server_, "model", 1));
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetResponseCallback(
+      request, nullptr, nullptr, nullptr, nullptr));
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetReleaseCallback(
+      request, ReleaseCallback, nullptr));
+  TRITONBACKEND_Request* backend_request =
+      reinterpret_cast<TRITONBACKEND_Request*>(request);
+  TRITONBACKEND_ResponseFactory* response_factory;
+  FAIL_TEST_IF_ERR(
+      TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
+  FAIL_TEST_IF_ERR(TRITONBACKEND_RequestRelease(
+      backend_request, TRITONSERVER_REQUEST_RELEASE_ALL));
+
+  bool is_cancelled = true;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestIsCancelled(request, &is_cancelled));
+  ASSERT_FALSE(is_cancelled);
+
+  is_cancelled = true;
+  FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryIsCancelled(
+      response_factory, &is_cancelled));
+  ASSERT_FALSE(is_cancelled);
+
+  is_cancelled = false;
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestCancel(request));
 
   is_cancelled = false;
   FAIL_TEST_IF_ERR(
