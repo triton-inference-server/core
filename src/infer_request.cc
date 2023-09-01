@@ -133,7 +133,7 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
 
   // Allow RELEASED state transition from any state for now.
   // Not all requests will follow linear transition, such as null requests
-  // used for padding batches, and ensemble requests.
+  // used for padding batches, ensemble requests, and errors.
   if (new_state == InferenceRequest::State::RELEASED) {
     state_ = new_state;
     return Status::Success;
@@ -170,9 +170,9 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       break;
     }
     case InferenceRequest::State::RELEASED: {
-      if (new_state != InferenceRequest::State::PENDING) {
-        // Only transition currently supported after release is to start again
-        // when re-using request objects for multiple inferences.
+      if (new_state != InferenceRequest::State::INITIALIZED) {
+        // Only transition currently supported after release is to start over
+        // again, such as re-using request objects for multiple inferences.
         return generate_error();
       }
       break;
@@ -857,8 +857,10 @@ InferenceRequest::PrepareForInference()
   request_start_ns_ = 0;
 #endif  // TRITON_ENABLE_STATS
 
-  LOG_VERBOSE(1) << LogRequest() << "prepared: " << *this;
+  // Help enforce that PrepareForInference() is called prior to Run().
+  RETURN_IF_ERROR(SetState(InferenceRequest::State::INITIALIZED));
 
+  LOG_VERBOSE(1) << LogRequest() << "prepared: " << *this;
   return Status::Success;
 }
 
