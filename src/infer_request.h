@@ -63,7 +63,7 @@ class InferenceRequest {
     INITIALIZED,
 
     // The request has been enqueued, but is not yet executing.
-    STARTED,
+    PENDING,
 
     // The request has been picked up by a backend model instance for execution,
     // but hasn't been released yet.

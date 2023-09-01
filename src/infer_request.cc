@@ -150,13 +150,13 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
   // Define state transitions
   switch (state_) {
     case InferenceRequest::State::INITIALIZED: {
-      if (new_state != InferenceRequest::State::STARTED) {
+      if (new_state != InferenceRequest::State::PENDING) {
         return generate_error();
       }
       IncrementPendingRequestCount();
       break;
     }
-    case InferenceRequest::State::STARTED: {
+    case InferenceRequest::State::PENDING: {
       if (new_state != InferenceRequest::State::EXECUTING) {
         return generate_error();
       }
@@ -170,7 +170,7 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       break;
     }
     case InferenceRequest::State::RELEASED: {
-      if (new_state != InferenceRequest::State::STARTED) {
+      if (new_state != InferenceRequest::State::PENDING) {
         // Only transition currently supported after release is to start again
         // when re-using request objects for multiple inferences.
         return generate_error();
@@ -384,7 +384,7 @@ InferenceRequest::OutputBufferProperties(
 Status
 InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
 {
-  RETURN_IF_ERROR(request->SetState(InferenceRequest::State::STARTED));
+  RETURN_IF_ERROR(request->SetState(InferenceRequest::State::PENDING));
   return request->model_raw_->Enqueue(request);
 }
 
@@ -1588,8 +1588,8 @@ operator<<(std::ostream& out, const InferenceRequest::State& state)
       out << "INITIALIZED";
       break;
     }
-    case InferenceRequest::State::STARTED: {
-      out << "STARTED";
+    case InferenceRequest::State::PENDING: {
+      out << "PENDING";
       break;
     }
     case InferenceRequest::State::EXECUTING: {
