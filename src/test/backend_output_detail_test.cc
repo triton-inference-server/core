@@ -274,7 +274,7 @@ TEST_F(BackendOutputDetailTest, DefaultInference)
         TRITONBACKEND_InferenceResponseOutput(
             backend_response, idx, &output_name, &output_datatype,
             &output_shape, &dims_count),
-        "getting ouput details by index");
+        "getting output details by index");
     EXPECT_EQ(*output_name, *names[idx]);
     EXPECT_EQ(output_datatype, TRITONSERVER_TYPE_FP32);
     EXPECT_EQ(*output_shape, int64_t(16));
