@@ -106,20 +106,10 @@ InferenceRequest::InferenceRequest(
     : needs_normalization_(true), model_raw_(model),
       requested_model_version_(requested_model_version), flags_(0),
       correlation_id_(0), batch_size_(0), timeout_us_(0), collect_stats_(true),
-      state_(InferenceRequest::State::INITIALIZED), null_request_(false),
-      decrement_pending_count_(false)
+      state_(InferenceRequest::State::INITIALIZED), null_request_(false)
 {
   SetPriority(0);
 }
-
-InferenceRequest::~InferenceRequest()
-{
-  // If request has been enqueued but hasn't started executing by destruction
-  // time, an error occurred and the pending request count will need to be
-  // decremented.
-  DecrementPendingRequestCount();
-}
-
 
 Status
 InferenceRequest::SetState(InferenceRequest::State new_state)
@@ -128,14 +118,6 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
                  << new_state;
   // No-op if this is already the current state, or if this is a null request.
   if (new_state == state_ || null_request_) {
-    return Status::Success;
-  }
-
-  // Allow RELEASED state transition from any state for now.
-  // Not all requests will follow linear transition, such as null requests
-  // used for padding batches, and ensemble requests.
-  if (new_state == InferenceRequest::State::RELEASED) {
-    state_ = new_state;
     return Status::Success;
   }
 
@@ -150,17 +132,25 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
   // Define state transitions
   switch (state_) {
     case InferenceRequest::State::INITIALIZED: {
-      if (new_state != InferenceRequest::State::PENDING) {
+      if (new_state == InferenceRequest::State::PENDING) {
+        IncrementPendingRequestCount();
+      } else if (new_state == InferenceRequest::State::RELEASED) {
+        // No-op when moving from initialized to released, just releasing early.
+      } else {
         return generate_error();
       }
-      IncrementPendingRequestCount();
       break;
     }
     case InferenceRequest::State::PENDING: {
-      if (new_state != InferenceRequest::State::EXECUTING) {
+      // Request may move from pending to either execution when scheduled to
+      // backend, or released early due to some error.
+      if (new_state == InferenceRequest::State::EXECUTING ||
+          new_state == InferenceRequest::State::RELEASED) {
+        DecrementPendingRequestCount();
+      } else {
+        // Unexpected state transition
         return generate_error();
       }
-      DecrementPendingRequestCount();
       break;
     }
     case InferenceRequest::State::EXECUTING: {
@@ -170,9 +160,9 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       break;
     }
     case InferenceRequest::State::RELEASED: {
-      if (new_state != InferenceRequest::State::PENDING) {
-        // Only transition currently supported after release is to start again
-        // when re-using request objects for multiple inferences.
+      if (new_state != InferenceRequest::State::INITIALIZED) {
+        // Only transition currently supported after release is to start over
+        // again, such as re-using request objects for multiple inferences.
         return generate_error();
       }
       break;
@@ -186,14 +176,11 @@ void
 InferenceRequest::IncrementPendingRequestCount()
 {
 #ifdef TRITON_ENABLE_METRICS
-  // Only increment once and do not increment again until decremented.
-  const bool increment_pending_count = !decrement_pending_count_;
-  if (increment_pending_count) {
-    auto reporter = model_raw_->MetricReporter();
-    if (reporter) {
-      reporter->IncrementGauge(kPendingRequestMetric, 1);
-    }
-    decrement_pending_count_ = true;
+  // Pending request count should always be 0 or 1 per-request. If a request
+  // increments the count, it should not be incremented again until decremented.
+  auto reporter = model_raw_->MetricReporter();
+  if (reporter) {
+    reporter->IncrementGauge(kPendingRequestMetric, 1);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
@@ -202,13 +189,11 @@ void
 InferenceRequest::DecrementPendingRequestCount()
 {
 #ifdef TRITON_ENABLE_METRICS
-  // Only decrement if count has been incremented, and not already decremented.
-  if (decrement_pending_count_) {
-    auto reporter = model_raw_->MetricReporter();
-    if (reporter) {
-      reporter->DecrementGauge(kPendingRequestMetric, 1);
-    }
-    decrement_pending_count_ = false;
+  // Pending request count should always be 0 or 1 per-request. A request should
+  // not decrement the count unless it has already been incremented.
+  auto reporter = model_raw_->MetricReporter();
+  if (reporter) {
+    reporter->DecrementGauge(kPendingRequestMetric, 1);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
@@ -857,8 +842,10 @@ InferenceRequest::PrepareForInference()
   request_start_ns_ = 0;
 #endif  // TRITON_ENABLE_STATS
 
-  LOG_VERBOSE(1) << LogRequest() << "prepared: " << *this;
+  // Help enforce that PrepareForInference() is called prior to Run().
+  RETURN_IF_ERROR(SetState(InferenceRequest::State::INITIALIZED));
 
+  LOG_VERBOSE(1) << LogRequest() << "prepared: " << *this;
   return Status::Success;
 }
 
