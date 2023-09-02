@@ -58,7 +58,7 @@ class GlobalLogger:
     def file(self) -> str:
         return self._file
 
-    @format.setter
+    @file.setter
     def file(self, f: str) -> None:
         # TRITONSERVER_ServerOptionsSetLogFile
         self._file = f

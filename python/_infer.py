@@ -7,7 +7,6 @@ import queue
 
 
 class Tensor:
-
     def __init__(self) -> None:
         # tensor metadata
         self.data_type: DataType = None

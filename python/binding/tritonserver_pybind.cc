@@ -198,9 +198,25 @@ class PyParameter : public PyWrapper<struct TRITONSERVER_Parameter> {
   {
   }
 
-  PyParameter(
-      const char* name, TRITONSERVER_ParameterType type, const void* value)
-      : PyWrapper(TRITONSERVER_ParameterNew(name, type, value), true)
+  PyParameter(const char* name, const std::string& val)
+      : PyWrapper(
+            TRITONSERVER_ParameterNew(
+                name, TRITONSERVER_PARAMETER_STRING, val.c_str()),
+            true)
+  {
+  }
+
+  PyParameter(const char* name, int64_t val)
+      : PyWrapper(
+            TRITONSERVER_ParameterNew(name, TRITONSERVER_PARAMETER_INT, &val),
+            true)
+  {
+  }
+
+  PyParameter(const char* name, bool val)
+      : PyWrapper(
+            TRITONSERVER_ParameterNew(name, TRITONSERVER_PARAMETER_BOOL, &val),
+            true)
   {
   }
 
@@ -327,6 +343,13 @@ class PyResponseAllocator
   using BufferAttributesFn = std::function<py::object(
       py::object, std::string, py::object, py::object, py::object)>;
 
+  PyResponseAllocator(AllocFn alloc, ReleaseFn release)
+      : alloc_fn_(alloc), release_fn_(release)
+  {
+    ThrowIfError(TRITONSERVER_ResponseAllocatorNew(
+        &triton_object_, PyTritonAllocFn, PyTritonReleaseFn, nullptr));
+    owned_ = true;
+  }
 
   PyResponseAllocator(AllocFn alloc, ReleaseFn release, StartFn start)
       : alloc_fn_(alloc), release_fn_(release), start_fn_(start)
@@ -1646,7 +1669,9 @@ PYBIND11_MODULE(triton_bindings, m)
   // TRITONSERVER_Parameter
   py::class_<PyParameter, std::shared_ptr<PyParameter>>(
       m, "TRITONSERVER_Parameter")
-      .def(py::init<const char*, TRITONSERVER_ParameterType, const void*>())
+      .def(py::init<const char*, const std::string&>())
+      .def(py::init<const char*, int64_t>())
+      .def(py::init<const char*, bool>())
       .def(py::init([](const char* name, py::bytes bytes) {
         // [FIXME] does not own 'bytes' in the same way as C API, but can also
         // hold 'bytes' to make sure it will not be invalidated while in use.
@@ -1713,7 +1738,11 @@ PYBIND11_MODULE(triton_bindings, m)
               PyResponseAllocator::AllocFn, PyResponseAllocator::ReleaseFn,
               PyResponseAllocator::StartFn>(),
           py::arg("alloc_function"), py::arg("release_function"),
-          py::arg("start_function").none(true))
+          py::arg("start_function"))
+      .def(
+          py::init<
+              PyResponseAllocator::AllocFn, PyResponseAllocator::ReleaseFn>(),
+          py::arg("alloc_function"), py::arg("release_function"))
       .def(
           "set_buffer_attributes_function",
           &PyResponseAllocator::SetBufferAttributesFunction,
