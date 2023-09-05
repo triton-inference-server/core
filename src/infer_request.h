@@ -291,7 +291,6 @@ class InferenceRequest {
       const int64_t requested_model_version);
 
   InferenceRequest(Model* model, const int64_t requested_model_version);
-  ~InferenceRequest();
 
   const std::string& ModelName() const;
   int64_t RequestedModelVersion() const { return requested_model_version_; }
