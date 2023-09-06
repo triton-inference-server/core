@@ -373,7 +373,11 @@ DynamicBatchScheduler::BatcherThread(const int nice)
                 if (preserve_ordering_ || response_cache_enabled_) {
                   DelegateResponse(request);
                 }
-                curr_payload_->AddRequest(std::move(request));
+                if (request->IsCancelled()) {
+                  CancelRequest(std::move(request));
+                } else {
+                  curr_payload_->AddRequest(std::move(request));
+                }
               } else {
                 // The queue is empty which conflicts with pending batch
                 // count. Send the current batch if any and reset related
@@ -690,6 +694,16 @@ DynamicBatchScheduler::DelegateResponse(
           InferenceResponse::Send(std::move(response), flags);
         }
       });
+}
+
+void
+DynamicBatchScheduler::CancelRequest(
+    std::unique_ptr<InferenceRequest>&& request)
+{
+  LOG_VERBOSE(1) << "Cancelling " << request->LogRequest() << " on "
+                 << request->ModelName();
+  InferenceRequest::RespondIfError(
+      request, Status(Status::Code::CANCELLED), true /* release_request */);
 }
 
 void
