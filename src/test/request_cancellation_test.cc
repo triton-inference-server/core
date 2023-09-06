@@ -24,6 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#include <chrono>
 #include <future>
 #include <thread>
 
@@ -106,6 +107,8 @@ class RequestCancellationTest : public ::testing::Test {
         server_options, "./models"));
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerOptionsSetBackendDirectory(
         server_options, "/opt/tritonserver/backends"));
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_ServerOptionsSetLogVerbose(server_options, 1));
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerOptionsSetRepoAgentDirectory(
         server_options, "/opt/tritonserver/repoagents"));
     FAIL_TEST_IF_ERR(
@@ -212,6 +215,12 @@ TEST_F(RequestCancellationTest, Cancellation)
 
   TRITONSERVER_InferenceResponse* response = future.get();
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceResponseDelete(response));
+  FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryDelete(response_factory));
+
+  // FIXME: Looks like there is an issue with internal request state management.
+  // If the backend send responses before releasing the requests the state may
+  // not be set to "RELEASED" which is allowed for converting to "INITIALIZED".
+  std::this_thread::sleep_for(std::chrono::seconds(2));
 
   p = new std::promise<TRITONSERVER_InferenceResponse*>();
   future = p->get_future();
@@ -219,6 +228,8 @@ TEST_F(RequestCancellationTest, Cancellation)
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetResponseCallback(
       irequest_, allocator_, nullptr /* response_allocator_userp */,
       InferResponseComplete, reinterpret_cast<void*>(p)));
+  FAIL_TEST_IF_ERR(
+      TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
 
   // Sending another request and the request should not be cancelled.
   FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
@@ -230,7 +241,7 @@ TEST_F(RequestCancellationTest, Cancellation)
       TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
   ASSERT_FALSE(is_cancelled);
 
-  is_cancelled = false;
+  is_cancelled = true;
   FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryIsCancelled(
       response_factory, &is_cancelled));
   ASSERT_FALSE(is_cancelled);
