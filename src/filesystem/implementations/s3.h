@@ -151,7 +151,7 @@ class S3FileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path,
+      const std::string& path, const std::string& fetch_subdir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
@@ -628,7 +628,8 @@ S3FileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 S3FileSystem::LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+    const std::string& path, const std::string& fetch_subdir,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   // Check if the directory or file exists
   bool exists;
@@ -693,28 +694,34 @@ S3FileSystem::LocalizePath(
               : JoinPath({(*localized)->Path(), s3_removed_path});
       bool is_subdir;
       RETURN_IF_ERROR(IsDirectory(s3_fpath, &is_subdir));
+      bool copy_subdir =
+          !fetch_subdir.empty()
+              ? s3_fpath == JoinPath({effective_path, fetch_subdir})
+              : true;
       if (is_subdir) {
-        // Create local mirror of sub-directories
+        if (copy_subdir) {
+          // Create local mirror of sub-directories
 #ifdef _WIN32
-        int status = mkdir(const_cast<char*>(local_fpath.c_str()));
+          int status = mkdir(const_cast<char*>(local_fpath.c_str()));
 #else
-        int status = mkdir(
-            const_cast<char*>(local_fpath.c_str()),
-            S_IRUSR | S_IWUSR | S_IXUSR);
+          int status = mkdir(
+              const_cast<char*>(local_fpath.c_str()),
+              S_IRUSR | S_IWUSR | S_IXUSR);
 #endif
-        if (status == -1) {
-          return Status(
-              Status::Code::INTERNAL,
-              "Failed to create local folder: " + local_fpath +
-                  ", errno:" + strerror(errno));
-        }
+          if (status == -1) {
+            return Status(
+                Status::Code::INTERNAL,
+                "Failed to create local folder: " + local_fpath +
+                    ", errno:" + strerror(errno));
+          }
 
-        // Add sub-directories and deeper files to contents
-        std::set<std::string> subdir_contents;
-        RETURN_IF_ERROR(GetDirectoryContents(s3_fpath, &subdir_contents));
-        for (auto itr = subdir_contents.begin(); itr != subdir_contents.end();
-             ++itr) {
-          contents.insert(JoinPath({s3_fpath, *itr}));
+          // Add sub-directories and deeper files to contents
+          std::set<std::string> subdir_contents;
+          RETURN_IF_ERROR(GetDirectoryContents(s3_fpath, &subdir_contents));
+          for (auto itr = subdir_contents.begin(); itr != subdir_contents.end();
+               ++itr) {
+            contents.insert(JoinPath({s3_fpath, *itr}));
+          }
         }
       } else {
         // Create local copy of file

@@ -86,7 +86,7 @@ class ASFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path,
+      const std::string& path, const std::string& fetch_subdir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
@@ -424,7 +424,8 @@ ASFileSystem::DownloadFolder(
 
 Status
 ASFileSystem::LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+    const std::string& path, const std::string& fetch_subdir,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   bool exists;
   RETURN_IF_ERROR(FileExists(path, &exists));

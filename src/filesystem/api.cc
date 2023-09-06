@@ -558,11 +558,13 @@ ReadTextProto(const std::string& path, google::protobuf::Message* msg)
 }
 
 Status
-LocalizePath(const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+LocalizePath(
+    const std::string& path, const std::string& fetch_subdir,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
-  return fs->LocalizePath(path, localized);
+  return fs->LocalizePath(path, fetch_subdir, localized);
 }
 
 Status

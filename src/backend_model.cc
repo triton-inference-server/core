@@ -75,10 +75,11 @@ TritonModel::Create(
   }
 
   // Localize the content of the model repository corresponding to
-  // 'model_path'. This model holds a handle to the localized content
-  // so that it persists as long as the model is loaded.
+  // 'model_path' and model's version. This model holds a handle to
+  // the localized content so that it persists as long as the model is loaded.
   std::shared_ptr<LocalizedPath> localized_model_dir;
-  RETURN_IF_ERROR(LocalizePath(model_path, &localized_model_dir));
+  RETURN_IF_ERROR(
+      LocalizePath(model_path, std::to_string(version), &localized_model_dir));
 
   // Localize paths in backend model config
   // [FIXME] Remove once a more permanent solution is implemented (DLIS-4211)

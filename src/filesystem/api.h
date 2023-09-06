@@ -145,11 +145,15 @@ Status ReadTextFile(const std::string& path, std::string* contents);
 
 /// Create an object representing a local copy of a path.
 /// \param path The path of the directory or file.
+/// \param fetch_subdir If specified, will only download provided
+/// sub directory, otherwise all subdirectories will be downloaded.
+/// Does not affect files individual files, located under `path`.
 /// \param localized Returns the LocalizedPath object
 /// representing the local copy of the path.
 /// \return Error status
 Status LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized);
+    const std::string& path, const std::string& fetch_subdir,
+    std::shared_ptr<LocalizedPath>* localized);
 
 /// Write a string to a file.
 /// \param path The path of the file.

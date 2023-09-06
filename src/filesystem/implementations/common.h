@@ -83,7 +83,8 @@ class FileSystem {
   virtual Status ReadTextFile(
       const std::string& path, std::string* contents) = 0;
   virtual Status LocalizePath(
-      const std::string& path, std::shared_ptr<LocalizedPath>* localized) = 0;
+      const std::string& path, const std::string& fetch_subdir,
+      std::shared_ptr<LocalizedPath>* localized) = 0;
   virtual Status WriteTextFile(
       const std::string& path, const std::string& contents) = 0;
   virtual Status WriteBinaryFile(

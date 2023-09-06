@@ -49,7 +49,7 @@ class LocalFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path,
+      const std::string& path, const std::string& fetch_subdir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
@@ -204,7 +204,8 @@ LocalFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 LocalFileSystem::LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+    const std::string& path, const std::string& fetch_subdir,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   // For local file system we don't actually need to download the
   // directory or file. We use it in place.
