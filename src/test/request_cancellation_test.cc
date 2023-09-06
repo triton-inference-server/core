@@ -194,11 +194,7 @@ TEST_F(RequestCancellationTest, Cancellation)
       TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
   ASSERT_FALSE(is_cancelled);
 
-  TRITONSERVER_Error* error = TRITONSERVER_InferenceRequestCancel(irequest_);
-  ASSERT_TRUE(error != nullptr);
-  ASSERT_TRUE(
-      std::string(TRITONSERVER_ErrorMessage(error)) ==
-      "Request cannot be cancelled before it has started executing.");
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestCancel(irequest_));
 
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */));
@@ -223,6 +219,7 @@ TEST_F(RequestCancellationTest, Cancellation)
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetResponseCallback(
       irequest_, allocator_, nullptr /* response_allocator_userp */,
       InferResponseComplete, reinterpret_cast<void*>(p)));
+
   // Sending another request and the request should not be cancelled.
   FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
       server_, irequest_, nullptr

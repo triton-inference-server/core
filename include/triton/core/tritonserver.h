@@ -1094,7 +1094,11 @@ TRITONSERVER_InferenceRequestSetCorrelationIdString(
 
 /// Cancel an inference request. Requests are canceled on a best
 /// effort basis and no guarantee is provided that cancelling a
-/// request will result in early termination.
+/// request will result in early termination. Note that the
+/// inference request cancellation status will be reset after
+/// TRITONSERVER_InferAsync is run. This means that if you cancel
+/// the request before calling TRITONSERVER_InferAsync
+/// the request will not be cancelled.
 ///
 /// \param inference_request The request object.
 /// \return a TRITONSERVER_Error indicating success or failure.

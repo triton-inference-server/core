@@ -819,6 +819,7 @@ InferenceRequest::PrepareForInference()
   // inference execution.
   inputs_.clear();
   override_inputs_.clear();
+  ResetCancel();
 
   // Renormalize if anything has changed in the inference request in a
   // way that could impact renormalization.

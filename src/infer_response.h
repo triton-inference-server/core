@@ -65,6 +65,7 @@ class InferenceResponseFactory {
   }
 
   void Cancel() { is_cancelled_ = true; }
+  void ResetCancel() { is_cancelled_ = false; }
 
   bool IsCancelled() { return is_cancelled_; }
 

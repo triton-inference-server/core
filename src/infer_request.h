@@ -679,17 +679,8 @@ class InferenceRequest {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
 
-  Status Cancel()
-  {
-    if (state_ != InferenceRequest::State::INITIALIZED) {
-      response_factory_->Cancel();
-    } else {
-      return Status(
-          Status::Code::INTERNAL,
-          "Request cannot be cancelled before it has started executing.");
-    }
-    return Status::Success;
-  }
+  void Cancel() { response_factory_->Cancel(); }
+  void ResetCancel() { response_factory_->ResetCancel(); }
 
   bool IsCancelled() { return response_factory_->IsCancelled(); }
 
