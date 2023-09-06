@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 15
+#define TRITONBACKEND_API_VERSION_MINOR 16
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -1568,6 +1568,44 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchInitialize(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelBatchFinalize(
     void* userp);
+
+/// Get all information about an output tensor by its name. The caller does
+/// not own any of the referenced return values and must not modify or delete
+/// them. The lifetime of all returned values extends until 'response' is
+/// deleted.
+///
+/// \param response The response object.
+/// \param name The name of the output.
+/// \param datatype Returns the type of the output.
+/// \param shape Returns the shape of the output.
+/// \param dim_count Returns the number of dimensions of the returned
+/// shape.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_ISPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceResponseOutputByName(
+    TRITONBACKEND_Response* response, const char* name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint64_t* dim_count);
+
+/// Get all information about an output tensor by its index. The caller does
+/// not own any of the referenced return values and must not modify or delete
+/// them. The lifetime of all returned values extends until 'response' is
+/// deleted.
+///
+/// \param response The response object.
+/// \param index The index of the output tensor, must be 0 <= index <
+/// count, where 'count' is the value returned by
+/// TRITONSERVER_InferenceResponseOutputCount.
+/// \param name Returns the name of the output.
+/// \param datatype Returns the type of the output.
+/// \param shape Returns the shape of the output.
+/// \param dim_count Returns the number of dimensions of the returned
+/// shape.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InferenceResponseOutput(
+    TRITONBACKEND_Response* response, const uint32_t index, const char** name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape,
+    uint64_t* dim_count);
 
 #ifdef __cplusplus
 }

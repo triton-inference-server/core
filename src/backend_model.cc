@@ -1750,6 +1750,60 @@ TRITONBACKEND_BackendAttributeSetParallelModelInstanceLoading(
   return nullptr;
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceResponseOutputByName(
+    TRITONBACKEND_Response* response, const char* name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count)
+{
+  InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
+
+  const auto& outputs = tr->Outputs();
+  uint32_t output_count = outputs.size();
+  std::string output_name = std::string(name);
+
+  for (uint32_t idx = 0; idx < output_count; ++idx) {
+    if (outputs[idx].Name() == output_name) {
+      *datatype = DataTypeToTriton(outputs[idx].DType());
+      const std::vector<int64_t>& oshape = outputs[idx].Shape();
+      *shape = &oshape[0];
+      *dim_count = oshape.size();
+      return nullptr;  // success
+    }
+  }
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_NOT_FOUND,
+      ("Output name " + output_name + "not found.").c_str());
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceResponseOutput(
+    TRITONBACKEND_Response* response, const uint32_t index, const char** name,
+    TRITONSERVER_DataType* datatype, const int64_t** shape, uint64_t* dim_count)
+{
+  InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
+
+  const auto& outputs = tr->Outputs();
+  if (index >= outputs.size()) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        ("out of bounds index " + std::to_string(index) +
+         std::string(": response has ") + std::to_string(outputs.size()) +
+         " outputs")
+            .c_str());
+  }
+
+  const InferenceResponse::Output& output = outputs[index];
+
+  *name = output.Name().c_str();
+  *datatype = DataTypeToTriton(output.DType());
+
+  const std::vector<int64_t>& oshape = output.Shape();
+  *shape = &oshape[0];
+  *dim_count = oshape.size();
+
+  return nullptr;  // success
+}
+
 }  // extern C
 
 }}  // namespace triton::core
