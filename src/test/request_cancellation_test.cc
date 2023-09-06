@@ -216,33 +216,31 @@ TEST_F(RequestCancellationTest, Cancellation)
 
   TRITONSERVER_InferenceResponse* response = future.get();
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceResponseDelete(response));
+
+  p = new std::promise<TRITONSERVER_InferenceResponse*>();
+  future = p->get_future();
+
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetResponseCallback(
+      irequest_, allocator_, nullptr /* response_allocator_userp */,
+      InferResponseComplete, reinterpret_cast<void*>(p)));
+  // Sending another request and the request should not be cancelled.
+  FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
+      server_, irequest_, nullptr
+      /* trace */));
+
+  is_cancelled = true;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
+  ASSERT_FALSE(is_cancelled);
+
+  is_cancelled = false;
+  FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryIsCancelled(
+      response_factory, &is_cancelled));
+  ASSERT_FALSE(is_cancelled);
+
+  response = future.get();
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceResponseDelete(response));
   FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryDelete(response_factory));
-
-  // TODO: Enable after https://github.com/triton-inference-server/core/pull/251
-  // is merged. Currently, it fails with "Invalid request state transition from
-  // EXECUTING to STARTED".
-  // p = new std::promise<TRITONSERVER_InferenceResponse*>();
-  // future = p->get_future();
-
-  // FAIL_TEST_IF_ERR(
-  //     TRITONSERVER_InferenceRequestSetResponseCallback(
-  //         irequest_, allocator_, nullptr /* response_allocator_userp */,
-  //         InferResponseComplete, reinterpret_cast<void*>(p)));
-  // // Sending another request and the request should not be cancelled.
-  // FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr
-  // /* trace */));
-
-  // is_cancelled = true;
-  // FAIL_TEST_IF_ERR(
-  //     TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
-  // ASSERT_FALSE(is_cancelled);
-
-  // is_cancelled = false;
-  // FAIL_TEST_IF_ERR(
-  //     TRITONBACKEND_ResponseFactoryIsCancelled(response_factory,
-  //     &is_cancelled));
-  // ASSERT_FALSE(is_cancelled);
-  // future.get();
 }
 
 TEST_F(RequestCancellationTest, CancellationAfterRelease)
