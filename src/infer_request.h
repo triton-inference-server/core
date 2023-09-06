@@ -679,7 +679,17 @@ class InferenceRequest {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
 
-  void Cancel() { response_factory_->Cancel(); }
+  Status Cancel()
+  {
+    if (state_ != InferenceRequest::State::INITIALIZED) {
+      response_factory_->Cancel();
+    } else {
+      return Status(
+          Status::Code::INTERNAL,
+          "Request cannot be cancelled before it has started executing.");
+    }
+    return Status::Success;
+  }
 
   bool IsCancelled() { return response_factory_->IsCancelled(); }
 
@@ -798,7 +808,7 @@ class InferenceRequest {
   std::shared_ptr<SequenceStates> sequence_states_;
 
   // The state of the request.
-  InferenceRequest::State state_;
+  std::atomic<InferenceRequest::State> state_;
   // Whether this is a null request used for direct sequence batch padding or
   // not.
   bool null_request_;
