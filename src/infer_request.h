@@ -63,7 +63,7 @@ class InferenceRequest {
     INITIALIZED,
 
     // The request has been enqueued, but is not yet executing.
-    STARTED,
+    PENDING,
 
     // The request has been picked up by a backend model instance for execution,
     // but hasn't been released yet.
@@ -291,7 +291,6 @@ class InferenceRequest {
       const int64_t requested_model_version);
 
   InferenceRequest(Model* model, const int64_t requested_model_version);
-  ~InferenceRequest();
 
   const std::string& ModelName() const;
   int64_t RequestedModelVersion() const { return requested_model_version_; }
@@ -799,9 +798,6 @@ class InferenceRequest {
   // Whether this is a null request used for direct sequence batch padding or
   // not.
   bool null_request_;
-  // Catch-all to correctly decrement pending count if needed on destruction
-  // if request doesn't follow normal execution path (error, unused, ensembles)
-  bool decrement_pending_count_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceRequest& request);
