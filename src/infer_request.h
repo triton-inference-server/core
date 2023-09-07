@@ -680,6 +680,11 @@ class InferenceRequest {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
 
+  void Cancel() { response_factory_->Cancel(); }
+  void ResetCancel() { response_factory_->ResetCancel(); }
+
+  bool IsCancelled() { return response_factory_->IsCancelled(); }
+
 #endif  // TRITON_ENABLE_STATS
 
  private:
@@ -795,7 +800,7 @@ class InferenceRequest {
   std::shared_ptr<SequenceStates> sequence_states_;
 
   // The state of the request.
-  InferenceRequest::State state_;
+  std::atomic<InferenceRequest::State> state_;
   // Whether this is a null request used for direct sequence batch padding or
   // not.
   bool null_request_;

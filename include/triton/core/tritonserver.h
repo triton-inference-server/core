@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 24
+#define TRITONSERVER_API_VERSION_MINOR 25
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -308,7 +308,8 @@ typedef enum TRITONSERVER_errorcode_enum {
   TRITONSERVER_ERROR_INVALID_ARG,
   TRITONSERVER_ERROR_UNAVAILABLE,
   TRITONSERVER_ERROR_UNSUPPORTED,
-  TRITONSERVER_ERROR_ALREADY_EXISTS
+  TRITONSERVER_ERROR_ALREADY_EXISTS,
+  TRITONSERVER_ERROR_CANCELLED
 } TRITONSERVER_Error_Code;
 
 /// Create a new error object. The caller takes ownership of the
@@ -1090,6 +1091,34 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetCorrelationIdString(
     struct TRITONSERVER_InferenceRequest* inference_request,
     const char* correlation_id);
+
+/// Cancel an inference request. Requests are canceled on a best
+/// effort basis and no guarantee is provided that cancelling a
+/// request will result in early termination. Note that the
+/// inference request cancellation status will be reset after
+/// TRITONSERVER_InferAsync is run. This means that if you cancel
+/// the request before calling TRITONSERVER_InferAsync
+/// the request will not be cancelled.
+///
+/// \param inference_request The request object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestCancel(
+    struct TRITONSERVER_InferenceRequest* inference_request);
+
+/// Query whether the request is cancelled or not.
+///
+/// If possible the backend should terminate any processing and
+/// send an error response with cancelled status.
+///
+/// \param inference_request The request object.
+/// \param is_cancelled Returns whether the inference request is cancelled or
+/// not.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestIsCancelled(
+    struct TRITONSERVER_InferenceRequest* inference_request,
+    bool* is_cancelled);
 
 /// Deprecated. See TRITONSERVER_InferenceRequestPriorityUInt64 instead.
 ///
