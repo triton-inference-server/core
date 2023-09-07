@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 15
+#define TRITONBACKEND_API_VERSION_MINOR 16
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -374,6 +374,31 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_OutputBufferAttributes(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestId(
     TRITONBACKEND_Request* request, const char** id);
+
+/// Query whether the request is cancelled or not.
+///
+/// If possible the backend should terminate any processing and
+/// send an error response with cancelled status.
+///
+/// \param request The inference request.
+/// \param is_cancelled Returns true if the request is cancelled otherwise it
+/// would return false.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestIsCancelled(
+    TRITONBACKEND_Request* request, bool* is_cancelled);
+
+/// Query whether the response factory is cancelled or not.
+///
+/// If possible the backend should terminate any processing and
+/// send an error response with cancelled status.
+///
+/// \param factory The response factory
+/// \param is_cancelled Returns true if the request is cancelled otherwise it
+/// would return false.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseFactoryIsCancelled(
+    TRITONBACKEND_ResponseFactory* factory, bool* is_cancelled);
 
 /// Get the correlation ID of the request if it is an unsigned integer.
 /// Zero indicates that the request does not have a correlation ID.

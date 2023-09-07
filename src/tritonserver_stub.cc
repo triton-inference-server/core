@@ -118,6 +118,14 @@ TRITONSERVER_ResponseAllocatorDelete()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestIsCancelled()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestCancel()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_MessageNewFromSerializedJson()
 {
 }
@@ -648,6 +656,14 @@ TRITONBACKEND_OutputBufferAttributes()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestId()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ResponseFactoryIsCancelled()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_RequestIsCancelled()
 {
 }
 TRITONAPI_DECLSPEC void
