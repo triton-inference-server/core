@@ -592,6 +592,14 @@ set_target_properties(
     INSTALL_RPATH ""
 )
 
+target_include_directories(
+  request_cancellation_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
 target_link_libraries(
   request_cancellation_test
   PRIVATE
