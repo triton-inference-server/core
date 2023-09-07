@@ -504,9 +504,10 @@ class InferenceRequest {
       TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
       void* response_userp)
   {
-    response_factory_.reset(new InferenceResponseFactory(
-        model_shared_, id_, allocator, alloc_userp, response_fn, response_userp,
-        response_delegator_));
+    response_allocator_ = allocator;
+    alloc_userp_ = alloc_userp;
+    response_callback_ = response_fn;
+    response_userp_ = response_userp;
     return Status::Success;
   }
 
@@ -680,10 +681,32 @@ class InferenceRequest {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
 
-  void Cancel() { response_factory_->Cancel(); }
-  void ResetCancel() { response_factory_->ResetCancel(); }
+  Status Cancel()
+  {
+    if (response_factory_) {
+      response_factory_->Cancel();
+    } else {
+      return Status(
+          Status::Code::INTERNAL,
+          "It is not possible to cancel an inference request before calling "
+          "TRITONSERVER_InferAsync.");
+    }
+    response_factory_->Cancel();
+    return Status::Success;
+  }
 
-  bool IsCancelled() { return response_factory_->IsCancelled(); }
+  Status IsCancelled(bool* is_cancelled)
+  {
+    if (response_factory_) {
+      *is_cancelled = response_factory_->IsCancelled();
+    } else {
+      return Status(
+          Status::Code::INTERNAL,
+          "It is not possible to query cancellation status before calling "
+          "TRITONSERVER_InferAsync.");
+    }
+    return Status::Success;
+  }
 
 #endif  // TRITON_ENABLE_STATS
 
@@ -804,6 +827,12 @@ class InferenceRequest {
   // Whether this is a null request used for direct sequence batch padding or
   // not.
   bool null_request_;
+
+  // Response factory arguments
+  const ResponseAllocator* response_allocator_;
+  void* response_userp_;
+  void* alloc_userp_;
+  TRITONSERVER_InferenceResponseCompleteFn_t response_callback_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceRequest& request);

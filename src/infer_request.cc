@@ -828,7 +828,9 @@ InferenceRequest::PrepareForInference()
   // inference execution.
   inputs_.clear();
   override_inputs_.clear();
-  ResetCancel();
+  response_factory_.reset(new InferenceResponseFactory(
+      model_shared_, id_, response_allocator_, alloc_userp_, response_callback_,
+      response_userp_, response_delegator_));
 
   // Renormalize if anything has changed in the inference request in a
   // way that could impact renormalization.
