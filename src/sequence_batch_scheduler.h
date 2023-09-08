@@ -208,6 +208,8 @@ class SequenceBatchScheduler : public Scheduler {
   // Removed objects to be cleaned up
   std::vector<std::shared_ptr<TritonModelInstance>> removed_instances_;
   std::vector<std::unique_ptr<SequenceBatch>> removed_batchers_;
+  std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
+      cancelled_requests_;
 
   // Map from a model instance pointer that is pending to be removed from this
   // scheduler to a pair ["the number of sequence slots remaining for the

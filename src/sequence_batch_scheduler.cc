@@ -69,6 +69,29 @@ SetThreadPriority(const int nice, const char* thread_name)
 #endif
 }
 
+bool
+IsAnyRequestCancelled(std::deque<std::unique_ptr<InferenceRequest>>& requests)
+{
+  for (const auto& req : requests) {
+    if (req->IsCancelled()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void
+CancelRequests(
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&& requests)
+{
+  static Status status = Status(Status::Code::CANCELLED);
+  for (auto& request : requests) {
+    for (auto& req : request) {
+      InferenceRequest::RespondIfError(req, status, true);
+    }
+  }
+}
+
 }  // namespace
 
 Status
@@ -841,47 +864,61 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
     return InferenceRequest::SequenceId();
   }
 
-  // If there is a backlogged sequence and it is requested, return it
-  // so that it can use the newly available sequence slot.
-  if (!backlog_queues_.empty()) {
-    auto& backlog = backlog_queues_.front()->queue_;
-    *requests = std::move(*backlog);
+  // If there is a backlogged sequence and it is requested, return it so that it
+  // can use the newly available sequence slot.
+  while (!backlog_queues_.empty()) {
+    auto backlog = backlog_queues_.front()->queue_;
     backlog_queues_.pop_front();
-    if (!requests->empty()) {  // should never be empty...
-      const auto& irequest = requests->back();
-      const InferenceRequest::SequenceId& correlation_id =
-          irequest->CorrelationId();
 
-      // If the last queue entry is not an END request then the entire
-      // sequence is not contained in the backlog. In that case must
-      // update backlog and batcherseqslot maps so that future
-      // requests get directed to the batcher sequence-slot instead of
-      // the backlog.
-      const bool seq_end =
-          ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0);
-      if (!seq_end) {
-        // Since the correlation ID is being actively collected in the
-        // backlog, there should not be any in-flight sequences with
-        // that same correlation ID that have an assigned slot.
-        if (sequence_to_batcherseqslot_map_.find(correlation_id) !=
-            sequence_to_batcherseqslot_map_.end()) {
-          LOG_ERROR << irequest->LogRequest() << "internal: backlog sequence "
-                    << correlation_id
-                    << " conflicts with in-flight sequence for model '"
-                    << irequest->ModelName() << "'";
-        }
+    if (backlog->empty()) {
+      LOG_ERROR << "Should not print this! Unexpected empty backlog.";
+      continue;
+    }
 
-        sequence_to_backlog_map_.erase(correlation_id);
-        sequence_to_batcherseqslot_map_[correlation_id] = batcher_seq_slot;
+    const auto& irequest = backlog->back();
+    const InferenceRequest::SequenceId& correlation_id =
+        irequest->CorrelationId();
+    const bool seq_cancelled = IsAnyRequestCancelled(*backlog);
+
+    // If the last queue entry is not an END request then the entire sequence is
+    // not contained in the backlog. In that case must update backlog and
+    // batcherseqslot maps so that future requests get directed to the batcher
+    // sequence-slot instead of the backlog.
+    const bool seq_end =
+        ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0);
+    if (!seq_end) {
+      // Since the correlation ID is being actively collected in the backlog,
+      // there should not be any in-flight sequences with that same correlation
+      // ID that have an assigned slot.
+      if (sequence_to_batcherseqslot_map_.find(correlation_id) !=
+          sequence_to_batcherseqslot_map_.end()) {
+        LOG_ERROR << irequest->LogRequest() << "internal: backlog sequence "
+                  << correlation_id
+                  << " conflicts with in-flight sequence for model '"
+                  << irequest->ModelName() << "'";
       }
 
-      LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
-                     << " reusing batcher "
-                     << batcher_seq_slot.model_instance_->Name() << ", slot "
-                     << batcher_seq_slot.seq_slot_ << ": "
-                     << irequest->ModelName();
-      return correlation_id;
+      sequence_to_backlog_map_.erase(correlation_id);
+      if (!seq_cancelled) {
+        sequence_to_batcherseqslot_map_[correlation_id] = batcher_seq_slot;
+      }
     }
+
+    if (seq_cancelled) {
+      LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
+                     << " sequence cancelled: " << irequest->ModelName();
+      cancelled_requests_.emplace_back(std::move(*backlog));
+      clean_up_cv_.notify_one();
+      continue;
+    }
+    *requests = std::move(*backlog);
+
+    LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
+                   << " reusing batcher "
+                   << batcher_seq_slot.model_instance_->Name() << ", slot "
+                   << batcher_seq_slot.seq_slot_ << ": "
+                   << irequest->ModelName();
+    return correlation_id;
   }
 
   // There is no backlogged sequence so just release the batch slot
@@ -1117,21 +1154,26 @@ SequenceBatchScheduler::CleanUpThread(const int nice)
     // Removed resources should be destructed outside the lock.
     std::vector<std::shared_ptr<TritonModelInstance>> removed_instances;
     std::vector<std::unique_ptr<SequenceBatch>> removed_batchers;
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
+        cancelled_requests;
 
     {
       std::unique_lock<std::mutex> lk(mu_);
 
       clean_up_cv_.wait(lk, [this] {
         return clean_up_thread_exit_ || !removed_instances_.empty() ||
-               !removed_batchers_.empty();
+               !removed_batchers_.empty() || !cancelled_requests_.empty();
       });
 
       removed_instances_.swap(removed_instances);
       removed_batchers_.swap(removed_batchers);
+      cancelled_requests_.swap(cancelled_requests);
     }
 
     LOG_VERBOSE(2)
         << "Cleaning-up resources on sequence-batch clean-up thread...";
+
+    CancelRequests(std::move(cancelled_requests));
   }
 
   LOG_VERBOSE(1) << "Stopping sequence-batch clean-up thread...";
