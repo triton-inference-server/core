@@ -631,6 +631,10 @@ TritonModelInstance::WarmUp()
         request->CaptureQueueStartNs();
         triton_requests.push_back(
             reinterpret_cast<TRITONBACKEND_Request*>(request.get()));
+
+        // For warmup requests we need to manually set ResponseFactory
+        // since they don't run `PrepareForInference`.
+        request->SetResponseFactory();
       }
 
       Execute(triton_requests);

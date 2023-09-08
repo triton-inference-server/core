@@ -551,6 +551,13 @@ class InferenceRequest {
 
   Status LoadInputStates();
 
+  void SetResponseFactory()
+  {
+    response_factory_.reset(new InferenceResponseFactory(
+        model_shared_, id_, response_allocator_, alloc_userp_,
+        response_callback_, response_userp_, response_delegator_));
+  }
+
   const std::shared_ptr<SequenceStates>& GetSequenceStates() const
   {
     return sequence_states_;
