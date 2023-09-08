@@ -497,8 +497,8 @@ class InferenceRequest {
     return Status::Success;
   }
 
-  // Initialize the response factory that is to be used with any
-  // responses produced for this request.
+  // Initialize the response factory arguments that are going to be used with
+  // any responses produced for this request.
   Status SetResponseCallback(
       const ResponseAllocator* allocator, void* alloc_userp,
       TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
@@ -683,9 +683,7 @@ class InferenceRequest {
 
   Status Cancel()
   {
-    if (response_factory_) {
-      response_factory_->Cancel();
-    } else {
+    if (!response_factory_) {
       return Status(
           Status::Code::INTERNAL,
           "It is not possible to cancel an inference request before calling "
@@ -697,14 +695,13 @@ class InferenceRequest {
 
   Status IsCancelled(bool* is_cancelled)
   {
-    if (response_factory_) {
-      *is_cancelled = response_factory_->IsCancelled();
-    } else {
+    if (!response_factory_) {
       return Status(
           Status::Code::INTERNAL,
           "It is not possible to query cancellation status before calling "
           "TRITONSERVER_InferAsync.");
     }
+    *is_cancelled = response_factory_->IsCancelled();
     return Status::Success;
   }
 

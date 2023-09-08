@@ -1023,11 +1023,7 @@ TRITONBACKEND_RequestIsCancelled(
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
 
-  auto status = tr->IsCancelled(is_cancelled);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->IsCancelled(is_cancelled));
   return nullptr;
 }
 
