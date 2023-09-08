@@ -154,7 +154,16 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       break;
     }
     case InferenceRequest::State::EXECUTING: {
-      if (new_state != InferenceRequest::State::RELEASED) {
+      if (new_state == InferenceRequest::State::RELEASED) {
+        // no-op
+      } else if (new_state == InferenceRequest::State::INITIALIZED) {
+        LOG_WARNING
+            << LogRequest() << " Invalid state transition detected from "
+            << state_ << " to " << new_state
+            << ". When re-using requests, make sure that the request release "
+               "callback is called before calling TRITONSERVER_InferAsync.";
+      } else {
+        // Unexpected state transition
         return generate_error();
       }
       break;
