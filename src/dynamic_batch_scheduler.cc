@@ -55,6 +55,21 @@ IsStaleState(Payload::State payload_state)
       (payload_state == Payload::State::RELEASED));
 }
 
+void
+FinishSkippedRequests(
+    std::shared_ptr<
+        std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>&& requests,
+    const Status& response_status)
+{
+  if (requests != nullptr) {
+    for (auto& queue : *requests) {
+      for (auto& request : queue) {
+        InferenceRequest::RespondIfError(request, response_status, true);
+      }
+    }
+  }
+}
+
 DynamicBatchScheduler::DynamicBatchScheduler(
     TritonModel* model, TritonModelInstance* model_instance,
     const bool dynamic_batching_enabled, const int32_t max_batch_size,
@@ -315,7 +330,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     NVTX_RANGE(nvtx_, "DynamicBatcher " + model_name_);
 
     std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>
-        rejected_requests;
+        rejected_requests, cancelled_requests;
     uint64_t wait_microseconds = 0;
 
     // Hold the lock for as short a time as possible.
@@ -359,8 +374,10 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           // Use dynamic batching to get request(s) to execute.
           wait_microseconds = GetDynamicBatch();
 
-          // Get requests that are rejected from searching dynamic batch.
-          queue_.ReleaseRejectedRequests(&rejected_requests);
+          // Get requests that are rejected or cancelled from searching dynamic
+          // batch.
+          queue_.ReleaseSkippedRequests(
+              &rejected_requests, &cancelled_requests);
 
           // Extract batch only if there is pending batch
           auto pending_batch_queue_cnt = queue_.PendingBatchCount();
@@ -373,11 +390,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
                 if (preserve_ordering_ || response_cache_enabled_) {
                   DelegateResponse(request);
                 }
-                if (request->IsCancelled()) {
-                  CancelRequest(std::move(request));
-                } else {
-                  curr_payload_->AddRequest(std::move(request));
-                }
+                curr_payload_->AddRequest(std::move(request));
               } else {
                 // The queue is empty which conflicts with pending batch
                 // count. Send the current batch if any and reset related
@@ -420,17 +433,12 @@ DynamicBatchScheduler::BatcherThread(const int nice)
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
     }
 
-    // Finish rejected requests if any
-    if (rejected_requests != nullptr) {
-      static Status rejected_status =
-          Status(Status::Code::UNAVAILABLE, "Request timeout expired");
-      for (auto& rejected_queue : *rejected_requests) {
-        for (auto& rejected_request : rejected_queue) {
-          InferenceRequest::RespondIfError(
-              rejected_request, rejected_status, true);
-        }
-      }
-    }
+    // Finish rejected and cancelled requests if any
+    static Status rejected_status =
+        Status(Status::Code::UNAVAILABLE, "Request timeout expired");
+    static Status cancelled_status = Status(Status::Code::CANCELLED);
+    FinishSkippedRequests(std::move(rejected_requests), rejected_status);
+    FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
   }  // end runner loop
 
   LOG_VERBOSE(1) << "Stopping dynamic-batcher thread for " << model_name_
@@ -694,16 +702,6 @@ DynamicBatchScheduler::DelegateResponse(
           InferenceResponse::Send(std::move(response), flags);
         }
       });
-}
-
-void
-DynamicBatchScheduler::CancelRequest(
-    std::unique_ptr<InferenceRequest>&& request)
-{
-  LOG_VERBOSE(1) << "Cancelling " << request->LogRequest() << " on "
-                 << request->ModelName();
-  InferenceRequest::RespondIfError(
-      request, Status(Status::Code::CANCELLED), true /* release_request */);
 }
 
 void

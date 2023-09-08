@@ -84,11 +84,13 @@ class PriorityQueue {
   // Dequeue the request at the front of the queue.
   Status Dequeue(std::unique_ptr<InferenceRequest>* request);
 
-  // Retrieve the requests that are rejected based on the queue policies.
-  void ReleaseRejectedRequests(
+  // Retrieve the requests that are either rejected or cancelled.
+  void ReleaseSkippedRequests(
+      std::shared_ptr<std::vector<
+          std::deque<std::unique_ptr<InferenceRequest>>>>* rejected_requests,
       std::shared_ptr<
           std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>*
-          requests);
+          cancelled_requests);
 
   // Return the number of requests in the queue, rejected requests are
   // not included.
@@ -110,7 +112,7 @@ class PriorityQueue {
   // Apply the queue policy and alter the underlying queue accordingly. After
   // the function returns, the cursor may be at its end to indicate that
   // there no request after the pending batch.
-  // Returns the total batch size of the newly rejected requests.
+  // Returns the total batch size of the newly rejected and cancelled requests.
   size_t ApplyPolicyAtCursor();
 
   // Return the request at the cursor.
@@ -185,18 +187,29 @@ class PriorityQueue {
     // Dequeue the request at the front of the queue.
     Status Dequeue(std::unique_ptr<InferenceRequest>* request);
 
-    // Apply the queue policy to the request at 'idx'.
+    // Apply the queue policy to the request at 'idx'. A request is rejected if
+    // it is expired and not delayable. A request is cancelled if it is marked
+    // as cancelled.
     // 'rejected_count' will be incremented by the number of the newly rejected
     // requests after applying the policy.
     // 'rejected_batch_size' will be incremented by the total batch size of the
     // newly rejected requests after applying the policy.
+    // 'cancelled_count' will be incremented by the number of newly cancelled
+    // requests after applying the policy.
+    // 'cancelled_batch_size' will be incremented by the total batch size of the
+    // newly cancelled requests after applying the policy.
     // Return true if the 'idx' still points to a request after applying the
     // policy, false otherwise.
     bool ApplyPolicy(
-        size_t idx, size_t* rejected_count, size_t* rejected_batch_size);
+        size_t idx, size_t* rejected_count, size_t* rejected_batch_size,
+        size_t* cancelled_count, size_t* cancelled_batch_size);
 
     // Return the rejected requests held by the queue.
     void ReleaseRejectedQueue(
+        std::deque<std::unique_ptr<InferenceRequest>>* requests);
+
+    // Return the cancelled requests held by the queue.
+    void ReleaseCancelledQueue(
         std::deque<std::unique_ptr<InferenceRequest>>* requests);
 
     // Return the request at 'idx'.
@@ -232,6 +245,7 @@ class PriorityQueue {
     std::deque<std::unique_ptr<InferenceRequest>> queue_;
     std::deque<std::unique_ptr<InferenceRequest>> delayed_queue_;
     std::deque<std::unique_ptr<InferenceRequest>> rejected_queue_;
+    std::deque<std::unique_ptr<InferenceRequest>> cancelled_queue_;
   };
   using PriorityQueues = std::map<uint64_t, PolicyQueue>;
 
