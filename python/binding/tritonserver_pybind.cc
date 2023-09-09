@@ -31,6 +31,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <triton/core/tritonserver.h>
+#include <iostream>
 
 // This binding is merely used to map Triton C API into Python equivalent,
 // and therefore, the naming will be the same as the one used in corresponding
@@ -83,8 +84,7 @@ namespace triton { namespace core { namespace python {
             err__, TRITONSERVER_ErrorDelete);            \
         py::print(TRITONSERVER_ErrorMessage(err__));     \
       }                                                  \
-    }                                                    \
-  }
+  }}
 // base exception for all Triton error code
 struct TritonError : public std::runtime_error {
   explicit TritonError(const std::string& what) : std::runtime_error(what) {}
@@ -204,6 +204,7 @@ class PyParameter : public PyWrapper<struct TRITONSERVER_Parameter> {
                 name, TRITONSERVER_PARAMETER_STRING, val.c_str()),
             true)
   {
+    std::cerr << "call string constructor" << std::endl;
   }
 
   PyParameter(const char* name, int64_t val)
@@ -598,26 +599,27 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
   }
 
   PyTrace(
-      TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
-      TimestampActivityFn timestamp, ReleaseFn release, py::object user_object)
+      int level, uint64_t parent_id, TimestampActivityFn timestamp,
+      ReleaseFn release, py::object user_object)
       : callback_resource_(
             new CallbackResource(timestamp, nullptr, release, user_object))
   {
     ThrowIfError(TRITONSERVER_InferenceTraceNew(
-        &triton_object_, level, parent_id, PyTritonTraceTimestampActivityFn,
-        PyTritonTraceRelease, callback_resource_.get()));
+        &triton_object_, static_cast<TRITONSERVER_InferenceTraceLevel>(level),
+        parent_id, PyTritonTraceTimestampActivityFn, PyTritonTraceRelease,
+        callback_resource_.get()));
     owned_ = true;
   }
 
   PyTrace(
-      TRITONSERVER_InferenceTraceLevel level, uint64_t parent_id,
-      TimestampActivityFn timestamp, TensorActivityFn tensor, ReleaseFn release,
-      py::object user_object)
+      int level, uint64_t parent_id, TimestampActivityFn timestamp,
+      TensorActivityFn tensor, ReleaseFn release, py::object user_object)
       : callback_resource_(
             new CallbackResource(timestamp, tensor, release, user_object))
   {
     ThrowIfError(TRITONSERVER_InferenceTraceTensorNew(
-        &triton_object_, level, parent_id, PyTritonTraceTimestampActivityFn,
+        &triton_object_, static_cast<TRITONSERVER_InferenceTraceLevel>(level),
+        parent_id, PyTritonTraceTimestampActivityFn,
         PyTritonTraceTensorActivityFn, PyTritonTraceRelease,
         callback_resource_.get()));
     owned_ = true;
@@ -1524,6 +1526,14 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     request.Release();
     trace.Release();
   }
+
+  void InferAsync(PyInferenceRequest& request)
+  {
+    ThrowIfError(
+        TRITONSERVER_ServerInferAsync(triton_object_, request.Ptr(), nullptr));
+    // Ownership of the internal C object is transferred.
+    request.Release();
+  }
 };
 
 class PyMetricFamily : public PyWrapper<struct TRITONSERVER_MetricFamily> {
@@ -1669,9 +1679,9 @@ PYBIND11_MODULE(triton_bindings, m)
   // TRITONSERVER_Parameter
   py::class_<PyParameter, std::shared_ptr<PyParameter>>(
       m, "TRITONSERVER_Parameter")
-      .def(py::init<const char*, const std::string&>())
-      .def(py::init<const char*, int64_t>())
-      .def(py::init<const char*, bool>())
+      // Python bytes can be consumed by function accepting string, so order
+      // the py::bytes constructor before string to ensure correct overload
+      // constructor is used
       .def(py::init([](const char* name, py::bytes bytes) {
         // [FIXME] does not own 'bytes' in the same way as C API, but can also
         // hold 'bytes' to make sure it will not be invalidated while in use.
@@ -1680,9 +1690,13 @@ PYBIND11_MODULE(triton_bindings, m)
         //   # 'a' still points to valid buffer at this line.
         // Note that even holding 'bytes', it is the user's responsibility not
         // to modify 'bytes' while the parameter is in use.
+        std::cerr << "call byte constructor" << std::endl;
         py::buffer_info info(py::buffer(bytes).request());
         return std::make_unique<PyParameter>(name, info.ptr, info.size);
-      }));
+      }))
+      .def(py::init<const char*, const std::string&>())
+      .def(py::init<const char*, int64_t>())
+      .def(py::init<const char*, bool>());
 
   // TRITONSERVER_InstanceGroupKind
   py::enum_<TRITONSERVER_InstanceGroupKind>(m, "TRITONSERVER_InstanceGroupKind")
@@ -1794,16 +1808,15 @@ PYBIND11_MODULE(triton_bindings, m)
       m, "TRITONSERVER_InferenceTrace")
       .def(
           py::init<
-              TRITONSERVER_InferenceTraceLevel, uint64_t,
-              PyTrace::TimestampActivityFn, PyTrace::TensorActivityFn,
-              PyTrace::ReleaseFn, py::object>(),
+              int, uint64_t, PyTrace::TimestampActivityFn,
+              PyTrace::TensorActivityFn, PyTrace::ReleaseFn, py::object>(),
           py::arg("level"), py::arg("parent_id"), py::arg("activity_function"),
           py::arg("tensor_activity_function"), py::arg("release_function"),
           py::arg("trace_userp"))
       .def(
           py::init<
-              TRITONSERVER_InferenceTraceLevel, uint64_t,
-              PyTrace::TimestampActivityFn, PyTrace::ReleaseFn, py::object>(),
+              int, uint64_t, PyTrace::TimestampActivityFn, PyTrace::ReleaseFn,
+              py::object>(),
           py::arg("level"), py::arg("parent_id"), py::arg("activity_function"),
           py::arg("release_function"), py::arg("trace_userp"))
       .def_property_readonly("id", &PyTrace::Id)
@@ -1823,7 +1836,9 @@ PYBIND11_MODULE(triton_bindings, m)
       .export_values();
 
   py::class_<PyInferenceRequest>(m, "TRITONSERVER_InferenceRequest")
-      .def(py::init<PyServer&, const std::string&, int64_t>())
+      .def(
+          py::init<PyServer&, const std::string&, int64_t>(),
+          py::keep_alive<1, 2>())
       .def("set_release_callback", &PyInferenceRequest::SetReleaseCallback)
       .def("set_response_callback", &PyInferenceRequest::SetResponseCallback)
       .def_property("id", &PyInferenceRequest::Id, &PyInferenceRequest::SetId)
@@ -1875,11 +1890,12 @@ PYBIND11_MODULE(triton_bindings, m)
       m, "TRITONSERVER_InferenceResponse")
       .def(
           "throw_if_response_error", &PyInferenceResponse::ThrowIfResponseError)
-      .def("model", &PyInferenceResponse::Model)
-      .def("id", &PyInferenceResponse::Id)
-      .def("parameter_count", &PyInferenceResponse::ParameterCount)
+      .def_property_readonly("model", &PyInferenceResponse::Model)
+      .def_property_readonly("id", &PyInferenceResponse::Id)
+      .def_property_readonly(
+          "parameter_count", &PyInferenceResponse::ParameterCount)
       .def("parameter", &PyInferenceResponse::Parameter)
-      .def("output_count", &PyInferenceResponse::OutputCount)
+      .def_property_readonly("output_count", &PyInferenceResponse::OutputCount)
       .def("output", &PyInferenceResponse::Output)
       .def(
           "output_classification_label",
@@ -1948,6 +1964,18 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_metrics_config", &PyServerOptions::SetMetricsConfig);
 
   // TRITONSERVER_Server
+  py::enum_<TRITONSERVER_ModelBatchFlag>(m, "TRITONSERVER_ModelBatchFlag")
+      .value("UNKNOWN", TRITONSERVER_BATCH_UNKNOWN)
+      .value("FIRST_DIM", TRITONSERVER_BATCH_FIRST_DIM)
+      .export_values();
+  py::enum_<TRITONSERVER_ModelIndexFlag>(m, "TRITONSERVER_ModelIndexFlag")
+      .value("READY", TRITONSERVER_INDEX_FLAG_READY)
+      .export_values();
+  py::enum_<TRITONSERVER_ModelTxnPropertyFlag>(
+      m, "TRITONSERVER_ModelTxnPropertyFlag")
+      .value("ONE_TO_ONE", TRITONSERVER_TXN_ONE_TO_ONE)
+      .value("DECOUPLED", TRITONSERVER_TXN_DECOUPLED)
+      .export_values();
   py::class_<PyServer>(m, "TRITONSERVER_Server")
       .def(py::init<PyServerOptions&>())
       .def("stop", &PyServer::Stop)
@@ -1971,7 +1999,12 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("unload_model", &PyServer::UnloadModel)
       .def("unload_model_and_dependents", &PyServer::UnloadModelAndDependents)
       .def("metrics", &PyServer::Metrics)
-      .def("infer_async", &PyServer::InferAsync);
+      .def(
+          "infer_async", py::overload_cast<PyInferenceRequest&, PyTrace&>(
+                             &PyServer::InferAsync))
+      .def(
+          "infer_async",
+          py::overload_cast<PyInferenceRequest&>(&PyServer::InferAsync));
 
   // TRITONSERVER_MetricFamily
   py::class_<PyMetricFamily>(m, "TRITONSERVER_MetricFamily")
