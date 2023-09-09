@@ -241,6 +241,13 @@ InferenceRequest::AddParameter(const char* name, const bool value)
   return Status::Success;
 }
 
+Status
+InferenceRequest::AddParameter(const InferenceParameter& parameter)
+{
+  parameters_.emplace_back(parameter);
+  return Status::Success;
+}
+
 #ifdef TRITON_ENABLE_TRACING
 Status
 InferenceRequest::TraceInputTensors(

@@ -366,6 +366,7 @@ class InferenceRequest {
   Status AddParameter(const char* name, const char* value);
   Status AddParameter(const char* name, const int64_t value);
   Status AddParameter(const char* name, const bool value);
+  Status AddParameter(const InferenceParameter& parameter);
   const std::deque<InferenceParameter>& Parameters() const
   {
     return parameters_;

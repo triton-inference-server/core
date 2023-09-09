@@ -347,6 +347,9 @@ class EnsembleContext {
   InferenceRequest::SequenceId correlation_id_;
   uint64_t priority_;
   uint64_t timeout_;
+  // The parameters of the ensemble-level request. Use this to forward
+  // parameters to composing models.
+  std::deque<InferenceParameter> parameters_;
 
   // Objects related to the ensemble infer request
   Status ensemble_status_;
@@ -462,6 +465,7 @@ EnsembleContext::EnsembleContext(
     flags_ = lrequest->Flags();
     priority_ = lrequest->Priority();
     timeout_ = lrequest->TimeoutMicroseconds();
+    parameters_ = lrequest->Parameters();
 
     for (const auto& pr : lrequest->ImmutableInputs()) {
       const InferenceRequest::Input* input = pr.second;
@@ -951,6 +955,10 @@ EnsembleContext::InitStep(
   irequest->SetFlags(flags);
   irequest->SetPriority(priority_);
   irequest->SetTimeoutMicroseconds(timeout_);
+  // Forward ensemble request parameters to composing models.
+  for (const auto& parameter : parameters_) {
+    irequest->AddParameter(parameter);
+  }
 #ifdef TRITON_ENABLE_STATS
   irequest->SetSecondaryStatsAggregator(
       &request_tracker_->ContextStatsAggregator());
