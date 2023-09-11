@@ -362,11 +362,11 @@ class InferenceRequest {
       TRITONSERVER_InferenceTraceActivity activity, const std::string& msg);
 #endif  // TRITON_ENABLE_TRACING
 
-  // Add an parameter to the request.
+  // Add a parameter to the request.
   Status AddParameter(const char* name, const char* value);
   Status AddParameter(const char* name, const int64_t value);
   Status AddParameter(const char* name, const bool value);
-  Status AddParameter(const InferenceParameter& parameter);
+  Status SetParameters(const std::deque<InferenceParameter>& parameters);
   const std::deque<InferenceParameter>& Parameters() const
   {
     return parameters_;

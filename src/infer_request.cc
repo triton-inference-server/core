@@ -242,9 +242,11 @@ InferenceRequest::AddParameter(const char* name, const bool value)
 }
 
 Status
-InferenceRequest::AddParameter(const InferenceParameter& parameter)
+InferenceRequest::SetParameters(
+    const std::deque<InferenceParameter>& parameters)
 {
-  parameters_.emplace_back(parameter);
+  // NOTE: For BYTES parameters, this will shallow copy the pointer for now.
+  parameters_ = parameters;
   return Status::Success;
 }
 

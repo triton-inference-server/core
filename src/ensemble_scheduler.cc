@@ -955,10 +955,7 @@ EnsembleContext::InitStep(
   irequest->SetFlags(flags);
   irequest->SetPriority(priority_);
   irequest->SetTimeoutMicroseconds(timeout_);
-  // Forward ensemble request parameters to composing models.
-  for (const auto& parameter : parameters_) {
-    irequest->AddParameter(parameter);
-  }
+  irequest->SetParameters(parameters_);
 #ifdef TRITON_ENABLE_STATS
   irequest->SetSecondaryStatsAggregator(
       &request_tracker_->ContextStatsAggregator());
