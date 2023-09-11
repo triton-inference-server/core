@@ -857,6 +857,15 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 {
   std::unique_lock<std::mutex> lock(mu_);
 
+  // If there are any remaining requests on the releasing sequence slot, those
+  // requests will be cancelled.
+  if (!requests->empty()) {
+    std::deque<std::unique_ptr<InferenceRequest>> cancelled_requests;
+    requests->swap(cancelled_requests);
+    cancelled_requests_.emplace_back(std::move(cancelled_requests));
+    clean_up_cv_.notify_one();
+  }
+
   // If the instance behind the slot is pending to be removed, do not add the
   // slot back to ready and erase it instead.
   if (EraseBatcherSequenceSlot(batcher_seq_slot)) {
@@ -1554,7 +1563,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
 
         // Make one pass through the active slots to:
         //
-        //   1) release any slots that have forcibly ended sequences
+        //   1) release any slots that have cancelled or forcibly ended
+        //      sequences
         //
         //   2) find a representative request that will provide:
         //
@@ -1574,12 +1584,23 @@ DirectSequenceBatch::BatcherThread(const int nice)
           std::deque<std::unique_ptr<InferenceRequest>>& queue =
               queues_[seq_slot];
           if (!queue.empty()) {
+            bool release_seq_slot = false;
+
             // If the request is nullptr then the sequence in the slot
             // has timed-out so release the slot for another sequence
             // from the backlog.
             if (queue.front() == nullptr) {
               queue.pop_front();
+              release_seq_slot = true;
+            }
+            // If the request is cancelled, then the sequence in the slot is
+            // cancelled, so release the slot and cancel all queued requests of
+            // the sequence.
+            else if (queue.front()->IsCancelled()) {
+              release_seq_slot = true;
+            }
 
+            if (release_seq_slot) {
               SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
                   model_instance_, seq_slot);
               seq_slot_correlation_ids_[seq_slot] =
@@ -1911,6 +1932,7 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
       // it in the dynamic batcher now.
       if (!queue.empty()) {
         auto& irequest = queue.front();
+        bool retain_queue_front = false;
 
         // If the request is null then this inference request is from
         // the reaper thread indicating a timed-out sequence. Mark that
@@ -1920,6 +1942,11 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           LOG_VERBOSE(1) << "force-end timed-out sequence in batcher "
                          << model_instance_->Name() << ", slot " << seq_slot;
           release_seq_slot = true;
+        } else if (irequest->IsCancelled()) {
+          LOG_VERBOSE(1) << "force-end cancelled sequence in batcher "
+                         << model_instance_->Name() << ", slot " << seq_slot;
+          release_seq_slot = true;
+          retain_queue_front = true;
         } else {
           const InferenceRequest::SequenceId& correlation_id =
               irequest->CorrelationId();
@@ -1953,20 +1980,21 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           dynamic_batcher_->Enqueue(irequest);
         }
 
-        queue.pop_front();
+        if (!retain_queue_front) {
+          queue.pop_front();
+        }
       }
 
       // If releasing the sequence slot then the sequence queue should be
       // empty and we can now assign a new sequence to the queue (from the
       // backlog).
       if (release_seq_slot) {
-        // Should never be anything in a queue after the END marker. If it
-        // happens that means we will clobber that request if/when we swap
-        // in a backlog sequence in ReleaseSequenceSlot below.
+        // Unless the sequence is cancelled, there should never be anything in a
+        // queue after the END marker. Any requests remaining in the queue will
+        // be cancelled.
         if (!queue.empty()) {
-          LOG_ERROR
-              << "internal: unexpected requests after sequence end in slot "
-              << seq_slot;
+          LOG_VERBOSE(2) << "requests remaining when releasing sequence slot "
+                         << seq_slot;
         }
 
         SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
