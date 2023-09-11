@@ -381,43 +381,4 @@ TritonBackendManager::BackendState(
   return Status::Success;
 }
 
-Status
-TritonBackendManager::PreloadBackend(
-    const std::string& backend_name,
-    const triton::common::BackendCmdlineConfigMap& config_map)
-{
-  std::string backends_dir;
-  std::string specialized_backend_name;
-  std::string backend_libname;
-  RETURN_IF_ERROR(
-      BackendConfigurationGlobalBackendsDirectory(config_map, &backends_dir));
-  RETURN_IF_ERROR(BackendConfigurationSpecializeBackendName(
-      config_map, backend_name, &specialized_backend_name));
-  RETURN_IF_ERROR(BackendConfigurationBackendLibraryName(
-      specialized_backend_name, &backend_libname));
-
-  const auto backend_dir = JoinPath({backends_dir, specialized_backend_name});
-  const auto backend_libpath = JoinPath({backend_dir, backend_libname});
-  bool exists = false;
-  RETURN_IF_ERROR(FileExists(backend_libpath, &exists));
-  if (exists) {
-    triton::common::BackendCmdlineConfig empty_backend_cmdline_config;
-    const triton::common::BackendCmdlineConfig* config;
-    const auto& itr = config_map.find(backend_name);
-    if (itr == config_map.end()) {
-      config = &empty_backend_cmdline_config;
-    } else {
-      config = &itr->second;
-    }
-
-    // Backend manager would always hold a reference to the backend object
-    // so it is ok if this object goes out of scope.
-    std::shared_ptr<TritonBackend> backend;
-    RETURN_IF_ERROR(CreateBackend(
-        backend_name, backend_dir, backend_libpath, *config, &backend));
-  }
-
-  return Status::Success;
-}
-
 }}  // namespace triton::core
