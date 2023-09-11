@@ -86,10 +86,9 @@ class PriorityQueue {
 
   // Retrieve the requests that are either rejected or cancelled.
   void ReleaseSkippedRequests(
-      std::shared_ptr<std::vector<
-          std::deque<std::unique_ptr<InferenceRequest>>>>* rejected_requests,
-      std::shared_ptr<
-          std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>*
+      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>*
+          rejected_requests,
+      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>*
           cancelled_requests);
 
   // Return the number of requests in the queue, rejected requests are

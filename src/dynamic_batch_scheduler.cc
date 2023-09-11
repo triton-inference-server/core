@@ -57,15 +57,12 @@ IsStaleState(Payload::State payload_state)
 
 void
 FinishSkippedRequests(
-    std::shared_ptr<
-        std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>&& requests,
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&& requests,
     const Status& response_status)
 {
-  if (requests != nullptr) {
-    for (auto& queue : *requests) {
-      for (auto& request : queue) {
-        InferenceRequest::RespondIfError(request, response_status, true);
-      }
+  for (auto& queue : requests) {
+    for (auto& request : queue) {
+      InferenceRequest::RespondIfError(request, response_status, true);
     }
   }
 }
@@ -329,7 +326,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
   while (!scheduler_thread_exit_.load()) {
     NVTX_RANGE(nvtx_, "DynamicBatcher " + model_name_);
 
-    std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
         rejected_requests, cancelled_requests;
     uint64_t wait_microseconds = 0;
 

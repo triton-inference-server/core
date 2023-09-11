@@ -360,22 +360,20 @@ PriorityQueue::Dequeue(std::unique_ptr<InferenceRequest>* request)
 
 void
 PriorityQueue::ReleaseSkippedRequests(
-    std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>*
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>*
         rejected_requests,
-    std::shared_ptr<std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>*
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>*
         cancelled_requests)
 {
-  auto reject_req = std::make_shared<
-      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>(
+  std::vector<std::deque<std::unique_ptr<InferenceRequest>>> reject_req(
       queues_.size());
-  auto cancel_req = std::make_shared<
-      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>>(
+  std::vector<std::deque<std::unique_ptr<InferenceRequest>>> cancel_req(
       queues_.size());
 
   size_t idx = 0;
   for (auto it = queues_.begin(); it != queues_.end();) {
-    it->second.ReleaseRejectedQueue(&((*reject_req)[idx]));
-    it->second.ReleaseCancelledQueue(&((*cancel_req)[idx]));
+    it->second.ReleaseRejectedQueue(&reject_req[idx]);
+    it->second.ReleaseCancelledQueue(&cancel_req[idx]);
     idx++;
     if (it->second.ReadyForErasure()) {
       // Invalidate the pending batch cursor if it points to
