@@ -241,6 +241,15 @@ InferenceRequest::AddParameter(const char* name, const bool value)
   return Status::Success;
 }
 
+Status
+InferenceRequest::SetParameters(
+    const std::deque<InferenceParameter>& parameters)
+{
+  // NOTE: For BYTES parameters, this will shallow copy the pointer for now.
+  parameters_ = parameters;
+  return Status::Success;
+}
+
 #ifdef TRITON_ENABLE_TRACING
 Status
 InferenceRequest::TraceInputTensors(
