@@ -26,7 +26,9 @@
 #pragma once
 
 #include <functional>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -46,6 +48,9 @@ namespace triton { namespace core {
 class Model;
 class InferenceServer;
 class MetricModelReporter;
+
+// Boolean to make sure state transition warning is only printed once.
+static std::atomic<bool> invalid_state_transition_warning_printed{false};
 
 //
 // An inference request. A request can be used multiple times for
