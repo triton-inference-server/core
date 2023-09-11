@@ -599,6 +599,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
   lrequest->SetResponseCallback(
       &null_allocator, nullptr, NullResponseComplete, nullptr);
   lrequest->SetReleaseCallback(NullRequestComplete, nullptr);
+  lrequest->SetResponseFactory();
 
   // Must normalize inputs here...
   for (auto& pr : lrequest->original_inputs_) {

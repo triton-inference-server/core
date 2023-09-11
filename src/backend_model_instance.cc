@@ -633,7 +633,8 @@ TritonModelInstance::WarmUp()
             reinterpret_cast<TRITONBACKEND_Request*>(request.get()));
 
         // For warmup requests we need to manually set ResponseFactory
-        // since they don't run `PrepareForInference`.
+        // since they modify the callback after PrepareForInference has
+        // been called.
         request->SetResponseFactory();
       }
 
