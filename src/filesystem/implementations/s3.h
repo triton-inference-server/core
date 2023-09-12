@@ -159,7 +159,9 @@ class S3FileSystem : public FileSystem {
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
       const size_t content_len) override;
-  Status MakeDirectory(const std::string& dir, const bool recursive) override;
+  Status MakeDirectory(
+      const std::string& dir, const bool recursive,
+      const bool allow_dir_exist) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
@@ -668,7 +670,8 @@ S3FileSystem::LocalizePath(
     tmp_folder = mount_dir.empty() ? std::string(env_mount_dir) : mount_dir;
     tmp_folder =
         JoinPath({tmp_folder, path.substr(path.find_last_of('/') + 1)});
-    RETURN_IF_ERROR(triton::core::MakeDirectory(tmp_folder, true));
+    RETURN_IF_ERROR(triton::core::MakeDirectory(
+        tmp_folder, true /*recursive*/, true /*allow_dir_exist*/));
   }
 
   // Specify contents to be downloaded
@@ -780,7 +783,8 @@ S3FileSystem::WriteBinaryFile(
 }
 
 Status
-S3FileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+S3FileSystem::MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
   return Status(
       Status::Code::UNSUPPORTED,

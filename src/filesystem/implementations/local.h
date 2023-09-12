@@ -57,7 +57,9 @@ class LocalFileSystem : public FileSystem {
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
       const size_t content_len) override;
-  Status MakeDirectory(const std::string& dir, const bool recursive) override;
+  Status MakeDirectory(
+      const std::string& dir, const bool recursive,
+      const bool allow_dir_exist) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 };
@@ -248,7 +250,8 @@ LocalFileSystem::WriteBinaryFile(
 }
 
 Status
-LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+LocalFileSystem::MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
 #ifdef _WIN32
   if (mkdir(dir.c_str()) == -1)
@@ -256,14 +259,14 @@ LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
   if (mkdir(dir.c_str(), S_IRWXU) == -1)
 #endif
   {
-    // Return success if directory already exists
-    if (errno == EEXIST) {
+    // Return success if directory already exists and it is permitted
+    if (allow_dir_exist && errno == EEXIST) {
       return Status::Success;
     }
     // In all other cases only allow the error due to parent directory
     // does not exist, if 'recursive' is requested
     if ((errno == ENOENT) && (!dir.empty()) && recursive) {
-      RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive));
+      RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive, allow_dir_exist));
       // Retry the creation
 #ifdef _WIN32
       if (mkdir(dir.c_str()) == -1)

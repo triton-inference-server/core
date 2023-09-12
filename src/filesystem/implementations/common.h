@@ -92,7 +92,8 @@ class FileSystem {
       const std::string& path, const char* contents,
       const size_t content_len) = 0;
   virtual Status MakeDirectory(
-      const std::string& dir, const bool recursive) = 0;
+      const std::string& dir, const bool recursive,
+      const bool allow_dir_exist) = 0;
   virtual Status MakeTemporaryDirectory(std::string* temp_dir) = 0;
   virtual Status DeletePath(const std::string& path) = 0;
 };

@@ -83,7 +83,9 @@ class GCSFileSystem : public FileSystem {
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
       const size_t content_len) override;
-  Status MakeDirectory(const std::string& dir, const bool recursive) override;
+  Status MakeDirectory(
+      const std::string& dir, const bool recursive,
+      const bool allow_dir_exist) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
@@ -474,7 +476,8 @@ GCSFileSystem::WriteBinaryFile(
 }
 
 Status
-GCSFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+GCSFileSystem::MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
   return Status(
       Status::Code::UNSUPPORTED,

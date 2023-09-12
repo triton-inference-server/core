@@ -619,11 +619,12 @@ ReadBinaryProto(const std::string& path, google::protobuf::MessageLite* msg)
 }
 
 Status
-MakeDirectory(const std::string& dir, const bool recursive)
+MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(dir, fs));
-  return fs->MakeDirectory(dir, recursive);
+  return fs->MakeDirectory(dir, recursive, allow_dir_exist);
 }
 
 Status
