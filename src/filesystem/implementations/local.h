@@ -49,7 +49,8 @@ class LocalFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path, const std::string& fetch_subdir,
+      const std::string& path, const bool recursive,
+      const std::string& mount_dir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
@@ -204,7 +205,7 @@ LocalFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 LocalFileSystem::LocalizePath(
-    const std::string& path, const std::string& fetch_subdir,
+    const std::string& path, const bool recursive, const std::string& mount_dir,
     std::shared_ptr<LocalizedPath>* localized)
 {
   // For local file system we don't actually need to download the
@@ -255,8 +256,12 @@ LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
   if (mkdir(dir.c_str(), S_IRWXU) == -1)
 #endif
   {
-    // Only allow the error due to parent directory does not exist
-    // if 'recursive' is requested
+    // Return success if directory already exists
+    if (errno == EEXIST) {
+      return Status::Success;
+    }
+    // In all other cases only allow the error due to parent directory
+    // does not exist, if 'recursive' is requested
     if ((errno == ENOENT) && (!dir.empty()) && recursive) {
       RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive));
       // Retry the creation

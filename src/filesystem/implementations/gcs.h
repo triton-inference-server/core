@@ -75,7 +75,8 @@ class GCSFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path, const std::string& fetch_subdir,
+      const std::string& path, const bool recursive,
+      const std::string& mount_dir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
@@ -363,7 +364,7 @@ GCSFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 GCSFileSystem::LocalizePath(
-    const std::string& path, const std::string& fetch_subdir,
+    const std::string& path, const bool recursive, const std::string& mount_dir,
     std::shared_ptr<LocalizedPath>* localized)
 {
   bool exists;

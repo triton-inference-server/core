@@ -151,7 +151,8 @@ class S3FileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path, const std::string& fetch_subdir,
+      const std::string& path, const bool recursive,
+      const std::string& mount_dir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
@@ -628,7 +629,7 @@ S3FileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 S3FileSystem::LocalizePath(
-    const std::string& path, const std::string& fetch_subdir,
+    const std::string& path, const bool recursive, const std::string& mount_dir,
     std::shared_ptr<LocalizedPath>* localized)
 {
   // Check if the directory or file exists
@@ -653,10 +654,18 @@ S3FileSystem::LocalizePath(
     effective_path = path;
   }
 
-  // Create temporary directory
+  // Create a local directory for s3 model store
+  const char* env_mount_dir = std::getenv("TRITON_AWS_MOUNT_DIRECTORY");
   std::string tmp_folder;
-  RETURN_IF_ERROR(
-      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
+  if (mount_dir.empty() && env_mount_dir == nullptr) {
+    RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
+        FileSystemType::LOCAL, &tmp_folder));
+  } else {
+    tmp_folder = mount_dir.empty() ? std::string(env_mount_dir) : mount_dir;
+    tmp_folder =
+        JoinPath({tmp_folder, path.substr(path.find_last_of('/') + 1)});
+    RETURN_IF_ERROR(triton::core::MakeDirectory(tmp_folder, true));
+  }
 
   // Specify contents to be downloaded
   std::set<std::string> contents;
@@ -694,36 +703,30 @@ S3FileSystem::LocalizePath(
               : JoinPath({(*localized)->Path(), s3_removed_path});
       bool is_subdir;
       RETURN_IF_ERROR(IsDirectory(s3_fpath, &is_subdir));
-      bool copy_subdir =
-          !fetch_subdir.empty()
-              ? s3_fpath == JoinPath({effective_path, fetch_subdir})
-              : true;
-      if (is_subdir) {
-        if (copy_subdir) {
-          // Create local mirror of sub-directories
+      if (recursive && is_subdir) {
+        // Create local mirror of sub-directories
 #ifdef _WIN32
-          int status = mkdir(const_cast<char*>(local_fpath.c_str()));
+        int status = mkdir(const_cast<char*>(local_fpath.c_str()));
 #else
-          int status = mkdir(
-              const_cast<char*>(local_fpath.c_str()),
-              S_IRUSR | S_IWUSR | S_IXUSR);
+        int status = mkdir(
+            const_cast<char*>(local_fpath.c_str()),
+            S_IRUSR | S_IWUSR | S_IXUSR);
 #endif
-          if (status == -1) {
-            return Status(
-                Status::Code::INTERNAL,
-                "Failed to create local folder: " + local_fpath +
-                    ", errno:" + strerror(errno));
-          }
-
-          // Add sub-directories and deeper files to contents
-          std::set<std::string> subdir_contents;
-          RETURN_IF_ERROR(GetDirectoryContents(s3_fpath, &subdir_contents));
-          for (auto itr = subdir_contents.begin(); itr != subdir_contents.end();
-               ++itr) {
-            contents.insert(JoinPath({s3_fpath, *itr}));
-          }
+        if (status == -1) {
+          return Status(
+              Status::Code::INTERNAL,
+              "Failed to create local folder: " + local_fpath +
+                  ", errno:" + strerror(errno));
         }
-      } else {
+
+        // Add sub-directories and deeper files to contents
+        std::set<std::string> subdir_contents;
+        RETURN_IF_ERROR(GetDirectoryContents(s3_fpath, &subdir_contents));
+        for (auto itr = subdir_contents.begin(); itr != subdir_contents.end();
+             ++itr) {
+          contents.insert(JoinPath({s3_fpath, *itr}));
+        }
+      } else if (!is_subdir) {
         // Create local copy of file
         std::string file_bucket, file_object;
         RETURN_IF_ERROR(ParsePath(s3_fpath, &file_bucket, &file_object));

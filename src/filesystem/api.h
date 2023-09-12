@@ -145,14 +145,26 @@ Status ReadTextFile(const std::string& path, std::string* contents);
 
 /// Create an object representing a local copy of a path.
 /// \param path The path of the directory or file.
-/// \param fetch_subdir If specified, will only download provided
-/// sub directory, otherwise all subdirectories will be downloaded.
-/// Does not affect files individual files, located under `path`.
+/// \param recursive If true, will fetch all sub-directories in
+/// the provided path.
 /// \param localized Returns the LocalizedPath object
 /// representing the local copy of the path.
 /// \return Error status
 Status LocalizePath(
-    const std::string& path, const std::string& fetch_subdir,
+    const std::string& path, const bool recursive,
+    std::shared_ptr<LocalizedPath>* localized);
+
+/// Create an object representing a local copy of a path.
+/// \param path The path of the directory or file.
+/// \param recursive If true, will fetch all sub-directories in
+/// the provided path.
+/// \param mount_dir If specified, will use provided local directory
+/// for localization.
+/// \param localized Returns the LocalizedPath object
+/// representing the local copy of the path.
+/// \return Error status
+Status LocalizePath(
+    const std::string& path, const bool recursive, const std::string& mount_dir,
     std::shared_ptr<LocalizedPath>* localized);
 
 /// Write a string to a file.
