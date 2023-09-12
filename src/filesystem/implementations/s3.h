@@ -654,7 +654,11 @@ S3FileSystem::LocalizePath(
     effective_path = path;
   }
 
-  // Create a local directory for s3 model store
+  // Create a local directory for s3 model store.
+  // If `mount_dir` or ENV variable are not set,
+  // creates a temporary directory under `/tmp` with the format: "folderXXXXXX".
+  // Otherwise, will create a folder under specified directory with the name
+  // indicated in path (i.e. everything after the last encounter of `/`).
   const char* env_mount_dir = std::getenv("TRITON_AWS_MOUNT_DIRECTORY");
   std::string tmp_folder;
   if (mount_dir.empty() && env_mount_dir == nullptr) {
