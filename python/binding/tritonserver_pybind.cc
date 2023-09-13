@@ -91,26 +91,26 @@ struct TritonError : public std::runtime_error {
 };
 
 // triton::core::python exceptions map 1:1 to TRITONSERVER_Error_Code.
-struct Unknown : public TritonError {
-  explicit Unknown(const std::string& what) : TritonError(what) {}
+struct UnknownError : public TritonError {
+  explicit UnknownError(const std::string& what) : TritonError(what) {}
 };
-struct Internal : public TritonError {
-  explicit Internal(const std::string& what) : TritonError(what) {}
+struct InternalError : public TritonError {
+  explicit InternalError(const std::string& what) : TritonError(what) {}
 };
-struct NotFound : public TritonError {
-  explicit NotFound(const std::string& what) : TritonError(what) {}
+struct NotFoundError : public TritonError {
+  explicit NotFoundError(const std::string& what) : TritonError(what) {}
 };
-struct InvalidArgument : public TritonError {
-  explicit InvalidArgument(const std::string& what) : TritonError(what) {}
+struct InvalidArgumentError : public TritonError {
+  explicit InvalidArgumentError(const std::string& what) : TritonError(what) {}
 };
-struct Unavailable : public TritonError {
-  explicit Unavailable(const std::string& what) : TritonError(what) {}
+struct UnavailableError : public TritonError {
+  explicit UnavailableError(const std::string& what) : TritonError(what) {}
 };
-struct Unsupported : public TritonError {
-  explicit Unsupported(const std::string& what) : TritonError(what) {}
+struct UnsupportedError : public TritonError {
+  explicit UnsupportedError(const std::string& what) : TritonError(what) {}
 };
-struct AlreadyExists : public TritonError {
-  explicit AlreadyExists(const std::string& what) : TritonError(what) {}
+struct AlreadyExistsError : public TritonError {
+  explicit AlreadyExistsError(const std::string& what) : TritonError(what) {}
 };
 
 TRITONSERVER_Error*
@@ -118,14 +118,18 @@ CreateTRITONSERVER_ErrorFrom(const py::error_already_set& ex)
 {
   // Reserved lookup to get Python type of the exceptions,
   // 'TRITONSERVER_ERROR_UNKNOWN' is the fallback error code.
-  // static auto uk = py::module::import("triton_bindings").attr("Unknown");
-  static auto it = py::module::import("triton_bindings").attr("Internal");
-  static auto nf = py::module::import("triton_bindings").attr("NotFound");
+  // static auto uk =
+  // py::module::import("triton_bindings").attr("UnknownError");
+  static auto it = py::module::import("triton_bindings").attr("InternalError");
+  static auto nf = py::module::import("triton_bindings").attr("NotFoundError");
   static auto ia =
-      py::module::import("triton_bindings").attr("InvalidArgument");
-  static auto ua = py::module::import("triton_bindings").attr("Unavailable");
-  static auto us = py::module::import("triton_bindings").attr("Unsupported");
-  static auto ae = py::module::import("triton_bindings").attr("AlreadyExists");
+      py::module::import("triton_bindings").attr("InvalidArgumentError");
+  static auto ua =
+      py::module::import("triton_bindings").attr("UnavailableError");
+  static auto us =
+      py::module::import("triton_bindings").attr("UnsupportedError");
+  static auto ae =
+      py::module::import("triton_bindings").attr("AlreadyExistsError");
   TRITONSERVER_Error_Code code = TRITONSERVER_ERROR_UNKNOWN;
   if (ex.matches(it.ptr())) {
     code = TRITONSERVER_ERROR_INTERNAL;
@@ -154,19 +158,19 @@ ThrowIfError(TRITONSERVER_Error* err)
   std::string msg = TRITONSERVER_ErrorMessage(err);
   switch (TRITONSERVER_ErrorCode(err)) {
     case TRITONSERVER_ERROR_INTERNAL:
-      throw Internal(std::move(msg));
+      throw InternalError(std::move(msg));
     case TRITONSERVER_ERROR_NOT_FOUND:
-      throw NotFound(std::move(msg));
+      throw NotFoundError(std::move(msg));
     case TRITONSERVER_ERROR_INVALID_ARG:
-      throw InvalidArgument(std::move(msg));
+      throw InvalidArgumentError(std::move(msg));
     case TRITONSERVER_ERROR_UNAVAILABLE:
-      throw Unavailable(std::move(msg));
+      throw UnavailableError(std::move(msg));
     case TRITONSERVER_ERROR_UNSUPPORTED:
-      throw Unsupported(std::move(msg));
+      throw UnsupportedError(std::move(msg));
     case TRITONSERVER_ERROR_ALREADY_EXISTS:
-      throw AlreadyExists(std::move(msg));
+      throw AlreadyExistsError(std::move(msg));
     default:
-      throw Unknown(std::move(msg));
+      throw UnknownError(std::move(msg));
   }
 }
 
@@ -262,7 +266,7 @@ class PyBufferAttributes
         triton_object_, memory_type));
   }
 
-  void SetCudaIpcHandle(size_t cuda_ipc_handle)
+  void SetCudaIpcHandle(uintptr_t cuda_ipc_handle)
   {
     ThrowIfError(TRITONSERVER_BufferAttributesSetCudaIpcHandle(
         triton_object_, reinterpret_cast<void*>(cuda_ipc_handle)));
@@ -291,12 +295,12 @@ class PyBufferAttributes
     return memory_type;
   }
 
-  size_t CudaIpcHandle()
+  uintptr_t CudaIpcHandle()
   {
     void* cuda_ipc_handle = nullptr;
     ThrowIfError(TRITONSERVER_BufferAttributesCudaIpcHandle(
         triton_object_, &cuda_ipc_handle));
-    return reinterpret_cast<size_t>(cuda_ipc_handle);
+    return reinterpret_cast<uintptr_t>(cuda_ipc_handle);
   }
 
   size_t ByteSize()
@@ -328,11 +332,11 @@ class PyResponseAllocator
     py::object user_object;
   };
   using AllocFn = std::function<
-      std::tuple<size_t, py::object, TRITONSERVER_MemoryType, int64_t>(
+      std::tuple<uintptr_t, py::object, TRITONSERVER_MemoryType, int64_t>(
           py::object, std::string, size_t, TRITONSERVER_MemoryType, int64_t,
           py::object)>;
   using ReleaseFn = std::function<void(
-      py::object, size_t, py::object, size_t, TRITONSERVER_MemoryType,
+      py::object, uintptr_t, py::object, size_t, TRITONSERVER_MemoryType,
       int64_t)>;
   using StartFn = std::function<void(py::object, py::object)>;
 
@@ -369,6 +373,7 @@ class PyResponseAllocator
       TRITONSERVER_MemoryType* actual_memory_type,
       int64_t* actual_memory_type_id)
   {
+    py::gil_scoped_acquire gil;
     struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     try {
@@ -398,18 +403,18 @@ class PyResponseAllocator
       void* buffer_userp, size_t byte_size, TRITONSERVER_MemoryType memory_type,
       int64_t memory_type_id)
   {
+    py::gil_scoped_acquire gil;
     struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(buffer_userp);
     try {
       cr->allocator.cast<PyResponseAllocator*>()->release_fn_(
-          cr->allocator, reinterpret_cast<size_t>(buffer), cr->user_object,
+          cr->allocator, reinterpret_cast<uintptr_t>(buffer), cr->user_object,
           byte_size, memory_type, memory_type_id);
     }
     catch (py::error_already_set& ex) {
       err = CreateTRITONSERVER_ErrorFrom(ex);
     }
     // Done with CallbackResource associated with this buffer
-    py::gil_scoped_acquire gil;
     delete cr;
     return err;
   }
@@ -417,6 +422,7 @@ class PyResponseAllocator
   static TRITONSERVER_Error* PyTritonStartFn(
       struct TRITONSERVER_ResponseAllocator* allocator, void* userp)
   {
+    py::gil_scoped_acquire gil;
     struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     try {
@@ -434,6 +440,7 @@ class PyResponseAllocator
       const char* tensor_name, size_t* byte_size,
       TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
   {
+    py::gil_scoped_acquire gil;
     struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     try {
@@ -458,6 +465,7 @@ class PyResponseAllocator
       struct TRITONSERVER_BufferAttributes* buffer_attributes, void* userp,
       void* buffer_userp)
   {
+    py::gil_scoped_acquire gil;
     struct TRITONSERVER_Error* err = nullptr;
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     auto bcr = reinterpret_cast<CallbackResource*>(buffer_userp);
@@ -564,9 +572,9 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
       py::object, TRITONSERVER_InferenceTraceActivity, uint64_t, py::object)>;
   using TensorActivityFn = std::function<void(
       py::object, TRITONSERVER_InferenceTraceActivity, std::string,
-      TRITONSERVER_DataType, size_t, size_t, py::array_t<int64_t>,
+      TRITONSERVER_DataType, uintptr_t, size_t, py::array_t<int64_t>,
       TRITONSERVER_MemoryType, int64_t, py::object)>;
-  using ReleaseFn = std::function<void(py::object, py::object)>;
+  using ReleaseFn = std::function<void(std::shared_ptr<PyTrace>, py::object)>;
 
   struct CallbackResource {
     CallbackResource(
@@ -678,6 +686,7 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
       TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns,
       void* userp)
   {
+    py::gil_scoped_acquire gil;
     // Note that 'trace' associated with the activity is not necessary the
     // root trace captured in Callback Resource, so need to always wrap 'trace'
     // in PyTrace for the Python callabck to interact with the correct trace.
@@ -696,14 +705,14 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
       const int64_t* shape, uint64_t dim_count,
       TRITONSERVER_MemoryType memory_type, int64_t memory_type_id, void* userp)
   {
+    py::gil_scoped_acquire gil;
     // See 'PyTritonTraceTimestampActivityFn' for 'pt' explanation.
     PyTrace pt(trace, false /* owned */);
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     cr->seen_traces.insert(reinterpret_cast<uintptr_t>(trace));
-    py::gil_scoped_acquire acquire;
     cr->tensor_fn(
         py::cast(pt, py::return_value_policy::reference), activity, name,
-        datatype, reinterpret_cast<size_t>(base), byte_size,
+        datatype, reinterpret_cast<uintptr_t>(base), byte_size,
         py::array_t<int64_t>(dim_count, shape), memory_type, memory_type_id,
         cr->user_object);
   }
@@ -711,14 +720,14 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
   static void PyTritonTraceRelease(
       struct TRITONSERVER_InferenceTrace* trace, void* userp)
   {
+    py::gil_scoped_acquire gil;
     // See 'PyTritonTraceTimestampActivityFn' for 'pt' explanation.
     // wrap in shared_ptr to transfer ownership to Python
     auto managed_pt = std::make_shared<PyTrace>(trace, true /* owned */);
     auto cr = reinterpret_cast<CallbackResource*>(userp);
-    cr->release_fn(py::cast(managed_pt), cr->user_object);
+    cr->release_fn(managed_pt, cr->user_object);
     cr->seen_traces.erase(reinterpret_cast<uintptr_t>(trace));
     if (cr->seen_traces.empty()) {
-      py::gil_scoped_acquire gil;
       delete cr;
     }
   }
@@ -812,7 +821,7 @@ class PyInferenceResponse
         py_value = py::bool_(*reinterpret_cast<const bool*>(value));
         break;
       default:
-        throw Unsupported(
+        throw UnsupportedError(
             std::string("Unexpected type '") +
             TRITONSERVER_ParameterTypeString(type) +
             "' received as response parameter");
@@ -830,8 +839,8 @@ class PyInferenceResponse
   }
 
   std::tuple<
-      std::string, TRITONSERVER_DataType, py::array_t<int64_t>, size_t, size_t,
-      TRITONSERVER_MemoryType, int64_t, py::object>
+      std::string, TRITONSERVER_DataType, py::array_t<int64_t>, uintptr_t,
+      size_t, TRITONSERVER_MemoryType, int64_t, py::object>
   Output(uint32_t index)
   {
     const char* name = nullptr;
@@ -849,7 +858,7 @@ class PyInferenceResponse
     return {name,
             datatype,
             py::array_t<int64_t>(dim_count, shape),
-            reinterpret_cast<size_t>(base),
+            reinterpret_cast<uintptr_t>(base),
             byte_size,
             memory_type,
             memory_type_id,
@@ -926,11 +935,11 @@ class PyInferenceRequest
       struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
       void* userp)
   {
+    py::gil_scoped_acquire gil;
     std::unique_ptr<PyInferenceRequest> managed_pt(
         new PyInferenceRequest(request, true /* owned */));
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     cr->release_fn(py::cast(managed_pt.release()), flags, cr->user_object);
-    py::gil_scoped_acquire gil;
     delete cr;
   }
 
@@ -952,12 +961,12 @@ class PyInferenceRequest
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
   {
+    py::gil_scoped_acquire gil;
     auto managed_pt =
         std::make_shared<PyInferenceResponse>(response, true /* owned */);
     auto cr = reinterpret_cast<PyInferenceResponse::CallbackResource*>(userp);
     cr->complete_fn(py::cast(managed_pt), flags, cr->user_object);
     if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
-      py::gil_scoped_acquire gil;
       delete cr->allocator_resource;
       delete cr;
     }
@@ -1072,7 +1081,7 @@ class PyInferenceRequest
     ThrowIfError(TRITONSERVER_InferenceRequestRemoveAllInputs(triton_object_));
   }
   void AppendInputData(
-      const std::string& name, size_t base, size_t byte_size,
+      const std::string& name, uintptr_t base, size_t byte_size,
       TRITONSERVER_MemoryType memory_type, int64_t memory_type_id)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestAppendInputData(
@@ -1080,7 +1089,7 @@ class PyInferenceRequest
         byte_size, memory_type, memory_type_id));
   }
   void AppendInputDataWithHostPolicy(
-      const std::string name, size_t base, size_t byte_size,
+      const std::string name, uintptr_t base, size_t byte_size,
       TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
       const std::string& host_policy_name)
   {
@@ -1089,7 +1098,7 @@ class PyInferenceRequest
         byte_size, memory_type, memory_type_id, host_policy_name.c_str()));
   }
   void AppendInputDataWithBufferAttributes(
-      const std::string& name, size_t base,
+      const std::string& name, uintptr_t base,
       PyBufferAttributes* buffer_attributes)
   {
     ThrowIfError(
@@ -1421,24 +1430,24 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     return ready;
   }
 
-  std::tuple<uint32_t, size_t> ModelBatchProperties(
+  std::tuple<uint32_t, uintptr_t> ModelBatchProperties(
       const std::string& model_name, int64_t model_version) const
   {
     uint32_t flags;
     void* voidp;
     ThrowIfError(TRITONSERVER_ServerModelBatchProperties(
         triton_object_, model_name.c_str(), model_version, &flags, &voidp));
-    return {flags, reinterpret_cast<size_t>(voidp)};
+    return {flags, reinterpret_cast<uintptr_t>(voidp)};
   }
 
-  std::tuple<uint32_t, size_t> ModelTransactionProperties(
+  std::tuple<uint32_t, uintptr_t> ModelTransactionProperties(
       const std::string& model_name, int64_t model_version) const
   {
     uint32_t txn_flags;
     void* voidp;
     ThrowIfError(TRITONSERVER_ServerModelTransactionProperties(
         triton_object_, model_name.c_str(), model_version, &txn_flags, &voidp));
-    return {txn_flags, reinterpret_cast<size_t>(voidp)};
+    return {txn_flags, reinterpret_cast<uintptr_t>(voidp)};
   }
 
   std::shared_ptr<PyMessage> Metadata() const
@@ -1487,6 +1496,8 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
 
   void LoadModel(const std::string& model_name)
   {
+    // load model is blocking, ensure to release GIL
+    py::gil_scoped_release release;
     ThrowIfError(
         TRITONSERVER_ServerLoadModel(triton_object_, model_name.c_str()));
   }
@@ -1499,6 +1510,8 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     for (const auto& p : parameters) {
       params.emplace_back(p->Ptr());
     }
+    // load model is blocking, ensure to release GIL
+    py::gil_scoped_release release;
     ThrowIfError(TRITONSERVER_ServerLoadModelWithParameters(
         triton_object_, model_name.c_str(), params.data(), params.size()));
   }
@@ -1622,13 +1635,17 @@ PYBIND11_MODULE(triton_bindings, m)
   // Implement exception inheritance in PyBind:
   // https://github.com/jagerman/pybind11/blob/master/tests/test_exceptions.cpp#L149-L152
   auto te = pybind11::register_exception<TritonError>(m, "TritonError");
-  pybind11::register_exception<Unknown>(m, "Unknown", te.ptr());
-  pybind11::register_exception<Internal>(m, "Internal", te.ptr());
-  pybind11::register_exception<NotFound>(m, "NotFound", te.ptr());
-  pybind11::register_exception<InvalidArgument>(m, "InvalidArgument", te.ptr());
-  pybind11::register_exception<Unavailable>(m, "Unavailable", te.ptr());
-  pybind11::register_exception<Unsupported>(m, "Unsupported", te.ptr());
-  pybind11::register_exception<AlreadyExists>(m, "AlreadyExists", te.ptr());
+  pybind11::register_exception<UnknownError>(m, "UnknownError", te.ptr());
+  pybind11::register_exception<InternalError>(m, "InternalError", te.ptr());
+  pybind11::register_exception<NotFoundError>(m, "NotFoundError", te.ptr());
+  pybind11::register_exception<InvalidArgumentError>(
+      m, "InvalidArgumentError", te.ptr());
+  pybind11::register_exception<UnavailableError>(
+      m, "UnavailableError", te.ptr());
+  pybind11::register_exception<UnsupportedError>(
+      m, "UnsupportedError", te.ptr());
+  pybind11::register_exception<AlreadyExistsError>(
+      m, "AlreadyExistsError", te.ptr());
 
   // TRITONSERVER_DataType
   py::enum_<TRITONSERVER_DataType>(m, "TRITONSERVER_DataType")

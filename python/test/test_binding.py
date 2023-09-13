@@ -271,10 +271,10 @@ class BindingTest(unittest.TestCase):
 
     def test_exceptions(self):
         ex_list = [
-            triton_bindings.Unknown, triton_bindings.Internal,
-            triton_bindings.NotFound, triton_bindings.InvalidArgument,
-            triton_bindings.Unavailable, triton_bindings.Unsupported,
-            triton_bindings.AlreadyExists
+            triton_bindings.UnknownError, triton_bindings.InternalError,
+            triton_bindings.NotFoundError, triton_bindings.InvalidArgumentError,
+            triton_bindings.UnavailableError, triton_bindings.UnsupportedError,
+            triton_bindings.AlreadyExistsError
         ]
         for ex_type in ex_list:
             with self.assertRaises(triton_bindings.TritonError) as ctx:
@@ -794,7 +794,7 @@ class BindingTest(unittest.TestCase):
         # the request
         server = self._start_polling_server()
 
-        with self.assertRaises(triton_bindings.NotFound) as ctx:
+        with self.assertRaises(triton_bindings.NotFoundError) as ctx:
             _ = triton_bindings.TRITONSERVER_InferenceRequest(
                 server, "not_existing_model", -1)
         self.assertTrue("unknown model" in str(ctx.exception))
