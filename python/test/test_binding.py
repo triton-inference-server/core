@@ -116,7 +116,7 @@ def g_request_fn(request, flags, user_object):
     if flags != 1:
         raise Exception("Unexpected request release flag")
     # counter of "inflight" requests
-    user_object.put(flags)
+    user_object.put(request)
 
 
 # Python model file string to fastly deploy test model, depends on
@@ -231,7 +231,7 @@ class BindingTest(unittest.TestCase):
         # enable "auto-complete" to skip providing config.pbtxt
         options.set_strict_model_config(False)
         options.set_server_id("testing_server")
-        # [FIXME] Need to fix request lifecycle
+        # [FIXME] Need to fix coupling of response and server
         options.set_exit_timeout(5)
         return triton_bindings.TRITONSERVER_Server(options)
 
@@ -267,7 +267,7 @@ class BindingTest(unittest.TestCase):
         request.append_input_data_with_buffer_attributes(
             "INPUT1", input_buffer, ba)
 
-        return request, allocator, response_queue
+        return request, allocator, response_queue, request_counter
 
     def test_exceptions(self):
         ex_list = [
@@ -586,7 +586,7 @@ class BindingTest(unittest.TestCase):
 
         # Send and wait for inference, not care about result.
         server = self._start_polling_server()
-        request, allocator, response_queue = self._prepare_inference_request(
+        request, allocator, response_queue, request_counter = self._prepare_inference_request(
             server)
         server.infer_async(request, trace)
 
@@ -647,6 +647,7 @@ class BindingTest(unittest.TestCase):
         # check if dict is empty to ensure the activity are logged in correct
         # amount.
         self.assertFalse(bool(expected_activities))
+        request_counter.get()
 
     def test_options(self):
         options = triton_bindings.TRITONSERVER_ServerOptions()
@@ -958,6 +959,9 @@ class BindingTest(unittest.TestCase):
 
         # label (no label so empty)
         self.assertEqual(len(res.output_classification_label(0, 1)), 0)
+        # [FIXME] keep alive behavior is not established between response
+        # and server, so must explicitly handle the destruction order for now.
+        del res
 
         # sanity check on user objects
         self.assertEqual(allocator_counter["start"], 1)
@@ -966,7 +970,7 @@ class BindingTest(unittest.TestCase):
         self.assertTrue("query" not in allocator_counter)
         self.assertEqual(allocator_counter["buffer"], 2)
         # Expect request to be released in 10 seconds
-        _ = request_counter.get(block=True, timeout=10)
+        request = request_counter.get(block=True, timeout=10)
 
     def test_server_explicit(self):
         self._create_model_repository()

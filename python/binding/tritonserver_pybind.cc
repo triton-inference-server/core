@@ -883,7 +883,8 @@ class PyInferenceRequest
  public:
   DESTRUCTOR_WITH_LOG(PyInferenceRequest, TRITONSERVER_InferenceRequestDelete);
 
-  using ReleaseFn = std::function<void(py::object, uint32_t, py::object)>;
+  using ReleaseFn = std::function<void(
+      std::shared_ptr<PyInferenceRequest>, uint32_t, py::object)>;
 
   // Defer definition until PyServer is defined
   PyInferenceRequest(
@@ -905,8 +906,8 @@ class PyInferenceRequest
   // Triton C callback wrapper.
   struct TRITONSERVER_InferenceRequest* Release()
   {
-    owned_ = false;
-    request_callback_resource_.release();
+    // Note that Release() doesn't change ownership as the
+    // same PyInferenceRequest will be passed along the life cycle.
     allocator_callback_resource_.release();
     response_callback_resource_.release();
     return triton_object_;
@@ -919,6 +920,15 @@ class PyInferenceRequest
     }
     ReleaseFn release_fn;
     py::object user_object;
+    // Unsafe handling to ensure the same PyInferenceRequest object
+    // goes through the request release cycle. This is due to
+    // a 'keep_alive' relationship is built between 'PyInferenceRequest'
+    // and 'PyServer': a request is associated with a server and the server
+    // should be kept alive until all associated requests is properly released.
+    // And here we exploit the 'keep_alive' utility in PyBind to guarantee so.
+    // See PyServer::InferAsync on how this field is set to avoid potential
+    // circular inclusion.
+    std::shared_ptr<PyInferenceRequest> request;
   };
 
 
@@ -936,10 +946,8 @@ class PyInferenceRequest
       void* userp)
   {
     py::gil_scoped_acquire gil;
-    std::unique_ptr<PyInferenceRequest> managed_pt(
-        new PyInferenceRequest(request, true /* owned */));
     auto cr = reinterpret_cast<CallbackResource*>(userp);
-    cr->release_fn(py::cast(managed_pt.release()), flags, cr->user_object);
+    cr->release_fn(cr->request, flags, cr->user_object);
     delete cr;
   }
 
@@ -1144,8 +1152,10 @@ class PyInferenceRequest
         triton_object_, key.c_str(), value));
   }
 
- private:
+ public:
   std::unique_ptr<CallbackResource> request_callback_resource_{nullptr};
+
+ private:
   std::unique_ptr<PyResponseAllocator::CallbackResource>
       allocator_callback_resource_{nullptr};
   std::unique_ptr<PyInferenceResponse::CallbackResource>
@@ -1535,21 +1545,59 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     return std::make_shared<PyMetrics>(metrics, true /* owned */);
   }
 
-  void InferAsync(PyInferenceRequest& request, PyTrace& trace)
+  void InferAsync(
+      const std::shared_ptr<PyInferenceRequest>& request, PyTrace& trace)
   {
+    // Extra handling to avoid circular inclusion:
+    //   request -> request_callback_resource_ -> request
+    // 1. extract 'request_callback_resource_' out and provide
+    //    scoped handler to place resource back to request if not released,
+    //    TRITONSERVER_ServerInferAsync failed in other words.
+    // 2. add 'request' into resource so request release callback can access it.
+    // 3. call TRITONSERVER_ServerInferAsync.
+    // 4. release the extracted resource if TRITONSERVER_ServerInferAsync
+    //    returns.
+    static auto resource_handler =
+        [](PyInferenceRequest::CallbackResource* cr) {
+          if (cr != nullptr) {
+            cr->request->request_callback_resource_.reset(cr);
+            cr->request.reset();
+          }
+        };
+    std::unique_ptr<
+        PyInferenceRequest::CallbackResource, decltype(resource_handler)>
+        scoped_rh(
+            request->request_callback_resource_.release(), resource_handler);
+    scoped_rh->request = request;
+
     ThrowIfError(TRITONSERVER_ServerInferAsync(
-        triton_object_, request.Ptr(), trace.Ptr()));
+        triton_object_, request->Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
-    request.Release();
+    scoped_rh.release();
+    request->Release();
     trace.Release();
   }
 
-  void InferAsync(PyInferenceRequest& request)
+  void InferAsync(const std::shared_ptr<PyInferenceRequest>& request)
   {
+    static auto resource_handler =
+        [](PyInferenceRequest::CallbackResource* cr) {
+          if (cr != nullptr) {
+            cr->request->request_callback_resource_.reset(cr);
+            cr->request.reset();
+          }
+        };
+    std::unique_ptr<
+        PyInferenceRequest::CallbackResource, decltype(resource_handler)>
+        scoped_rh(
+            request->request_callback_resource_.release(), resource_handler);
+    scoped_rh->request = request;
+
     ThrowIfError(
-        TRITONSERVER_ServerInferAsync(triton_object_, request.Ptr(), nullptr));
+        TRITONSERVER_ServerInferAsync(triton_object_, request->Ptr(), nullptr));
     // Ownership of the internal C object is transferred.
-    request.Release();
+    scoped_rh.release();
+    request->Release();
   }
 };
 
@@ -1855,7 +1903,8 @@ PYBIND11_MODULE(triton_bindings, m)
       .value("ALL", TRITONSERVER_REQUEST_RELEASE_ALL)
       .export_values();
 
-  py::class_<PyInferenceRequest>(m, "TRITONSERVER_InferenceRequest")
+  py::class_<PyInferenceRequest, std::shared_ptr<PyInferenceRequest>>(
+      m, "TRITONSERVER_InferenceRequest")
       .def(
           py::init<PyServer&, const std::string&, int64_t>(),
           py::keep_alive<1, 2>())
@@ -2020,11 +2069,14 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("unload_model_and_dependents", &PyServer::UnloadModelAndDependents)
       .def("metrics", &PyServer::Metrics)
       .def(
-          "infer_async", py::overload_cast<PyInferenceRequest&, PyTrace&>(
-                             &PyServer::InferAsync))
+          "infer_async",
+          py::overload_cast<
+              const std::shared_ptr<PyInferenceRequest>&, PyTrace&>(
+              &PyServer::InferAsync))
       .def(
           "infer_async",
-          py::overload_cast<PyInferenceRequest&>(&PyServer::InferAsync));
+          py::overload_cast<const std::shared_ptr<PyInferenceRequest>&>(
+              &PyServer::InferAsync));
 
   // TRITONSERVER_MetricKind
   py::enum_<TRITONSERVER_MetricKind>(m, "TRITONSERVER_MetricKind")
