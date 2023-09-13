@@ -177,7 +177,8 @@ ThrowIfError(TRITONSERVER_Error* err)
 template <typename TritonStruct>
 class PyWrapper {
  public:
-  explicit PyWrapper(TritonStruct* to, bool o) : triton_object_(to), owned_(o)
+  explicit PyWrapper(TritonStruct* triton_object, bool owned)
+      : triton_object_(triton_object), owned_(owned)
   {
   }
   PyWrapper() = default;
@@ -322,7 +323,7 @@ class PyResponseAllocator
   // Triton C callback wrappers. This struct will be used for both
   // 'allocator_userp' and 'buffer_userp'
   struct CallbackResource {
-    CallbackResource(py::object a, py::object uo)
+    CallbackResource(const py::object& a, const py::object& uo)
         : allocator(a), user_object(uo)
     {
     }
@@ -578,7 +579,8 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
 
   struct CallbackResource {
     CallbackResource(
-        TimestampActivityFn ts, TensorActivityFn t, ReleaseFn r, py::object uo)
+        TimestampActivityFn ts, TensorActivityFn t, ReleaseFn r,
+        const py::object& uo)
         : timestamp_fn(ts), tensor_fn(t), release_fn(r), user_object(uo)
     {
     }
@@ -608,7 +610,7 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
 
   PyTrace(
       int level, uint64_t parent_id, TimestampActivityFn timestamp,
-      ReleaseFn release, py::object user_object)
+      ReleaseFn release, const py::object& user_object)
       : callback_resource_(
             new CallbackResource(timestamp, nullptr, release, user_object))
   {
@@ -621,7 +623,7 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
 
   PyTrace(
       int level, uint64_t parent_id, TimestampActivityFn timestamp,
-      TensorActivityFn tensor, ReleaseFn release, py::object user_object)
+      TensorActivityFn tensor, ReleaseFn release, const py::object& user_object)
       : callback_resource_(
             new CallbackResource(timestamp, tensor, release, user_object))
   {
@@ -745,7 +747,8 @@ class PyInferenceResponse
   using CompleteFn = std::function<void(py::object, uint32_t, py::object)>;
   struct CallbackResource {
     CallbackResource(
-        CompleteFn c, PyResponseAllocator::CallbackResource* a, py::object u)
+        CompleteFn c, PyResponseAllocator::CallbackResource* a,
+        const py::object& u)
         : complete_fn(c), allocator_resource(a), user_object(u)
     {
     }
@@ -914,7 +917,7 @@ class PyInferenceRequest
   }
 
   struct CallbackResource {
-    CallbackResource(ReleaseFn r, py::object uo)
+    CallbackResource(ReleaseFn r, const py::object& uo)
         : release_fn(r), user_object(uo)
     {
     }
@@ -932,7 +935,7 @@ class PyInferenceRequest
   };
 
 
-  void SetReleaseCallback(ReleaseFn release, py::object user_object)
+  void SetReleaseCallback(ReleaseFn release, const py::object& user_object)
   {
     request_callback_resource_.reset(
         new CallbackResource(release, user_object));
@@ -952,8 +955,9 @@ class PyInferenceRequest
   }
 
   void SetResponseCallback(
-      py::object allocator, py::object allocater_user_object,
-      PyInferenceResponse::CompleteFn response, py::object response_user_object)
+      const py::object& allocator, const py::object& allocater_user_object,
+      PyInferenceResponse::CompleteFn response,
+      const py::object& response_user_object)
   {
     allocator_callback_resource_.reset(
         new PyResponseAllocator::CallbackResource(
@@ -1877,14 +1881,15 @@ PYBIND11_MODULE(triton_bindings, m)
       .def(
           py::init<
               int, uint64_t, PyTrace::TimestampActivityFn,
-              PyTrace::TensorActivityFn, PyTrace::ReleaseFn, py::object>(),
+              PyTrace::TensorActivityFn, PyTrace::ReleaseFn,
+              const py::object&>(),
           py::arg("level"), py::arg("parent_id"), py::arg("activity_function"),
           py::arg("tensor_activity_function"), py::arg("release_function"),
           py::arg("trace_userp"))
       .def(
           py::init<
               int, uint64_t, PyTrace::TimestampActivityFn, PyTrace::ReleaseFn,
-              py::object>(),
+              const py::object&>(),
           py::arg("level"), py::arg("parent_id"), py::arg("activity_function"),
           py::arg("release_function"), py::arg("trace_userp"))
       .def_property_readonly("id", &PyTrace::Id)
