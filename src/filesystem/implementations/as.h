@@ -116,7 +116,8 @@ class ASFileSystem : public FileSystem {
 
   Status DownloadFolder(
       const std::string& container, const std::string& path,
-      const std::string& dest, const bool recursive);
+      const std::string& dest, const bool recursive,
+      const bool allow_dir_exist);
 
   std::shared_ptr<asb::BlobServiceClient> client_;
   re2::RE2 as_regex_;
@@ -392,7 +393,7 @@ ASFileSystem::FileExists(const std::string& path, bool* exists)
 Status
 ASFileSystem::DownloadFolder(
     const std::string& container, const std::string& path,
-    const std::string& dest, const bool recursive)
+    const std::string& dest, const bool recursive, const bool allow_dir_exist)
 {
   auto container_client = client_->GetBlobContainerClient(container);
   auto func = [&](const std::vector<asb::Models::BlobItem>& blobs,
@@ -413,14 +414,15 @@ ASFileSystem::DownloadFolder(
         const auto& local_path = JoinPath({dest, BaseName(directory_item)});
         int status = mkdir(
             const_cast<char*>(local_path.c_str()), S_IRUSR | S_IWUSR | S_IXUSR);
-        if (status == -1 && errno != EEXIST) {
+        if (status == -1 && !(allow_dir_exist && errno == EEXIST)) {
           return Status(
               Status::Code::INTERNAL,
               "Failed to create local folder: " + local_path +
                   ", errno:" + strerror(errno));
         }
-        RETURN_IF_ERROR(
-            DownloadFolder(container, directory_item, local_path, recursive));
+        RETURN_IF_ERROR(DownloadFolder(
+            container, directory_item, local_path, recursive,
+            true /*allow_dir_exist*/));
       }
     }
     return Status::Success;
@@ -471,7 +473,8 @@ ASFileSystem::LocalizePath(
   std::string dest(tmp_folder);
   std::string container, blob;
   RETURN_IF_ERROR(ParsePath(path, &container, &blob));
-  return DownloadFolder(container, blob, dest, recursive);
+  return DownloadFolder(
+      container, blob, dest, recursive, true /*allow_dir_exist*/);
 }
 
 Status
