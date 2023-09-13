@@ -38,6 +38,7 @@
 #include "response_allocator.h"
 #include "sequence_state.h"
 #include "status.h"
+#include "triton/common/logging.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
@@ -710,6 +711,16 @@ class InferenceRequest {
     }
     *is_cancelled = response_factory_->IsCancelled();
     return Status::Success;
+  }
+
+  bool IsCancelled()
+  {
+    bool is_cancelled = false;
+    Status status = IsCancelled(&is_cancelled);
+    if (!status.IsOk()) {
+      LOG_ERROR << status.Message();
+    }
+    return is_cancelled;
   }
 
 #endif  // TRITON_ENABLE_STATS
