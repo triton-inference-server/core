@@ -188,22 +188,16 @@ TEST_F(RequestCancellationTest, Cancellation)
 
   TRITONBACKEND_Request* backend_request =
       reinterpret_cast<TRITONBACKEND_Request*>(irequest_);
-  TRITONBACKEND_ResponseFactory* response_factory;
-  FAIL_TEST_IF_ERR(
-      TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
-
-  bool is_cancelled = true;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
-  ASSERT_FALSE(is_cancelled);
-
-  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestCancel(irequest_));
 
   FAIL_TEST_IF_ERR(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */));
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestCancel(irequest_));
 
-  is_cancelled = false;
+  TRITONBACKEND_ResponseFactory* response_factory;
+  FAIL_TEST_IF_ERR(
+      TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
+
+  bool is_cancelled = false;
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
   ASSERT_TRUE(is_cancelled);
@@ -228,13 +222,13 @@ TEST_F(RequestCancellationTest, Cancellation)
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetResponseCallback(
       irequest_, allocator_, nullptr /* response_allocator_userp */,
       InferResponseComplete, reinterpret_cast<void*>(p)));
-  FAIL_TEST_IF_ERR(
-      TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
 
   // Sending another request and the request should not be cancelled.
   FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
       server_, irequest_, nullptr
       /* trace */));
+  FAIL_TEST_IF_ERR(
+      TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
 
   is_cancelled = true;
   FAIL_TEST_IF_ERR(
@@ -259,6 +253,10 @@ TEST_F(RequestCancellationTest, CancellationAfterRelease)
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetResponseCallback(
       irequest_, allocator_, nullptr /* response_allocator_userp */,
       InferResponseComplete, reinterpret_cast<void*>(p)));
+
+  FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
+      server_, irequest_, nullptr
+      /* trace */));
 
   TRITONBACKEND_Request* backend_request =
       reinterpret_cast<TRITONBACKEND_Request*>(irequest_);
@@ -285,6 +283,9 @@ TEST_F(RequestCancellationTest, CancellationAfterRelease)
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestIsCancelled(irequest_, &is_cancelled));
   ASSERT_TRUE(is_cancelled);
+
+  TRITONSERVER_InferenceResponse* response = future.get();
+  FAIL_TEST_IF_ERR(TRITONSERVER_InferenceResponseDelete(response));
 
   is_cancelled = false;
   FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryIsCancelled(

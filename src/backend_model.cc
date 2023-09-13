@@ -1022,7 +1022,8 @@ TRITONBACKEND_RequestIsCancelled(
     TRITONBACKEND_Request* request, bool* is_cancelled)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  *is_cancelled = tr->IsCancelled();
+
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->IsCancelled(is_cancelled));
   return nullptr;
 }
 

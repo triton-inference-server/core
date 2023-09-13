@@ -599,6 +599,7 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
   lrequest->SetResponseCallback(
       &null_allocator, nullptr, NullResponseComplete, nullptr);
   lrequest->SetReleaseCallback(NullRequestComplete, nullptr);
+  lrequest->SetResponseFactory();
 
   // Must normalize inputs here...
   for (auto& pr : lrequest->original_inputs_) {
@@ -828,7 +829,7 @@ InferenceRequest::PrepareForInference()
   // inference execution.
   inputs_.clear();
   override_inputs_.clear();
-  ResetCancel();
+  SetResponseFactory();
 
   // Renormalize if anything has changed in the inference request in a
   // way that could impact renormalization.

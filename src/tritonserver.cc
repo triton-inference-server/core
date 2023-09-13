@@ -1643,7 +1643,7 @@ TRITONSERVER_InferenceRequestIsCancelled(
 {
   tc::InferenceRequest* lrequest =
       reinterpret_cast<tc::InferenceRequest*>(inference_request);
-  *is_cancelled = lrequest->IsCancelled();
+  RETURN_IF_STATUS_ERROR(lrequest->IsCancelled(is_cancelled));
   return nullptr;  // Success
 }
 
@@ -1653,7 +1653,7 @@ TRITONSERVER_InferenceRequestCancel(
 {
   tc::InferenceRequest* lrequest =
       reinterpret_cast<tc::InferenceRequest*>(inference_request);
-  lrequest->Cancel();
+  RETURN_IF_STATUS_ERROR(lrequest->Cancel());
   return nullptr;  // Success
 }
 
