@@ -412,17 +412,10 @@ ASFileSystem::DownloadFolder(
     if (recursive) {
       for (const auto& directory_item : blob_prefixes) {
         const auto& local_path = JoinPath({dest, BaseName(directory_item)});
-        int status = mkdir(
-            const_cast<char*>(local_path.c_str()), S_IRUSR | S_IWUSR | S_IXUSR);
-        if (status == -1 && !(allow_dir_exist && errno == EEXIST)) {
-          return Status(
-              Status::Code::INTERNAL,
-              "Failed to create local folder: " + local_path +
-                  ", errno:" + strerror(errno));
-        }
+        RETURN_IF_ERROR(triton::core::MakeDirectory(
+            local_path, recursive, allow_dir_exist));
         RETURN_IF_ERROR(DownloadFolder(
-            container, directory_item, local_path, recursive,
-            true /*allow_dir_exist*/));
+            container, directory_item, local_path, recursive, allow_dir_exist));
       }
     }
     return Status::Success;
@@ -450,7 +443,7 @@ ASFileSystem::LocalizePath(
         "AS file localization not yet implemented " + path);
   }
 
-  // Create a local directory for s3 model store.
+  // Create a local directory for azure model store.
   // If `mount_dir` or ENV variable are not set,
   // creates a temporary directory under `/tmp` with the format: "folderXXXXXX".
   // Otherwise, will create a folder under specified directory with the name
