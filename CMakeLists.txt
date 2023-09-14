@@ -416,24 +416,4 @@ export(
 
 export(PACKAGE TritonCore)
 
-FetchContent_Declare(
-  pybind11
-  GIT_REPOSITORY "https://github.com/pybind/pybind11"
-  # COMMIT ID for v2.10.0
-  GIT_TAG "aa304c9c7d725ffb9d10af08a3b34cb372307020"
-  GIT_SHALLOW ON
-)
-FetchContent_MakeAvailable(pybind11)
-set(
-  PYTHON_BINDING_SRCS
-  python/binding/tritonserver_pybind.cc
-)
-
-pybind11_add_module(triton_bindings SHARED ${PYTHON_BINDING_SRCS})
-target_link_libraries(
-  triton_bindings
-  PRIVATE
-  triton-core-serverapi           # from repo-core
-  triton-core-serverstub          # from repo-core
-)
-target_compile_features(triton_bindings PRIVATE cxx_std_17)
+add_subdirectory(python python)
