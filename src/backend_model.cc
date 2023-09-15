@@ -87,7 +87,7 @@ TritonModel::Create(
       version_path, true /*recursive*/, localized_model_dir->Path(),
       &localized_version_dir));
 
-  localized_model_dir->other_localized_path.push_back(localized_version_dir);
+  localized_version_dir->other_localized_path.push_back(localized_model_dir);
 
   // Localize paths in backend model config
   // [FIXME] Remove once a more permanent solution is implemented (DLIS-4211)
@@ -171,7 +171,7 @@ TritonModel::Create(
 
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
-      server, localized_model_dir, backend, min_compute_capability, version,
+      server, localized_version_dir, backend, min_compute_capability, version,
       model_config, auto_complete_config, backend_cmdline_config_map,
       host_policy_map));
 
