@@ -88,6 +88,7 @@ TritonModel::Create(
       &localized_version_dir));
 
   localized_version_dir->other_localized_path.push_back(localized_model_dir);
+  std::cout << localized_version_dir->Path() << std::endl;
 
   // Localize paths in backend model config
   // [FIXME] Remove once a more permanent solution is implemented (DLIS-4211)
