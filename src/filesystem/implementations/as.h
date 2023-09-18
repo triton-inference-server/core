@@ -95,7 +95,7 @@ class ASFileSystem : public FileSystem {
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(
-      std::string& dir_path, std::string* temp_dir) override;
+      std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
  private:
@@ -447,8 +447,8 @@ ASFileSystem::LocalizePath(
   // under `/tmp` with the format: "folderXXXXXX".
   // Otherwise, will create a folder under specified directory with the same
   // format.
-  std::string env_mount_dir =
-      GetEnvironmentVariableOrDefault("TRITON_AZURE_MOUNT_DIRECTORY", "/tmp");
+  std::string env_mount_dir = GetEnvironmentVariableOrDefault(
+      "TRITON_AZURE_MOUNT_DIRECTORY", kDefaultMountDirectory);
   std::string tmp_folder;
   RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
       FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
@@ -500,7 +500,7 @@ ASFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 
 Status
 ASFileSystem::MakeTemporaryDirectory(
-    std::string& dir_path, std::string* temp_dir)
+    std::string dir_path, std::string* temp_dir)
 {
   return Status(
       Status::Code::UNSUPPORTED,

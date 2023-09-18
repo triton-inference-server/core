@@ -65,6 +65,9 @@
 
 namespace triton { namespace core {
 
+// Default folder for temporary local cache
+constexpr char kDefaultMountDirectory[] = "/tmp";
+
 // FileSystem interface that all file system implementation should inherit from.
 // To add new file system support, the implementation should be added and made
 // visible to FileSystemManager in api.cc

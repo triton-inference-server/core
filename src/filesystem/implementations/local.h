@@ -58,7 +58,7 @@ class LocalFileSystem : public FileSystem {
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
   Status MakeTemporaryDirectory(
-      std::string& dir_path, std::string* temp_dir) override;
+      std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 };
 
@@ -282,7 +282,7 @@ LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 
 Status
 LocalFileSystem::MakeTemporaryDirectory(
-    std::string& dir_path, std::string* temp_dir)
+    std::string dir_path, std::string* temp_dir)
 {
 #ifdef _WIN32
   char temp_path[MAX_PATH + 1];
