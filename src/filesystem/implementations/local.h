@@ -317,7 +317,7 @@ LocalFileSystem::MakeTemporaryDirectory(
   }
 #else
   if (dir_path.empty()) {
-    dir_path = "/tmp";
+    dir_path = kDefaultMountDirectory;
   }
   std::string folder_template = JoinPath({dir_path, "folderXXXXXX"});
   char* res = mkdtemp(const_cast<char*>(folder_template.c_str()));
