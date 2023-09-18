@@ -198,6 +198,15 @@ Status MakeDirectory(const std::string& dir, const bool recursive);
 /// \return Error status
 Status MakeTemporaryDirectory(const FileSystemType type, std::string* temp_dir);
 
+/// Create a temporary directory of the specified filesystem type
+/// in a provided location.
+/// \param type The type of the filesystem.
+/// \param  dir_path The specified path.
+/// \param temp_dir Returns the path to the temporary directory.
+/// \return Error status
+Status MakeTemporaryDirectory(
+    const FileSystemType type, std::string& dir_path, std::string* temp_dir);
+
 /// Delete a path.
 /// \param path The path to the directory or file.
 /// \return Error status

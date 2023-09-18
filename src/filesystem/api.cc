@@ -619,7 +619,16 @@ MakeTemporaryDirectory(const FileSystemType type, std::string* temp_dir)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(type, fs));
-  return fs->MakeTemporaryDirectory(temp_dir);
+  return fs->MakeTemporaryDirectory("/tmp", temp_dir);
+}
+
+Status
+MakeTemporaryDirectory(
+    const FileSystemType type, std::string& dir_path, std::string* temp_dir)
+{
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(type, fs));
+  return fs->MakeTemporaryDirectory(dir_path, temp_dir);
 }
 
 Status

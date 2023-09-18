@@ -94,7 +94,8 @@ class ASFileSystem : public FileSystem {
       const std::string& path, const char* contents,
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
-  Status MakeTemporaryDirectory(std::string* temp_dir) override;
+  Status MakeTemporaryDirectory(
+      std::string& dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
  private:
@@ -441,17 +442,20 @@ ASFileSystem::LocalizePath(
         "AS file localization not yet implemented " + path);
   }
 
-  std::string folder_template = "/tmp/folderXXXXXX";
-  char* tmp_folder = mkdtemp(const_cast<char*>(folder_template.c_str()));
-  if (tmp_folder == nullptr) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Failed to create local temp folder: " + folder_template +
-            ", errno:" + strerror(errno));
-  }
+  // Create a local directory for azure model store.
+  // If ENV variable are not set, creates a temporary directory
+  // under `/tmp` with the format: "folderXXXXXX".
+  // Otherwise, will create a folder under specified directory with the same
+  // format.
+  std::string env_mount_dir =
+      GetEnvironmentVariableOrDefault("TRITON_AZURE_MOUNT_DIRECTORY", "/tmp");
+  std::string tmp_folder;
+  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
+      FileSystemType::LOCAL, std::string(env_mount_dir), &tmp_folder));
+
   localized->reset(new LocalizedPath(path, tmp_folder));
 
-  std::string dest(folder_template);
+  std::string dest(tmp_folder);
 
   std::string container, blob;
   RETURN_IF_ERROR(ParsePath(path, &container, &blob));
@@ -495,7 +499,8 @@ ASFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 }
 
 Status
-ASFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
+ASFileSystem::MakeTemporaryDirectory(
+    std::string& dir_path, std::string* temp_dir)
 {
   return Status(
       Status::Code::UNSUPPORTED,
