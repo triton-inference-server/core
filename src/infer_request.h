@@ -688,6 +688,7 @@ class InferenceRequest {
   {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
+#endif  // TRITON_ENABLE_STATS
 
   Status Cancel()
   {
@@ -722,8 +723,6 @@ class InferenceRequest {
     }
     return is_cancelled;
   }
-
-#endif  // TRITON_ENABLE_STATS
 
  private:
   DISALLOW_COPY_AND_ASSIGN(InferenceRequest);
