@@ -69,8 +69,8 @@ ResponseAlloc(
       *buffer = allocated_ptr;
       *buffer_userp = new std::string(tensor_name);
     }
-    return nullptr;  // Success
   }
+  return nullptr;  // Success
 }
 
 TRITONSERVER_Error*
