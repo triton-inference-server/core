@@ -662,7 +662,7 @@ S3FileSystem::LocalizePath(
       GetEnvironmentVariableOrDefault("TRITON_AWS_MOUNT_DIRECTORY", "/tmp");
   std::string tmp_folder;
   RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
-      FileSystemType::LOCAL, std::string(env_mount_dir), &tmp_folder));
+      FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
 
   // Specify contents to be downloaded
   std::set<std::string> contents;
