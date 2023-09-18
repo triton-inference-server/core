@@ -205,7 +205,7 @@ Status MakeTemporaryDirectory(const FileSystemType type, std::string* temp_dir);
 /// \param temp_dir Returns the path to the temporary directory.
 /// \return Error status
 Status MakeTemporaryDirectory(
-    const FileSystemType type, std::string& dir_path, std::string* temp_dir);
+    const FileSystemType type, std::string dir_path, std::string* temp_dir);
 
 /// Delete a path.
 /// \param path The path to the directory or file.
