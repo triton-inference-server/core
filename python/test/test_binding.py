@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -39,22 +38,24 @@ from tritonserver import _c as triton_bindings
 # Callback functions used in inference pipeline
 # 'user_object' is a per-request counter of how many times the
 # callback is invoked
-def g_alloc_fn(allocator, tensor_name, byte_size, memory_type, memory_type_id,
-               user_object):
+def g_alloc_fn(
+    allocator, tensor_name, byte_size, memory_type, memory_type_id, user_object
+):
     if "alloc" not in user_object:
         user_object["alloc"] = 0
     user_object["alloc"] += 1
     buffer = numpy.empty(byte_size, numpy.byte)
-    return (buffer.ctypes.data, buffer,
-            triton_bindings.TRITONSERVER_MemoryType.CPU, 0)
+    return (buffer.ctypes.data, buffer, triton_bindings.TRITONSERVER_MemoryType.CPU, 0)
 
 
-def g_release_fn(allocator, buffer, buffer_user_object, byte_size, memory_type,
-                 memory_type_id):
+def g_release_fn(
+    allocator, buffer, buffer_user_object, byte_size, memory_type, memory_type_id
+):
     # No-op, buffer ('buffer_user_object') will be garbage collected
     # only sanity check that the objects are expected
     if (not isinstance(buffer_user_object, numpy.ndarray)) or (
-            buffer_user_object.ctypes.data != buffer):
+        buffer_user_object.ctypes.data != buffer
+    ):
         raise Exception("Misaligned parameters in allocator release callback")
     pass
 
@@ -66,16 +67,18 @@ def g_start_fn(allocator, user_object):
     pass
 
 
-def g_query_fn(allocator, user_object, tensor_name, byte_size, memory_type,
-               memory_type_id):
+def g_query_fn(
+    allocator, user_object, tensor_name, byte_size, memory_type, memory_type_id
+):
     if "query" not in user_object:
         user_object["query"] = 0
     user_object["query"] += 1
     return (triton_bindings.TRITONSERVER_MemoryType.CPU, 0)
 
 
-def g_buffer_fn(allocator, tensor_name, buffer_attribute, user_object,
-                buffer_user_object):
+def g_buffer_fn(
+    allocator, tensor_name, buffer_attribute, user_object, buffer_user_object
+):
     if "buffer" not in user_object:
         user_object["buffer"] = 0
     user_object["buffer"] += 1
@@ -224,7 +227,6 @@ class TritonPythonModel:
 
 # ======================================= Test cases ===========================
 class BindingTest(unittest.TestCase):
-
     def setUp(self):
         self._test_model_repo = os.path.join(os.getcwd(), "binding_test_repo")
         # clear model repository that may be created for testing.
@@ -248,12 +250,13 @@ class BindingTest(unittest.TestCase):
     # prepare a model repository with "addsub" model
     def _create_model_repository(self):
         os.makedirs(
-            os.path.join(self._test_model_repo, self._model_name,
-                         self._version))
+            os.path.join(self._test_model_repo, self._model_name, self._version)
+        )
         with open(
-                os.path.join(self._test_model_repo, self._model_name,
-                             self._version, self._file_name),
-                "wb",
+            os.path.join(
+                self._test_model_repo, self._model_name, self._version, self._file_name
+            ),
+            "wb",
         ) as f:
             f.write(g_python_addsub)
 
@@ -266,7 +269,8 @@ class BindingTest(unittest.TestCase):
         options = triton_bindings.TRITONSERVER_ServerOptions()
         options.set_model_repository_path(self._test_model_repo)
         options.set_model_control_mode(
-            triton_bindings.TRITONSERVER_ModelControlMode.POLL)
+            triton_bindings.TRITONSERVER_ModelControlMode.POLL
+        )
         # enable "auto-complete" to skip providing config.pbtxt
         options.set_strict_model_config(False)
         options.set_server_id("testing_server")
@@ -276,7 +280,8 @@ class BindingTest(unittest.TestCase):
 
     def _prepare_inference_request(self, server):
         allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
-            g_alloc_fn, g_release_fn, g_start_fn)
+            g_alloc_fn, g_release_fn, g_start_fn
+        )
         allocator.set_buffer_attributes_function(g_buffer_fn)
         allocator.set_query_function(g_query_fn)
 
@@ -284,11 +289,13 @@ class BindingTest(unittest.TestCase):
         response_queue = queue.Queue()
         allocator_counter = {}
         request = triton_bindings.TRITONSERVER_InferenceRequest(
-            server, self._model_name, -1)
+            server, self._model_name, -1
+        )
         request.id = "req_0"
         request.set_release_callback(g_request_fn, request_counter)
-        request.set_response_callback(allocator, allocator_counter,
-                                      g_response_fn, response_queue)
+        request.set_response_callback(
+            allocator, allocator_counter, g_response_fn, response_queue
+        )
 
         input = numpy.ones([4], dtype=numpy.float32)
         input_buffer = input.ctypes.data
@@ -297,14 +304,14 @@ class BindingTest(unittest.TestCase):
         ba.memory_type_id = 0
         ba.byte_size = input.itemsize * input.size
 
-        request.add_input("INPUT0", triton_bindings.TRITONSERVER_DataType.FP32,
-                          input.shape)
-        request.add_input("INPUT1", triton_bindings.TRITONSERVER_DataType.FP32,
-                          input.shape)
-        request.append_input_data_with_buffer_attributes(
-            "INPUT0", input_buffer, ba)
-        request.append_input_data_with_buffer_attributes(
-            "INPUT1", input_buffer, ba)
+        request.add_input(
+            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+        )
+        request.add_input(
+            "INPUT1", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+        )
+        request.append_input_data_with_buffer_attributes("INPUT0", input_buffer, ba)
+        request.append_input_data_with_buffer_attributes("INPUT1", input_buffer, ba)
 
         return request, allocator, response_queue, request_counter
 
@@ -344,12 +351,9 @@ class BindingTest(unittest.TestCase):
         ]
 
         for t, t_str, t_size in t_list:
-            self.assertEqual(triton_bindings.TRITONSERVER_DataTypeString(t),
-                             t_str)
-            self.assertEqual(
-                triton_bindings.TRITONSERVER_StringToDataType(t_str), t)
-            self.assertEqual(triton_bindings.TRITONSERVER_DataTypeByteSize(t),
-                             t_size)
+            self.assertEqual(triton_bindings.TRITONSERVER_DataTypeString(t), t_str)
+            self.assertEqual(triton_bindings.TRITONSERVER_StringToDataType(t_str), t)
+            self.assertEqual(triton_bindings.TRITONSERVER_DataTypeByteSize(t), t_size)
 
     def test_memory_type(self):
         t_list = [
@@ -358,8 +362,7 @@ class BindingTest(unittest.TestCase):
             (triton_bindings.TRITONSERVER_MemoryType.GPU, "GPU"),
         ]
         for t, t_str in t_list:
-            self.assertEqual(triton_bindings.TRITONSERVER_MemoryTypeString(t),
-                             t_str)
+            self.assertEqual(triton_bindings.TRITONSERVER_MemoryTypeString(t), t_str)
 
     def test_parameter_type(self):
         t_list = [
@@ -369,14 +372,12 @@ class BindingTest(unittest.TestCase):
             (triton_bindings.TRITONSERVER_ParameterType.BYTES, "BYTES"),
         ]
         for t, t_str in t_list:
-            self.assertEqual(
-                triton_bindings.TRITONSERVER_ParameterTypeString(t), t_str)
+            self.assertEqual(triton_bindings.TRITONSERVER_ParameterTypeString(t), t_str)
 
     def test_parameter(self):
         # C API doesn't provide additional API for parameter, can only test
         # New/Delete unless we mock the implementation to expose more info.
-        str_param = triton_bindings.TRITONSERVER_Parameter(
-            "str_key", "str_value")
+        str_param = triton_bindings.TRITONSERVER_Parameter("str_key", "str_value")
         int_param = triton_bindings.TRITONSERVER_Parameter("int_key", 123)
         bool_param = triton_bindings.TRITONSERVER_Parameter("bool_key", True)
         # bytes parameter doesn't own the buffer
@@ -397,7 +398,8 @@ class BindingTest(unittest.TestCase):
         ]
         for t, t_str in t_list:
             self.assertEqual(
-                triton_bindings.TRITONSERVER_InstanceGroupKindString(t), t_str)
+                triton_bindings.TRITONSERVER_InstanceGroupKindString(t), t_str
+            )
 
     def test_log(self):
         # This test depends on 'TRITONSERVER_ServerOptions' operates properly
@@ -417,16 +419,14 @@ class BindingTest(unittest.TestCase):
             options.set_log_warn(False)
             options.set_log_error(True)
             options.set_log_verbose(0)
-            options.set_log_format(
-                triton_bindings.TRITONSERVER_LogFormat.DEFAULT)
+            options.set_log_format(triton_bindings.TRITONSERVER_LogFormat.DEFAULT)
             for ll, enabled in [
                 (triton_bindings.TRITONSERVER_LogLevel.INFO, True),
                 (triton_bindings.TRITONSERVER_LogLevel.WARN, False),
                 (triton_bindings.TRITONSERVER_LogLevel.ERROR, True),
                 (triton_bindings.TRITONSERVER_LogLevel.VERBOSE, False),
             ]:
-                self.assertEqual(triton_bindings.TRITONSERVER_LogIsEnabled(ll),
-                                 enabled)
+                self.assertEqual(triton_bindings.TRITONSERVER_LogIsEnabled(ll), enabled)
             # Write message to each of the log level
             triton_bindings.TRITONSERVER_LogMessage(
                 triton_bindings.TRITONSERVER_LogLevel.INFO,
@@ -464,11 +464,10 @@ class BindingTest(unittest.TestCase):
                 # sanity check that there is no log with other format "YYYY-MM-DDThh:mm:ssZ L"
                 self.assertNotRegex(log, iso8601_format_regex)
             # Test different format
-            options.set_log_format(
-                triton_bindings.TRITONSERVER_LogFormat.ISO8601)
+            options.set_log_format(triton_bindings.TRITONSERVER_LogFormat.ISO8601)
             triton_bindings.TRITONSERVER_LogMessage(
-                triton_bindings.TRITONSERVER_LogLevel.INFO, "fn", 258,
-                "info_message")
+                triton_bindings.TRITONSERVER_LogLevel.INFO, "fn", 258, "info_message"
+            )
             with open(log_file, "r") as f:
                 log = f.read()
                 self.assertRegex(log, r"fn:258.*info_message")
@@ -481,8 +480,7 @@ class BindingTest(unittest.TestCase):
             options.set_log_warn(False)
             options.set_log_error(False)
             options.set_log_verbose(0)
-            options.set_log_format(
-                triton_bindings.TRITONSERVER_LogFormat.DEFAULT)
+            options.set_log_format(triton_bindings.TRITONSERVER_LogFormat.DEFAULT)
             os.remove(log_file)
 
     def test_buffer_attributes(self):
@@ -491,8 +489,7 @@ class BindingTest(unittest.TestCase):
         expected_byte_size = 1024
         buffer_attributes = triton_bindings.TRITONSERVER_BufferAttributes()
         buffer_attributes.memory_type_id = expected_memory_type_id
-        self.assertEqual(buffer_attributes.memory_type_id,
-                         expected_memory_type_id)
+        self.assertEqual(buffer_attributes.memory_type_id, expected_memory_type_id)
         buffer_attributes.memory_type = expected_memory_type
         self.assertEqual(buffer_attributes.memory_type, expected_memory_type)
         buffer_attributes.byte_size = expected_byte_size
@@ -508,14 +505,15 @@ class BindingTest(unittest.TestCase):
         mock_handle = array("b", [i for i in range(handle_byte_size)])
         buffer_attributes.cuda_ipc_handle = mock_handle.buffer_info()[0]
         res_arr = (ctypes.c_char * handle_byte_size).from_address(
-            buffer_attributes.cuda_ipc_handle)
+            buffer_attributes.cuda_ipc_handle
+        )
         for i in range(handle_byte_size):
             self.assertEqual(int.from_bytes(res_arr[i], "big"), mock_handle[i])
 
     def test_allocator(self):
-
-        def alloc_fn(allocator, tensor_name, byte_size, memory_type,
-                     memory_type_id, user_object):
+        def alloc_fn(
+            allocator, tensor_name, byte_size, memory_type, memory_type_id, user_object
+        ):
             return (123, None, triton_bindings.TRITONSERVER_MemoryType.GPU, 1)
 
         def release_fn(
@@ -531,35 +529,31 @@ class BindingTest(unittest.TestCase):
         def start_fn(allocator, user_object):
             pass
 
-        def query_fn(allocator, user_object, tensor_name, byte_size,
-                     memory_type, memory_type_id):
+        def query_fn(
+            allocator, user_object, tensor_name, byte_size, memory_type, memory_type_id
+        ):
             return (triton_bindings.TRITONSERVER_MemoryType.GPU, 1)
 
-        def buffer_fn(allocator, tensor_name, buffer_attribute, user_object,
-                      buffer_user_object):
+        def buffer_fn(
+            allocator, tensor_name, buffer_attribute, user_object, buffer_user_object
+        ):
             return buffer_attribute
 
         # allocator without start_fn
-        allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
-            alloc_fn, release_fn)
+        allocator = triton_bindings.TRITONSERVER_ResponseAllocator(alloc_fn, release_fn)
         del allocator
         gc.collect()
 
         # allocator with start_fn
         allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
-            alloc_fn, release_fn, start_fn)
+            alloc_fn, release_fn, start_fn
+        )
         allocator.set_buffer_attributes_function(buffer_fn)
         allocator.set_query_function(query_fn)
 
     def test_message(self):
-        expected_dict = {
-            "key_0": [1, 2, "3"],
-            "key_1": {
-                "nested_key": "nested_value"
-            }
-        }
-        message = triton_bindings.TRITONSERVER_Message(
-            json.dumps(expected_dict))
+        expected_dict = {"key_0": [1, 2, "3"], "key_1": {"nested_key": "nested_value"}}
+        message = triton_bindings.TRITONSERVER_Message(json.dumps(expected_dict))
         self.assertEqual(expected_dict, json.loads(message.serialize_to_json()))
 
     def test_metrics(self):
@@ -571,43 +565,42 @@ class BindingTest(unittest.TestCase):
         options = triton_bindings.TRITONSERVER_ServerOptions()
         options.set_model_repository_path(self._test_model_repo)
         options.set_model_control_mode(
-            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT)
+            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT
+        )
         server = triton_bindings.TRITONSERVER_Server(options)
         metrics = server.metrics()
         # Check one of the metrics is reported
-        self.assertTrue("nv_cpu_memory_used_bytes" in metrics.formatted(
-            triton_bindings.TRITONSERVER_MetricFormat.PROMETHEUS))
+        self.assertTrue(
+            "nv_cpu_memory_used_bytes"
+            in metrics.formatted(triton_bindings.TRITONSERVER_MetricFormat.PROMETHEUS)
+        )
 
     def test_trace_enum(self):
         t_list = [
-            (triton_bindings.TRITONSERVER_InferenceTraceLevel.DISABLED,
-             "DISABLED"),
+            (triton_bindings.TRITONSERVER_InferenceTraceLevel.DISABLED, "DISABLED"),
             (triton_bindings.TRITONSERVER_InferenceTraceLevel.MIN, "MIN"),
             (triton_bindings.TRITONSERVER_InferenceTraceLevel.MAX, "MAX"),
-            (triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS,
-             "TIMESTAMPS"),
-            (triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS,
-             "TENSORS"),
+            (triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS, "TIMESTAMPS"),
+            (triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS, "TENSORS"),
         ]
         for t, t_str in t_list:
             self.assertEqual(
-                triton_bindings.TRITONSERVER_InferenceTraceLevelString(t),
-                t_str)
+                triton_bindings.TRITONSERVER_InferenceTraceLevelString(t), t_str
+            )
         # bit-wise operation
-        level = int(
-            triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS) | int(
-                triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS)
+        level = int(triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS) | int(
+            triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS
+        )
         self.assertNotEqual(
-            level &
-            int(triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS), 0)
+            level & int(triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS), 0
+        )
         self.assertNotEqual(
-            level &
-            int(triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS), 0)
+            level & int(triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS), 0
+        )
 
         t_list = [
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                REQUEST_START,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.REQUEST_START,
                 "REQUEST_START",
             ),
             (
@@ -615,18 +608,15 @@ class BindingTest(unittest.TestCase):
                 "QUEUE_START",
             ),
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                COMPUTE_START,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_START,
                 "COMPUTE_START",
             ),
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                COMPUTE_INPUT_END,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_INPUT_END,
                 "COMPUTE_INPUT_END",
             ),
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                COMPUTE_OUTPUT_START,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_OUTPUT_START,
                 "COMPUTE_OUTPUT_START",
             ),
             (
@@ -638,36 +628,33 @@ class BindingTest(unittest.TestCase):
                 "REQUEST_END",
             ),
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                TENSOR_QUEUE_INPUT,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_QUEUE_INPUT,
                 "TENSOR_QUEUE_INPUT",
             ),
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                TENSOR_BACKEND_INPUT,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_BACKEND_INPUT,
                 "TENSOR_BACKEND_INPUT",
             ),
             (
-                triton_bindings.TRITONSERVER_InferenceTraceActivity.
-                TENSOR_BACKEND_OUTPUT,
+                triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_BACKEND_OUTPUT,
                 "TENSOR_BACKEND_OUTPUT",
             ),
         ]
         for t, t_str in t_list:
             self.assertEqual(
-                triton_bindings.TRITONSERVER_InferenceTraceActivityString(t),
-                t_str)
+                triton_bindings.TRITONSERVER_InferenceTraceActivityString(t), t_str
+            )
 
     def test_trace(self):
         # This test depends on 'test_infer_async' test to capture
         # the trace
-        level = int(
-            triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS) | int(
-                triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS)
+        level = int(triton_bindings.TRITONSERVER_InferenceTraceLevel.TIMESTAMPS) | int(
+            triton_bindings.TRITONSERVER_InferenceTraceLevel.TENSORS
+        )
         trace_dict = {"signal_queue": queue.Queue()}
         trace = triton_bindings.TRITONSERVER_InferenceTrace(
-            level, 123, g_timestamp_fn, g_tensor_fn, g_trace_release_fn,
-            trace_dict)
+            level, 123, g_timestamp_fn, g_tensor_fn, g_trace_release_fn, trace_dict
+        )
         # [FIXME] get a copy of trace id due to potential issue of 'trace'
         # lifecycle
         trace_id = trace.id
@@ -699,27 +686,18 @@ class BindingTest(unittest.TestCase):
         # particular activity should be logged
         expected_activities = {
             # timestamp
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.REQUEST_START:
-                0,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.QUEUE_START:
-                0,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_START:
-                0,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_INPUT_END:
-                0,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_OUTPUT_START:
-                0,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_END:
-                0,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.REQUEST_END:
-                0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.REQUEST_START: 0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.QUEUE_START: 0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_START: 0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_INPUT_END: 0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_OUTPUT_START: 0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.COMPUTE_END: 0,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.REQUEST_END: 0,
             # not timestamp
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_QUEUE_INPUT:
-                2,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_QUEUE_INPUT: 2,
             # TENSOR_BACKEND_INPUT never get called with in Triton core
             # triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_BACKEND_INPUT : 2,
-            triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_BACKEND_OUTPUT:
-                2,
+            triton_bindings.TRITONSERVER_InferenceTraceActivity.TENSOR_BACKEND_OUTPUT: 2,
         }
         for tl in trace_dict[trace_id]:
             # basic check
@@ -755,9 +733,9 @@ class BindingTest(unittest.TestCase):
         options.set_model_repository_path("model_repo_0")
         options.set_model_repository_path("model_repo_1")
         for m in [
-                triton_bindings.TRITONSERVER_ModelControlMode.NONE,
-                triton_bindings.TRITONSERVER_ModelControlMode.POLL,
-                triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT,
+            triton_bindings.TRITONSERVER_ModelControlMode.NONE,
+            triton_bindings.TRITONSERVER_ModelControlMode.POLL,
+            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT,
         ]:
             options.set_model_control_mode(m)
         options.set_startup_model("*")
@@ -766,11 +744,12 @@ class BindingTest(unittest.TestCase):
         options.set_model_namespacing(True)
         # Only support Kind GPU for now
         options.set_model_load_device_limit(
-            triton_bindings.TRITONSERVER_InstanceGroupKind.GPU, 0, 0.5)
+            triton_bindings.TRITONSERVER_InstanceGroupKind.GPU, 0, 0.5
+        )
         for k in [
-                triton_bindings.TRITONSERVER_InstanceGroupKind.AUTO,
-                triton_bindings.TRITONSERVER_InstanceGroupKind.CPU,
-                triton_bindings.TRITONSERVER_InstanceGroupKind.MODEL,
+            triton_bindings.TRITONSERVER_InstanceGroupKind.AUTO,
+            triton_bindings.TRITONSERVER_InstanceGroupKind.CPU,
+            triton_bindings.TRITONSERVER_InstanceGroupKind.MODEL,
         ]:
             with self.assertRaises(triton_bindings.TritonError) as context:
                 options.set_model_load_device_limit(k, 0, 0)
@@ -783,8 +762,8 @@ class BindingTest(unittest.TestCase):
 
         # Rate limiter
         for r in [
-                triton_bindings.TRITONSERVER_RateLimitMode.OFF,
-                triton_bindings.TRITONSERVER_RateLimitMode.EXEC_COUNT,
+            triton_bindings.TRITONSERVER_RateLimitMode.OFF,
+            triton_bindings.TRITONSERVER_RateLimitMode.EXEC_COUNT,
         ]:
             options.set_rate_limiter_mode(r)
         options.add_rate_limiter_resource("shared_resource", 4, -1)
@@ -795,11 +774,8 @@ class BindingTest(unittest.TestCase):
         # cache
         options.set_response_cache_byte_size(4096)
         options.set_cache_config(
-            "cache_name",
-            json.dumps({
-                "config_0": "value_0",
-                "config_1": "value_1"
-            }))
+            "cache_name", json.dumps({"config_0": "value_0", "config_1": "value_1"})
+        )
         options.set_cache_directory("cache_dir_0")
         options.set_cache_directory("cache_dir_1")
         # Log
@@ -810,8 +786,8 @@ class BindingTest(unittest.TestCase):
             options.set_log_error(True)
             options.set_log_verbose(2)
             for f in [
-                    triton_bindings.TRITONSERVER_LogFormat.DEFAULT,
-                    triton_bindings.TRITONSERVER_LogFormat.ISO8601,
+                triton_bindings.TRITONSERVER_LogFormat.DEFAULT,
+                triton_bindings.TRITONSERVER_LogFormat.ISO8601,
             ]:
                 options.set_log_format(f)
         finally:
@@ -822,8 +798,7 @@ class BindingTest(unittest.TestCase):
             options.set_log_warn(False)
             options.set_log_error(False)
             options.set_log_verbose(0)
-            options.set_log_format(
-                triton_bindings.TRITONSERVER_LogFormat.DEFAULT)
+            options.set_log_format(triton_bindings.TRITONSERVER_LogFormat.DEFAULT)
 
         # Metrics
         options.set_gpu_metrics(True)
@@ -834,8 +809,7 @@ class BindingTest(unittest.TestCase):
         # Misc..
         with self.assertRaises(triton_bindings.TritonError) as context:
             options.set_host_policy("policy_name", "setting", "value")
-        self.assertTrue(
-            "Unsupported host policy setting" in str(context.exception))
+        self.assertTrue("Unsupported host policy setting" in str(context.exception))
         options.set_repo_agent_directory("repo_agent_dir_0")
         options.set_repo_agent_directory("repo_agent_dir_1")
         options.set_buffer_manager_thread_count(4)
@@ -871,17 +845,16 @@ class BindingTest(unittest.TestCase):
         self.assertTrue("name" in server_meta_data)
         self.assertEqual(server_meta_data["name"], "testing_server")
         # model_metadata
-        model_meta_data = self._to_pyobject(
-            server.model_metadata(self._model_name, -1))
+        model_meta_data = self._to_pyobject(server.model_metadata(self._model_name, -1))
         self.assertTrue("name" in model_meta_data)
         self.assertEqual(model_meta_data["name"], self._model_name)
         # model_statistics
         model_statistics = self._to_pyobject(
-            server.model_statistics(self._model_name, -1))
+            server.model_statistics(self._model_name, -1)
+        )
         self.assertTrue("model_stats" in model_statistics)
         # model_config
-        model_config = self._to_pyobject(
-            server.model_config(self._model_name, -1, 1))
+        model_config = self._to_pyobject(server.model_config(self._model_name, -1, 1))
         self.assertTrue("input" in model_config)
         # model_index
         model_index = self._to_pyobject(server.model_index(0))
@@ -896,13 +869,14 @@ class BindingTest(unittest.TestCase):
 
         with self.assertRaises(triton_bindings.NotFoundError) as ctx:
             _ = triton_bindings.TRITONSERVER_InferenceRequest(
-                server, "not_existing_model", -1)
+                server, "not_existing_model", -1
+            )
         self.assertTrue("unknown model" in str(ctx.exception))
 
         expected_request_id = "request"
         expected_flags = int(
-            triton_bindings.TRITONSERVER_RequestFlag.SEQUENCE_START) | int(
-                triton_bindings.TRITONSERVER_RequestFlag.SEQUENCE_END)
+            triton_bindings.TRITONSERVER_RequestFlag.SEQUENCE_START
+        ) | int(triton_bindings.TRITONSERVER_RequestFlag.SEQUENCE_END)
         expected_correlation_id = 2
         expected_correlation_id_string = "123"
         expected_priority = 19
@@ -911,8 +885,7 @@ class BindingTest(unittest.TestCase):
         expected_priority_uint64 = 67
         expected_timeout_microseconds = 222
 
-        request = triton_bindings.TRITONSERVER_InferenceRequest(
-            server, "addsub", -1)
+        request = triton_bindings.TRITONSERVER_InferenceRequest(server, "addsub", -1)
 
         # request metadata
         request.id = expected_request_id
@@ -922,20 +895,17 @@ class BindingTest(unittest.TestCase):
         request.correlation_id = expected_correlation_id
         self.assertEqual(request.correlation_id, expected_correlation_id)
         request.correlation_id_string = expected_correlation_id_string
-        self.assertEqual(request.correlation_id_string,
-                         expected_correlation_id_string)
+        self.assertEqual(request.correlation_id_string, expected_correlation_id_string)
         # Expect error from retrieving correlation id in a wrong type,
         # wrap in lambda function to avoid early evaluation that raises
         # exception before assert
-        self.assertRaises(triton_bindings.TritonError,
-                          lambda: request.correlation_id)
+        self.assertRaises(triton_bindings.TritonError, lambda: request.correlation_id)
         request.priority = expected_priority
         self.assertEqual(request.priority, expected_priority)
         request.priority_uint64 = expected_priority_uint64
         self.assertEqual(request.priority_uint64, 10)
         request.timeout_microseconds = expected_timeout_microseconds
-        self.assertEqual(request.timeout_microseconds,
-                         expected_timeout_microseconds)
+        self.assertEqual(request.timeout_microseconds, expected_timeout_microseconds)
 
         request.set_string_parameter("str_key", "str_val")
         request.set_int_parameter("int_key", 567)
@@ -949,25 +919,26 @@ class BindingTest(unittest.TestCase):
         ba.memory_type_id = 0
         ba.byte_size = input.itemsize * input.size
 
-        request.add_input("INPUT0", triton_bindings.TRITONSERVER_DataType.FP32,
-                          input.shape)
-        self.assertRaises(triton_bindings.TritonError, request.remove_input,
-                          "INPUT2")
+        request.add_input(
+            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+        )
+        self.assertRaises(triton_bindings.TritonError, request.remove_input, "INPUT2")
         # raw input assumes single input
-        self.assertRaises(triton_bindings.TritonError, request.add_raw_input,
-                          "INPUT1")
+        self.assertRaises(triton_bindings.TritonError, request.add_raw_input, "INPUT1")
         request.remove_input("INPUT0")
         request.add_raw_input("INPUT1")
         request.remove_all_inputs()
         # all inputs are removed, all 'append' functions should raise exceptions
-        aid_args = [
-            "INPUT0", buffer, ba.byte_size, ba.memory_type, ba.memory_type_id
-        ]
-        self.assertRaises(triton_bindings.TritonError,
-                          request.append_input_data, *aid_args)
-        self.assertRaises(triton_bindings.TritonError,
-                          request.append_input_data_with_host_policy, *aid_args,
-                          "host_policy_name")
+        aid_args = ["INPUT0", buffer, ba.byte_size, ba.memory_type, ba.memory_type_id]
+        self.assertRaises(
+            triton_bindings.TritonError, request.append_input_data, *aid_args
+        )
+        self.assertRaises(
+            triton_bindings.TritonError,
+            request.append_input_data_with_host_policy,
+            *aid_args,
+            "host_policy_name"
+        )
         self.assertRaises(
             triton_bindings.TritonError,
             request.append_input_data_with_buffer_attributes,
@@ -975,11 +946,13 @@ class BindingTest(unittest.TestCase):
             buffer,
             ba,
         )
-        self.assertRaises(triton_bindings.TritonError,
-                          request.remove_all_input_data, "INPUT0")
+        self.assertRaises(
+            triton_bindings.TritonError, request.remove_all_input_data, "INPUT0"
+        )
         # Add back input
-        request.add_input("INPUT0", triton_bindings.TRITONSERVER_DataType.FP32,
-                          input.shape)
+        request.add_input(
+            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+        )
         request.append_input_data(*aid_args)
         request.remove_all_input_data("INPUT0")
 
@@ -993,7 +966,8 @@ class BindingTest(unittest.TestCase):
 
         # prepare for infer
         allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
-            g_alloc_fn, g_release_fn, g_start_fn)
+            g_alloc_fn, g_release_fn, g_start_fn
+        )
         allocator.set_buffer_attributes_function(g_buffer_fn)
         allocator.set_query_function(g_query_fn)
 
@@ -1001,11 +975,13 @@ class BindingTest(unittest.TestCase):
         response_queue = queue.Queue()
         allocator_counter = {}
         request = triton_bindings.TRITONSERVER_InferenceRequest(
-            server, self._model_name, -1)
+            server, self._model_name, -1
+        )
         request.id = "req_0"
         request.set_release_callback(g_request_fn, request_counter)
-        request.set_response_callback(allocator, allocator_counter,
-                                      g_response_fn, response_queue)
+        request.set_response_callback(
+            allocator, allocator_counter, g_response_fn, response_queue
+        )
 
         input = numpy.ones([4], dtype=numpy.float32)
         input_buffer = input.ctypes.data
@@ -1014,14 +990,14 @@ class BindingTest(unittest.TestCase):
         ba.memory_type_id = 0
         ba.byte_size = input.itemsize * input.size
 
-        request.add_input("INPUT0", triton_bindings.TRITONSERVER_DataType.FP32,
-                          input.shape)
-        request.add_input("INPUT1", triton_bindings.TRITONSERVER_DataType.FP32,
-                          input.shape)
-        request.append_input_data_with_buffer_attributes(
-            "INPUT0", input_buffer, ba)
-        request.append_input_data_with_buffer_attributes(
-            "INPUT1", input_buffer, ba)
+        request.add_input(
+            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+        )
+        request.add_input(
+            "INPUT1", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+        )
+        request.append_input_data_with_buffer_attributes("INPUT0", input_buffer, ba)
+        request.append_input_data_with_buffer_attributes("INPUT1", input_buffer, ba)
 
         # non-blocking, wait on response complete
         server.infer_async(request)
@@ -1029,7 +1005,8 @@ class BindingTest(unittest.TestCase):
         # Expect every response to be returned in 10 seconds
         flags, res = response_queue.get(block=True, timeout=10)
         self.assertEqual(
-            flags, int(triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL))
+            flags, int(triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL)
+        )
         # expect no error
         res.throw_if_response_error()
         # version will be actual model version
@@ -1056,8 +1033,7 @@ class BindingTest(unittest.TestCase):
                 numpy_buffer,
             ) = out
             self.assertEqual(name, expected_name)
-            self.assertEqual(data_type,
-                             triton_bindings.TRITONSERVER_DataType.FP32)
+            self.assertEqual(data_type, triton_bindings.TRITONSERVER_DataType.FP32)
             self.assertEqual(shape, expected_data.shape)
             self.assertEqual(out_buffer, numpy_buffer.ctypes.data)
             # buffer attribute used for input doesn't necessarily to
@@ -1069,7 +1045,8 @@ class BindingTest(unittest.TestCase):
                 numpy.allclose(
                     numpy_buffer.view(dtype=expected_data.dtype).reshape(shape),
                     expected_data,
-                ))
+                )
+            )
 
         # label (no label so empty)
         self.assertEqual(len(res.output_classification_label(0, 1)), 0)
@@ -1088,18 +1065,19 @@ class BindingTest(unittest.TestCase):
 
     def test_server_explicit(self):
         self._create_model_repository()
-        # explict : load with params
+        # explicit : load with params
         options = triton_bindings.TRITONSERVER_ServerOptions()
         options.set_model_repository_path(self._test_model_repo)
         options.set_model_control_mode(
-            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT)
+            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT
+        )
         options.set_strict_model_config(False)
         server = triton_bindings.TRITONSERVER_Server(options)
         load_file_params = [
             triton_bindings.TRITONSERVER_Parameter("config", r"{}"),
             triton_bindings.TRITONSERVER_Parameter(
-                "file:" + os.path.join(self._version, self._file_name),
-                g_python_addsub),
+                "file:" + os.path.join(self._version, self._file_name), g_python_addsub
+            ),
         ]
         server.load_model_with_parameters("wired_addsub", load_file_params)
         self.assertTrue(server.model_is_ready("wired_addsub", -1))
@@ -1108,8 +1086,9 @@ class BindingTest(unittest.TestCase):
         self.assertFalse(server.model_is_ready(self._model_name, -1))
         # unregister
         server.unregister_model_repository(self._test_model_repo)
-        self.assertRaises(triton_bindings.TritonError, server.load_model,
-                          self._model_name)
+        self.assertRaises(
+            triton_bindings.TritonError, server.load_model, self._model_name
+        )
         # register
         server.register_model_repository(self._test_model_repo, [])
         server.load_model(self._model_name)
@@ -1125,7 +1104,8 @@ class BindingTest(unittest.TestCase):
         options = triton_bindings.TRITONSERVER_ServerOptions()
         options.set_model_repository_path(self._test_model_repo)
         options.set_model_control_mode(
-            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT)
+            triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT
+        )
         server = triton_bindings.TRITONSERVER_Server(options)
 
         # create custom metric
@@ -1136,16 +1116,17 @@ class BindingTest(unittest.TestCase):
         )
         m = triton_bindings.TRITONSERVER_Metric(mf, [])
         m.increment(2)
-        self.assertEqual(m.kind,
-                         triton_bindings.TRITONSERVER_MetricKind.COUNTER)
+        self.assertEqual(m.kind, triton_bindings.TRITONSERVER_MetricKind.COUNTER)
         self.assertEqual(m.value, 2)
         # can't use 'set_value' due to wrong kind
         self.assertRaises(triton_bindings.TritonError, m.set_value, 5)
 
         # Check custom metric is reported
         metrics = server.metrics()
-        self.assertTrue("custom_metric_familiy" in metrics.formatted(
-            triton_bindings.TRITONSERVER_MetricFormat.PROMETHEUS))
+        self.assertTrue(
+            "custom_metric_familiy"
+            in metrics.formatted(triton_bindings.TRITONSERVER_MetricFormat.PROMETHEUS)
+        )
 
 
 if __name__ == "__main__":

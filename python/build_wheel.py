@@ -75,14 +75,12 @@ def sed(pattern, replace, source, dest=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dest-dir",
-                        type=str,
-                        required=True,
-                        help="Destination directory.")
-    parser.add_argument("--binding-path",
-                        type=str,
-                        required=True,
-                        help="Path to Triton Python binding.")
+    parser.add_argument(
+        "--dest-dir", type=str, required=True, help="Destination directory."
+    )
+    parser.add_argument(
+        "--binding-path", type=str, required=True, help="Path to Triton Python binding."
+    )
 
     FLAGS = parser.parse_args()
 
@@ -97,8 +95,7 @@ if __name__ == "__main__":
     print("Adding package files")
 
     mkdir(os.path.join(FLAGS.whl_dir, "tritonserver"))
-    shutil.copy("tritonserver/__init__.py",
-                os.path.join(FLAGS.whl_dir, "tritonserver"))
+    shutil.copy("tritonserver/__init__.py", os.path.join(FLAGS.whl_dir, "tritonserver"))
 
     cpdir("tritonserver/_c", os.path.join(FLAGS.whl_dir, "tritonserver", "_c"))
     PYBIND_LIB = os.path.basename(FLAGS.binding_path)

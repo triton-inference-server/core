@@ -39,7 +39,7 @@
 //  * Triton structs are encapsulated in a thin wrapper to isolate raw pointer
 //    operations which is not supported in pure Python. A thin 'PyWrapper' base
 //    class is defined with common utilities
-//  * Trival getters and setters are grouped to be a Python class property.
+//  * Trivial getters and setters are grouped to be a Python class property.
 //    However, this creates asymmetry that some APIs are called like function
 //    while some like member variables. So I am open to expose getter / setter
 //    if it may be more intuitive.
@@ -588,7 +588,7 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
     ReleaseFn release_fn{nullptr};
     py::object user_object;
     // The trace API will use the same 'trace_userp' for all traces associated
-    // with the request, and becasue there is no guarantee that the root trace
+    // with the request, and because there is no guarantee that the root trace
     // must be released last, need to track all trace seen / released to
     // determine whether this CallbackResource may be released.
     std::set<uintptr_t> seen_traces;
@@ -690,7 +690,7 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
     py::gil_scoped_acquire gil;
     // Note that 'trace' associated with the activity is not necessary the
     // root trace captured in Callback Resource, so need to always wrap 'trace'
-    // in PyTrace for the Python callabck to interact with the correct trace.
+    // in PyTrace for the Python callback to interact with the correct trace.
     PyTrace pt(trace, false /* owned */);
     auto cr = reinterpret_cast<CallbackResource*>(userp);
     cr->seen_traces.insert(reinterpret_cast<uintptr_t>(trace));
@@ -857,15 +857,16 @@ class PyInferenceResponse
     ThrowIfError(TRITONSERVER_InferenceResponseOutput(
         triton_object_, index, &name, &datatype, &shape, &dim_count, &base,
         &byte_size, &memory_type, &memory_type_id, &userp));
-    return {name,
-            datatype,
-            py::array_t<int64_t>(dim_count, shape),
-            reinterpret_cast<uintptr_t>(base),
-            byte_size,
-            memory_type,
-            memory_type_id,
-            reinterpret_cast<PyResponseAllocator::CallbackResource*>(userp)
-                ->user_object};
+    return {
+        name,
+        datatype,
+        py::array_t<int64_t>(dim_count, shape),
+        reinterpret_cast<uintptr_t>(base),
+        byte_size,
+        memory_type,
+        memory_type_id,
+        reinterpret_cast<PyResponseAllocator::CallbackResource*>(userp)
+            ->user_object};
   }
 
   std::string OutputClassificationLabel(uint32_t index, size_t class_index)
