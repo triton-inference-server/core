@@ -48,6 +48,7 @@ add_custom_command(
   ARGS
     "${CMAKE_CURRENT_SOURCE_DIR}/build_wheel.py"
     --dest-dir "${CMAKE_CURRENT_BINARY_DIR}/generic"
+    --binding-path $<TARGET_FILE:python-bindings>
   DEPENDS ${WHEEL_DEPENDS}
 )
 

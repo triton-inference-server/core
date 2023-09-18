@@ -79,6 +79,10 @@ if __name__ == "__main__":
                         type=str,
                         required=True,
                         help="Destination directory.")
+    parser.add_argument("--binding-path",
+                        type=str,
+                        required=True,
+                        help="Path to Triton Python binding.")
 
     FLAGS = parser.parse_args()
 
@@ -96,16 +100,12 @@ if __name__ == "__main__":
     shutil.copy("tritonserver/__init__.py",
                 os.path.join(FLAGS.whl_dir, "tritonserver"))
 
-    if os.path.isdir("tritonserver/_c"):
-        cpdir("tritonserver/_c",
-              os.path.join(FLAGS.whl_dir, "tritonserver", "_c"))
-        for file in os.listdir("tritonserver"):
-            if "triton_bindings" in file:
-                shutil.copyfile(
-                    os.path.join("tritonserver", file),
-                    os.path.join(FLAGS.whl_dir, "tritonserver", "_c", file),
-                )
-                PYBIND_LIB = file
+    cpdir("tritonserver/_c", os.path.join(FLAGS.whl_dir, "tritonserver", "_c"))
+    PYBIND_LIB = os.path.basename(FLAGS.binding_path)
+    shutil.copyfile(
+        FLAGS.binding_path,
+        os.path.join(FLAGS.whl_dir, "tritonserver", "_c", PYBIND_LIB),
+    )
 
     shutil.copyfile("LICENSE.txt", os.path.join(FLAGS.whl_dir, "LICENSE.txt"))
     shutil.copyfile("setup.py", os.path.join(FLAGS.whl_dir, "setup.py"))
