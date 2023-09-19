@@ -159,7 +159,8 @@ class S3FileSystem : public FileSystem {
       const std::string& path, const char* contents,
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
-  Status MakeTemporaryDirectory(std::string* temp_dir) override;
+  Status MakeTemporaryDirectory(
+      std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
  private:
@@ -652,10 +653,16 @@ S3FileSystem::LocalizePath(
     effective_path = path;
   }
 
-  // Create temporary directory
+  // Create a local directory for AWS model store.
+  // If ENV variable are not set, creates a temporary directory
+  // under `/tmp` with the format: "folderXXXXXX".
+  // Otherwise, will create a folder under specified directory with the same
+  // format.
+  std::string env_mount_dir = GetEnvironmentVariableOrDefault(
+      "TRITON_AWS_MOUNT_DIRECTORY", kDefaultMountDirectory);
   std::string tmp_folder;
-  RETURN_IF_ERROR(
-      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
+  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
+      FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
 
   // Specify contents to be downloaded
   std::set<std::string> contents;
@@ -774,7 +781,8 @@ S3FileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 }
 
 Status
-S3FileSystem::MakeTemporaryDirectory(std::string* temp_dir)
+S3FileSystem::MakeTemporaryDirectory(
+    std::string dir_path, std::string* temp_dir)
 {
   return Status(
       Status::Code::UNSUPPORTED,
