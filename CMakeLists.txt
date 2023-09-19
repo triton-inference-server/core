@@ -415,3 +415,7 @@ export(
 )
 
 export(PACKAGE TritonCore)
+
+if(NOT TRITON_CORE_HEADERS_ONLY)
+  add_subdirectory(python python)
+endif()
