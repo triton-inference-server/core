@@ -83,7 +83,8 @@ class GCSFileSystem : public FileSystem {
       const std::string& path, const char* contents,
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
-  Status MakeTemporaryDirectory(std::string* temp_dir) override;
+  Status MakeTemporaryDirectory(
+      std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
  private:
@@ -380,9 +381,12 @@ GCSFileSystem::LocalizePath(
         "GCS file localization not yet implemented " + path);
   }
 
+  // Create a local directory for GCS model store.
+  std::string env_mount_dir = GetEnvironmentVariableOrDefault(
+      "TRITON_GCS_MOUNT_DIRECTORY", kDefaultMountDirectory);
   std::string tmp_folder;
-  RETURN_IF_ERROR(
-      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
+  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
+      FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
 
   localized->reset(new LocalizedPath(path, tmp_folder));
 
@@ -480,7 +484,8 @@ GCSFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 }
 
 Status
-GCSFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
+GCSFileSystem::MakeTemporaryDirectory(
+    std::string dir_path, std::string* temp_dir)
 {
   return Status(
       Status::Code::UNSUPPORTED,

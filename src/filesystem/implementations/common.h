@@ -65,6 +65,9 @@
 
 namespace triton { namespace core {
 
+// Default folder for temporary local cache
+constexpr char kDefaultMountDirectory[] = "/tmp";
+
 // FileSystem interface that all file system implementation should inherit from.
 // To add new file system support, the implementation should be added and made
 // visible to FileSystemManager in api.cc
@@ -91,7 +94,8 @@ class FileSystem {
       const size_t content_len) = 0;
   virtual Status MakeDirectory(
       const std::string& dir, const bool recursive) = 0;
-  virtual Status MakeTemporaryDirectory(std::string* temp_dir) = 0;
+  virtual Status MakeTemporaryDirectory(
+      std::string dir_path, std::string* temp_dir) = 0;
   virtual Status DeletePath(const std::string& path) = 0;
 };
 
@@ -104,6 +108,20 @@ AppendSlash(const std::string& name)
   }
 
   return (name + "/");
+}
+
+/// Helper function to get the value of the environment variable,
+/// or default value if not set.
+///
+/// \param variable_name The name of the environment variable.
+/// \param default_value The default value.
+/// \return The environment variable or the default value if not set.
+std::string
+GetEnvironmentVariableOrDefault(
+    const std::string& variable_name, const std::string& default_value)
+{
+  const char* value = getenv(variable_name.c_str());
+  return value ? value : default_value;
 }
 
 }}  // namespace triton::core
