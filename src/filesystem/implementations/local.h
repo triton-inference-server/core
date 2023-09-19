@@ -57,7 +57,8 @@ class LocalFileSystem : public FileSystem {
       const std::string& path, const char* contents,
       const size_t content_len) override;
   Status MakeDirectory(const std::string& dir, const bool recursive) override;
-  Status MakeTemporaryDirectory(std::string* temp_dir) override;
+  Status MakeTemporaryDirectory(
+      std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 };
 
@@ -280,7 +281,8 @@ LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 }
 
 Status
-LocalFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
+LocalFileSystem::MakeTemporaryDirectory(
+    std::string dir_path, std::string* temp_dir)
 {
 #ifdef _WIN32
   char temp_path[MAX_PATH + 1];
@@ -314,7 +316,10 @@ LocalFileSystem::MakeTemporaryDirectory(std::string* temp_dir)
         "Failed to create local temp folder: " + *temp_dir);
   }
 #else
-  std::string folder_template = "/tmp/folderXXXXXX";
+  if (dir_path.empty()) {
+    dir_path = kDefaultMountDirectory;
+  }
+  std::string folder_template = JoinPath({dir_path, "folderXXXXXX"});
   char* res = mkdtemp(const_cast<char*>(folder_template.c_str()));
   if (res == nullptr) {
     return Status(
