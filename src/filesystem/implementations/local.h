@@ -49,14 +49,17 @@ class LocalFileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path,
+      const std::string& path, const bool recursive,
+      const std::string& mount_dir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
       const size_t content_len) override;
-  Status MakeDirectory(const std::string& dir, const bool recursive) override;
+  Status MakeDirectory(
+      const std::string& dir, const bool recursive,
+      const bool allow_dir_exist) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 };
@@ -204,7 +207,8 @@ LocalFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 LocalFileSystem::LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+    const std::string& path, const bool recursive, const std::string& mount_dir,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   // For local file system we don't actually need to download the
   // directory or file. We use it in place.
@@ -246,7 +250,8 @@ LocalFileSystem::WriteBinaryFile(
 }
 
 Status
-LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+LocalFileSystem::MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
 #ifdef _WIN32
   if (mkdir(dir.c_str()) == -1)
@@ -254,10 +259,14 @@ LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
   if (mkdir(dir.c_str(), S_IRWXU) == -1)
 #endif
   {
-    // Only allow the error due to parent directory does not exist
-    // if 'recursive' is requested
+    // Return success if directory already exists and it is permitted
+    if (allow_dir_exist && errno == EEXIST) {
+      return Status::Success;
+    }
+    // In all other cases only allow the error due to parent directory
+    // does not exist, if 'recursive' is requested
     if ((errno == ENOENT) && (!dir.empty()) && recursive) {
-      RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive));
+      RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive, allow_dir_exist));
       // Retry the creation
 #ifdef _WIN32
       if (mkdir(dir.c_str()) == -1)

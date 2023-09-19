@@ -918,8 +918,8 @@ LocalizePythonBackendExecutionEnvironmentPath(
           model_path_slash) {
         // Localize the file
         std::shared_ptr<LocalizedPath> localized_exec_env_path;
-        RETURN_IF_ERROR(
-            LocalizePath(abs_exec_env_path, &localized_exec_env_path));
+        RETURN_IF_ERROR(LocalizePath(
+            abs_exec_env_path, true /*recursive*/, &localized_exec_env_path));
         // Persist the localized temporary path
         (*localized_model_dir)
             ->other_localized_path.push_back(localized_exec_env_path);

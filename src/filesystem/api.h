@@ -145,11 +145,27 @@ Status ReadTextFile(const std::string& path, std::string* contents);
 
 /// Create an object representing a local copy of a path.
 /// \param path The path of the directory or file.
+/// \param recursive If true, will fetch all sub-directories in
+/// the provided path.
 /// \param localized Returns the LocalizedPath object
 /// representing the local copy of the path.
 /// \return Error status
 Status LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized);
+    const std::string& path, const bool recursive,
+    std::shared_ptr<LocalizedPath>* localized);
+
+/// Create an object representing a local copy of a path.
+/// \param path The path of the directory or file.
+/// \param recursive If true, will fetch all sub-directories in
+/// the provided path.
+/// \param mount_dir If not empty, will use provided local directory
+/// for localization.
+/// \param localized Returns the LocalizedPath object
+/// representing the local copy of the path.
+/// \return Error status
+Status LocalizePath(
+    const std::string& path, const bool recursive, const std::string& mount_dir,
+    std::shared_ptr<LocalizedPath>* localized);
 
 /// Write a string to a file.
 /// \param path The path of the file.
@@ -189,8 +205,14 @@ Status ReadBinaryProto(
 /// \param dir The path to the directory.
 /// \param recursive Whether the parent directories will be created
 /// if not exist.
+/// \param allow_dir_exist Controls the behavior on condition,
+/// when `dir` already exists. If true and `dir` exists, returns success.
+/// If false and `dir` exists, fails with `Status::Code::INTERNAL`
+/// and reports errno EEXIST. Default value: false.
 /// \return Error status if the directory can't be created
-Status MakeDirectory(const std::string& dir, const bool recursive);
+Status MakeDirectory(
+    const std::string& dir, const bool recursive,
+    const bool allow_dir_exist = false);
 
 /// Create a temporary directory of the specified filesystem type.
 /// \param type The type of the filesystem.

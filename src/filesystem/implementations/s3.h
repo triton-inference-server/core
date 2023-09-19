@@ -151,14 +151,17 @@ class S3FileSystem : public FileSystem {
       const std::string& path, std::set<std::string>* files) override;
   Status ReadTextFile(const std::string& path, std::string* contents) override;
   Status LocalizePath(
-      const std::string& path,
+      const std::string& path, const bool recursive,
+      const std::string& mount_dir,
       std::shared_ptr<LocalizedPath>* localized) override;
   Status WriteTextFile(
       const std::string& path, const std::string& contents) override;
   Status WriteBinaryFile(
       const std::string& path, const char* contents,
       const size_t content_len) override;
-  Status MakeDirectory(const std::string& dir, const bool recursive) override;
+  Status MakeDirectory(
+      const std::string& dir, const bool recursive,
+      const bool allow_dir_exist) override;
   Status MakeTemporaryDirectory(std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
 
@@ -628,7 +631,8 @@ S3FileSystem::ReadTextFile(const std::string& path, std::string* contents)
 
 Status
 S3FileSystem::LocalizePath(
-    const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+    const std::string& path, const bool recursive, const std::string& mount_dir,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   // Check if the directory or file exists
   bool exists;
@@ -652,10 +656,23 @@ S3FileSystem::LocalizePath(
     effective_path = path;
   }
 
-  // Create temporary directory
+  // Create a local directory for s3 model store.
+  // If `mount_dir` or ENV variable are not set,
+  // creates a temporary directory under `/tmp` with the format: "folderXXXXXX".
+  // Otherwise, will create a folder under specified directory with the name
+  // indicated in path (i.e. everything after the last encounter of `/`).
+  const char* env_mount_dir = std::getenv("TRITON_AWS_MOUNT_DIRECTORY");
   std::string tmp_folder;
-  RETURN_IF_ERROR(
-      triton::core::MakeTemporaryDirectory(FileSystemType::LOCAL, &tmp_folder));
+  if (mount_dir.empty() && env_mount_dir == nullptr) {
+    RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
+        FileSystemType::LOCAL, &tmp_folder));
+  } else {
+    tmp_folder = mount_dir.empty() ? std::string(env_mount_dir) : mount_dir;
+    tmp_folder =
+        JoinPath({tmp_folder, path.substr(path.find_last_of('/') + 1)});
+    RETURN_IF_ERROR(triton::core::MakeDirectory(
+        tmp_folder, true /*recursive*/, true /*allow_dir_exist*/));
+  }
 
   // Specify contents to be downloaded
   std::set<std::string> contents;
@@ -693,7 +710,7 @@ S3FileSystem::LocalizePath(
               : JoinPath({(*localized)->Path(), s3_removed_path});
       bool is_subdir;
       RETURN_IF_ERROR(IsDirectory(s3_fpath, &is_subdir));
-      if (is_subdir) {
+      if (recursive && is_subdir) {
         // Create local mirror of sub-directories
 #ifdef _WIN32
         int status = mkdir(const_cast<char*>(local_fpath.c_str()));
@@ -716,7 +733,7 @@ S3FileSystem::LocalizePath(
              ++itr) {
           contents.insert(JoinPath({s3_fpath, *itr}));
         }
-      } else {
+      } else if (!is_subdir) {
         // Create local copy of file
         std::string file_bucket, file_object;
         RETURN_IF_ERROR(ParsePath(s3_fpath, &file_bucket, &file_object));
@@ -766,7 +783,8 @@ S3FileSystem::WriteBinaryFile(
 }
 
 Status
-S3FileSystem::MakeDirectory(const std::string& dir, const bool recursive)
+S3FileSystem::MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
   return Status(
       Status::Code::UNSUPPORTED,

@@ -75,10 +75,19 @@ TritonModel::Create(
   }
 
   // Localize the content of the model repository corresponding to
-  // 'model_path'. This model holds a handle to the localized content
-  // so that it persists as long as the model is loaded.
+  // 'model_path'. This model holds a handle to
+  // the localized content so that it persists as long as the model is loaded.
   std::shared_ptr<LocalizedPath> localized_model_dir;
-  RETURN_IF_ERROR(LocalizePath(model_path, &localized_model_dir));
+  RETURN_IF_ERROR(
+      LocalizePath(model_path, false /*recursive*/, &localized_model_dir));
+
+  const auto version_path = JoinPath({model_path, std::to_string(version)});
+  std::shared_ptr<LocalizedPath> localized_version_dir;
+  RETURN_IF_ERROR(LocalizePath(
+      version_path, true /*recursive*/, localized_model_dir->Path(),
+      &localized_version_dir));
+
+  localized_model_dir->other_localized_path.push_back(localized_version_dir);
 
   // Localize paths in backend model config
   // [FIXME] Remove once a more permanent solution is implemented (DLIS-4211)
@@ -110,12 +119,11 @@ TritonModel::Create(
   // Get the path to the backend shared library. Search path is
   // version directory, model directory, global backend directory.
   const auto localized_model_path = localized_model_dir->Path();
-  const auto version_path =
-      JoinPath({localized_model_path, std::to_string(version)});
+  const auto localized_version_path = localized_version_dir->Path();
   const std::string global_path =
       JoinPath({backend_dir, specialized_backend_name});
   const std::vector<std::string> search_paths = {
-      version_path, localized_model_path, global_path};
+      localized_version_path, localized_model_path, global_path};
 
   std::string backend_libdir;
   std::string backend_libpath;

@@ -558,11 +558,23 @@ ReadTextProto(const std::string& path, google::protobuf::Message* msg)
 }
 
 Status
-LocalizePath(const std::string& path, std::shared_ptr<LocalizedPath>* localized)
+LocalizePath(
+    const std::string& path, const bool recursive,
+    std::shared_ptr<LocalizedPath>* localized)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
-  return fs->LocalizePath(path, localized);
+  return fs->LocalizePath(path, recursive, "", localized);
+}
+
+Status
+LocalizePath(
+    const std::string& path, const bool recursive, const std::string& mount_dir,
+    std::shared_ptr<LocalizedPath>* localized)
+{
+  std::shared_ptr<FileSystem> fs;
+  RETURN_IF_ERROR(fsm_.GetFileSystem(path, fs));
+  return fs->LocalizePath(path, recursive, mount_dir, localized);
 }
 
 Status
@@ -607,11 +619,12 @@ ReadBinaryProto(const std::string& path, google::protobuf::MessageLite* msg)
 }
 
 Status
-MakeDirectory(const std::string& dir, const bool recursive)
+MakeDirectory(
+    const std::string& dir, const bool recursive, const bool allow_dir_exist)
 {
   std::shared_ptr<FileSystem> fs;
   RETURN_IF_ERROR(fsm_.GetFileSystem(dir, fs));
-  return fs->MakeDirectory(dir, recursive);
+  return fs->MakeDirectory(dir, recursive, allow_dir_exist);
 }
 
 Status
