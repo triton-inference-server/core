@@ -606,6 +606,8 @@ TRITONSERVER_ParameterTypeString(TRITONSERVER_ParameterType paramtype)
       return "INT";
     case TRITONSERVER_PARAMETER_BOOL:
       return "BOOL";
+    case TRITONSERVER_PARAMETER_BYTES:
+      return "BYTES";
     default:
       break;
   }
