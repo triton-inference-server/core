@@ -38,6 +38,7 @@
 #include "response_allocator.h"
 #include "sequence_state.h"
 #include "status.h"
+#include "triton/common/logging.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
@@ -687,6 +688,7 @@ class InferenceRequest {
   {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
+#endif  // TRITON_ENABLE_STATS
 
   Status Cancel()
   {
@@ -712,7 +714,15 @@ class InferenceRequest {
     return Status::Success;
   }
 
-#endif  // TRITON_ENABLE_STATS
+  bool IsCancelled()
+  {
+    bool is_cancelled = false;
+    Status status = IsCancelled(&is_cancelled);
+    if (!status.IsOk()) {
+      LOG_ERROR << status.Message();
+    }
+    return is_cancelled;
+  }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(InferenceRequest);
