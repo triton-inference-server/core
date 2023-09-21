@@ -72,7 +72,7 @@ SetThreadPriority(const int nice, const char* thread_name)
 bool
 IsAnyRequestCancelled(std::deque<std::unique_ptr<InferenceRequest>>& requests)
 {
-  for (const auto& req : requests) {
+  for (auto& req : requests) {
     if (req->IsCancelled()) {
       return true;
     }
@@ -81,14 +81,11 @@ IsAnyRequestCancelled(std::deque<std::unique_ptr<InferenceRequest>>& requests)
 }
 
 void
-CancelRequests(
-    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&& requests)
+CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
   static Status status = Status(Status::Code::CANCELLED);
-  for (auto& request : requests) {
-    for (auto& req : request) {
-      InferenceRequest::RespondIfError(req, status, true);
-    }
+  for (auto& req : requests) {
+    InferenceRequest::RespondIfError(req, status, true);
   }
 }
 
@@ -850,6 +847,21 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   return Status::Success;
 }
 
+void
+SequenceBatchScheduler::MarkRequestsCancelled(
+    std::deque<std::unique_ptr<InferenceRequest>>* requests)
+{
+  bool notify_clean_up = !requests->empty();
+  while (!requests->empty()) {
+    auto& cancelled_request = requests->front();
+    cancelled_requests_.emplace_back(std::move(cancelled_request));
+    requests->pop_front();
+  }
+  if (notify_clean_up) {
+    clean_up_cv_.notify_one();
+  }
+}
+
 InferenceRequest::SequenceId
 SequenceBatchScheduler::ReleaseSequenceSlot(
     const BatcherSequenceSlot& batcher_seq_slot,
@@ -859,12 +871,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 
   // If there are any remaining requests on the releasing sequence slot, those
   // requests will be cancelled.
-  if (!requests->empty()) {
-    std::deque<std::unique_ptr<InferenceRequest>> cancelled_requests;
-    requests->swap(cancelled_requests);
-    cancelled_requests_.emplace_back(std::move(cancelled_requests));
-    clean_up_cv_.notify_one();
-  }
+  MarkRequestsCancelled(requests);
 
   // If the instance behind the slot is pending to be removed, do not add the
   // slot back to ready and erase it instead.
@@ -916,8 +923,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
     if (seq_cancelled) {
       LOG_VERBOSE(1) << irequest->LogRequest() << "CORRID " << correlation_id
                      << " sequence cancelled: " << irequest->ModelName();
-      cancelled_requests_.emplace_back(std::move(*backlog));
-      clean_up_cv_.notify_one();
+      MarkRequestsCancelled(backlog.get());
       continue;
     }
     *requests = std::move(*backlog);
@@ -1163,8 +1169,7 @@ SequenceBatchScheduler::CleanUpThread(const int nice)
     // Removed resources should be destructed outside the lock.
     std::vector<std::shared_ptr<TritonModelInstance>> removed_instances;
     std::vector<std::unique_ptr<SequenceBatch>> removed_batchers;
-    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
-        cancelled_requests;
+    std::vector<std::unique_ptr<InferenceRequest>> cancelled_requests;
 
     {
       std::unique_lock<std::mutex> lk(mu_);
