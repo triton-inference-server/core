@@ -854,7 +854,9 @@ SequenceBatchScheduler::MarkRequestsCancelled(
   bool notify_clean_up = !requests->empty();
   while (!requests->empty()) {
     auto& cancelled_request = requests->front();
-    cancelled_requests_.emplace_back(std::move(cancelled_request));
+    if (cancelled_request) {
+      cancelled_requests_.emplace_back(std::move(cancelled_request));
+    }
     requests->pop_front();
   }
   if (notify_clean_up) {
