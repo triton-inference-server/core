@@ -83,7 +83,7 @@ IsAnyRequestCancelled(std::deque<std::unique_ptr<InferenceRequest>>& requests)
 void
 CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
-  static Status cancelled_status = Status(Status::Code::CANCELLED);
+  const static Status cancelled_status = Status(Status::Code::CANCELLED);
   for (auto& req : requests) {
     // Mark the request as cancelled before responding.
     Status status = req->Cancel();
@@ -1144,7 +1144,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
       }
 
       // Reject timeout requests
-      static Status rejected_status = Status(
+      const static Status rejected_status = Status(
           Status::Code::UNAVAILABLE,
           "timeout of the corresponding sequence has been expired");
       for (auto& backlog : expired_backlogs) {
