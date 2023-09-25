@@ -83,9 +83,15 @@ IsAnyRequestCancelled(std::deque<std::unique_ptr<InferenceRequest>>& requests)
 void
 CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
-  static Status status = Status(Status::Code::CANCELLED);
+  static Status cancelled_status = Status(Status::Code::CANCELLED);
   for (auto& req : requests) {
-    InferenceRequest::RespondIfError(req, status, true);
+    // Mark the request as cancelled before responding.
+    Status status = req->Cancel();
+    if (!status.IsOk()) {
+      LOG_ERROR << status.Message();
+    }
+    // Respond the request as cancelled.
+    InferenceRequest::RespondIfError(req, cancelled_status, true);
   }
 }
 

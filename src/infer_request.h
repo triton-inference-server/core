@@ -690,6 +690,7 @@ class InferenceRequest {
   }
 #endif  // TRITON_ENABLE_STATS
 
+  // Mark the request as cancelled.
   Status Cancel()
   {
     if (!response_factory_) {
@@ -702,6 +703,9 @@ class InferenceRequest {
     return Status::Success;
   }
 
+  // Check if the request is marked as cancelled. This does not indicate if the
+  // request is actually cancelled. The request is cancelled if and only if it
+  // is responded with a cancelled status.
   Status IsCancelled(bool* is_cancelled)
   {
     if (!response_factory_) {
