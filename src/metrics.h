@@ -324,6 +324,9 @@ class Metrics {
   prometheus::Family<prometheus::Summary>& cache_hit_summary_us_model_family_;
   prometheus::Family<prometheus::Summary>& cache_miss_summary_us_model_family_;
 
+  // Version
+  prometheus::Family<prometheus::Gauge>& version_info_family_;
+
 #ifdef TRITON_ENABLE_METRICS_GPU
   prometheus::Family<prometheus::Gauge>& gpu_utilization_family_;
   prometheus::Family<prometheus::Gauge>& gpu_memory_total_family_;
