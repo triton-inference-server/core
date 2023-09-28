@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 16
+#define TRITONBACKEND_API_VERSION_MINOR 17
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -982,6 +982,15 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelVersion(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelRepository(
     TRITONBACKEND_Model* model, TRITONBACKEND_ArtifactType* artifact_type,
     const char** location);
+
+/// Get the location of the model (moedl.py), provided by a python based
+/// backend.
+///
+/// \param model The model.
+/// \param location Returns the location.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_BackendModelLocation(
+    TRITONBACKEND_Model* model, const char** location);
 
 /// Get the model configuration. The caller takes ownership of the
 /// message object and must call TRITONSERVER_MessageDelete to release

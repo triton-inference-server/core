@@ -823,6 +823,10 @@ TRITONBACKEND_ModelRepository()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_BackendModelLocation()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelConfig()
 {
 }

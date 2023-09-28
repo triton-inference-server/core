@@ -376,7 +376,32 @@ TritonBackendManager::BackendState(
         {backend->Name(), std::vector<std::string>{libpath, backend_config}});
   }
 
+  for (const auto& custom_backend_pair : custom_backend_map_) {
+    auto& custom_backend_name = custom_backend_pair.first;
+    auto custom_backend_path = custom_backend_pair.second;
+
+    backend_state_map->insert(
+        {custom_backend_name,
+         std::vector<std::string>{custom_backend_path, ""}});
+  }
+
   *backend_state = std::move(backend_state_map);
+
+  return Status::Success;
+}
+
+Status
+TritonBackendManager::StoreCustomBackend(
+    const std::string& name, const std::string& libpath)
+{
+  std::lock_guard<std::mutex> lock(mu_);
+
+  const auto& itr = custom_backend_map_.find(libpath);
+  if (itr != custom_backend_map_.end()) {
+    return Status::Success;
+  }
+
+  custom_backend_map_.insert({name, libpath});
 
   return Status::Success;
 }

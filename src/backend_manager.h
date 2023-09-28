@@ -174,10 +174,14 @@ class TritonBackendManager {
           std::unordered_map<std::string, std::vector<std::string>>>*
           backend_state);
 
+  Status StoreCustomBackend(
+      const std::string& name, const std::string& libpath);
+
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonBackendManager);
   TritonBackendManager() = default;
   std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
+  std::unordered_map<std::string, std::string> custom_backend_map_;
 };
 
 }}  // namespace triton::core
