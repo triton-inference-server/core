@@ -239,7 +239,7 @@ class TritonModel : public Model {
   // This `model.py` is later reused by models,
   // using this python-based backend.
   // We provide the location of common model.py, when model is initialized.
-  std::string py_backend_model_path_;
+  std::string py_backend_model_path_ = "";
 
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;
