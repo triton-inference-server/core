@@ -367,6 +367,14 @@ SequenceBatchScheduler::GenerateInitialStateData(
             std::to_string(initial_state.dims().size()) +
             " != " + std::to_string(state.dims().size()));
   }
+  const auto& initial_state_pair = initial_state_.emplace(
+      std::piecewise_construct, std::forward_as_tuple(state.input_name()),
+      std::forward_as_tuple(initial_state.name()));
+  auto& initial_state_data = initial_state_pair.first->second;
+
+  if (max_batch_size_ > 0) {
+    initial_state_data.shape_.emplace_back(1);
+  }
 
   // Check the dimensions to make sure it doesn't have variable-sized dims and
   // matches the state description.
@@ -390,12 +398,8 @@ SequenceBatchScheduler::GenerateInitialStateData(
                 " != " + std::to_string(*state_dim));
       }
     }
+    initial_state_data.shape_.emplace_back(*initial_state_dim);
   }
-
-  const auto& initial_state_pair = initial_state_.emplace(
-      std::piecewise_construct, std::forward_as_tuple(state.input_name()),
-      std::forward_as_tuple(initial_state.name()));
-  auto& initial_state_data = initial_state_pair.first->second;
 
   // Calculate total memory byte size
   auto element_count = triton::common::GetElementCount(initial_state.dims());
