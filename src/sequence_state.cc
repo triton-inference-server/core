@@ -237,11 +237,8 @@ SequenceStates::OutputState(
 
     if (output_state_r->Data()->TotalByteSize() ==
         input_state_r->Data()->TotalByteSize()) {
-      std::shared_ptr<Memory> temp_memory = input_state_r->Data();
       RETURN_IF_ERROR(input_state_r->RemoveAllData());
       RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-      RETURN_IF_ERROR(output_state_r->RemoveAllData());
-      RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
     } else {
       // If the size of output state is different from the input state, allocate
       // a new memory for the input state with the same size as output state.
