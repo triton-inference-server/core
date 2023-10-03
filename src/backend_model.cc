@@ -126,6 +126,7 @@ TritonModel::Create(
       backend_libname, &backend_libdir, &backend_libpath,
       &python_runtime_modeldir));
 
+  // `backend_libpath` always points to shared library path.
   if (backend_libpath.empty()) {
     return Status(
         Status::Code::INVALID_ARG,
@@ -140,8 +141,11 @@ TritonModel::Create(
   bool is_python_backend_based = false;
   triton::common::BackendCmdlineConfig config;
   if (!python_runtime_modeldir.empty()) {
+    // `backend_libdir` points to model.py for python backend based backends.
     backend_libdir = python_runtime_modeldir;
     is_python_backend_based = true;
+    // Python backend based backends use configs, specified for python backend
+    // in cmdline.
     RETURN_IF_ERROR(
         ResolveBackendConfigs(backend_cmdline_config_map, "python", config));
   } else {
@@ -349,9 +353,9 @@ TritonModel::ResolveBackendPaths(
     return Status::Success;
   }
 
-  // If not found, look for libtriton_python.so in python backend directory
+  // If not found, then we are processing a python backend based backend.
+  // We look for libtriton_python.so in python backend directory
   // and model.py in provided custom backend's directory
-
   std::string python_backend_dir = JoinPath({global_backend_dir, "python"});
   bool is_dir;
   RETURN_IF_ERROR(IsDirectory(python_backend_dir, &is_dir));
