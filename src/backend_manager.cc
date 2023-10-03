@@ -345,6 +345,10 @@ TritonBackendManager::CreateBackend(
   const auto& itr = backend_map_.find(libpath);
   if (itr != backend_map_.end()) {
     *backend = itr->second;
+    // Python backend based backends use the same shared library as python
+    // backend. If libpath to libtriton_python.so is already found, need to
+    // check if backends' names match. If not, we create a new python backend
+    // based backend.
     if ((*backend)->Name() == name) {
       return Status::Success;
     }

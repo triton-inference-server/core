@@ -203,6 +203,12 @@ class TritonModel : public Model {
       const std::string& backend_libname, std::string* backend_libdir,
       std::string* backend_libpath);
 
+  // For a given backend (`backend_name`), looks for backend directory and
+  // location for the shared library, used by the backend. Returns:
+  // `backend_libdir` returns directory, where shared library (.so) is stored,
+  // `backend_libpath` returns the full path to .so,
+  // `python_runtime_modeldir` is set to empty string for c++ backends and
+  // returns directory, where model.py is stored.
   static Status ResolveBackendPaths(
       const std::string& backend_name, const std::string& global_backend_dir,
       const std::string& model_name, std::vector<std::string>& search_paths,
