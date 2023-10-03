@@ -386,7 +386,7 @@ TritonBackendManager::BackendState(
     backend->BackendConfig().Serialize(&backend_config, &backend_config_size);
     backend_state_map->insert(
         {backend->Name(), std::vector<std::string>{libpath, backend_config}});
-    if (backend->IsPythonBackendBased()) {
+    if (backend->IsPythonBackendBased() && python_backend_config.empty()) {
       python_backend_config.emplace_back(backend->LibPath());
       python_backend_config.emplace_back(std::string(backend_config));
     }
