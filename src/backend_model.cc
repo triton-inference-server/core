@@ -138,12 +138,12 @@ TritonModel::Create(
 
   // Resolve the global backend configuration with the specific backend
   // configuration
-  bool is_python_backend_based = false;
+  bool is_python_based_backend = false;
   triton::common::BackendCmdlineConfig config;
   if (!python_runtime_modeldir.empty()) {
     // `backend_libdir` points to model.py for python backend based backends.
     backend_libdir = python_runtime_modeldir;
-    is_python_backend_based = true;
+    is_python_based_backend = true;
     // Python backend based backends use configs, specified for python backend
     // in cmdline.
     RETURN_IF_ERROR(
@@ -158,7 +158,7 @@ TritonModel::Create(
   std::shared_ptr<TritonBackend> backend;
   RETURN_IF_ERROR(server->BackendManager()->CreateBackend(
       backend_name, backend_libdir, backend_libpath, config,
-      is_python_backend_based, &backend));
+      is_python_based_backend, &backend));
 
   // Normalize backend-dependent config
   {

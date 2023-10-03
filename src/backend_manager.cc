@@ -338,7 +338,7 @@ Status
 TritonBackendManager::CreateBackend(
     const std::string& name, const std::string& dir, const std::string& libpath,
     const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-    bool& is_python_backend_based, std::shared_ptr<TritonBackend>* backend)
+    bool is_python_based_backend, std::shared_ptr<TritonBackend>* backend)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -357,8 +357,8 @@ TritonBackendManager::CreateBackend(
   RETURN_IF_ERROR(TritonBackend::Create(
       name, dir, libpath, backend_cmdline_config, backend));
 
-  (*backend)->SetPythonBackendBasedFlag(is_python_backend_based);
-  if (is_python_backend_based) {
+  (*backend)->SetPythonBasedBackendFlag(is_python_based_backend);
+  if (is_python_based_backend) {
     backend_map_.insert({std::string(dir + "/model.py"), *backend});
   } else {
     backend_map_.insert({libpath, *backend});
