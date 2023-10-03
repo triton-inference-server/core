@@ -431,9 +431,9 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     }
 
     // Finish rejected and cancelled requests if any
-    static Status rejected_status =
+    const static Status rejected_status =
         Status(Status::Code::UNAVAILABLE, "Request timeout expired");
-    static Status cancelled_status = Status(Status::Code::CANCELLED);
+    const static Status cancelled_status = Status(Status::Code::CANCELLED);
     FinishSkippedRequests(std::move(rejected_requests), rejected_status);
     FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
   }  // end runner loop
