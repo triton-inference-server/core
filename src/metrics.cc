@@ -195,11 +195,6 @@ Metrics::Metrics()
           prometheus::BuildGauge()
             .Name("triton_version_information")
             .Help("Triton API & Server Versions")
-            /*.Labels({
-                //{std::string("api_major_version"), std::to_string(TRITONBACKEND_API_VERSION_MAJOR)},
-                {std::string("api_minor_version"),    std::to_string(TRITONBACKEND_API_VERSION_MINOR)},
-                {std::string("server_major_version"), std::to_string(TRITONSERVER_API_VERSION_MAJOR)},
-                {std::string("server_minor_version"), std::to_string(TRITONSERVER_API_VERSION_MINOR)}})*/
             .Register(*registry_)),
 
 #ifdef TRITON_ENABLE_METRICS_GPU
