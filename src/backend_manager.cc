@@ -338,19 +338,27 @@ Status
 TritonBackendManager::CreateBackend(
     const std::string& name, const std::string& dir, const std::string& libpath,
     const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-    std::shared_ptr<TritonBackend>* backend)
+    bool& is_python_backend_based, std::shared_ptr<TritonBackend>* backend)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
   const auto& itr = backend_map_.find(libpath);
   if (itr != backend_map_.end()) {
     *backend = itr->second;
-    return Status::Success;
+    if ((*backend)->Name() == name) {
+      return Status::Success;
+    }
   }
 
   RETURN_IF_ERROR(TritonBackend::Create(
       name, dir, libpath, backend_cmdline_config, backend));
-  backend_map_.insert({libpath, *backend});
+
+  (*backend)->SetPythonBackendBasedFlag(is_python_backend_based);
+  if (is_python_backend_based) {
+    backend_map_.insert({std::string(dir + "/model.py"), *backend});
+  } else {
+    backend_map_.insert({libpath, *backend});
+  }
 
   return Status::Success;
 }
@@ -365,43 +373,30 @@ TritonBackendManager::BackendState(
   std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>
       backend_state_map(
           new std::unordered_map<std::string, std::vector<std::string>>);
+  std::vector<std::string> python_backend_config{};
+  bool has_python_backend = false;
   for (const auto& backend_pair : backend_map_) {
     auto& libpath = backend_pair.first;
     auto backend = backend_pair.second;
-
+    if (backend->Name() == "python") {
+      has_python_backend = true;
+    }
     const char* backend_config;
     size_t backend_config_size;
     backend->BackendConfig().Serialize(&backend_config, &backend_config_size);
     backend_state_map->insert(
         {backend->Name(), std::vector<std::string>{libpath, backend_config}});
+    if (backend->IsPythonBackendBased()) {
+      python_backend_config.emplace_back(backend->LibPath());
+      python_backend_config.emplace_back(std::string(backend_config));
+    }
   }
 
-  for (const auto& custom_backend_pair : custom_backend_map_) {
-    auto& custom_backend_name = custom_backend_pair.first;
-    auto custom_backend_path = custom_backend_pair.second;
-
-    backend_state_map->insert(
-        {custom_backend_name,
-         std::vector<std::string>{custom_backend_path, ""}});
+  if (!has_python_backend && !python_backend_config.empty()) {
+    backend_state_map->insert({"python", python_backend_config});
   }
 
   *backend_state = std::move(backend_state_map);
-
-  return Status::Success;
-}
-
-Status
-TritonBackendManager::StoreCustomBackend(
-    const std::string& name, const std::string& libpath)
-{
-  std::lock_guard<std::mutex> lock(mu_);
-
-  const auto& itr = custom_backend_map_.find(libpath);
-  if (itr != custom_backend_map_.end()) {
-    return Status::Success;
-  }
-
-  custom_backend_map_.insert({name, libpath});
 
   return Status::Success;
 }

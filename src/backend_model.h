@@ -71,14 +71,6 @@ class TritonModel : public Model {
     return localized_model_dir_->Path();
   }
 
-  const std::string& PythonBackendBasedModelPath()
-  {
-    return py_backend_model_path_;
-  }
-  void SetPythonBackendBasedModelPath(const std::string& py_backend_model_path)
-  {
-    py_backend_model_path_ = py_backend_model_path;
-  }
   // Return pointer to the underlying server.
   InferenceServer* Server() { return server_; }
   // Return whether the backend should attempt to auto-complete the model config
@@ -208,8 +200,14 @@ class TritonModel : public Model {
   // backend path in backend_libpath.
   static Status LocateBackendLibrary(
       const std::vector<std::string> search_paths,
-      const std::string& backend_libname, std::string& backend_libdir,
-      std::string& backend_libpath);
+      const std::string& backend_libname, std::string* backend_libdir,
+      std::string* backend_libpath);
+
+  static Status ResolveBackendPaths(
+      const std::string& backend_name, const std::string& global_backend_dir,
+      const std::string& model_name, std::vector<std::string>& search_paths,
+      const std::string& backend_libname, std::string* backend_libdir,
+      std::string* backend_libpath, std::string* python_runtime_modeldir);
 
   // Clear library handles.
   void ClearHandles();
@@ -234,12 +232,6 @@ class TritonModel : public Model {
   // required creation of a temporary local copy then that copy will
   // persist as along as this object is retained by this model.
   std::shared_ptr<LocalizedPath> localized_model_dir_;
-
-  // Python-based backends provide model.py in their directory.
-  // This `model.py` is later reused by models,
-  // using this python-based backend.
-  // We provide the location of common model.py, when model is initialized.
-  std::string py_backend_model_path_ = "";
 
   // Backend used by this model.
   std::shared_ptr<TritonBackend> backend_;

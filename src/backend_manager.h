@@ -77,6 +77,7 @@ class TritonBackend {
 
   const std::string& Name() const { return name_; }
   const std::string& Directory() const { return dir_; }
+  const std::string& LibPath() const { return libpath_; }
   const TritonServerMessage& BackendConfig() const { return backend_config_; }
   const Attribute& BackendAttributes() const { return attributes_; }
 
@@ -91,6 +92,11 @@ class TritonBackend {
 
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
+  bool& IsPythonBackendBased() { return is_python_backend_based_; }
+  void SetPythonBackendBasedFlag(bool& is_python_backend_based)
+  {
+    is_python_backend_based_ = is_python_backend_based;
+  }
 
   TritonModelInitFn_t ModelInitFn() const { return model_init_fn_; }
   TritonModelFiniFn_t ModelFiniFn() const { return model_fini_fn_; }
@@ -135,6 +141,8 @@ class TritonBackend {
   // Full path to the backend shared library.
   const std::string libpath_;
 
+  bool is_python_backend_based_;
+
   // Backend configuration as JSON
   TritonServerMessage backend_config_;
 
@@ -167,21 +175,17 @@ class TritonBackendManager {
       const std::string& name, const std::string& dir,
       const std::string& libpath,
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-      std::shared_ptr<TritonBackend>* backend);
+      bool& is_python_backend_based, std::shared_ptr<TritonBackend>* backend);
 
   Status BackendState(
       std::unique_ptr<
           std::unordered_map<std::string, std::vector<std::string>>>*
           backend_state);
 
-  Status StoreCustomBackend(
-      const std::string& name, const std::string& libpath);
-
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonBackendManager);
   TritonBackendManager() = default;
   std::unordered_map<std::string, std::shared_ptr<TritonBackend>> backend_map_;
-  std::unordered_map<std::string, std::string> custom_backend_map_;
 };
 
 }}  // namespace triton::core
