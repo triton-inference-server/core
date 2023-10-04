@@ -122,7 +122,7 @@ TritonModel::Create(
   std::string python_runtime_modeldir;
 
   RETURN_IF_ERROR(ResolveBackendPaths(
-      backend_name, backend_dir, model_config.name(), search_paths,
+      specialized_backend_name, backend_dir, model_config.name(), search_paths,
       backend_libname, &backend_libdir, &backend_libpath,
       &python_runtime_modeldir));
 
