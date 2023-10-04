@@ -1018,6 +1018,17 @@ TRITONBACKEND_RequestFlags(TRITONBACKEND_Request* request, uint32_t* flags)
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_RequestIsCancelled(
+    TRITONBACKEND_Request* request, bool* is_cancelled)
+{
+  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
+
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->IsCancelled(is_cancelled));
+  return nullptr;
+}
+
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestCorrelationIdString(
     TRITONBACKEND_Request* request, const char** id)
 {
@@ -1364,6 +1375,17 @@ TRITONBACKEND_ResponseFactorySendFlags(
   }
   return nullptr;  // success
 }
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseFactoryIsCancelled(
+    TRITONBACKEND_ResponseFactory* factory, bool* is_cancelled)
+{
+  std::shared_ptr<InferenceResponseFactory>* response_factory =
+      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(factory);
+  *is_cancelled = (*response_factory)->IsCancelled();
+  return nullptr;  // success
+}
+
 
 ///
 /// TRITONBACKEND_Response

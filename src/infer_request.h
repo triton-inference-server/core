@@ -38,6 +38,7 @@
 #include "response_allocator.h"
 #include "sequence_state.h"
 #include "status.h"
+#include "triton/common/logging.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
 
@@ -497,16 +498,17 @@ class InferenceRequest {
     return Status::Success;
   }
 
-  // Initialize the response factory that is to be used with any
-  // responses produced for this request.
+  // Initialize the response factory arguments that are going to be used with
+  // any responses produced for this request.
   Status SetResponseCallback(
       const ResponseAllocator* allocator, void* alloc_userp,
       TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
       void* response_userp)
   {
-    response_factory_.reset(new InferenceResponseFactory(
-        model_shared_, id_, allocator, alloc_userp, response_fn, response_userp,
-        response_delegator_));
+    response_allocator_ = allocator;
+    alloc_userp_ = alloc_userp;
+    response_callback_ = response_fn;
+    response_userp_ = response_userp;
     return Status::Success;
   }
 
@@ -549,6 +551,13 @@ class InferenceRequest {
   }
 
   Status LoadInputStates();
+
+  void SetResponseFactory()
+  {
+    response_factory_.reset(new InferenceResponseFactory(
+        model_shared_, id_, response_allocator_, alloc_userp_,
+        response_callback_, response_userp_, response_delegator_));
+  }
 
   const std::shared_ptr<SequenceStates>& GetSequenceStates() const
   {
@@ -679,8 +688,45 @@ class InferenceRequest {
   {
     secondary_stats_aggregator_ = secondary_stats_aggregator;
   }
-
 #endif  // TRITON_ENABLE_STATS
+
+  // Mark the request as cancelled.
+  Status Cancel()
+  {
+    if (!response_factory_) {
+      return Status(
+          Status::Code::INTERNAL,
+          "It is not possible to cancel an inference request before calling "
+          "TRITONSERVER_InferAsync.");
+    }
+    response_factory_->Cancel();
+    return Status::Success;
+  }
+
+  // Check if the request is marked as cancelled. This does not indicate if the
+  // request is actually cancelled. The request is cancelled if and only if it
+  // is responded with a cancelled status.
+  Status IsCancelled(bool* is_cancelled)
+  {
+    if (!response_factory_) {
+      return Status(
+          Status::Code::INTERNAL,
+          "It is not possible to query cancellation status before calling "
+          "TRITONSERVER_InferAsync.");
+    }
+    *is_cancelled = response_factory_->IsCancelled();
+    return Status::Success;
+  }
+
+  bool IsCancelled()
+  {
+    bool is_cancelled = false;
+    Status status = IsCancelled(&is_cancelled);
+    if (!status.IsOk()) {
+      LOG_ERROR << status.Message();
+    }
+    return is_cancelled;
+  }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(InferenceRequest);
@@ -795,10 +841,16 @@ class InferenceRequest {
   std::shared_ptr<SequenceStates> sequence_states_;
 
   // The state of the request.
-  InferenceRequest::State state_;
+  std::atomic<InferenceRequest::State> state_;
   // Whether this is a null request used for direct sequence batch padding or
   // not.
   bool null_request_;
+
+  // Response factory arguments
+  const ResponseAllocator* response_allocator_;
+  void* response_userp_;
+  void* alloc_userp_;
+  TRITONSERVER_InferenceResponseCompleteFn_t response_callback_;
 };
 
 std::ostream& operator<<(std::ostream& out, const InferenceRequest& request);

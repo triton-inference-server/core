@@ -48,7 +48,8 @@ TritonCodeToStatusCode(TRITONSERVER_Error_Code code)
       return Status::Code::UNSUPPORTED;
     case TRITONSERVER_ERROR_ALREADY_EXISTS:
       return Status::Code::ALREADY_EXISTS;
-
+    case TRITONSERVER_ERROR_CANCELLED:
+      return Status::Code::CANCELLED;
     default:
       break;
   }
@@ -74,7 +75,8 @@ StatusCodeToTritonCode(Status::Code status_code)
       return TRITONSERVER_ERROR_UNSUPPORTED;
     case Status::Code::ALREADY_EXISTS:
       return TRITONSERVER_ERROR_ALREADY_EXISTS;
-
+    case Status::Code::CANCELLED:
+      return TRITONSERVER_ERROR_CANCELLED;
     default:
       break;
   }

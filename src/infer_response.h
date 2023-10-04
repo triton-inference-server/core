@@ -59,9 +59,14 @@ class InferenceResponseFactory {
           std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
       : model_(model), id_(id), allocator_(allocator),
         alloc_userp_(alloc_userp), response_fn_(response_fn),
-        response_userp_(response_userp), response_delegator_(delegator)
+        response_userp_(response_userp), response_delegator_(delegator),
+        is_cancelled_(false)
   {
   }
+
+  void Cancel() { is_cancelled_ = true; }
+
+  bool IsCancelled() { return is_cancelled_; }
 
   const ResponseAllocator* Allocator() { return allocator_; }
   void* AllocatorUserp() { return alloc_userp_; }
@@ -118,6 +123,7 @@ class InferenceResponseFactory {
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>
       response_delegator_;
 
+  std::atomic<bool> is_cancelled_;
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.

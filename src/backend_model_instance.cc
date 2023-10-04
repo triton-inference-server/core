@@ -623,6 +623,12 @@ TritonModelInstance::WarmUp()
         request->SetResponseCallback(
             &warmup_allocator, nullptr, WarmupResponseComplete,
             &response_complete[i]);
+
+        // For warmup requests we need to manually set ResponseFactory
+        // since they modify the callback after PrepareForInference has
+        // been called.
+        request->SetResponseFactory();
+
         // Capture timestamp before run to avoid incorrect accumulation from
         // sequential warmup runs
 #ifdef TRITON_ENABLE_STATS

@@ -1640,6 +1640,27 @@ TRITONSERVER_InferenceRequestFlags(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestIsCancelled(
+    struct TRITONSERVER_InferenceRequest* inference_request, bool* is_cancelled)
+{
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  RETURN_IF_STATUS_ERROR(lrequest->IsCancelled(is_cancelled));
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestCancel(
+    struct TRITONSERVER_InferenceRequest* inference_request)
+{
+  tc::InferenceRequest* lrequest =
+      reinterpret_cast<tc::InferenceRequest*>(inference_request);
+  RETURN_IF_STATUS_ERROR(lrequest->Cancel());
+  return nullptr;  // Success
+}
+
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetFlags(
     TRITONSERVER_InferenceRequest* inference_request, uint32_t flags)
 {
