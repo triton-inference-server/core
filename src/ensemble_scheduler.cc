@@ -1264,6 +1264,11 @@ EnsembleContext::ScheduleSteps(
       }
     }
     if (should_schedule) {
+      // If the ensemble request is cancelled, propagate the cancellation to the
+      // next request step.
+      if (context->request_tracker_->Request()->IsCancelled()) {
+        step->request_->Cancel();
+      }
       // On a successful call to InferAsync(), the step will be released by
       // the response callback. When the response callback is invoked, the
       // step must not own (and release) the request as the request should be
