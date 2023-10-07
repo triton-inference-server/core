@@ -77,6 +77,7 @@ class TritonBackend {
 
   const std::string& Name() const { return name_; }
   const std::string& Directory() const { return dir_; }
+  const std::string& LibPath() const { return libpath_; }
   const TritonServerMessage& BackendConfig() const { return backend_config_; }
   const Attribute& BackendAttributes() const { return attributes_; }
 
@@ -91,6 +92,11 @@ class TritonBackend {
 
   void* State() { return state_; }
   void SetState(void* state) { state_ = state; }
+  bool IsPythonBackendBased() { return is_python_based_backend_; }
+  void SetPythonBasedBackendFlag(bool is_python_based_backend)
+  {
+    is_python_based_backend_ = is_python_based_backend;
+  }
 
   TritonModelInitFn_t ModelInitFn() const { return model_init_fn_; }
   TritonModelFiniFn_t ModelFiniFn() const { return model_fini_fn_; }
@@ -135,6 +141,8 @@ class TritonBackend {
   // Full path to the backend shared library.
   const std::string libpath_;
 
+  bool is_python_based_backend_;
+
   // Backend configuration as JSON
   TritonServerMessage backend_config_;
 
@@ -167,7 +175,7 @@ class TritonBackendManager {
       const std::string& name, const std::string& dir,
       const std::string& libpath,
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-      std::shared_ptr<TritonBackend>* backend);
+      bool is_python_based_backend, std::shared_ptr<TritonBackend>* backend);
 
   Status BackendState(
       std::unique_ptr<

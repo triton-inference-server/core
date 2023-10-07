@@ -70,6 +70,7 @@ class TritonModel : public Model {
   {
     return localized_model_dir_->Path();
   }
+
   // Return pointer to the underlying server.
   InferenceServer* Server() { return server_; }
   // Return whether the backend should attempt to auto-complete the model config
@@ -193,6 +194,26 @@ class TritonModel : public Model {
   // the command line.
   static Status SetBackendConfigDefaults(
       triton::common::BackendCmdlineConfig& config);
+
+  // Searches for backend_libname in provided search_paths.
+  // If found, stores backend directory in backend_libdir and
+  // backend path in backend_libpath.
+  static Status LocateBackendLibrary(
+      const std::vector<std::string> search_paths,
+      const std::string& backend_libname, std::string* backend_libdir,
+      std::string* backend_libpath);
+
+  // For a given backend (`backend_name`), looks for backend directory and
+  // location for the shared library, used by the backend. Returns:
+  // `backend_libdir` returns directory, where shared library (.so) is stored,
+  // `backend_libpath` returns the full path to .so,
+  // `python_runtime_modeldir` is set to empty string for c++ backends and
+  // returns directory, where model.py is stored.
+  static Status ResolveBackendPaths(
+      const std::string& backend_name, const std::string& global_backend_dir,
+      const std::string& model_name, std::vector<std::string>& search_paths,
+      const std::string& backend_libname, std::string* backend_libdir,
+      std::string* backend_libpath, std::string* python_runtime_modeldir);
 
   // Clear library handles.
   void ClearHandles();

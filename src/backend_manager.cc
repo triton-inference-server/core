@@ -338,19 +338,31 @@ Status
 TritonBackendManager::CreateBackend(
     const std::string& name, const std::string& dir, const std::string& libpath,
     const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-    std::shared_ptr<TritonBackend>* backend)
+    bool is_python_based_backend, std::shared_ptr<TritonBackend>* backend)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
   const auto& itr = backend_map_.find(libpath);
   if (itr != backend_map_.end()) {
     *backend = itr->second;
-    return Status::Success;
+    // Python backend based backends use the same shared library as python
+    // backend. If libpath to libtriton_python.so is already found, need to
+    // check if backends' names match. If not, we create a new python backend
+    // based backend.
+    if ((*backend)->Name() == name) {
+      return Status::Success;
+    }
   }
 
   RETURN_IF_ERROR(TritonBackend::Create(
       name, dir, libpath, backend_cmdline_config, backend));
-  backend_map_.insert({libpath, *backend});
+
+  (*backend)->SetPythonBasedBackendFlag(is_python_based_backend);
+  if (is_python_based_backend) {
+    backend_map_.insert({std::string(dir + "/model.py"), *backend});
+  } else {
+    backend_map_.insert({libpath, *backend});
+  }
 
   return Status::Success;
 }
@@ -365,15 +377,27 @@ TritonBackendManager::BackendState(
   std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>
       backend_state_map(
           new std::unordered_map<std::string, std::vector<std::string>>);
+  std::vector<std::string> python_backend_config{};
+  bool has_python_backend = false;
   for (const auto& backend_pair : backend_map_) {
     auto& libpath = backend_pair.first;
     auto backend = backend_pair.second;
-
+    if (backend->Name() == "python") {
+      has_python_backend = true;
+    }
     const char* backend_config;
     size_t backend_config_size;
     backend->BackendConfig().Serialize(&backend_config, &backend_config_size);
     backend_state_map->insert(
         {backend->Name(), std::vector<std::string>{libpath, backend_config}});
+    if (backend->IsPythonBackendBased() && python_backend_config.empty()) {
+      python_backend_config.emplace_back(backend->LibPath());
+      python_backend_config.emplace_back(std::string(backend_config));
+    }
+  }
+
+  if (!has_python_backend && !python_backend_config.empty()) {
+    backend_state_map->insert({"python", python_backend_config});
   }
 
   *backend_state = std::move(backend_state_map);
