@@ -364,7 +364,7 @@ TritonBackendManager::CreateBackend(
 
   (*backend)->SetPythonBasedBackendFlag(is_python_based_backend);
   if (is_python_based_backend) {
-    backend_map_.insert({std::string(dir + "/model.py"), *backend});
+    backend_map_.insert({python_based_backend_path, *backend});
   } else {
     backend_map_.insert({libpath, *backend});
   }
