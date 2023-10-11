@@ -342,15 +342,19 @@ TritonBackendManager::CreateBackend(
 {
   std::lock_guard<std::mutex> lock(mu_);
 
-  const auto& itr = backend_map_.find(libpath);
-  if (itr != backend_map_.end()) {
-    *backend = itr->second;
-    // Python backend based backends use the same shared library as python
-    // backend. If libpath to libtriton_python.so is already found, need to
-    // check if backends' names match. If not, we create a new python backend
-    // based backend.
-    if ((*backend)->Name() == name) {
-      return Status::Success;
+  const auto python_based_backend_path = dir + "/model.py";
+  std::vector<std::string> paths = {libpath, python_based_backend_path};
+  for (const auto& path : paths) {
+    const auto& itr = backend_map_.find(path);
+    // If backend already exists, re-use it.
+    if (itr != backend_map_.end()) {
+      *backend = itr->second;
+      // Python based backends use the same shared library as python backend.
+      // If libpath to libtriton_python.so is already found, we need to check
+      // if backend names match. If not, we create a new python based backend.
+      if ((*backend)->Name() == name) {
+        return Status::Success;
+      }
     }
   }
 
@@ -359,7 +363,7 @@ TritonBackendManager::CreateBackend(
 
   (*backend)->SetPythonBasedBackendFlag(is_python_based_backend);
   if (is_python_based_backend) {
-    backend_map_.insert({std::string(dir + "/model.py"), *backend});
+    backend_map_.insert({python_based_backend_path, *backend});
   } else {
     backend_map_.insert({libpath, *backend});
   }
