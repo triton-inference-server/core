@@ -174,6 +174,8 @@ class ModelRepositoryManager {
       downstreams_.erase(downstream);
     }
 
+    void Writeback(const DependencyNode& updated_dependency_node);
+
     // Overall status
     Status status_;
 
@@ -304,7 +306,7 @@ class ModelRepositoryManager {
     // Find a node in the dependency graph with the exact matching model
     // identifier. The disconnected portion of the graph is looked up first, see
     // 'removed_nodes_'. If not found, then the connected portion of the graph
-    // is looked up, see 'nodes_'. If not found, 'nullptr' is returned.
+    // is looked up, see 'nodes_'. If not found, an exception is thrown.
     DependencyNode* GetNode(const ModelIdentifier& model_id) const;
 
     // Remove the given set of nodes, return two sets of nodes: The first set

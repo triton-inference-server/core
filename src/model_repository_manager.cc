@@ -2109,10 +2109,12 @@ ModelRepositoryManager::DependencyGraph::GetNode(
   const auto it = removed_nodes_.find(model_id);
   if (it != removed_nodes_.end()) {
     return it->second.get();
-  } else {
-    return FindNode(model_id, false /* allow_fuzzy_matching */);
   }
-  return nullptr;
+  auto* node = FindNode(model_id, false /* allow_fuzzy_matching */);
+  if (node == nullptr) {
+    throw std::invalid_argument("model_id '" + model_id.str() + "' not found");
+  }
+  return node;
 }
 
 std::unique_ptr<ModelIdentifier>
@@ -2156,15 +2158,24 @@ ModelRepositoryManager::DependencyGraph::Writeback(
     auto* node = GetNode(model_id);
     auto* updated_node = updated_dependency_graph.GetNode(model_id);
     // Writeback
-    node->status_ = updated_node->status_;
-    node->checked_ = updated_node->checked_;
-    node->loaded_versions_ = updated_node->loaded_versions_;
-    node->is_locked_ = updated_node->is_locked_;
-    // Notify retry(s)
-    node->retry_notify_cv_->notify_all();
+    node->Writeback(*updated_node);
     // Erase removed nodes at last to complete its lifecycle
     removed_nodes_.erase(model_id);
   }
+}
+
+
+void
+ModelRepositoryManager::DependencyNode::Writeback(
+    const DependencyNode& updated_dependency_node)
+{
+  // Writeback
+  status_ = updated_dependency_node.status_;
+  checked_ = updated_dependency_node.checked_;
+  loaded_versions_ = updated_dependency_node.loaded_versions_;
+  is_locked_ = updated_dependency_node.is_locked_;
+  // Notify retry(s)
+  retry_notify_cv_->notify_all();
 }
 
 
