@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 25
+#define TRITONSERVER_API_VERSION_MINOR 26
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -911,7 +911,8 @@ typedef enum tritonserver_requestflag_enum {
 /// Inference request release flags. The enum values must be
 /// power-of-2 values.
 typedef enum tritonserver_requestreleaseflag_enum {
-  TRITONSERVER_REQUEST_RELEASE_ALL = 1
+  TRITONSERVER_REQUEST_RELEASE_ALL = 1,
+  TRITONSERVER_REQUEST_RELEASE_RESCHEDULE = 2
 } TRITONSERVER_RequestReleaseFlag;
 
 /// Inference response complete flags. The enum values must be
@@ -936,6 +937,13 @@ typedef enum tritonserver_responsecompleteflag_enum {
 ///     itself nor any input tensor data associated with the
 ///     request. The callback should free or otherwise manage the
 ///     'request' object and all associated tensor data.
+///   - TRITONSERVER_REQUEST_RELEASE_RESCHEDULE: This flag is currently being
+///     consumed internally and the callback is not expected to receive nor
+///     process this kind of release. The backend will call
+///     TRITONBACKEND_RequestRelease with this flag when it wish the request
+///     to be rescheduled back to the model. An example is that the model is
+///     recursively performing inference of the request and use the rescheduling
+///     to proceed the recursive execution.
 ///
 /// Note that currently TRITONSERVER_REQUEST_RELEASE_ALL should always
 /// be set when the callback is invoked but in the future that may
