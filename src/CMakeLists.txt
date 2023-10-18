@@ -146,7 +146,7 @@ set(
   rate_limiter.cc
   repo_agent.cc
   scheduler_utils.cc
-  sequence_batch_scheduler.cc
+  sequence_batch_scheduler/sequence_batch_scheduler.cc
   sequence_state.cc
   server.cc
   shared_library.cc
@@ -194,8 +194,9 @@ set(
   response_allocator.h
   scheduler.h
   scheduler_utils.h
-  sequence_batch_scheduler.h
+  sequence_batch_scheduler/sequence_batch_scheduler.h
   sequence_state.h
+  sequence_batch_scheduler/sequence_utils.h
   server.h
   server_message.h
   shared_library.h
@@ -279,6 +280,7 @@ target_include_directories(
   triton-core
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${Boost_INCLUDE_DIRS}
     ${Protobuf_INCLUDE_DIRS}
 )

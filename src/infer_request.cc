@@ -431,6 +431,7 @@ void
 InferenceRequest::Release(
     std::unique_ptr<InferenceRequest>&& request, const uint32_t release_flags)
 {
+  // lock needed if release passes through all callback.
   // Invoke the release callbacks added internally before releasing the
   // request to user provided callback.
   for (auto it = request->release_callbacks_.rbegin();

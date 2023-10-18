@@ -42,6 +42,7 @@
 #include "scheduler.h"
 #include "scheduler_utils.h"
 #include "sequence_state.h"
+#include "sequence_utils.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 
@@ -279,6 +280,8 @@ class SequenceBatchScheduler : public Scheduler {
   // Initial state used for implicit state.
   std::unordered_map<std::string, SequenceStates::InitialStateData>
       initial_state_;
+
+  std::unique_ptr<Sequencer> sequencer_;
 };
 
 // Base class for a scheduler that implements a particular scheduling

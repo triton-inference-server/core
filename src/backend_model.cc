@@ -34,7 +34,7 @@
 #include "filesystem/api.h"
 #include "model_config_utils.h"
 #include "numa_utils.h"
-#include "sequence_batch_scheduler.h"
+#include "sequence_batch_scheduler/sequence_batch_scheduler.h"
 #include "sequence_state.h"
 #include "server.h"
 #include "server_message.h"

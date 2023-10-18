@@ -118,6 +118,13 @@ SequenceBatchScheduler::Create(
 
   auto& config = model->Config();
 
+  // Sequencer
+  if (config.sequence_batching().generative_sequence()) {
+    sched->sequencer_.reset(new GenerativeSequencer());
+  } else {
+    sched->sequencer_.reset(new Sequencer());
+  }
+
   // Max sequence idle...
   sched->max_sequence_idle_microseconds_ =
       config.sequence_batching().max_sequence_idle_microseconds();
@@ -674,17 +681,8 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
             "batcher");
   }
 
-  // A request must have a correlation ID to be processed correctly by
-  // this scheduler. A value of 0 (zero) or "" (empty) indicates that the
-  // request doesn't have a correlation ID.
-  const InferenceRequest::SequenceId& correlation_id =
-      irequest->CorrelationId();
-  if (!correlation_id.InSequence()) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "inference request to model '" + irequest->ModelName() +
-            "' must specify a non-zero or non-empty correlation ID");
-  }
+  RETURN_IF_ERROR(sequencer_->SetupSequenceRequest(irequest));
+  const auto& correlation_id = irequest->CorrelationId();
 
   BatcherSequenceSlot* target = nullptr;
 
