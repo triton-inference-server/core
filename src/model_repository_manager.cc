@@ -767,9 +767,8 @@ ModelRepositoryManager::LoadUnloadModels(
 
   // Check for collision in affected models and try to lock those models.
   std::shared_ptr<std::condition_variable> retry_notify_cv;
-  auto conflict_model = new_dependency_graph.LockNodes(
-      affected_models, dependency_graph_ /* prev_dependency_graph */,
-      &retry_notify_cv);
+  auto conflict_model =
+      new_dependency_graph.LockNodes(affected_models, &retry_notify_cv);
   if (conflict_model) {
     // A collision is found. Since info is only written to local copy, so it is
     // safe to rollback by simply returning the conflict information.
@@ -1972,13 +1971,13 @@ ModelRepositoryManager::DependencyGraph::RemoveNode(
     downstreams.emplace(downstream->model_id_);
   }
 
-  // Drop the node from all reference,
-  // remove from graph at last to complete its lifecycle
+  // Drop the node from all references and only track it on removed nodes
   (*global_map_ptr_)[model_id.name_].erase(model_id);
   for (const auto& model_name : node->missing_upstreams_) {
     auto mit = missing_nodes_.find(model_name);
     mit->second.erase(model_id);
   }
+  removed_nodes_.emplace(std::make_pair(model_id, std::move(node)));
   nodes_.erase(it);
 
   return {std::move(upstreams), std::move(downstreams)};
@@ -2078,6 +2077,11 @@ ModelRepositoryManager::DependencyGraph::DependencyGraph(
     }
     pair.second->downstreams_.swap(new_downstreams);
   }
+  // Copy removed_nodes_
+  for (auto& pair : rhs.removed_nodes_) {
+    removed_nodes_.emplace(
+        pair.first, std::make_unique<DependencyNode>(*pair.second));
+  }
 }
 
 void
@@ -2095,38 +2099,38 @@ ModelRepositoryManager::DependencyGraph::Swap(DependencyGraph& rhs)
   std::swap(global_map_ptr_, rhs.global_map_ptr_);
   nodes_.swap(rhs.nodes_);
   missing_nodes_.swap(rhs.missing_nodes_);
+  removed_nodes_.swap(rhs.removed_nodes_);
+}
+
+ModelRepositoryManager::DependencyNode*
+ModelRepositoryManager::DependencyGraph::GetNode(
+    const ModelIdentifier& model_id) const
+{
+  const auto it = removed_nodes_.find(model_id);
+  if (it != removed_nodes_.end()) {
+    return it->second.get();
+  }
+  auto* node = FindNode(model_id, false /* allow_fuzzy_matching */);
+  if (node == nullptr) {
+    throw std::invalid_argument("model_id '" + model_id.str() + "' not found");
+  }
+  return node;
 }
 
 std::unique_ptr<ModelIdentifier>
 ModelRepositoryManager::DependencyGraph::LockNodes(
     const std::set<ModelIdentifier>& nodes,
-    const DependencyGraph& prev_dependency_graph,
     std::shared_ptr<std::condition_variable>* retry_notify_cv)
 {
   for (const auto& model_id : nodes) {
-    auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
-    // An affected node can be deleted from this graph, so the presence of the
-    // node must be checked.
-    if (node != nullptr) {
-      // The node is on this graph, check the lock state and then lock.
-      if (node->is_locked_) {
-        if (retry_notify_cv != nullptr) {
-          *retry_notify_cv = node->retry_notify_cv_;
-        }
-        return std::make_unique<ModelIdentifier>(model_id);
+    auto* node = GetNode(model_id);
+    if (node->is_locked_) {
+      if (retry_notify_cv != nullptr) {
+        *retry_notify_cv = node->retry_notify_cv_;
       }
-      node->is_locked_ = true;
-    } else {
-      // The node should be on the previous graph.
-      node = prev_dependency_graph.FindNode(
-          model_id, false /* allow_fuzzy_matching */);
-      if (node != nullptr && node->is_locked_) {
-        if (retry_notify_cv != nullptr) {
-          *retry_notify_cv = node->retry_notify_cv_;
-        }
-        return std::make_unique<ModelIdentifier>(model_id);
-      }
+      return std::make_unique<ModelIdentifier>(model_id);
     }
+    node->is_locked_ = true;
   }
   return std::unique_ptr<ModelIdentifier>(nullptr);
 }
@@ -2136,16 +2140,11 @@ ModelRepositoryManager::DependencyGraph::UnlockNodes(
     const std::set<ModelIdentifier>& nodes)
 {
   for (const auto& model_id : nodes) {
-    auto node = FindNode(model_id, false /* allow_fuzzy_matching */);
-    // An affected node can be deleted from this graph, so the presence of the
-    // node must be checked.
-    // If the node is present, check the lock state and then unlock.
-    if (node != nullptr) {
-      if (!node->is_locked_) {
-        return std::make_unique<ModelIdentifier>(model_id);
-      }
-      node->is_locked_ = false;
+    auto* node = GetNode(model_id);
+    if (!node->is_locked_) {
+      return std::make_unique<ModelIdentifier>(model_id);
     }
+    node->is_locked_ = false;
   }
   return std::unique_ptr<ModelIdentifier>(nullptr);
 }
@@ -2156,21 +2155,27 @@ ModelRepositoryManager::DependencyGraph::Writeback(
     const std::set<ModelIdentifier>& affected_models)
 {
   for (const auto& model_id : affected_models) {
-    // An affected model can be deleted, so the presence of the model must be
-    // checked.
-    auto* updated_node = updated_dependency_graph.FindNode(
-        model_id, false /* allow_fuzzy_matching */);
-    if (updated_node != nullptr) {
-      auto* node = FindNode(model_id, false /* allow_fuzzy_matching */);
-      // Writeback
-      node->status_ = updated_node->status_;
-      node->checked_ = updated_node->checked_;
-      node->loaded_versions_ = updated_node->loaded_versions_;
-      node->is_locked_ = updated_node->is_locked_;
-      // Notify retry(s)
-      node->retry_notify_cv_->notify_all();
-    }
+    auto* node = GetNode(model_id);
+    auto* updated_node = updated_dependency_graph.GetNode(model_id);
+    // Writeback
+    node->Writeback(*updated_node);
+    // Erase removed nodes at last to complete its lifecycle
+    removed_nodes_.erase(model_id);
   }
+}
+
+
+void
+ModelRepositoryManager::DependencyNode::Writeback(
+    const DependencyNode& updated_dependency_node)
+{
+  // Writeback
+  status_ = updated_dependency_node.status_;
+  checked_ = updated_dependency_node.checked_;
+  loaded_versions_ = updated_dependency_node.loaded_versions_;
+  is_locked_ = updated_dependency_node.is_locked_;
+  // Notify retry(s)
+  retry_notify_cv_->notify_all();
 }
 
 

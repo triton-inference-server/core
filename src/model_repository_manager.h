@@ -174,6 +174,8 @@ class ModelRepositoryManager {
       downstreams_.erase(downstream);
     }
 
+    void Writeback(const DependencyNode& updated_dependency_node);
+
     // Overall status
     Status status_;
 
@@ -265,16 +267,11 @@ class ModelRepositoryManager {
 
     // Set the nodes to lock state. If a node is already locked, then the
     // identifier of the node is returned. Otherwise, nullptr is returned.
-    // The previous dependency graph is for checking if the node is already
-    // locked when it is not found on this dependency graph, as the node could
-    // be deleted on this graph from the previous, and correctly return the
-    // identifier.
-    // The conflict notifier can be provided optionally. If a node is already
+    // The retry notifier can be provided optionally. If a node is already
     // locked, it will be set to a notifier that the calling thread can wait on
     // until notified to retry, to reduce the number of retries.
     std::unique_ptr<ModelIdentifier> LockNodes(
         const std::set<ModelIdentifier>& nodes,
-        const DependencyGraph& prev_dependency_graph,
         std::shared_ptr<std::condition_variable>* retry_notify_cv = nullptr);
 
     // Set the nodes to unlock state. If a node is already unlocked, then the
@@ -306,6 +303,12 @@ class ModelRepositoryManager {
         std::set<ModelIdentifier>* deleted_dependents = nullptr);
 
    private:
+    // Find a node in the dependency graph with the exact matching model
+    // identifier. The disconnected portion of the graph is looked up first, see
+    // 'removed_nodes_'. If not found, then the connected portion of the graph
+    // is looked up, see 'nodes_'. If not found, an exception is thrown.
+    DependencyNode* GetNode(const ModelIdentifier& model_id) const;
+
     // Remove the given set of nodes, return two sets of nodes: The first set
     // contains existing nodes to be re-evaluated, because they depend on
     // the nodes removed; the second set contains all the nodes removed in this
@@ -365,6 +368,11 @@ class ModelRepositoryManager {
     // A list of model names that there are nodes depending on but not present.
     // Note that the key is not ModelIdentifier to allow more flexible matching.
     std::unordered_map<std::string, std::set<ModelIdentifier>> missing_nodes_;
+    // A set of nodes that are disconnected from the graph but not yet
+    // forgotten. Since the nodes are disconnected, their upstream and
+    // downstream pointers are always invalid and must not be used.
+    std::unordered_map<ModelIdentifier, std::unique_ptr<DependencyNode>>
+        removed_nodes_;
   };
 
   ~ModelRepositoryManager();
