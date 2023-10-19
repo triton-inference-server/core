@@ -984,12 +984,8 @@ TRITONBACKEND_ModelConfig(
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
 
   std::string model_config_json;
-  Status status =
-      ModelConfigToJson(tm->Config(), config_version, &model_config_json);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(
+      ModelConfigToJson(tm->Config(), config_version, &model_config_json));
 
   *model_config = reinterpret_cast<TRITONSERVER_Message*>(
       new TritonServerMessage(std::move(model_config_json)));
@@ -1012,11 +1008,8 @@ TRITONBACKEND_ModelSetConfig(
     TRITONSERVER_Message* model_config)
 {
   TritonModel* tm = reinterpret_cast<TritonModel*>(model);
-  Status status = tm->UpdateModelConfig(config_version, model_config);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(
+      tm->UpdateModelConfig(config_version, model_config));
   return nullptr;  // success
 }
 
@@ -1271,12 +1264,8 @@ TRITONBACKEND_RequestOutputBufferProperties(
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  auto status =
-      tr->OutputBufferProperties(name, byte_size, memory_type, memory_type_id);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(
+      tr->OutputBufferProperties(name, byte_size, memory_type, memory_type_id));
   return nullptr;  // success
 }
 
@@ -1317,13 +1306,7 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_StateUpdate(TRITONBACKEND_State* state)
 {
   SequenceState* ts = reinterpret_cast<SequenceState*>(state);
-  auto status = ts->Update();
-
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
-
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(ts->Update());
   return nullptr;  // success
 }
 
@@ -1347,14 +1330,8 @@ TRITONBACKEND_StateNew(
             .c_str());
   }
 
-  Status status = sequence_state->OutputState(
-      name, TritonToDataType(datatype), lshape, &lstate);
-  if (!status.IsOk()) {
-    *state = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
-
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(sequence_state->OutputState(
+      name, TritonToDataType(datatype), lshape, &lstate));
   *state = reinterpret_cast<TRITONBACKEND_State*>(lstate);
   return nullptr;  // success
 }
@@ -1401,8 +1378,7 @@ TRITONBACKEND_StateBuffer(
 
   if (!status.IsOk()) {
     *buffer = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(status);
   }
   return nullptr;  // success
 }
@@ -1449,11 +1425,8 @@ TRITONBACKEND_ResponseFactorySendFlags(
 {
   std::shared_ptr<InferenceResponseFactory>* response_factory =
       reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(factory);
-  Status status = (*response_factory)->SendFlags(send_flags);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(
+      (*response_factory)->SendFlags(send_flags));
   return nullptr;  // success
 }
 
@@ -1475,15 +1448,12 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseNew(
     TRITONBACKEND_Response** response, TRITONBACKEND_Request* request)
 {
+  *response = nullptr;
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
 
   std::unique_ptr<InferenceResponse> tresp;
-  Status status = tr->ResponseFactory()->CreateResponse(&tresp);
-  if (!status.IsOk()) {
-    *response = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(
+      tr->ResponseFactory()->CreateResponse(&tresp));
 
   *response = reinterpret_cast<TRITONBACKEND_Response*>(tresp.release());
   return nullptr;  // success
@@ -1493,17 +1463,12 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseNewFromFactory(
     TRITONBACKEND_Response** response, TRITONBACKEND_ResponseFactory* factory)
 {
+  *response = nullptr;
   std::shared_ptr<InferenceResponseFactory>* response_factory =
       reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(factory);
 
   std::unique_ptr<InferenceResponse> tr;
-  Status status = (*response_factory)->CreateResponse(&tr);
-  if (!status.IsOk()) {
-    *response = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
-
+  RETURN_TRITONSERVER_ERROR_IF_ERROR((*response_factory)->CreateResponse(&tr));
   *response = reinterpret_cast<TRITONBACKEND_Response*>(tr.release());
   return nullptr;  // success
 }
@@ -1521,11 +1486,7 @@ TRITONBACKEND_ResponseSetStringParameter(
     TRITONBACKEND_Response* response, const char* name, const char* value)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
-  Status status = tr->AddParameter(name, value);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
 }
 
@@ -1534,11 +1495,7 @@ TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
-  Status status = tr->AddParameter(name, value);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
 }
 
@@ -1547,11 +1504,7 @@ TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value)
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
-  Status status = tr->AddParameter(name, value);
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
 }
 
@@ -1561,17 +1514,12 @@ TRITONBACKEND_ResponseOutput(
     const char* name, const TRITONSERVER_DataType datatype,
     const int64_t* shape, const uint32_t dims_count)
 {
+  *output = nullptr;
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   std::vector<int64_t> lshape(shape, shape + dims_count);
   InferenceResponse::Output* loutput;
-  Status status = tr->AddOutput(
-      name, TritonToDataType(datatype), std::move(lshape), &loutput);
-  if (!status.IsOk()) {
-    *output = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
-  }
-
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddOutput(
+      name, TritonToDataType(datatype), std::move(lshape), &loutput));
   *output = reinterpret_cast<TRITONBACKEND_Output*>(loutput);
   return nullptr;  // success
 }
@@ -1583,22 +1531,16 @@ TRITONBACKEND_ResponseSend(
 {
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
 
-  Status status;
-
   std::unique_ptr<InferenceResponse> utr(tr);
   if (error == nullptr) {
-    status = InferenceResponse::Send(std::move(utr), send_flags);
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(
+        InferenceResponse::Send(std::move(utr), send_flags));
   } else {
-    status = InferenceResponse::SendWithStatus(
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(InferenceResponse::SendWithStatus(
         std::move(utr), send_flags,
         Status(
             TritonCodeToStatusCode(TRITONSERVER_ErrorCode(error)),
-            TRITONSERVER_ErrorMessage(error)));
-  }
-
-  if (!status.IsOk()) {
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+            TRITONSERVER_ErrorMessage(error))));
   }
 
   return nullptr;  // success
@@ -1727,8 +1669,7 @@ TRITONBACKEND_InputBuffer(
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(status);
   }
   return nullptr;  // success
 }
@@ -1745,8 +1686,7 @@ TRITONBACKEND_InputBufferAttributes(
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_attributes = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(status);
   }
   return nullptr;  // success
 }
@@ -1771,8 +1711,7 @@ TRITONBACKEND_InputBufferForHostPolicy(
   if (!status.IsOk()) {
     *buffer = nullptr;
     *buffer_byte_size = 0;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(status);
   }
   return nullptr;  // success
 }
@@ -1792,8 +1731,7 @@ TRITONBACKEND_OutputBuffer(
       buffer, buffer_byte_size, memory_type, memory_type_id);
   if (!status.IsOk()) {
     *buffer = nullptr;
-    return TRITONSERVER_ErrorNew(
-        StatusCodeToTritonCode(status.StatusCode()), status.Message().c_str());
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(status);
   }
   return nullptr;  // success
 }
