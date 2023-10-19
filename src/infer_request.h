@@ -526,7 +526,8 @@ class InferenceRequest {
   // Add a callback to be invoked on releasing the request object from Triton.
   // Multiple callbacks can be added by calling this function in order,
   // and they will be invoked in reversed order.
-  Status AddInternalReleaseCallback(std::function<void()>&& callback)
+  Status AddInternalReleaseCallback(
+      std::function<Status(bool*, const uint32_t)>&& callback)
   {
     release_callbacks_.emplace_back(std::move(callback));
     return Status::Success;
@@ -602,7 +603,7 @@ class InferenceRequest {
   // Release the request. Call the release callback and transfer
   // ownership of the request to the callback. On return 'request' is
   // nullptr.
-  static void Release(
+  static Status Release(
       std::unique_ptr<InferenceRequest>&& request,
       const uint32_t release_flags);
 
@@ -792,7 +793,7 @@ class InferenceRequest {
   void* release_userp_;
 
   // Additional release callbacks invoked before 'release_fn_'.
-  std::vector<std::function<void()>> release_callbacks_;
+  std::vector<std::function<Status(bool*, const uint32_t)>> release_callbacks_;
 
   // Delegator to be invoked on sending responses.
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>

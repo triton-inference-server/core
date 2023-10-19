@@ -1986,7 +1986,12 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
           in_flight_[seq_slot] = true;
 
           irequest->AddInternalReleaseCallback(
-              [this, seq_slot]() { CompleteAndNext(seq_slot); });
+              [this, seq_slot](
+                  bool* request_taken, const uint32_t flags) -> Status {
+                CompleteAndNext(seq_slot);
+                *request_taken = false;
+                return Status::Success;
+              });
 
           dynamic_batcher_->Enqueue(irequest);
         }
