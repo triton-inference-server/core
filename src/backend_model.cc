@@ -353,7 +353,7 @@ TritonModel::ResolveBackendPaths(
     return Status::Success;
   }
 
-  // If not found, then we are processing a python backend based backend.
+  // If not found, then we are processing a python-based backend.
   // We look for libtriton_python.so in python backend directory
   // and model.py in provided custom backend's directory
   std::string python_backend_dir = JoinPath({global_backend_dir, "python"});
@@ -373,8 +373,8 @@ TritonModel::ResolveBackendPaths(
   if (!exists) {
     return Status(
         Status::Code::INVALID_ARG,
-        "unable to find '" + backend_name + "/model.py' for model '" +
-            model_name + "', in " +
+        "unable to find '" + backend_libname + "' or '" + backend_name +
+            "/model.py' for model '" + model_name + "', in " +
             JoinPath({global_backend_dir, backend_name}));
   }
 
