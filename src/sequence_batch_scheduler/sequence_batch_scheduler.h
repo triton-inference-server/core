@@ -125,6 +125,8 @@ class SequenceBatchScheduler : public Scheduler {
     return initial_state_;
   }
 
+  Sequencer* SequencerPtr() { return sequencer_.get(); }
+
  private:
   SequenceBatchScheduler(
       TritonModel* model,

@@ -8,6 +8,8 @@
 
 namespace triton { namespace core {
 
+class SequenceBatchScheduler;
+
 class Sequencer {
  public:
   // Regular sequencer expects the request is well-prepared by the user when
@@ -27,10 +29,24 @@ class Sequencer {
     }
     return Status::Success;
   }
+
+  virtual void AddReleaseCallback(
+      std::unique_ptr<InferenceRequest>& irequest,
+      InferenceRequest::InternalReleaseFn&& callback)
+  {
+    irequest->AddInternalReleaseCallback(std::move(callback));
+  }
+
+  virtual void RescheduleRequest(
+      std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
+  {
+    // Sequencer will not reschedule requests
+  }
 };
 
 class GenerativeSequencer : public Sequencer {
  public:
+  GenerativeSequencer(SequenceBatchScheduler* base) : base_(base) {}
   // Generative sequencer will prepare the request for sequence batcher if it is
   // not associated with an sequence
   Status SetupSequenceRequest(
@@ -47,7 +63,21 @@ class GenerativeSequencer : public Sequencer {
     return Status::Success;
   }
 
+  void AddReleaseCallback(
+      std::unique_ptr<InferenceRequest>& irequest,
+      InferenceRequest::InternalReleaseFn&& callback) override
+  {
+    if (irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_START) {
+      irequest->AddInternalReleaseCallback(std::move(callback));
+    }
+  }
+
+  void RescheduleRequest(
+      std::unique_ptr<InferenceRequest>& request, const uint32_t flags);
+
+ private:
   std::atomic<uint64_t> sequence_id_{1};
+  SequenceBatchScheduler* const base_;
 };
 
 }}  // namespace triton::core

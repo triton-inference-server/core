@@ -112,7 +112,8 @@ InferenceRequest::InferenceRequest(
   // Outer-most release callback to ensure a request has been taken, this
   // callback won't be invoked, if certain flags are set.
   release_callbacks_.emplace_back(
-      [](bool* request_taken, const uint32_t flags) -> Status {
+      [](std::unique_ptr<InferenceRequest>& request,
+         const uint32_t flags) -> Status {
         if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
           return Status(
               Status::Code::INVALID_ARG,
@@ -120,7 +121,6 @@ InferenceRequest::InferenceRequest(
               "TRITONSERVER_REQUEST_RELEASE_RESCHEDULE, while the model is not "
               "configured to handle such a flag.");
         }
-        *request_taken = false;
         return Status::Success;
       });
 }
@@ -445,14 +445,12 @@ Status
 InferenceRequest::Release(
     std::unique_ptr<InferenceRequest>&& request, const uint32_t release_flags)
 {
-  // lock needed if release passes through all callback.
   // Invoke the release callbacks added internally before releasing the
   // request to user provided callback.
-  bool request_taken = false;
   for (auto it = request->release_callbacks_.rbegin();
        it != request->release_callbacks_.rend(); it++) {
-    RETURN_IF_ERROR((*it)(&request_taken, release_flags));
-    if (request_taken) {
+    RETURN_IF_ERROR((*it)(request, release_flags));
+    if (request == nullptr) {
       return Status::Success;
     }
   }

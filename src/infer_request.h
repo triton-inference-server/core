@@ -58,6 +58,8 @@ class MetricModelReporter;
 //
 class InferenceRequest {
  public:
+  using InternalReleaseFn =
+      std::function<Status(std::unique_ptr<InferenceRequest>&, const uint32_t)>;
   /// State for the request object.
   enum class State {
     // The request has been initialized, but not yet enqueued.
@@ -526,8 +528,7 @@ class InferenceRequest {
   // Add a callback to be invoked on releasing the request object from Triton.
   // Multiple callbacks can be added by calling this function in order,
   // and they will be invoked in reversed order.
-  Status AddInternalReleaseCallback(
-      std::function<Status(bool*, const uint32_t)>&& callback)
+  Status AddInternalReleaseCallback(InternalReleaseFn&& callback)
   {
     release_callbacks_.emplace_back(std::move(callback));
     return Status::Success;
@@ -793,7 +794,7 @@ class InferenceRequest {
   void* release_userp_;
 
   // Additional release callbacks invoked before 'release_fn_'.
-  std::vector<std::function<Status(bool*, const uint32_t)>> release_callbacks_;
+  std::vector<InternalReleaseFn> release_callbacks_;
 
   // Delegator to be invoked on sending responses.
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>

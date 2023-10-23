@@ -120,7 +120,7 @@ SequenceBatchScheduler::Create(
 
   // Sequencer
   if (config.sequence_batching().generative_sequence()) {
-    sched->sequencer_.reset(new GenerativeSequencer());
+    sched->sequencer_.reset(new GenerativeSequencer(sched.get()));
   } else {
     sched->sequencer_.reset(new Sequencer());
   }
@@ -1985,11 +1985,13 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
                          << ", slot " << seq_slot;
           in_flight_[seq_slot] = true;
 
-          irequest->AddInternalReleaseCallback(
+          base_->SequencerPtr()->AddReleaseCallback(
+              irequest,
               [this, seq_slot](
-                  bool* request_taken, const uint32_t flags) -> Status {
+                  std::unique_ptr<InferenceRequest>& request,
+                  const uint32_t flags) -> Status {
+                base_->SequencerPtr()->RescheduleRequest(request, flags);
                 CompleteAndNext(seq_slot);
-                *request_taken = false;
                 return Status::Success;
               });
 
