@@ -1487,6 +1487,16 @@ DirectSequenceBatch::Enqueue(
     const uint32_t seq_slot, const InferenceRequest::SequenceId& correlation_id,
     std::unique_ptr<InferenceRequest>& request)
 {
+  if (request != nullptr) {
+    base_->SequencerPtr()->AddReleaseCallback(
+        request,
+        [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
+            -> Status {
+          base_->SequencerPtr()->RescheduleRequest(request, flags);
+          return Status::Success;
+        });
+  }
+
   bool wake_runner = false;
 
   {
