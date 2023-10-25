@@ -214,6 +214,10 @@ TRITONSERVER_InferenceRequestSetFlags()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_InferenceRequestTimeout()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestCorrelationId()
 {
 }

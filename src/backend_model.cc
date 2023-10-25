@@ -1091,6 +1091,15 @@ TRITONBACKEND_RequestCorrelationId(TRITONBACKEND_Request* request, uint64_t* id)
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceRequestTimeout(
+    TRITONBACKEND_Request* request, uint64_t* timeout)
+{
+  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
+  *timeout = tr->TimeoutMicroseconds();
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestFlags(TRITONBACKEND_Request* request, uint32_t* flags)
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);

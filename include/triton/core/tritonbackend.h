@@ -411,6 +411,15 @@ TRITONBACKEND_ResponseFactoryIsCancelled(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
 
+/// Extract the specified timeout value (if any) from the request.
+///
+/// \param request The inference request.
+/// \param timeout Returns the timeout value for the request.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceRequestTimeout(
+    TRITONBACKEND_Request* request, uint64_t* timeout);
+
 /// Get the correlation ID of the request if it is a string.
 /// Empty string indicates that the request does not have a correlation ID.
 /// Returns error if correlation ID for given request is not a string.
