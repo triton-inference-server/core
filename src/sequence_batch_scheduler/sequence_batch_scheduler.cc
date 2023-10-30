@@ -847,6 +847,14 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
                  << model_instance->Name() << ", sequence slot " << seq_slot
                  << ": " << irequest->ModelName();
 
+  sequencer_->AddReleaseCallback(
+      irequest,
+      [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
+          -> Status {
+        sequencer_->RescheduleRequest(request, flags);
+        return Status::Success;
+      });
+
   batchers_[model_instance]->Enqueue(seq_slot, correlation_id, irequest);
   return Status::Success;
 }
@@ -1487,16 +1495,6 @@ DirectSequenceBatch::Enqueue(
     const uint32_t seq_slot, const InferenceRequest::SequenceId& correlation_id,
     std::unique_ptr<InferenceRequest>& request)
 {
-  if (request != nullptr) {
-    base_->SequencerPtr()->AddReleaseCallback(
-        request,
-        [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
-            -> Status {
-          base_->SequencerPtr()->RescheduleRequest(request, flags);
-          return Status::Success;
-        });
-  }
-
   bool wake_runner = false;
 
   {
@@ -2000,7 +1998,6 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
               [this, seq_slot](
                   std::unique_ptr<InferenceRequest>& request,
                   const uint32_t flags) -> Status {
-                base_->SequencerPtr()->RescheduleRequest(request, flags);
                 CompleteAndNext(seq_slot);
                 return Status::Success;
               });

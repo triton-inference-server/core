@@ -1275,8 +1275,13 @@ TRITONBACKEND_RequestRelease(
 {
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
   std::unique_ptr<InferenceRequest> ur(tr);
-  RETURN_TRITONSERVER_ERROR_IF_ERROR(
-      InferenceRequest::Release(std::move(ur), release_flags));
+  auto status = InferenceRequest::Release(std::move(ur), release_flags);
+  if (!status.IsOk()) {
+    // On error, ownership of request is not taken and should not be
+    // managed by unique pointer.
+    ur.release();
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(status);
+  }
   return nullptr;  // success
 }
 
