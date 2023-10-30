@@ -940,8 +940,8 @@ typedef enum tritonserver_responsecompleteflag_enum {
 ///   - TRITONSERVER_REQUEST_RELEASE_RESCHEDULE: This flag is currently being
 ///     consumed internally and the callback is not expected to receive nor
 ///     process this kind of release. The backend will call
-///     TRITONBACKEND_RequestRelease with this flag when it wish the request
-///     to be rescheduled back to the model. An example is that the model is
+///     TRITONBACKEND_RequestRelease with this flag when it wishes to reschedule
+///     the request back to the model. An example is that the model is
 ///     recursively performing inference of the request and use the rescheduling
 ///     to proceed the recursive execution.
 ///
