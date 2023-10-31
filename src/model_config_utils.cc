@@ -681,6 +681,8 @@ GetNormalizedModelConfig(
                  << config->DebugString();
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
+  LOG_VERBOSE(1) << "Core side normalized auto-completed config: "
+                 << config->DebugString();
 
   return Status::Success;
 }
