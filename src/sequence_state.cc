@@ -35,17 +35,17 @@ SequenceState::SequenceState() : data_(new MemoryReference) {}
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const int64_t* shape, const uint64_t dim_count)
+    const int64_t* shape, const uint64_t dim_count, bool reuse_buffer)
     : name_(name), datatype_(datatype), shape_(shape, shape + dim_count),
-      data_(new MemoryReference)
+      data_(new MemoryReference), reuse_buffer_(reuse_buffer)
 {
 }
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const std::vector<int64_t>& shape)
+    const std::vector<int64_t>& shape, bool reuse_buffer)
     : name_(name), datatype_(datatype), shape_(shape),
-      data_(new MemoryReference)
+      data_(new MemoryReference), reuse_buffer_(reuse_buffer)
 {
 }
 
@@ -103,6 +103,7 @@ SequenceStates::Initialize(
 
   for (auto& state : state_output_config_map) {
     auto& state_config = state.second;
+    bool use_single_buffer = state_config.use_single_buffer();
 
     std::vector<int64_t> dims;
     if (max_batch_size != 0) {
@@ -154,7 +155,8 @@ SequenceStates::Initialize(
         std::piecewise_construct,
         std::forward_as_tuple(state_config.input_name()),
         std::forward_as_tuple(new SequenceState(
-            state_config.input_name(), state.second.data_type(), dims)));
+            state_config.input_name(), state.second.data_type(), dims,
+            use_single_buffer)));
 
     if (!input_pair.second) {
       LOG_WARNING
@@ -173,7 +175,9 @@ SequenceStates::Initialize(
     const auto& output_pair = output_states_.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(state_config.output_name()),
-        std::forward_as_tuple());
+        std::forward_as_tuple(new SequenceState(
+            state_config.output_name(), state.second.data_type(), dims,
+            use_single_buffer)));
     if (!output_pair.second) {
       // Remove the corresponding state from the input_states_map
       input_states_.erase(state_config.input_name());
@@ -184,6 +188,15 @@ SequenceStates::Initialize(
 
       continue;
     }
+
+    auto& output_tensor = output_pair.first->second;
+    if (use_single_buffer) {
+      auto& output_tensor = output_pair.first->second;
+      output_tensor->SetData(data);
+    }
+
+    output_tensor->SetOtherState(input_tensor);
+    input_tensor->SetOtherState(output_tensor);
   }
 
   return Status::Success;
@@ -204,19 +217,9 @@ SequenceStates::OutputState(
         "state '" + name + "' is not a valid state name.");
   }
 
-  if (output_states_[name] == nullptr) {
-    output_states_[name] = std::unique_ptr<SequenceState>(
-        new SequenceState(name, datatype, shape, dim_count));
-  } else {
-    // A new SequenceState is created here in case the shape for the new output
-    // state is different from the shape of the originally stored state.
-    std::unique_ptr<SequenceState> output_state(
-        new SequenceState(name, datatype, shape, dim_count));
-
-    // Transfer the previously allocated buffer to the new output_state.
-    output_state->SetData(output_states_[name]->Data());
-    output_states_[name] = std::move(output_state);
-  }
+  std::vector<int64_t> new_shape(shape, shape + dim_count);
+  *output_states_[name]->MutableDType() = datatype;
+  *output_states_[name]->MutableShape() = new_shape;
 
   auto& output_state_r = output_states_[name];
   size_t iter_advance =
@@ -226,55 +229,62 @@ SequenceStates::OutputState(
   auto input_states_itr = input_states_.begin();
   std::advance(input_states_itr, iter_advance);
   auto& input_state_r = input_states_[input_states_itr->first];
+  bool reuse_buffer = output_states_[name]->ReuseBuffer();
 
   if (output_state != nullptr) {
     *output_state = output_states_[name].get();
   }
 
-  output_state_r->SetStateUpdateCallback([&output_state_r, &input_state_r]() {
-    // Swap the internal memory if the size of the input and output state is
-    // equal
+  output_state_r->SetStateUpdateCallback(
+      [&output_state_r, &input_state_r, reuse_buffer]() {
+        // Swap the internal memory if the size of the input and output state is
+        // equal
 
-    if (output_state_r->Data()->TotalByteSize() ==
-        input_state_r->Data()->TotalByteSize()) {
-      std::shared_ptr<Memory> temp_memory = input_state_r->Data();
-      RETURN_IF_ERROR(input_state_r->RemoveAllData());
-      RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-      RETURN_IF_ERROR(output_state_r->RemoveAllData());
-      RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
-    } else {
-      // If the size of output state is different from the input state, allocate
-      // a new memory for the input state with the same size as output state.
-      TRITONSERVER_MemoryType memory_type;
-      int64_t memory_type_id;
+        if (output_state_r->Data()->TotalByteSize() ==
+            input_state_r->Data()->TotalByteSize()) {
+          if (!reuse_buffer) {
+            std::shared_ptr<Memory> temp_memory = input_state_r->Data();
+            RETURN_IF_ERROR(input_state_r->RemoveAllData());
+            RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
+            RETURN_IF_ERROR(output_state_r->RemoveAllData());
+            RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
+          }
+        } else {
+          if (!reuse_buffer) {
+            // If the size of output state is different from the input state,
+            // allocate a new memory for the input state with the same size as
+            // output state.
+            TRITONSERVER_MemoryType memory_type;
+            int64_t memory_type_id;
 
-      const std::shared_ptr<MutableMemory>& input_memory =
-          reinterpret_cast<const std::shared_ptr<MutableMemory>&>(
-              input_state_r->Data());
+            const std::shared_ptr<MutableMemory>& input_memory =
+                reinterpret_cast<const std::shared_ptr<MutableMemory>&>(
+                    input_state_r->Data());
 
-      input_memory->MutableBuffer(&memory_type, &memory_type_id);
-      std::shared_ptr<AllocatedMemory> memory =
-          std::make_shared<AllocatedMemory>(
-              output_state_r->Data()->TotalByteSize(), memory_type,
-              memory_type_id);
-      RETURN_IF_ERROR(input_state_r->RemoveAllData());
-      RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-      RETURN_IF_ERROR(output_state_r->RemoveAllData());
-      RETURN_IF_ERROR(output_state_r->SetData(memory));
-    }
+            input_memory->MutableBuffer(&memory_type, &memory_type_id);
+            std::shared_ptr<AllocatedMemory> memory =
+                std::make_shared<AllocatedMemory>(
+                    output_state_r->Data()->TotalByteSize(), memory_type,
+                    memory_type_id);
+            RETURN_IF_ERROR(input_state_r->RemoveAllData());
+            RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
+            RETURN_IF_ERROR(output_state_r->RemoveAllData());
+            RETURN_IF_ERROR(output_state_r->SetData(memory));
+          }
+        }
 
-    // Update the shape and data type of the output state if it doesn't match
-    // the input state.
-    if (input_state_r->Shape() != output_state_r->Shape()) {
-      *input_state_r->MutableShape() = output_state_r->Shape();
-    }
+        // Update the shape and data type of the output state if it doesn't
+        // match the input state.
+        if (input_state_r->Shape() != output_state_r->Shape()) {
+          *input_state_r->MutableShape() = output_state_r->Shape();
+        }
 
-    if (input_state_r->DType() != output_state_r->DType()) {
-      *input_state_r->MutableDType() = output_state_r->DType();
-    }
+        if (input_state_r->DType() != output_state_r->DType()) {
+          *input_state_r->MutableDType() = output_state_r->DType();
+        }
 
-    return Status::Success;
-  });
+        return Status::Success;
+      });
 
   return Status::Success;
 }
@@ -300,7 +310,7 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
           std::forward_as_tuple(from_input_state_tensor->Name()),
           std::forward_as_tuple(new SequenceState(
               from_input_state_tensor->Name(), from_input_state_tensor->DType(),
-              from_input_state_tensor->Shape())));
+              from_input_state_tensor->Shape(), false /* reused buffer */)));
 
       auto& input_tensor = input_pair.first->second;
       std::shared_ptr<AllocatedMemory> data;

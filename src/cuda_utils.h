@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -31,6 +31,7 @@
 #include "triton/common/sync_queue.h"
 
 #ifdef TRITON_ENABLE_GPU
+#include <cuda.h>
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
@@ -44,6 +45,16 @@ namespace triton { namespace core {
       return Status(                                                         \
           Status::Code::INTERNAL, (MSG) + ": " + cudaGetErrorString(err__)); \
     }                                                                        \
+  } while (false)
+
+#define RETURN_IF_CUDA_DRIVER_ERR(X, MSG)                                   \
+  do {                                                                      \
+    CUresult cuda_err__ = (X);                                              \
+    if (cuda_err__ != CUDA_SUCCESS) {                                       \
+      const char* error_string__;                                           \
+      cuGetErrorString(cuda_err__, &error_string__);                        \
+      return Status(Status::Code::INTERNAL, (MSG) + ": " + error_string__); \
+    }                                                                       \
   } while (false)
 #endif  // TRITON_ENABLE_GPU
 
@@ -118,6 +129,12 @@ Status GetSupportedGPUs(
 /// \return The error status. A non-OK status means the target GPU is
 /// not supported.
 Status SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support);
+
+/// Get the minimum allocation granularity.
+/// \param aligned_size Returns minimum allocation granularity.
+/// \return The error status. A non-OK status means there were some errors
+/// when querying the allocation granularity.
+Status GetAllocationGranularity(size_t& aligned_sz);
 #endif
 
 // Helper around CopyBuffer that updates the completion queue with the returned
@@ -141,5 +158,6 @@ struct CopyParams {
   const void* src_;
   const size_t byte_size_;
 };
+
 
 }}  // namespace triton::core

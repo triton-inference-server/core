@@ -36,6 +36,7 @@ find_package(GTest REQUIRED)
 #
 set(
   CUDA_MEMORY_MANAGER_SRCS
+  ../cuda_block_manager.cc
   ../cuda_memory_manager.cc
   ../cuda_utils.cc
   ../status.cc
@@ -43,6 +44,7 @@ set(
 
 set(
   CUDA_MEMORY_MANAGER_HDRS
+  ../cuda_block_manager.h
   ../cuda_memory_manager.h
   ../cuda_utils.h
   ../status.h
@@ -149,6 +151,7 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
+      CUDA::cuda_driver
   )
 
   if (NOT WIN32)
@@ -199,6 +202,8 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     GTest::gmock
+    CUDA::cudart
+    CUDA::cuda_driver
 )
 
 install(
@@ -261,6 +266,7 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
+      CUDA::cuda_driver
   )
 
   if (NOT WIN32)
@@ -328,6 +334,7 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
+      CUDA::cuda_driver
   )
 
   if (NOT WIN32)
@@ -487,6 +494,8 @@ if(${TRITON_ENABLE_METRICS})
       GTest::gmock
       prometheus-cpp::core
       protobuf::libprotobuf
+      CUDA::cudart
+      CUDA::cuda_driver
   )
 
   install(
@@ -528,6 +537,8 @@ target_link_libraries(
     triton-core
     GTest::gtest
     GTest::gtest_main
+    CUDA::cudart
+    CUDA::cuda_driver
 )
 
 install(
@@ -568,6 +579,8 @@ target_link_libraries(
     triton-core
     GTest::gtest
     GTest::gtest_main
+    CUDA::cudart
+    CUDA::cuda_driver
 )
 
 install(
@@ -608,6 +621,8 @@ target_link_libraries(
     triton-core
     GTest::gtest
     GTest::gtest_main
+    CUDA::cudart
+    CUDA::cuda_driver
 )
 
 install(

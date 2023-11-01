@@ -33,6 +33,7 @@
 #include <cuda_runtime_api.h>
 
 #include "cuda_memory_manager.h"
+#include "cuda_utils.h"
 #endif  // TRITON_ENABLE_GPU
 
 namespace triton { namespace core {
@@ -234,6 +235,117 @@ AllocatedMemory::~AllocatedMemory()
     }
     buffer_ = nullptr;
   }
+}
+
+GrowableMemory::GrowableMemory(
+    size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id, std::unique_ptr<Allocation>&& allocation,
+    size_t virtual_address_size)
+    : MutableMemory(nullptr, byte_size, memory_type, memory_type_id)
+{
+  allocation_prop_.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+  allocation_prop_.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+  allocation_prop_.location.id = memory_type_id;
+
+  access_desc_.location = allocation_prop_.location;
+  access_desc_.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+  virtual_address_size_ = virtual_address_size;
+}
+
+Status
+GrowableMemory::Create(
+    size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id, std::unique_ptr<GrowableMemory>& growable_memory,
+    size_t virtual_address_size)
+{
+  std::unique_ptr<Allocation> allocation =
+      std::make_unique<Allocation>(memory_type_id);
+
+  if (memory_type != TRITONSERVER_MEMORY_GPU) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("Only TRITONSERVER_MEMORY_GPU is supported for growable "
+                    "memory. Found '") +
+            TRITONSERVER_MemoryTypeString(memory_type) + "'.");
+  }
+
+  if (byte_size > virtual_address_size) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("'byte_size' requested for GrowableMemory cannot be smaller"
+                    " than the virtual address size. byte_size: ") +
+            std::to_string(byte_size) +
+            ", virtual_address_size:" + std::to_string(virtual_address_size));
+  }
+
+  RETURN_IF_ERROR(
+      CudaBlockManager::Allocate(byte_size, allocation, memory_type_id));
+
+  void* buffer;
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cuMemAddressReserve(
+          reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
+          0 /* alignment */, 0 /* start_address */, 0 /* flags */),
+      std::string("cuMemAddressReserve failed:"));
+  growable_memory->buffer_ = reinterpret_cast<char*>(buffer);
+  growable_memory = std::move(std::make_unique<GrowableMemory>(
+      CudaBlockManager::BlockSize() * allocation->Blocks().size(), memory_type,
+      memory_type_id, std::move(allocation), virtual_address_size));
+
+  for (auto& block : allocation->Blocks()) {
+    RETURN_IF_ERROR(growable_memory->Map(block));
+  }
+  return Status::Success;
+}
+
+Status
+GrowableMemory::Map(CUmemGenericAllocationHandle& block)
+{
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cuMemMap(
+          reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+          CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */),
+      std::string("cuMemMap failed:"));
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cuMemSetAccess(
+          reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+          CudaBlockManager::BlockSize(), &access_desc_,
+          1ULL /* Mapping size */),
+      std::string("cuMemSetAccess failed:"));
+  virtual_address_offset_ += CudaBlockManager::BlockSize();
+  return Status::Success;
+}
+
+Status
+GrowableMemory::Resize(size_t size)
+{
+  if (size > virtual_address_size_) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string(
+            "Failed to resize the GrowableMemory. The requested size is larger"
+            " than the virtual page size. requested size: ") +
+            std::to_string(size) +
+            ", virtual_address_size:" + std::to_string(virtual_address_size_));
+  }
+
+  if (size < buffer_attributes_.ByteSize()) {
+    return Status::Success;
+  } else {
+    size_t new_size = size - buffer_attributes_.ByteSize();
+    std::unique_ptr<Allocation> allocation =
+        std::make_unique<Allocation>(buffer_attributes_.MemoryTypeId());
+    RETURN_IF_ERROR(CudaBlockManager::Allocate(
+        new_size, allocation, buffer_attributes_.MemoryTypeId()));
+    for (auto& block : allocation->Blocks()) {
+      RETURN_IF_ERROR(Map(block));
+    }
+    allocation_->Merge(std::move(allocation));
+  }
+  buffer_attributes_.SetByteSize(
+      allocation_->Blocks().size() * CudaBlockManager::BlockSize());
+
+  return Status::Success;
 }
 
 }}  // namespace triton::core

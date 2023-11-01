@@ -44,10 +44,10 @@ class SequenceState {
   SequenceState();
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const std::vector<int64_t>& shape);
+      const std::vector<int64_t>& shape, bool reuse_buffer);
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const int64_t* shape, const uint64_t dim_count);
+      const int64_t* shape, const uint64_t dim_count, bool reuse_buffer);
 
   // The name of the state tensor.
   const std::string& Name() const { return name_; }
@@ -64,6 +64,17 @@ class SequenceState {
 
   // The data for this shape.
   std::shared_ptr<Memory>& Data() { return data_; }
+
+  // A boolean indicating whether the state buffer should be reused or not.
+  bool ReuseBuffer() { return reuse_buffer_; }
+
+  // Set pointer to the other sequence state
+  void SetOtherState(std::shared_ptr<SequenceState>& other)
+  {
+    other_state_ = other;
+  }
+
+  std::shared_ptr<SequenceState> OtherState() { return other_state_; }
 
   // Set the data for this shape. Error if state already has some
   // data.
@@ -92,6 +103,8 @@ class SequenceState {
   std::vector<int64_t> shape_;
   std::vector<int64_t> batch_dim_;
   std::shared_ptr<Memory> data_;
+  std::shared_ptr<SequenceState> other_state_;
+  bool reuse_buffer_;
   std::function<Status()> state_update_cb_ = []() {
     // By default calling the TRITONBACKEND_StateUpdate will return an error.
     return Status(
@@ -136,12 +149,12 @@ class SequenceStates {
   static std::shared_ptr<SequenceStates> CopyAsNull(
       const std::shared_ptr<SequenceStates>& from);
 
-  const std::map<std::string, std::unique_ptr<SequenceState>>& InputStates()
+  const std::map<std::string, std::shared_ptr<SequenceState>>& InputStates()
   {
     return input_states_;
   }
 
-  std::map<std::string, std::unique_ptr<SequenceState>>& OutputStates()
+  std::map<std::string, std::shared_ptr<SequenceState>>& OutputStates()
   {
     return output_states_;
   }
@@ -160,8 +173,8 @@ class SequenceStates {
   bool IsNullRequest() { return is_null_request_; }
 
  private:
-  std::map<std::string, std::unique_ptr<SequenceState>> input_states_;
-  std::map<std::string, std::unique_ptr<SequenceState>> output_states_;
+  std::map<std::string, std::shared_ptr<SequenceState>> input_states_;
+  std::map<std::string, std::shared_ptr<SequenceState>> output_states_;
   std::shared_ptr<SequenceStates> null_sequence_states_;
   bool is_null_request_ = false;
 };

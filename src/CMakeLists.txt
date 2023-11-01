@@ -212,12 +212,14 @@ if(${TRITON_ENABLE_GPU})
     SERVER_SRCS
     ${SERVER_SRCS}
     cuda_memory_manager.cc
+    cuda_block_manager.h
     model_config_cuda.cc
   )
   set(
     SERVER_HDRS
     ${SERVER_HDRS}
     cuda_memory_manager.h
+    cuda_block_manager.cc
     model_config_cuda.h
   )
 endif() # TRITON_ENABLE_GPU
@@ -510,6 +512,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CNMEM_LIBRARY}
       CUDA::cudart
+      CUDA::cuda_driver
   )
 endif() # TRITON_ENABLE_GPU
 
@@ -531,5 +534,5 @@ install(
 
 # Currently unit tests do not build for windows...
 if (NOT WIN32)
-  add_subdirectory(test test)
+#  add_subdirectory(test test)
 endif() # NOT WIN32

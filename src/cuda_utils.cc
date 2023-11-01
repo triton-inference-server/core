@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,6 +28,10 @@
 
 #include "model_config_utils.h"
 #include "triton/common/nvtx.h"
+
+#ifdef TRITON_ENABLE_GPU
+#include <cuda.h>
+#endif
 
 namespace triton { namespace core {
 
@@ -255,6 +259,21 @@ SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support)
     *zero_copy_support = false;
   }
 
+  return Status::Success;
+}
+
+Status
+GetAllocationGranularity(size_t& aligned_sz)
+{
+  CUmemAllocationProp prop = {};
+  prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+  prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+  prop.location.id = 0;
+
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cuMemGetAllocationGranularity(
+          &aligned_sz, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM),
+      std::string("failed to call cuMemGetAllocationGranularity"));
   return Status::Success;
 }
 

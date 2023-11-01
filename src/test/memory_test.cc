@@ -27,6 +27,7 @@
 
 #include <cuda_runtime_api.h>
 
+#include "cuda_block_manager.h"
 #include "cuda_memory_manager.h"
 #include "cuda_utils.h"
 #include "gtest/gtest.h"

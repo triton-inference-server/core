@@ -1356,36 +1356,29 @@ TRITONBACKEND_StateBuffer(
   SequenceState* to = reinterpret_cast<SequenceState*>(state);
   Status status = Status::Success;
 
-  // If the buffer size exactly matches the buffer available, reuse the
-  // currently allocated buffer.
-  if (to->Data()->TotalByteSize() == buffer_byte_size) {
-    const std::shared_ptr<AllocatedMemory>& memory =
-        reinterpret_cast<const std::shared_ptr<AllocatedMemory>&>(to->Data());
+  TRITONSERVER_MemoryType current_memory_type;
+  int64_t current_memory_type_id;
+  const std::shared_ptr<AllocatedMemory>& memory =
+      reinterpret_cast<const std::shared_ptr<AllocatedMemory>&>(to->Data());
+  void* lbuffer =
+      memory->MutableBuffer(&current_memory_type, &current_memory_type_id);
 
-    TRITONSERVER_MemoryType current_memory_type;
-    int64_t current_memory_type_id;
-    void* lbuffer =
-        memory->MutableBuffer(&current_memory_type, &current_memory_type_id);
-
-    // If the requested memory type doesn't match the current buffer, allocate
-    // a new buffer with the requested memory type and memory type id.
-    if (current_memory_type == *memory_type &&
-        current_memory_type_id == *memory_type_id) {
-      *buffer = lbuffer;
-    } else {
-      std::shared_ptr<AllocatedMemory> memory =
-          std::make_shared<AllocatedMemory>(
-              buffer_byte_size, *memory_type, *memory_type_id);
-      *buffer = memory->MutableBuffer(memory_type, memory_type_id);
-      to->RemoveAllData();
-      status = to->SetData(memory);
-    }
+  // If the buffer size exactly matches the buffer available and is requesting
+  // the same memory type and memory type id, reuse the currently allocated
+  // buffer.
+  if (to->Data()->TotalByteSize() == buffer_byte_size &&
+      current_memory_type == *memory_type &&
+      current_memory_type_id == *memory_type_id) {
+    *buffer = lbuffer;
   } else {
     std::shared_ptr<AllocatedMemory> memory = std::make_shared<AllocatedMemory>(
         buffer_byte_size, *memory_type, *memory_type_id);
     *buffer = memory->MutableBuffer(memory_type, memory_type_id);
     to->RemoveAllData();
     status = to->SetData(memory);
+    if (to->ReuseBuffer()) {
+      to->OtherState()->SetData(memory);
+    }
   }
 
   if (!status.IsOk()) {

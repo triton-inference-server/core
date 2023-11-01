@@ -25,11 +25,16 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <memory>
 #include <vector>
 
 #include "buffer_attributes.h"
 #include "constants.h"
 #include "status.h"
+
+#ifdef TRITON_ENABLE_GPU
+#include "cuda_block_manager.h"
+#endif
 
 namespace triton { namespace core {
 
@@ -171,5 +176,38 @@ class AllocatedMemory : public MutableMemory {
 
   ~AllocatedMemory() override;
 };
+
+#ifdef TRITON_ENABLE_GPU
+class GrowableMemory : public MutableMemory {
+ public:
+  // Create a continuous data buffer with 'byte_size', 'memory_type' and
+  // 'memory_type_id'. Note that the buffer may be created on different memory
+  // type and memory type id if the original request type and id can not be
+  // satisfied, thus the function caller should always check the actual memory
+  // type and memory type id before use.
+  GrowableMemory(
+      size_t byte_size, TRITONSERVER_MemoryType memory_type,
+      int64_t memory_type_id, std::unique_ptr<Allocation>&& allocation,
+      size_t virtual_page_size);
+
+  static Status Create(
+      size_t byte_size, TRITONSERVER_MemoryType memory_type,
+      int64_t memory_type_id, std::unique_ptr<GrowableMemory>& growable_memory,
+      size_t virtual_page_size);
+
+  Status Map(CUmemGenericAllocationHandle& block);
+
+  ~GrowableMemory() override;
+
+  Status Resize(size_t size);
+
+ private:
+  std::unique_ptr<Allocation> allocation_;
+  size_t virtual_address_offset_;
+  CUmemAllocationProp allocation_prop_;
+  CUmemAccessDesc access_desc_;
+  size_t virtual_address_size_;
+};
+#endif
 
 }}  // namespace triton::core

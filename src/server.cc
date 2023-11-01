@@ -38,6 +38,7 @@
 
 #include "backend_manager.h"
 #include "constants.h"
+#include "cuda_block_manager.h"
 #include "cuda_utils.h"
 #include "model.h"
 #include "model_config.pb.h"
@@ -230,6 +231,14 @@ InferenceServer::Init()
   if (!status.IsOk()) {
     LOG_ERROR << status.Message();
   }
+
+  status = CudaBlockManager::Create(min_supported_compute_capability_);
+  // If CUDA memory manager can't be created, just log error as the
+  // server can still function properly
+  if (!status.IsOk()) {
+    LOG_ERROR << status.Message();
+  }
+
 #endif  // TRITON_ENABLE_GPU
 
   status = EnablePeerAccess(min_supported_compute_capability_);
