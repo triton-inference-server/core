@@ -109,6 +109,20 @@ InferenceRequest::InferenceRequest(
       state_(InferenceRequest::State::INITIALIZED), null_request_(false)
 {
   SetPriority(0);
+  // Outer-most release callback to ensure a request has been taken, this
+  // callback won't be invoked, if certain flags are set.
+  release_callbacks_.emplace_back(
+      [](std::unique_ptr<InferenceRequest>& request,
+         const uint32_t flags) -> Status {
+        if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "Request is released with "
+              "TRITONSERVER_REQUEST_RELEASE_RESCHEDULE, while the model is not "
+              "configured to handle such a flag.");
+        }
+        return Status::Success;
+      });
 }
 
 Status
@@ -427,7 +441,7 @@ InferenceRequest::RespondIfError(
   }
 }
 
-void
+Status
 InferenceRequest::Release(
     std::unique_ptr<InferenceRequest>&& request, const uint32_t release_flags)
 {
@@ -435,9 +449,11 @@ InferenceRequest::Release(
   // request to user provided callback.
   for (auto it = request->release_callbacks_.rbegin();
        it != request->release_callbacks_.rend(); it++) {
-    (*it)();
+    RETURN_IF_ERROR((*it)(request, release_flags));
+    if (request == nullptr) {
+      return Status::Success;
+    }
   }
-  request->release_callbacks_.clear();
 
 #ifdef TRITON_ENABLE_TRACING
   // If tracing then record request end and release the trace.
@@ -458,6 +474,7 @@ InferenceRequest::Release(
   release_fn(
       reinterpret_cast<TRITONSERVER_InferenceRequest*>(request.release()),
       release_flags, userp);
+  return Status::Success;
 }
 
 InferenceRequest*

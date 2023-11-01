@@ -118,6 +118,13 @@ SequenceBatchScheduler::Create(
 
   auto& config = model->Config();
 
+  // Sequencer
+  if (config.sequence_batching().generative_sequence()) {
+    sched->sequencer_.reset(new GenerativeSequencer(sched.get()));
+  } else {
+    sched->sequencer_.reset(new Sequencer());
+  }
+
   // Max sequence idle...
   sched->max_sequence_idle_microseconds_ =
       config.sequence_batching().max_sequence_idle_microseconds();
@@ -674,17 +681,8 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
             "batcher");
   }
 
-  // A request must have a correlation ID to be processed correctly by
-  // this scheduler. A value of 0 (zero) or "" (empty) indicates that the
-  // request doesn't have a correlation ID.
-  const InferenceRequest::SequenceId& correlation_id =
-      irequest->CorrelationId();
-  if (!correlation_id.InSequence()) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "inference request to model '" + irequest->ModelName() +
-            "' must specify a non-zero or non-empty correlation ID");
-  }
+  RETURN_IF_ERROR(sequencer_->SetupSequenceRequest(irequest));
+  const auto& correlation_id = irequest->CorrelationId();
 
   BatcherSequenceSlot* target = nullptr;
 
@@ -848,6 +846,14 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   LOG_VERBOSE(1) << "Enqueuing CORRID " << correlation_id << " into batcher "
                  << model_instance->Name() << ", sequence slot " << seq_slot
                  << ": " << irequest->ModelName();
+
+  sequencer_->AddReleaseCallback(
+      irequest,
+      [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
+          -> Status {
+        sequencer_->RescheduleRequest(request, flags);
+        return Status::Success;
+      });
 
   batchers_[model_instance]->Enqueue(seq_slot, correlation_id, irequest);
   return Status::Success;
@@ -1987,8 +1993,14 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
                          << ", slot " << seq_slot;
           in_flight_[seq_slot] = true;
 
-          irequest->AddInternalReleaseCallback(
-              [this, seq_slot]() { CompleteAndNext(seq_slot); });
+          base_->SequencerPtr()->AddReleaseCallback(
+              irequest,
+              [this, seq_slot](
+                  std::unique_ptr<InferenceRequest>& request,
+                  const uint32_t flags) -> Status {
+                CompleteAndNext(seq_slot);
+                return Status::Success;
+              });
 
           dynamic_batcher_->Enqueue(irequest);
         }
