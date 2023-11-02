@@ -28,6 +28,7 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <boost/filesystem.hpp>
 #include <deque>
 #include <future>
 #include <stdexcept>
@@ -109,22 +110,30 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                      "' must have bytes type for its value")
                         .c_str());
               }
-              // NOTE: Explicitly disallow ".." to avoid override file paths
-              // escaping the temporary model directory used for load API.
-              if (file->Name().find("..") != std::string::npos) {
-                return TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    (std::string("File parameter '") + file->Name() +
-                     "' must stay within the model directory. Relative paths "
-                     "including '..' are not allowed.")
-                        .c_str());
-              }
-
               // Save model override file to the instructed directory using the
               // temporary model directory as the basepath.
               const std::string file_path =
                   JoinPath({temp_dir, file->Name().substr(file_prefix.size())});
               const std::string dir = DirName(file_path);
+              // Resolve any relative paths or symlinks, and enforce that target
+              // directory stays within model directory for security.
+              // NOTE: realpath doesn't support windows, use boost for cross
+              // platform support. Can use std::filesystem over boost in C++17.
+              const std::string realdir =
+                  boost::filesystem::weakly_canonical(dir).string();
+              if (realdir.rfind(temp_dir, 0) != 0) {
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG,
+                    (std::string("Invalid file parameter '") + file->Name() +
+                     "', file location must stay within model directory.")
+                        .c_str());
+              }
+
+
+              // TODO: Remove
+              std::cout << "[DEBUG] dirname: " << dir << std::endl;
+              std::cout << "[DEBUG] weakly_canonical dirname: " << realdir
+                        << std::endl;
               bool dir_exist = false;
               RETURN_TRITONSERVER_ERROR_IF_ERROR(FileExists(dir, &dir_exist));
               if (dir_exist) {
