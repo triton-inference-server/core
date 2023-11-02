@@ -693,7 +693,6 @@ TritonModel::UpdateModelConfig(
       JsonToModelConfig({buffer, byte_size}, config_version, &updated_config));
   auto config = Config();
   config.set_max_batch_size(updated_config.max_batch_size());
-
   auto inputs_config = config.mutable_input();
   *inputs_config = updated_config.input();
   auto outputs_config = config.mutable_output();
@@ -721,6 +720,12 @@ TritonModel::UpdateModelConfig(
          std::string(" when auto-completing."))
             .c_str());
   }  // else do nothing
+
+  // Update model_transaction_policy if needed
+  if (updated_config.has_model_transaction_policy()) {
+    bool is_decoupled = updated_config.model_transaction_policy().decoupled();
+    config.mutable_model_transaction_policy()->set_decoupled(is_decoupled);
+  }
 
   // Need to normalize the model configuration for
   // populating missing fields.
