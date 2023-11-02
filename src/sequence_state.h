@@ -44,10 +44,12 @@ class SequenceState {
   SequenceState();
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const std::vector<int64_t>& shape, bool reuse_buffer);
+      const std::vector<int64_t>& shape, bool reuse_buffer,
+      bool use_growable_memory);
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const int64_t* shape, const uint64_t dim_count, bool reuse_buffer);
+      const int64_t* shape, const uint64_t dim_count, bool reuse_buffer,
+      bool use_growable_memory);
 
   // The name of the state tensor.
   const std::string& Name() const { return name_; }
@@ -67,6 +69,9 @@ class SequenceState {
 
   // A boolean indicating whether the state buffer should be reused or not.
   bool ReuseBuffer() { return reuse_buffer_; }
+
+  // Use growable memory or not
+  bool UseGrowableMemory() { return use_growable_memory_; }
 
   // Set pointer to the other sequence state
   void SetOtherState(std::shared_ptr<SequenceState>& other)
@@ -105,6 +110,7 @@ class SequenceState {
   std::shared_ptr<Memory> data_;
   std::shared_ptr<SequenceState> other_state_;
   bool reuse_buffer_;
+  bool use_growable_memory_;
   std::function<Status()> state_update_cb_ = []() {
     // By default calling the TRITONBACKEND_StateUpdate will return an error.
     return Status(
@@ -134,7 +140,8 @@ class SequenceStates {
           std::string, const inference::ModelSequenceBatching_State&>&
           state_output_config_map,
       const size_t max_batch_size,
-      const std::unordered_map<std::string, InitialStateData>& initial_state);
+      const std::unordered_map<std::string, InitialStateData>& initial_state,
+      TRITONSERVER_InstanceGroupKind kind, int32_t device_id);
 
   // Get a buffer holding the output state.
   Status OutputState(

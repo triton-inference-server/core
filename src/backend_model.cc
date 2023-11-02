@@ -1358,8 +1358,8 @@ TRITONBACKEND_StateBuffer(
 
   TRITONSERVER_MemoryType current_memory_type;
   int64_t current_memory_type_id;
-  const std::shared_ptr<AllocatedMemory>& memory =
-      reinterpret_cast<const std::shared_ptr<AllocatedMemory>&>(to->Data());
+  const std::shared_ptr<MutableMemory>& memory =
+      reinterpret_cast<const std::shared_ptr<MutableMemory>&>(to->Data());
   void* lbuffer =
       memory->MutableBuffer(&current_memory_type, &current_memory_type_id);
 
@@ -1371,8 +1371,15 @@ TRITONBACKEND_StateBuffer(
       current_memory_type_id == *memory_type_id) {
     *buffer = lbuffer;
   } else {
-    std::shared_ptr<AllocatedMemory> memory = std::make_shared<AllocatedMemory>(
-        buffer_byte_size, *memory_type, *memory_type_id);
+    std::shared_ptr<MutableMemory> memory;
+    if (to->UseGrowableMemory()) {
+      const std::shared_ptr<GrowableMemory>& memory =
+          reinterpret_cast<const std::shared_ptr<GrowableMemory>&>(to->Data());
+      RETURN_TRITONSERVER_ERROR_IF_ERROR(memory->Resize(buffer_byte_size));
+    } else {
+      memory = std::make_shared<AllocatedMemory>(
+          buffer_byte_size, *memory_type, *memory_type_id);
+    }
     *buffer = memory->MutableBuffer(memory_type, memory_type_id);
     to->RemoveAllData();
     status = to->SetData(memory);

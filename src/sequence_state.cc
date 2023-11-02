@@ -26,6 +26,7 @@
 
 #include "sequence_state.h"
 
+#include "cuda_utils.h"
 #include "memory.h"
 #include "triton/common/logging.h"
 
@@ -35,17 +36,21 @@ SequenceState::SequenceState() : data_(new MemoryReference) {}
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const int64_t* shape, const uint64_t dim_count, bool reuse_buffer)
+    const int64_t* shape, const uint64_t dim_count, bool reuse_buffer,
+    bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape, shape + dim_count),
-      data_(new MemoryReference), reuse_buffer_(reuse_buffer)
+      data_(new MemoryReference), reuse_buffer_(reuse_buffer),
+      use_growable_memory_(use_growable_memory)
 {
 }
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const std::vector<int64_t>& shape, bool reuse_buffer)
+    const std::vector<int64_t>& shape, bool reuse_buffer,
+    bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape),
-      data_(new MemoryReference), reuse_buffer_(reuse_buffer)
+      data_(new MemoryReference), reuse_buffer_(reuse_buffer),
+      use_growable_memory_(use_growable_memory)
 {
 }
 
@@ -85,7 +90,13 @@ SequenceState::SetStringDataToZero()
   const std::shared_ptr<MutableMemory>& memory =
       reinterpret_cast<const std::shared_ptr<MutableMemory>&>(Data());
   char* buffer = memory->MutableBuffer(&memory_type, &memory_type_id);
-  memset(buffer, 0, Data()->TotalByteSize());
+  if (memory_type == TRITONSERVER_MEMORY_GPU) {
+    memset(buffer, 0, Data()->TotalByteSize());
+  } else {
+    RETURN_IF_CUDA_ERR(
+        cudaMemset(buffer, 0, Data()->TotalByteSize()),
+        std::string("failed to set the data to zero."));
+  }
 
   return Status::Success;
 }
@@ -96,7 +107,8 @@ SequenceStates::Initialize(
         std::string, const inference::ModelSequenceBatching_State&>&
         state_output_config_map,
     const size_t max_batch_size,
-    const std::unordered_map<std::string, InitialStateData>& initial_state)
+    const std::unordered_map<std::string, InitialStateData>& initial_state,
+    TRITONSERVER_InstanceGroupKind kind, int32_t device_id)
 {
   input_states_.clear();
   output_states_.clear();
@@ -104,6 +116,26 @@ SequenceStates::Initialize(
   for (auto& state : state_output_config_map) {
     auto& state_config = state.second;
     bool use_single_buffer = state_config.use_single_buffer();
+    bool use_growable_memory = state_config.use_growable_memory();
+
+    if (use_growable_memory) {
+      if (!use_single_buffer) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string("In order to 'use_growable_memory', you must also "
+                        "enable 'use_single_buffer' for state input name '") +
+                state_config.input_name() + ("'."));
+      }
+      if (kind != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string("'use_growable_memory' can only work with KIND_GPU "
+                        "model instances right now. Please either change the "
+                        "instance type to KIND_GPU or set "
+                        "'use_growable_memory' to false for state input '") +
+                state_config.input_name() + ("'."));
+      }
+    }
 
     std::vector<int64_t> dims;
     if (max_batch_size != 0) {
@@ -119,23 +151,42 @@ SequenceStates::Initialize(
       }
     }
 
-    std::shared_ptr<AllocatedMemory> data;
+    std::shared_ptr<MutableMemory> data;
     auto initial_state_it = initial_state.find(state_config.input_name());
     if (initial_state_it != initial_state.end()) {
-      data = std::make_shared<AllocatedMemory>(
-          initial_state_it->second.data_->TotalByteSize(),
-          TRITONSERVER_MEMORY_CPU, 0);
+      if (use_growable_memory) {
+        std::unique_ptr<GrowableMemory> growable_memory;
+        RETURN_IF_ERROR(GrowableMemory::Create(
+            initial_state_it->second.data_->TotalByteSize(),
+            TRITONSERVER_MEMORY_GPU, device_id, growable_memory,
+            1024 * 1024 * 1024));
+        data = std::move(growable_memory);
 
-      TRITONSERVER_MemoryType memory_type;
-      int64_t memory_type_id;
-      char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
-      char* initial_state_buffer =
-          initial_state_it->second.data_->MutableBuffer(
-              &memory_type, &memory_type_id);
+        TRITONSERVER_MemoryType memory_type;
+        int64_t memory_type_id;
+        char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
+        RETURN_IF_CUDA_ERR(
+            cudaMemcpy(
+                growable_memory->MutableBuffer(&memory_type, &memory_type_id),
+                dst_buffer, initial_state_it->second.data_->TotalByteSize(),
+                cudaMemcpyHostToDevice),
+            std::string("failed to copy initial state to GPU:"));
+      } else {
+        data = std::make_shared<AllocatedMemory>(
+            initial_state_it->second.data_->TotalByteSize(),
+            TRITONSERVER_MEMORY_CPU, 0);
 
-      memcpy(
-          dst_buffer, initial_state_buffer,
-          initial_state_it->second.data_->TotalByteSize());
+        TRITONSERVER_MemoryType memory_type;
+        int64_t memory_type_id;
+        char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
+        char* initial_state_buffer =
+            initial_state_it->second.data_->MutableBuffer(
+                &memory_type, &memory_type_id);
+
+        memcpy(
+            dst_buffer, initial_state_buffer,
+            initial_state_it->second.data_->TotalByteSize());
+      }
     } else {
       size_t state_size;
       if (state.second.data_type() == inference::DataType::TYPE_STRING) {
@@ -147,8 +198,16 @@ SequenceStates::Initialize(
         state_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
       }
-      data = std::make_shared<AllocatedMemory>(
-          state_size, TRITONSERVER_MEMORY_CPU, 0);
+      if (use_growable_memory) {
+        data = std::make_shared<AllocatedMemory>(
+            state_size, TRITONSERVER_MEMORY_CPU, 0);
+      } else {
+        std::unique_ptr<GrowableMemory> growable_memory;
+        RETURN_IF_ERROR(GrowableMemory::Create(
+            state_size, TRITONSERVER_MEMORY_GPU, device_id, growable_memory,
+            1024 * 1024 * 1024));
+        data = std::move(growable_memory);
+      }
     }
 
     const auto& input_pair = input_states_.emplace(
@@ -156,7 +215,7 @@ SequenceStates::Initialize(
         std::forward_as_tuple(state_config.input_name()),
         std::forward_as_tuple(new SequenceState(
             state_config.input_name(), state.second.data_type(), dims,
-            use_single_buffer)));
+            use_single_buffer, use_growable_memory)));
 
     if (!input_pair.second) {
       LOG_WARNING
@@ -177,7 +236,7 @@ SequenceStates::Initialize(
         std::forward_as_tuple(state_config.output_name()),
         std::forward_as_tuple(new SequenceState(
             state_config.output_name(), state.second.data_type(), dims,
-            use_single_buffer)));
+            use_single_buffer, use_growable_memory)));
     if (!output_pair.second) {
       // Remove the corresponding state from the input_states_map
       input_states_.erase(state_config.input_name());
@@ -310,7 +369,8 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
           std::forward_as_tuple(from_input_state_tensor->Name()),
           std::forward_as_tuple(new SequenceState(
               from_input_state_tensor->Name(), from_input_state_tensor->DType(),
-              from_input_state_tensor->Shape(), false /* reused buffer */)));
+              from_input_state_tensor->Shape(), false /* reused buffer */,
+              false /* use growable memory */)));
 
       auto& input_tensor = input_pair.first->second;
       std::shared_ptr<AllocatedMemory> data;

@@ -1387,7 +1387,8 @@ SequenceBatch::UpdateImplicitState(
       sequence_states.reset(new SequenceStates);
       sequence_states->Initialize(
           base_->StateOutputConfigMap(), base_->MaxBatchSize(),
-          base_->InitialState());
+          base_->InitialState(), model_instance_->Kind(),
+          model_instance_->DeviceId());
     }
 
     irequest->SetSequenceStates(sequence_states);
