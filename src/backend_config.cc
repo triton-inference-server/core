@@ -187,19 +187,6 @@ BackendConfigurationSpecializeBackendName(
 }
 
 Status
-BackendConfigurationBackendLibraryName(
-    const std::string& backend_name, std::string* libname)
-{
-#ifdef _WIN32
-  *libname = "triton_" + backend_name + ".dll";
-#else
-  *libname = "libtriton_" + backend_name + ".so";
-#endif
-
-  return Status::Success;
-}
-
-Status
 BackendConfigurationModelLoadGpuFraction(
     const triton::common::BackendCmdlineConfigMap& config_map,
     const int device_id, double* memory_limit)

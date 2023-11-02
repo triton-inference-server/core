@@ -64,10 +64,6 @@ Status BackendConfigurationSpecializeBackendName(
     const triton::common::BackendCmdlineConfigMap& config_map,
     const std::string& backend_name, std::string* specialized_name);
 
-/// Return the shared library name for a backend.
-Status BackendConfigurationBackendLibraryName(
-    const std::string& backend_name, std::string* libname);
-
 /// Get GPU memory limit fraction for model loading
 /// from the backend configuration.
 Status BackendConfigurationModelLoadGpuFraction(

@@ -195,25 +195,27 @@ class TritonModel : public Model {
   static Status SetBackendConfigDefaults(
       triton::common::BackendCmdlineConfig& config);
 
-  // Searches for backend_libname in provided search_paths.
-  // If found, stores backend directory in backend_libdir and
-  // backend path in backend_libpath.
-  static Status LocateBackendLibrary(
-      const std::vector<std::string> search_paths,
-      const std::string& backend_libname, std::string* backend_libdir,
+  // Get the search paths to the backend shared library.
+  static std::vector<std::string> GetBackendLibrarySearchPaths(
+      const std::string& model_path, int64_t version,
+      const std::string& backend_dir, const std::string& backend_name);
+
+  // Get backend library directory and path.
+  static Status GetBackendLibraryDirectoryAndPath(
+      const std::string& model_name, const std::string& model_path,
+      int64_t version, const std::string& backend_dir,
+      const std::string& backend_name, const std::string& backend_libname,
+      bool is_python_backend_based_backend,
+      std::vector<std::string>* search_paths, std::string* backend_libdir,
       std::string* backend_libpath);
 
-  // For a given backend (`backend_name`), looks for backend directory and
-  // location for the shared library, used by the backend. Returns:
-  // `backend_libdir` returns directory, where shared library (.so) is stored,
-  // `backend_libpath` returns the full path to .so,
-  // `python_runtime_modeldir` is set to empty string for c++ backends and
-  // returns directory, where model.py is stored.
-  static Status ResolveBackendPaths(
-      const std::string& backend_name, const std::string& global_backend_dir,
-      const std::string& model_name, std::vector<std::string>& search_paths,
+  // Search for 'backend_libname' from 'search_paths'. If found, the matching
+  // search path will be stored in 'backend_libdir' and the backend library path
+  // will be stored in 'backend_libpath'.
+  static Status FindBackendLibraryPath(
+      const std::vector<std::string>& search_paths,
       const std::string& backend_libname, std::string* backend_libdir,
-      std::string* backend_libpath, std::string* python_runtime_modeldir);
+      std::string* backend_libpath);
 
   // Clear library handles.
   void ClearHandles();

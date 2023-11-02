@@ -1223,31 +1223,21 @@ AutoCompleteBackendRuntimeField(
   if (fill_runtime) {
     // auto detect C++ vs Python runtime if unknown
     if (runtime_type == RuntimeType::RUNTIME_TYPE_UNKNOWN) {
-      // default to C++ runtime
-      runtime_type = RuntimeType::RUNTIME_TYPE_CPP;
-      // unless the default model filename ends with '.py'
-      const static std::string py_model_extension = ".py";
-      const std::string& model_filename = config->default_model_filename();
-      if (model_filename.length() >= py_model_extension.length()) {
-        auto start_pos = model_filename.length() - py_model_extension.length();
-        if (model_filename.substr(start_pos) == py_model_extension) {
-          runtime_type = RuntimeType::RUNTIME_TYPE_PYTHON;
-        }
+      if (IsPythonRuntime(config->default_model_filename())) {
+        runtime_type = RuntimeType::RUNTIME_TYPE_PYTHON;
+      } else {
+        runtime_type = RuntimeType::RUNTIME_TYPE_CPP;
       }
     }
     // set runtime library from runtime type
     if (runtime_type == RuntimeType::RUNTIME_TYPE_CPP) {
       if (config->backend().empty()) {
-        return Status(
-            Status::Code::INTERNAL,
-            "Model config 'backend' field cannot be empty when auto completing "
-            "for C++ 'runtime' field.");
+        LOG_INFO
+            << "Model config 'backend' field is empty when auto completing for "
+               "C++ 'runtime' field. The 'runtime' field is left unchanged.";
+      } else {
+        config->set_runtime(AssembleCPPRuntimeLibraryName(config->backend()));
       }
-#ifdef _WIN32
-      config->set_runtime("triton_" + config->backend() + ".dll");
-#else
-      config->set_runtime("libtriton_" + config->backend() + ".so");
-#endif
     } else if (runtime_type == RuntimeType::RUNTIME_TYPE_PYTHON) {
       config->set_runtime(kPythonFilename);
     } else {
@@ -2473,6 +2463,32 @@ InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
   *config.mutable_name() = "[Normalized]";
   config.set_count(1);
   return config.SerializeAsString();
+}
+
+bool
+IsPythonRuntime(const std::string& library_name)
+{
+  if (library_name == kPythonFilename) {
+    return true;
+  }
+  const static std::string py_extension = ".py";
+  if (library_name.length() >= py_extension.length()) {
+    auto start_pos = library_name.length() - py_extension.length();
+    if (library_name.substr(start_pos) == py_extension) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string
+AssembleCPPRuntimeLibraryName(const std::string& backend_name)
+{
+#ifdef _WIN32
+  return "triton_" + backend_name + ".dll";
+#else
+  return "libtriton_" + backend_name + ".so";
+#endif
 }
 
 }}  // namespace triton::core

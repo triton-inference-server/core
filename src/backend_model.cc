@@ -66,14 +66,22 @@ TritonModel::Create(
 {
   model->reset();
 
-  // The model configuration must specify a backend. The name of the
-  // corresponding shared library must be libtriton_<backend>.so.
-  std::string backend_name = model_config.backend();
+  // The model configuration must specify a backend.
+  const std::string& backend_name = model_config.backend();
   if (backend_name.empty()) {
     return Status(
         Status::Code::INVALID_ARG,
         "must specify 'backend' for '" + model_config.name() + "'");
   }
+
+  // The model configuration must specify a runtime library.
+  const std::string& backend_libname = model_config.runtime();
+  if (backend_libname.empty()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "must specify 'runtime' for '" + model_config.name() + "'");
+  }
+  bool is_python_backend_based_backend = IsPythonRuntime(backend_libname);
 
   // Localize the content of the model repository corresponding to
   // 'model_path'. This model holds a handle to the localized content
@@ -103,62 +111,30 @@ TritonModel::Create(
   RETURN_IF_ERROR(BackendConfigurationSpecializeBackendName(
       backend_cmdline_config_map, backend_name, &specialized_backend_name));
 
-  std::string backend_libname;
-  RETURN_IF_ERROR(BackendConfigurationBackendLibraryName(
-      specialized_backend_name, &backend_libname));
+  std::vector<std::string> search_paths = GetBackendLibrarySearchPaths(
+      model_path, version, backend_dir, backend_name);
 
-  // Get the path to the backend shared library. Search path is
-  // version directory, model directory, global backend directory.
-  const auto localized_model_path = localized_model_dir->Path();
-  const auto version_path =
-      JoinPath({localized_model_path, std::to_string(version)});
-  const std::string global_path =
-      JoinPath({backend_dir, specialized_backend_name});
-  std::vector<std::string> search_paths = {
-      version_path, localized_model_path, global_path};
-
-  std::string backend_libdir;
-  std::string backend_libpath;
-  std::string python_runtime_modeldir;
-
-  RETURN_IF_ERROR(ResolveBackendPaths(
-      specialized_backend_name, backend_dir, model_config.name(), search_paths,
-      backend_libname, &backend_libdir, &backend_libpath,
-      &python_runtime_modeldir));
-
-  // `backend_libpath` always points to shared library path.
-  if (backend_libpath.empty()) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "unable to find '" + backend_libname + "' or '" +
-            specialized_backend_name + "/" + kPythonFilename + "' for model '" +
-            model_config.name() + "', searched: " + version_path + ", " +
-            model_path + ", " + global_path);
-  }
+  std::string backend_libdir, backend_libpath;
+  RETURN_IF_ERROR(GetBackendLibraryDirectoryAndPath(
+      model_config.name(), localized_model_dir->Path(), version, backend_dir,
+      specialized_backend_name, backend_libname,
+      is_python_backend_based_backend, &search_paths, &backend_libdir,
+      &backend_libpath));
 
   // Resolve the global backend configuration with the specific backend
   // configuration
-  bool is_python_based_backend = false;
   triton::common::BackendCmdlineConfig config;
-  if (!python_runtime_modeldir.empty()) {
-    // `backend_libdir` points to model.py for python backend based backends.
-    backend_libdir = python_runtime_modeldir;
-    is_python_based_backend = true;
-    // Python backend based backends use configs, specified for python backend
-    // in cmdline.
-    RETURN_IF_ERROR(ResolveBackendConfigs(
-        backend_cmdline_config_map, kPythonBackend, config));
-  } else {
-    RETURN_IF_ERROR(ResolveBackendConfigs(
-        backend_cmdline_config_map, backend_name, config));
-  }
+  RETURN_IF_ERROR(ResolveBackendConfigs(
+      backend_cmdline_config_map,
+      (is_python_backend_based_backend ? kPythonBackend : backend_name),
+      config));
 
   RETURN_IF_ERROR(SetBackendConfigDefaults(config));
 
   std::shared_ptr<TritonBackend> backend;
   RETURN_IF_ERROR(server->BackendManager()->CreateBackend(
       backend_name, backend_libdir, backend_libpath, config,
-      is_python_based_backend, &backend));
+      is_python_backend_based_backend, &backend));
 
   // Normalize backend-dependent config
   {
@@ -317,9 +293,73 @@ TritonModel::GetExecutionPolicy(const inference::ModelConfig& model_config)
   return Status::Success;
 }
 
+std::vector<std::string>
+TritonModel::GetBackendLibrarySearchPaths(
+    const std::string& model_path, int64_t version,
+    const std::string& backend_dir, const std::string& backend_name)
+{
+  const auto version_path = JoinPath({model_path, std::to_string(version)});
+  const auto backend_path = JoinPath({backend_dir, backend_name});
+  std::vector<std::string> search_paths = {
+      version_path, model_path, backend_path};
+  return search_paths;
+}
+
 Status
-TritonModel::LocateBackendLibrary(
-    const std::vector<std::string> search_paths,
+TritonModel::GetBackendLibraryDirectoryAndPath(
+    const std::string& model_name, const std::string& model_path,
+    int64_t version, const std::string& backend_dir,
+    const std::string& backend_name, const std::string& backend_libname,
+    bool is_python_backend_based_backend,
+    std::vector<std::string>* search_paths, std::string* backend_libdir,
+    std::string* backend_libpath)
+{
+  std::string cpp_backend_libname = backend_libname;
+  if (is_python_backend_based_backend) {
+    // Use Python backend C++ runtime library.
+    cpp_backend_libname = AssembleCPPRuntimeLibraryName(kPythonBackend);
+    // The search paths only contain locations related to the Python backend
+    // based backend, the global Python backend location needs to be added.
+    search_paths->emplace_back(JoinPath({backend_dir, kPythonBackend}));
+  }
+
+  backend_libpath->clear();
+  RETURN_IF_ERROR(FindBackendLibraryPath(
+      *search_paths, cpp_backend_libname, backend_libdir, backend_libpath));
+
+  if (backend_libpath->empty()) {
+    std::string search_paths_str = "";
+    for (const auto& path : *search_paths) {
+      search_paths_str += "'" + path + "' ";
+    }
+    return Status(
+        Status::Code::INVALID_ARG,
+        "unable to find backend library '" + cpp_backend_libname +
+            "' for model '" + model_name + "', searched: " + search_paths_str);
+  }
+
+  if (is_python_backend_based_backend) {
+    // 'backend_libdir' point to Python backend based backend runtime directory.
+    *backend_libdir = JoinPath({backend_dir, backend_name});
+    // Make sure the runtime (and its directory) exists.
+    std::string runtime_libpath = JoinPath({*backend_libdir, kPythonFilename});
+    bool runtime_libpath_exist;
+    RETURN_IF_ERROR(FileExists(runtime_libpath, &runtime_libpath_exist));
+    if (!runtime_libpath_exist) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "unable to find Python backend based backend library '" +
+              backend_libname + "' for model '" + model_name +
+              "', searched: '" + runtime_libpath + "'");
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
+TritonModel::FindBackendLibraryPath(
+    const std::vector<std::string>& search_paths,
     const std::string& backend_libname, std::string* backend_libdir,
     std::string* backend_libpath)
 {
@@ -333,59 +373,6 @@ TritonModel::LocateBackendLibrary(
       break;
     }
   }
-
-  return Status::Success;
-}
-
-Status
-TritonModel::ResolveBackendPaths(
-    const std::string& backend_name, const std::string& global_backend_dir,
-    const std::string& model_name, std::vector<std::string>& search_paths,
-    const std::string& backend_libname, std::string* backend_libdir,
-    std::string* backend_libpath, std::string* python_runtime_modeldir)
-{
-  // Look for shared library first
-  RETURN_IF_ERROR(LocateBackendLibrary(
-      search_paths, backend_libname, backend_libdir, backend_libpath));
-
-  if (!(*backend_libpath).empty()) {
-    *python_runtime_modeldir = "";
-    return Status::Success;
-  }
-
-  // If not found, then we are processing a python-based backend.
-  // We look for libtriton_python.so in python backend directory
-  // and model.py in provided custom backend's directory
-  std::string python_backend_dir =
-      JoinPath({global_backend_dir, kPythonBackend});
-  bool is_dir;
-  RETURN_IF_ERROR(IsDirectory(python_backend_dir, &is_dir));
-  if (!is_dir) {
-    return Status(
-        Status::Code::INVALID_ARG, "unable to find '" + global_backend_dir +
-                                       "/python', '" + backend_name +
-                                       "' requires python backend to operate.");
-  }
-  search_paths.emplace_back(python_backend_dir);
-  std::string runtime_model_path =
-      JoinPath({global_backend_dir, backend_name, kPythonFilename});
-  bool exists;
-  RETURN_IF_ERROR(FileExists(runtime_model_path, &exists));
-  if (!exists) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "unable to find '" + backend_libname + "' or '" + backend_name + "/" +
-            kPythonFilename + "' for model '" + model_name + "', in " +
-            JoinPath({global_backend_dir, backend_name}));
-  }
-
-  *python_runtime_modeldir = JoinPath({global_backend_dir, backend_name});
-  std::string python_backend_libname;
-  RETURN_IF_ERROR(BackendConfigurationBackendLibraryName(
-      kPythonBackend, &python_backend_libname));
-
-  RETURN_IF_ERROR(LocateBackendLibrary(
-      search_paths, python_backend_libname, backend_libdir, backend_libpath));
 
   return Status::Success;
 }
