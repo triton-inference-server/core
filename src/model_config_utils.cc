@@ -979,7 +979,7 @@ AutoCompleteBackendFields(
     config->set_name(model_name);
   }
 
-  // Trying to fill the 'backend', 'default_model_filename' field.
+  // Trying to fill the 'backend', 'default_model_filename' and 'runtime' field.
 
   // TensorFlow
   // For TF backend, the platform is required
@@ -1016,7 +1016,7 @@ AutoCompleteBackendFields(
     }
   }
 
-  // Fill 'backend' and 'default_model_filename' if missing
+  // Fill 'backend', 'default_model_filename' and 'runtime' if missing
   if ((config->platform() == kTensorFlowSavedModelPlatform) ||
       (config->platform() == kTensorFlowGraphDefPlatform)) {
     if (config->backend().empty()) {
@@ -1029,6 +1029,8 @@ AutoCompleteBackendFields(
         config->set_default_model_filename(kTensorFlowGraphDefFilename);
       }
     }
+    RETURN_IF_ERROR(
+        AutoCompleteBackendRuntimeField(RuntimeType::RUNTIME_TYPE_CPP, config));
     return Status::Success;
   }
 
@@ -1058,6 +1060,8 @@ AutoCompleteBackendFields(
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kTensorRTPlanFilename);
     }
+    RETURN_IF_ERROR(
+        AutoCompleteBackendRuntimeField(RuntimeType::RUNTIME_TYPE_CPP, config));
     return Status::Success;
   }
 
@@ -1083,6 +1087,8 @@ AutoCompleteBackendFields(
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kOnnxRuntimeOnnxFilename);
     }
+    RETURN_IF_ERROR(
+        AutoCompleteBackendRuntimeField(RuntimeType::RUNTIME_TYPE_CPP, config));
     return Status::Success;
   }
 
@@ -1103,10 +1109,12 @@ AutoCompleteBackendFields(
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kOpenVINORuntimeOpenVINOFilename);
     }
+    RETURN_IF_ERROR(
+        AutoCompleteBackendRuntimeField(RuntimeType::RUNTIME_TYPE_CPP, config));
     return Status::Success;
   }
 
-  // PyTorch (TorchScript, LibTorch)
+  // PyTorch
   if (config->backend().empty()) {
     if ((config->platform() == kPyTorchLibTorchPlatform) ||
         (config->default_model_filename() == kPyTorchLibTorchFilename)) {
@@ -1132,6 +1140,8 @@ AutoCompleteBackendFields(
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kPyTorchLibTorchFilename);
     }
+    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
+        RuntimeType::RUNTIME_TYPE_UNKNOWN, config));
     return Status::Success;
   }
 
@@ -1152,6 +1162,18 @@ AutoCompleteBackendFields(
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kPythonFilename);
     }
+    RETURN_IF_ERROR(
+        AutoCompleteBackendRuntimeField(RuntimeType::RUNTIME_TYPE_CPP, config));
+    return Status::Success;
+  }
+
+  // vLLM
+  if (config->backend() == kVLLMBackend) {
+    if (config->default_model_filename().empty()) {
+      config->set_default_model_filename(kPythonFilename);
+    }
+    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
+        RuntimeType::RUNTIME_TYPE_PYTHON, config));
     return Status::Success;
   }
 
@@ -1180,9 +1202,58 @@ AutoCompleteBackendFields(
     config->set_backend(backend_name);
     config->set_default_model_filename(
         (std::string("model.") + backend_name).c_str());
+    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
+        RuntimeType::RUNTIME_TYPE_UNKNOWN, config));
     return Status::Success;
   }
 
+  RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
+      RuntimeType::RUNTIME_TYPE_UNKNOWN, config));
+  return Status::Success;
+}
+
+Status
+AutoCompleteBackendRuntimeField(
+    RuntimeType runtime_type, inference::ModelConfig* config)
+{
+  bool fill_runtime = config->runtime().empty();
+#ifdef TRITON_ENABLE_ENSEMBLE
+  fill_runtime = fill_runtime && config->platform() != kEnsemblePlatform;
+#endif  // TRITON_ENABLE_ENSEMBLE
+  if (fill_runtime) {
+    // auto detect C++ vs Python runtime if unknown
+    if (runtime_type == RuntimeType::RUNTIME_TYPE_UNKNOWN) {
+      // default to C++ runtime
+      runtime_type = RuntimeType::RUNTIME_TYPE_CPP;
+      // unless the default model filename ends with '.py'
+      const static std::string py_model_extension = ".py";
+      const std::string& model_filename = config->default_model_filename();
+      if (model_filename.length() >= py_model_extension.length()) {
+        auto start_pos = model_filename.length() - py_model_extension.length();
+        if (model_filename.substr(start_pos) == py_model_extension) {
+          runtime_type = RuntimeType::RUNTIME_TYPE_PYTHON;
+        }
+      }
+    }
+    // set runtime library from runtime type
+    if (runtime_type == RuntimeType::RUNTIME_TYPE_CPP) {
+      if (config->backend().empty()) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Model config 'backend' field cannot be empty when auto completing "
+            "for C++ 'runtime' field.");
+      }
+#ifdef _WIN32
+      config->set_runtime("triton_" + config->backend() + ".dll");
+#else
+      config->set_runtime("libtriton_" + config->backend() + ".so");
+#endif
+    } else if (runtime_type == RuntimeType::RUNTIME_TYPE_PYTHON) {
+      config->set_runtime(kPythonFilename);
+    } else {
+      return Status(Status::Code::INTERNAL, "Unimplemented runtime type.");
+    }
+  }
   return Status::Success;
 }
 

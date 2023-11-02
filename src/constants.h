@@ -60,6 +60,8 @@ constexpr char kPyTorchBackend[] = "pytorch";
 constexpr char kPythonFilename[] = "model.py";
 constexpr char kPythonBackend[] = "python";
 
+constexpr char kVLLMBackend[] = "vllm";
+
 #ifdef TRITON_ENABLE_ENSEMBLE
 constexpr char kEnsemblePlatform[] = "ensemble";
 #endif  // TRITON_ENABLE_ENSEMBLE
