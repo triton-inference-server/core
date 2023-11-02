@@ -109,9 +109,19 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                      "' must have bytes type for its value")
                         .c_str());
               }
+              // NOTE: Explicitly disallow ".." to avoid override file paths
+              // escaping the temporary model directory used for load API.
+              if (file->Name().find("..") != std::string::npos) {
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG,
+                    (std::string("File parameter '") + file->Name() +
+                     "' must stay within the model directory. Relative paths "
+                     "including '..' are not allowed.")
+                        .c_str());
+              }
 
-              // Save model file to the instructed directory
-              // mkdir
+              // Save model override file to the instructed directory using the
+              // temporary model directory as the basepath.
               const std::string file_path =
                   JoinPath({temp_dir, file->Name().substr(file_prefix.size())});
               const std::string dir = DirName(file_path);
@@ -132,7 +142,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                     MakeDirectory(dir, true /* recursive */));
               }
 
-              // write
+              // Write file contents at specified path
               RETURN_TRITONSERVER_ERROR_IF_ERROR(WriteBinaryFile(
                   file_path,
                   reinterpret_cast<const char*>(file->ValuePointer()),
