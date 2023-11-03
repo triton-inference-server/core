@@ -137,4 +137,13 @@ CudaBlockManager::Free(
   return Status::Success;
 }
 
+CudaBlockManager::~CudaBlockManager()
+{
+  for (auto& [device, free_blocks] : free_blocks_) {
+    for (auto& free_block : free_blocks) {
+      cuMemRelease(free_block);
+    }
+  }
+}
+
 }};  // namespace triton::core

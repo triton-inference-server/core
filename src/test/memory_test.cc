@@ -32,6 +32,7 @@
 #include "cuda_utils.h"
 #include "gtest/gtest.h"
 #include "pinned_memory_manager.h"
+#include "triton/core/tritonserver.h"
 
 namespace tc = triton::core;
 
@@ -392,6 +393,72 @@ TEST_F(AllocatedMemoryTest, Release)
 
   // Sanity check on the pointer property
   CHECK_POINTER_ATTRIBUTES(ptr, cudaMemoryTypeDevice, expect_id);
+}
+
+class GrowableMemoryTest : public ::testing::Test {
+ protected:
+  // Per-test-suite set-up.
+  static void SetUpTestSuite()
+  {
+    cudaFree(0);
+    cuInit(0);
+    auto status = tc::CudaBlockManager::Create(6.0);
+    EXPECT_TRUE(status.IsOk()) << status.Message();
+  }
+
+  void TearDown() override {}
+};
+
+TEST_F(GrowableMemoryTest, AllocGPU)
+{
+  std::unique_ptr<tc::GrowableMemory> growable_memory;
+  size_t block_size = tc::CudaBlockManager::BlockSize();
+  auto status = tc::GrowableMemory::Create(
+      block_size, TRITONSERVER_MEMORY_GPU, 0, growable_memory, block_size * 20);
+  EXPECT_TRUE(status.IsOk()) << status.Message();
+
+  auto blocks = growable_memory->GetAllocation()->Blocks();
+
+  TRITONSERVER_MemoryType memory_type;
+  int64_t memory_type_id;
+  char* buffer = growable_memory->MutableBuffer(&memory_type, &memory_type_id);
+  EXPECT_EQ(memory_type, TRITONSERVER_MEMORY_GPU);
+  EXPECT_EQ(memory_type_id, 0);
+  CHECK_POINTER_ATTRIBUTES(buffer, cudaMemoryTypeDevice, 0);
+  // Make sure the memory is destructed without issues.
+  growable_memory.reset(nullptr);
+
+  // Allocate new memory with the same size.
+  status = tc::GrowableMemory::Create(
+      block_size, TRITONSERVER_MEMORY_GPU, 0, growable_memory, block_size * 20);
+  buffer = growable_memory->MutableBuffer(&memory_type, &memory_type_id);
+  EXPECT_EQ(memory_type, TRITONSERVER_MEMORY_GPU);
+  EXPECT_EQ(memory_type_id, 0);
+  CHECK_POINTER_ATTRIBUTES(buffer, cudaMemoryTypeDevice, 0);
+  EXPECT_TRUE(status.IsOk()) << status.Message();
+  auto new_blocks = growable_memory->GetAllocation()->Blocks();
+  ASSERT_EQ(blocks[0], new_blocks[0])
+      << "Expected the same blocks found different blocks";
+
+  // Grow the memory
+  status = growable_memory->Resize(block_size * 3);
+  buffer = growable_memory->MutableBuffer(&memory_type, &memory_type_id);
+  EXPECT_EQ(memory_type, TRITONSERVER_MEMORY_GPU);
+  EXPECT_EQ(memory_type_id, 0);
+  CHECK_POINTER_ATTRIBUTES(buffer, cudaMemoryTypeDevice, 0);
+  EXPECT_TRUE(status.IsOk()) << status.Message();
+  ASSERT_EQ(growable_memory->GetAllocation()->Blocks().size(), 3)
+      << "expected 3 blocks.";
+
+  // Try to grow the memory beyond the virtual address size
+  status = growable_memory->Resize(block_size * 21);
+  EXPECT_FALSE(status.IsOk()) << status.Message();
+
+  // Try to allocate memory larger than the block size
+  status = tc::GrowableMemory::Create(
+      block_size * 21, TRITONSERVER_MEMORY_GPU, 0, growable_memory,
+      block_size * 20);
+  EXPECT_FALSE(status.IsOk()) << status.Message();
 }
 
 }  // namespace

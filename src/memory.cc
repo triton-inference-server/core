@@ -237,6 +237,7 @@ AllocatedMemory::~AllocatedMemory()
   }
 }
 
+#ifdef TRITON_ENABLE_GPU
 GrowableMemory::GrowableMemory(
     size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id, std::unique_ptr<Allocation>&& allocation,
@@ -250,6 +251,8 @@ GrowableMemory::GrowableMemory(
   access_desc_.location = allocation_prop_.location;
   access_desc_.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
   virtual_address_size_ = virtual_address_size;
+  allocation_ = std::move(allocation);
+  virtual_address_offset_ = 0;
 }
 
 Status
@@ -265,8 +268,7 @@ GrowableMemory::Create(
     return Status(
         Status::Code::INVALID_ARG,
         std::string("Only TRITONSERVER_MEMORY_GPU is supported for growable "
-                    "memory. Found '") +
-            TRITONSERVER_MemoryTypeString(memory_type) + "'.");
+                    "memory."));
   }
 
   if (byte_size > virtual_address_size) {
@@ -286,13 +288,13 @@ GrowableMemory::Create(
       cuMemAddressReserve(
           reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
           0 /* alignment */, 0 /* start_address */, 0 /* flags */),
-      std::string("cuMemAddressReserve failed:"));
-  growable_memory->buffer_ = reinterpret_cast<char*>(buffer);
+      std::string("cuMemAddressReserve failed"));
   growable_memory = std::move(std::make_unique<GrowableMemory>(
       CudaBlockManager::BlockSize() * allocation->Blocks().size(), memory_type,
       memory_type_id, std::move(allocation), virtual_address_size));
+  growable_memory->buffer_ = reinterpret_cast<char*>(buffer);
 
-  for (auto& block : allocation->Blocks()) {
+  for (auto& block : growable_memory->allocation_->Blocks()) {
     RETURN_IF_ERROR(growable_memory->Map(block));
   }
   return Status::Success;
@@ -305,13 +307,13 @@ GrowableMemory::Map(CUmemGenericAllocationHandle& block)
       cuMemMap(
           reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
           CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */),
-      std::string("cuMemMap failed:"));
+      std::string("cuMemMap failed"));
   RETURN_IF_CUDA_DRIVER_ERR(
       cuMemSetAccess(
           reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
           CudaBlockManager::BlockSize(), &access_desc_,
           1ULL /* Mapping size */),
-      std::string("cuMemSetAccess failed:"));
+      std::string("cuMemSetAccess failed"));
   virtual_address_offset_ += CudaBlockManager::BlockSize();
   return Status::Success;
 }
@@ -347,5 +349,20 @@ GrowableMemory::Resize(size_t size)
 
   return Status::Success;
 }
+
+std::unique_ptr<Allocation>&
+GrowableMemory::GetAllocation()
+{
+  return allocation_;
+}
+
+GrowableMemory::~GrowableMemory()
+{
+  cuMemUnmap(
+      reinterpret_cast<CUdeviceptr>(buffer_), buffer_attributes_.ByteSize());
+  cuMemAddressFree(
+      reinterpret_cast<CUdeviceptr>(buffer_), virtual_address_size_);
+}
+#endif
 
 }}  // namespace triton::core

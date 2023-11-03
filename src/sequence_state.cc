@@ -199,14 +199,14 @@ SequenceStates::Initialize(
             triton::common::GetByteSize(state.second.data_type(), dims);
       }
       if (use_growable_memory) {
-        data = std::make_shared<AllocatedMemory>(
-            state_size, TRITONSERVER_MEMORY_CPU, 0);
-      } else {
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
             state_size, TRITONSERVER_MEMORY_GPU, device_id, growable_memory,
             1024 * 1024 * 1024));
         data = std::move(growable_memory);
+      } else {
+        data = std::make_shared<AllocatedMemory>(
+            state_size, TRITONSERVER_MEMORY_CPU, 0);
       }
     }
 

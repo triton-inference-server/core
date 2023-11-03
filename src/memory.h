@@ -201,6 +201,8 @@ class GrowableMemory : public MutableMemory {
 
   Status Resize(size_t size);
 
+  std::unique_ptr<Allocation>& GetAllocation();
+
  private:
   std::unique_ptr<Allocation> allocation_;
   size_t virtual_address_offset_;
