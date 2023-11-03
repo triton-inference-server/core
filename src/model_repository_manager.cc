@@ -129,11 +129,6 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                         .c_str());
               }
 
-
-              // TODO: Remove
-              std::cout << "[DEBUG] dirname: " << dir << std::endl;
-              std::cout << "[DEBUG] weakly_canonical dirname: " << realdir
-                        << std::endl;
               bool dir_exist = false;
               RETURN_TRITONSERVER_ERROR_IF_ERROR(FileExists(dir, &dir_exist));
               if (dir_exist) {
