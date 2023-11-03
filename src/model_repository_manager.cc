@@ -117,11 +117,10 @@ class LocalizeRepoAgent : public TritonRepoAgent {
               const std::string dir = DirName(file_path);
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              // NOTE: realpath doesn't support windows, use boost for cross
-              // platform support. Can use std::filesystem over boost in C++17.
-              const std::string realdir =
+              // DLIS-5149: Can use std::filesystem over boost in C++17.
+              const std::string& real_dir =
                   boost::filesystem::weakly_canonical(dir).string();
-              if (realdir.rfind(temp_dir, 0) != 0) {
+              if (real_dir.rfind(temp_dir, 0) != 0) {
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
                     (std::string("Invalid file parameter '") + file->Name() +
