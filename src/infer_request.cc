@@ -396,8 +396,8 @@ InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
   auto status = request->model_raw_->Enqueue(request);
   if (!status.IsOk()) {
     LOG_STATUS_ERROR(
-      request->SetState(InferenceRequest::State::RELEASED),
-      "Failed to set released state");
+        request->SetState(InferenceRequest::State::RELEASED),
+        "Failed to set released state");
   }
   return status;
 }
