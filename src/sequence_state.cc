@@ -155,6 +155,7 @@ SequenceStates::Initialize(
     auto initial_state_it = initial_state.find(state_config.input_name());
     if (initial_state_it != initial_state.end()) {
       if (use_growable_memory) {
+        // TODO: use a constant or a flag for virtual address space size.
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
             initial_state_it->second.data_->TotalByteSize(),
@@ -199,6 +200,7 @@ SequenceStates::Initialize(
             triton::common::GetByteSize(state.second.data_type(), dims);
       }
       if (use_growable_memory) {
+        // TODO: use a constant or a flag for virtual address space size.
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
             state_size, TRITONSERVER_MEMORY_GPU, device_id, growable_memory,
