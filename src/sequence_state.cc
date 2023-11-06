@@ -250,7 +250,6 @@ SequenceStates::Initialize(
 
     auto& output_tensor = output_pair.first->second;
     if (use_single_buffer) {
-      auto& output_tensor = output_pair.first->second;
       output_tensor->SetData(data);
     }
 

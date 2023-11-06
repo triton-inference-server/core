@@ -1373,9 +1373,11 @@ TRITONBACKEND_StateBuffer(
   } else {
     std::shared_ptr<MutableMemory> memory;
     if (to->UseGrowableMemory()) {
-      const std::shared_ptr<GrowableMemory>& memory =
+      const std::shared_ptr<GrowableMemory>& growable_memory =
           reinterpret_cast<const std::shared_ptr<GrowableMemory>&>(to->Data());
-      RETURN_TRITONSERVER_ERROR_IF_ERROR(memory->Resize(buffer_byte_size));
+      RETURN_TRITONSERVER_ERROR_IF_ERROR(
+          growable_memory->Resize(buffer_byte_size));
+      memory = growable_memory;
     } else {
       memory = std::make_shared<AllocatedMemory>(
           buffer_byte_size, *memory_type, *memory_type_id);
@@ -1384,6 +1386,7 @@ TRITONBACKEND_StateBuffer(
     to->RemoveAllData();
     status = to->SetData(memory);
     if (to->ReuseBuffer()) {
+      to->OtherState()->RemoveAllData();
       to->OtherState()->SetData(memory);
     }
   }
