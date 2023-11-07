@@ -124,7 +124,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
                     (std::string("Invalid file parameter '") + file->Name() +
-                     "' with normalized dir '" + dir +
+                     "' with normalized path '" + file_path +
                      "' must stay within model directory.")
                         .c_str());
               }
