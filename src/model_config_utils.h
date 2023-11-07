@@ -322,12 +322,6 @@ bool EquivalentInInstanceConfig(
 std::string InstanceConfigSignature(
     const inference::ModelInstanceGroup& instance_config);
 
-/// Check if the library name belongs to Python runtime.
-/// \param library_name The library name to check.
-/// \return True if the library name matches the 'kPythonFilename' constant or
-/// ends with a '.py' extension. False if otherwise.
-bool IsPythonRuntime(const std::string& library_name);
-
 /// Assemble the C++ runtime library name.
 /// \param backend_name The backend name.
 /// \return The assembled C++ runtime library name.

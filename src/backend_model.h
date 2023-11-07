@@ -200,18 +200,29 @@ class TritonModel : public Model {
       const std::string& model_path, int64_t version,
       const std::string& backend_dir, const std::string& backend_name);
 
-  // Get backend library directory and path.
-  static Status GetBackendLibraryDirectoryAndPath(
+  // Get backend library directory and path, and search paths for the library
+  // and whether the backend is based on Python backend.
+  static Status GetBackendLibraryProperties(
       const std::string& model_name, const std::string& model_path,
       int64_t version, const std::string& backend_dir,
-      const std::string& backend_name, const std::string& backend_libname,
-      bool is_python_backend_based_backend,
+      const std::string& backend_name, const std::string& runtime,
+      bool* is_python_backend_based_backend,
       std::vector<std::string>* search_paths, std::string* backend_libdir,
       std::string* backend_libpath);
 
-  // Search for 'backend_libname' from 'search_paths'. If found, the matching
+  // Get 'backend_libname', 'backend_libdir', 'backend_libpath' and
+  // 'is_python_backend_based_backend' by searching for different possible
+  // backend library names on 'search_paths'
+  static Status GetBackendRuntimeLibraryName(
+      const std::string& backend_name,
+      const std::vector<std::string>& search_paths,
+      std::string* backend_libname, std::string* backend_libdir,
+      std::string* backend_libpath, bool* is_python_backend_based_backend);
+
+  // Search for 'backend_libname' on 'search_paths'. If found, the matching
   // search path will be stored in 'backend_libdir' and the backend library path
-  // will be stored in 'backend_libpath'.
+  // will be stored in 'backend_libpath'. If not found, 'backend_libpath' will
+  // be set to empty.
   static Status FindBackendLibraryPath(
       const std::vector<std::string>& search_paths,
       const std::string& backend_libname, std::string* backend_libdir,

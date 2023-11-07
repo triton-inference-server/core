@@ -1140,8 +1140,11 @@ AutoCompleteBackendFields(
     if (config->default_model_filename().empty()) {
       config->set_default_model_filename(kPyTorchLibTorchFilename);
     }
-    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
-        RuntimeType::RUNTIME_TYPE_UNKNOWN, config));
+    auto runtime_type = RuntimeType::RUNTIME_TYPE_CPP;
+    if (config->default_model_filename() == kPythonFilename) {
+      runtime_type = RuntimeType::RUNTIME_TYPE_PYTHON;
+    }
+    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(runtime_type, config));
     return Status::Success;
   }
 
@@ -1202,13 +1205,9 @@ AutoCompleteBackendFields(
     config->set_backend(backend_name);
     config->set_default_model_filename(
         (std::string("model.") + backend_name).c_str());
-    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
-        RuntimeType::RUNTIME_TYPE_UNKNOWN, config));
     return Status::Success;
   }
 
-  RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
-      RuntimeType::RUNTIME_TYPE_UNKNOWN, config));
   return Status::Success;
 }
 
@@ -1221,14 +1220,6 @@ AutoCompleteBackendRuntimeField(
   fill_runtime = fill_runtime && config->platform() != kEnsemblePlatform;
 #endif  // TRITON_ENABLE_ENSEMBLE
   if (fill_runtime) {
-    // auto detect C++ vs Python runtime if unknown
-    if (runtime_type == RuntimeType::RUNTIME_TYPE_UNKNOWN) {
-      if (IsPythonRuntime(config->default_model_filename())) {
-        runtime_type = RuntimeType::RUNTIME_TYPE_PYTHON;
-      } else {
-        runtime_type = RuntimeType::RUNTIME_TYPE_CPP;
-      }
-    }
     // set runtime library from runtime type
     if (runtime_type == RuntimeType::RUNTIME_TYPE_CPP) {
       if (config->backend().empty()) {
@@ -1241,7 +1232,7 @@ AutoCompleteBackendRuntimeField(
     } else if (runtime_type == RuntimeType::RUNTIME_TYPE_PYTHON) {
       config->set_runtime(kPythonFilename);
     } else {
-      return Status(Status::Code::INTERNAL, "Unimplemented runtime type.");
+      return Status(Status::Code::INTERNAL, "Unexpected runtime type.");
     }
   }
   return Status::Success;
@@ -2463,22 +2454,6 @@ InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
   *config.mutable_name() = "[Normalized]";
   config.set_count(1);
   return config.SerializeAsString();
-}
-
-bool
-IsPythonRuntime(const std::string& library_name)
-{
-  if (library_name == kPythonFilename) {
-    return true;
-  }
-  const static std::string py_extension = ".py";
-  if (library_name.length() >= py_extension.length()) {
-    auto start_pos = library_name.length() - py_extension.length();
-    if (library_name.substr(start_pos) == py_extension) {
-      return true;
-    }
-  }
-  return false;
 }
 
 std::string
