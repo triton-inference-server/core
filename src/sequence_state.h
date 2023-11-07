@@ -74,12 +74,9 @@ class SequenceState {
   bool UseGrowableMemory() { return use_growable_memory_; }
 
   // Set pointer to the other sequence state
-  void SetOtherState(std::shared_ptr<SequenceState>& other)
-  {
-    other_state_ = other;
-  }
+  void SetOtherState(SequenceState* other) { other_state_ = other; }
 
-  std::shared_ptr<SequenceState> OtherState() { return other_state_; }
+  SequenceState* OtherState() { return other_state_; }
 
   // Set the data for this shape. Error if state already has some
   // data.
@@ -108,7 +105,7 @@ class SequenceState {
   std::vector<int64_t> shape_;
   std::vector<int64_t> batch_dim_;
   std::shared_ptr<Memory> data_;
-  std::shared_ptr<SequenceState> other_state_;
+  SequenceState* other_state_;
   bool reuse_buffer_;
   bool use_growable_memory_;
   std::function<Status()> state_update_cb_ = []() {

@@ -1358,10 +1358,11 @@ TRITONBACKEND_StateBuffer(
 
   TRITONSERVER_MemoryType current_memory_type;
   int64_t current_memory_type_id;
-  const std::shared_ptr<MutableMemory>& memory =
-      reinterpret_cast<const std::shared_ptr<MutableMemory>&>(to->Data());
-  void* lbuffer =
-      memory->MutableBuffer(&current_memory_type, &current_memory_type_id);
+  void* lbuffer = nullptr;
+  MutableMemory* mutable_memory =
+      reinterpret_cast<MutableMemory*>(to->Data().get());
+  lbuffer = mutable_memory->MutableBuffer(
+      &current_memory_type, &current_memory_type_id);
 
   // If the buffer size exactly matches the buffer available and is requesting
   // the same memory type and memory type id, reuse the currently allocated
@@ -1371,23 +1372,23 @@ TRITONBACKEND_StateBuffer(
       current_memory_type_id == *memory_type_id) {
     *buffer = lbuffer;
   } else {
-    std::shared_ptr<MutableMemory> memory;
     if (to->UseGrowableMemory()) {
-      const std::shared_ptr<GrowableMemory>& growable_memory =
-          reinterpret_cast<const std::shared_ptr<GrowableMemory>&>(to->Data());
+      GrowableMemory* growable_memory =
+          reinterpret_cast<GrowableMemory*>(to->Data().get());
       RETURN_TRITONSERVER_ERROR_IF_ERROR(
           growable_memory->Resize(buffer_byte_size));
-      memory = growable_memory;
+      *buffer = growable_memory->MutableBuffer(memory_type, memory_type_id);
     } else {
-      memory = std::make_shared<AllocatedMemory>(
-          buffer_byte_size, *memory_type, *memory_type_id);
-    }
-    *buffer = memory->MutableBuffer(memory_type, memory_type_id);
-    to->RemoveAllData();
-    status = to->SetData(memory);
-    if (to->ReuseBuffer()) {
-      to->OtherState()->RemoveAllData();
-      to->OtherState()->SetData(memory);
+      std::shared_ptr<AllocatedMemory> memory =
+          std::make_shared<AllocatedMemory>(
+              buffer_byte_size, *memory_type, *memory_type_id);
+      *buffer = memory->MutableBuffer(memory_type, memory_type_id);
+      to->RemoveAllData();
+      status = to->SetData(memory);
+      if (to->ReuseBuffer()) {
+        to->OtherState()->RemoveAllData();
+        to->OtherState()->SetData(memory);
+      }
     }
   }
 

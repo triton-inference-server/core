@@ -255,8 +255,8 @@ SequenceStates::Initialize(
       output_tensor->SetData(data);
     }
 
-    output_tensor->SetOtherState(input_tensor);
-    input_tensor->SetOtherState(output_tensor);
+    output_tensor->SetOtherState(input_tensor.get());
+    input_tensor->SetOtherState(output_tensor.get());
   }
 
   return Status::Success;
