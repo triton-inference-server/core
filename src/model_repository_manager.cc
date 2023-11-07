@@ -115,13 +115,11 @@ class LocalizeRepoAgent : public TritonRepoAgent {
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
               // DLIS-5149: Can use std::filesystem over boost in C++17.
-
               const std::string file_path =
                   boost::filesystem::weakly_canonical(
                       JoinPath(
                           {temp_dir, file->Name().substr(file_prefix.size())}))
                       .string();
-
               if (file_path.rfind(temp_dir, 0) != 0) {
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
@@ -133,9 +131,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
 
               // Save model override file to the instructed directory using the
               // temporary model directory as the basepath.
-
               const std::string dir = DirName(file_path);
-
               bool dir_exist = false;
               RETURN_TRITONSERVER_ERROR_IF_ERROR(FileExists(dir, &dir_exist));
               if (dir_exist) {
