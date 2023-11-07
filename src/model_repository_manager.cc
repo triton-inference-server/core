@@ -83,7 +83,8 @@ class LocalizeRepoAgent : public TritonRepoAgent {
           RETURN_TRITONSERVER_ERROR_IF_ERROR(
               agent_model->AcquireMutableLocation(
                   TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
-          const std::string temp_dir = temp_dir_cstr;
+          const std::string temp_dir =
+              boost::filesystem::canonical(temp_dir_cstr).string();
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
@@ -114,19 +115,18 @@ class LocalizeRepoAgent : public TritonRepoAgent {
               // temporary model directory as the basepath.
               const std::string file_path =
                   JoinPath({temp_dir, file->Name().substr(file_prefix.size())});
-              const std::string dir = DirName(file_path);
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
               // DLIS-5149: Can use std::filesystem over boost in C++17.
-              const std::string& canonical_tmp_dir =
-                  boost::filesystem::weakly_canonical(temp_dir).string();
-              const std::string& canonical_override_dir =
-                  boost::filesystem::weakly_canonical(dir).string();
-              if (canonical_override_dir.rfind(canonical_tmp_dir, 0) != 0) {
+              const std::string dir =
+                  boost::filesystem::weakly_canonical(DirName(file_path))
+                      .string();
+              if (dir.rfind(temp_dir, 0) != 0) {
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG,
                     (std::string("Invalid file parameter '") + file->Name() +
-                     "', file location must stay within model directory.")
+                     "' with normalized dir '" + dir +
+                     "' must stay within model directory.")
                         .c_str());
               }
 
