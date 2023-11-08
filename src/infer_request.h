@@ -65,8 +65,11 @@ class InferenceRequest {
     // The request has been initialized, but not yet enqueued.
     INITIALIZED,
 
-    // The request has been enqueued, but is not yet executing.
+    // The request is pending execution.
     PENDING,
+
+    // The request failed to enqueue.
+    FAILED_ENQUEUE,
 
     // The request has been picked up by a backend model instance for execution,
     // but hasn't been released yet.

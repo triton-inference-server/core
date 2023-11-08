@@ -157,9 +157,11 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
     }
     case InferenceRequest::State::PENDING: {
       // Request may move from pending to either execution when scheduled to
-      // backend, or released early due to some error.
+      // backend, released early due to some error or failure was encountered
+      // when calling enqueue.
       if (new_state == InferenceRequest::State::EXECUTING ||
-          new_state == InferenceRequest::State::RELEASED) {
+          new_state == InferenceRequest::State::RELEASED ||
+          new_state == InferenceRequest::State::FAILED_ENQUEUE) {
         DecrementPendingRequestCount();
       } else {
         // Unexpected state transition
@@ -177,6 +179,15 @@ InferenceRequest::SetState(InferenceRequest::State new_state)
       if (new_state != InferenceRequest::State::INITIALIZED) {
         // Only transition currently supported after release is to start over
         // again, such as re-using request objects for multiple inferences.
+        return generate_error();
+      }
+      break;
+    }
+    case InferenceRequest::State::FAILED_ENQUEUE: {
+      if (new_state != InferenceRequest::State::INITIALIZED) {
+        // Only transition currently supported after failed to enqueue is to
+        // start over again, such as re-using request objects for multiple
+        // inferences.
         return generate_error();
       }
       break;
@@ -393,7 +404,13 @@ Status
 InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
 {
   RETURN_IF_ERROR(request->SetState(InferenceRequest::State::PENDING));
-  return request->model_raw_->Enqueue(request);
+  auto status = request->model_raw_->Enqueue(request);
+  if (!status.IsOk()) {
+    LOG_STATUS_ERROR(
+        request->SetState(InferenceRequest::State::FAILED_ENQUEUE),
+        "Failed to set failed_enqueue state");
+  }
+  return status;
 }
 
 void
