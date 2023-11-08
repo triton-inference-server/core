@@ -365,9 +365,9 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           // outer lock to allow Enqueue threads above to make progress.
           lock.unlock();
           // Use slot lock to wait for the slot availability.
-          std::unique_lock<std::mutex> slot_lock(slot_mu_);
+          std::mutex slot_mu;
+          std::unique_lock<std::mutex> slot_lock(slot_mu);
           cv_.wait(slot_lock, wait_for_slots);
-
           // Recapture the outer most lock to keep making progress.
           lock.lock();
         }

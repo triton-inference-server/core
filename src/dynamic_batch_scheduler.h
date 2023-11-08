@@ -142,7 +142,6 @@ class DynamicBatchScheduler : public Scheduler {
 
   // Mutex and condvar for signaling scheduler thread
   std::mutex mu_;
-  std::mutex slot_mu_;
   std::condition_variable cv_;
 
   std::shared_ptr<RateLimiter> rate_limiter_;
