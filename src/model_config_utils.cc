@@ -2466,4 +2466,19 @@ AssembleCPPRuntimeLibraryName(const std::string& backend_name)
 #endif
 }
 
+Status
+IsRuntimeLibraryNameWellFormed(const std::string& library_name)
+{
+  const static std::vector<std::string> excluded_strings = {"\\", "/"};
+  for (const auto& excluded_str : excluded_strings) {
+    if (library_name.find(excluded_str) != library_name.npos) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Model configuration runtime field contains illegal sub-string '" +
+              excluded_str + "'");
+    }
+  }
+  return Status::Success;
+}
+
 }}  // namespace triton::core

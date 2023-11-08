@@ -318,6 +318,7 @@ TritonModel::GetBackendLibraryProperties(
     }
     python_backend_based_backend_libdir = *backend_libdir;
   } else {
+    RETURN_IF_ERROR(IsRuntimeLibraryNameWellFormed(backend_libname));
     *is_python_backend_based_backend = backend_libname == kPythonFilename;
   }
 

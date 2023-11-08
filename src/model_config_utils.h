@@ -327,4 +327,10 @@ std::string InstanceConfigSignature(
 /// \return The assembled C++ runtime library name.
 std::string AssembleCPPRuntimeLibraryName(const std::string& backend_name);
 
+/// Check if runtime library name is well formed.
+/// \param library_name The library name to check.
+/// \return Success status if '\' and '/' characters are not in library name.
+/// Error status if otherwise.
+Status IsRuntimeLibraryNameWellFormed(const std::string& library_name);
+
 }}  // namespace triton::core
