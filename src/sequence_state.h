@@ -76,6 +76,8 @@ class SequenceState {
   // Set pointer to the other sequence state
   void SetOtherState(SequenceState* other) { other_state_ = other; }
 
+  // For input state this would point to the output state. For output state this
+  // would point to the input state.
   SequenceState* OtherState() { return other_state_; }
 
   // Set the data for this shape. Error if state already has some
