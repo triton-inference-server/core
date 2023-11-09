@@ -116,7 +116,7 @@ SequenceStates::Initialize(
 
   for (auto& state : state_output_config_map) {
     auto& state_config = state.second;
-    bool use_single_buffer = state_config.use_single_buffer();
+    bool use_single_buffer = state_config.use_same_buffer_for_input_output();
     bool use_growable_memory = state_config.use_growable_memory();
 
     if (use_growable_memory) {
