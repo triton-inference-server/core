@@ -459,6 +459,13 @@ TEST_F(GrowableMemoryTest, AllocGPU)
       growable_memory, block_size * 21, TRITONSERVER_MEMORY_GPU, 0,
       block_size * 20);
   EXPECT_FALSE(status.IsOk()) << status.Message();
+
+  // Request a CPU memory and make sure you get GPU memory back
+  status = tc::GrowableMemory::Create(
+      growable_memory, block_size, TRITONSERVER_MEMORY_CPU, 0, block_size * 20);
+  buffer = growable_memory->MutableBuffer(&memory_type, &memory_type_id);
+  EXPECT_EQ(memory_type, TRITONSERVER_MEMORY_GPU);
+  EXPECT_EQ(memory_type_id, 0);
 }
 
 }  // namespace

@@ -1388,7 +1388,8 @@ SequenceBatch::UpdateImplicitState(
       sequence_states->Initialize(
           base_->StateOutputConfigMap(), base_->MaxBatchSize(),
           base_->InitialState(), model_instance_->Kind(),
-          model_instance_->DeviceId());
+          model_instance_->DeviceId(),
+          model_instance_->Model()->Server()->CudaVirtualAddressSpaceSize());
     }
 
     irequest->SetSequenceStates(sequence_states);

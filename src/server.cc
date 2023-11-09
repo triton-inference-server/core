@@ -220,6 +220,10 @@ InferenceServer::Init()
       if (cuda_memory_pool_size_.find(gpu) == cuda_memory_pool_size_.end()) {
         cuda_memory_pool_size_[gpu] = 1 << 26;
       }
+      if (cuda_virtual_address_space_size_.find(gpu) ==
+          cuda_virtual_address_space_size_.end()) {
+        cuda_virtual_address_space_size_[gpu] = 1 << 30;
+      }
     }
   }
 

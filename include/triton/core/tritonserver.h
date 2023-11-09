@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 26
+#define TRITONSERVER_API_VERSION_MINOR 27
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1854,6 +1854,18 @@ TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     struct TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
+
+/// Set the size of the virtual address space that will be used
+/// for growable memories in implicit state.
+///
+/// \param options The server options object.
+/// \param gpu_device The GPU device to set the CUDA virtual address space size
+/// \param size The size of the CUDA virtual address space.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCudaVirtualAddressSize(
+    TRITONSERVER_ServerOptions* options, int gpu_device,
+    size_t cuda_virtual_address_size);
 
 /// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
 ///

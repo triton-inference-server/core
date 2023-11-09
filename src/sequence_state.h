@@ -138,7 +138,8 @@ class SequenceStates {
           state_output_config_map,
       const size_t max_batch_size,
       const std::unordered_map<std::string, InitialStateData>& initial_state,
-      TRITONSERVER_InstanceGroupKind kind, int32_t device_id);
+      TRITONSERVER_InstanceGroupKind kind, int32_t device_id,
+      const std::map<int, size_t>& cuda_virtual_address_size);
 
   // Get a buffer holding the output state.
   Status OutputState(

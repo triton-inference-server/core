@@ -86,7 +86,9 @@ CudaBlockManager::Allocate(
          "' to allocate memory from."));
   }
 
-  // Align the byte size to number of blocks.
+  // Align the byte size to number of blocks. The allocated bytes must be a
+  // multiple of the cudaAllocationGranularity. In the current implementation
+  // the block size is the cuda minimum allocation granularity.
   size_t num_blocks =
       (size + instance_->block_size_ - 1) / (instance_->block_size_);
   while (num_blocks > 0) {

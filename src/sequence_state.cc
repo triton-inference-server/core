@@ -108,7 +108,8 @@ SequenceStates::Initialize(
         state_output_config_map,
     const size_t max_batch_size,
     const std::unordered_map<std::string, InitialStateData>& initial_state,
-    TRITONSERVER_InstanceGroupKind kind, int32_t device_id)
+    TRITONSERVER_InstanceGroupKind kind, int32_t device_id,
+    const std::map<int, size_t>& cuda_virtual_address_size)
 {
   input_states_.clear();
   output_states_.clear();
@@ -155,11 +156,11 @@ SequenceStates::Initialize(
     auto initial_state_it = initial_state.find(state_config.input_name());
     if (initial_state_it != initial_state.end()) {
       if (use_growable_memory) {
-        // TODO: use a constant or a flag for virtual address space size.
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
             growable_memory, initial_state_it->second.data_->TotalByteSize(),
-            TRITONSERVER_MEMORY_GPU, device_id, 1024 * 1024 * 1024));
+            TRITONSERVER_MEMORY_GPU, device_id,
+            cuda_virtual_address_size.at(device_id)));
         data = std::move(growable_memory);
 
         TRITONSERVER_MemoryType memory_type;
@@ -199,11 +200,10 @@ SequenceStates::Initialize(
             triton::common::GetByteSize(state.second.data_type(), dims);
       }
       if (use_growable_memory) {
-        // TODO: use a constant or a flag for virtual address space size.
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
             growable_memory, state_size, TRITONSERVER_MEMORY_GPU, device_id,
-            1024 * 1024 * 1024));
+            cuda_virtual_address_size.at(device_id)));
         data = std::move(growable_memory);
       } else {
         data = std::make_shared<AllocatedMemory>(
