@@ -191,8 +191,8 @@ class GrowableMemory : public MutableMemory {
       size_t virtual_page_size);
 
   static Status Create(
-      size_t byte_size, TRITONSERVER_MemoryType memory_type,
-      int64_t memory_type_id, std::unique_ptr<GrowableMemory>& growable_memory,
+      std::unique_ptr<GrowableMemory>& growable_memory, size_t byte_size,
+      TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
       size_t virtual_page_size);
 
   Status Map(CUmemGenericAllocationHandle& block);

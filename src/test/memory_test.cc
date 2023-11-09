@@ -414,7 +414,7 @@ TEST_F(GrowableMemoryTest, AllocGPU)
   std::unique_ptr<tc::GrowableMemory> growable_memory;
   size_t block_size = tc::CudaBlockManager::BlockSize();
   auto status = tc::GrowableMemory::Create(
-      block_size, TRITONSERVER_MEMORY_GPU, 0, growable_memory, block_size * 20);
+      growable_memory, block_size, TRITONSERVER_MEMORY_GPU, 0, block_size * 20);
   EXPECT_TRUE(status.IsOk()) << status.Message();
 
   auto blocks = growable_memory->GetAllocation()->Blocks();
@@ -430,7 +430,7 @@ TEST_F(GrowableMemoryTest, AllocGPU)
 
   // Allocate new memory with the same size.
   status = tc::GrowableMemory::Create(
-      block_size, TRITONSERVER_MEMORY_GPU, 0, growable_memory, block_size * 20);
+      growable_memory, block_size, TRITONSERVER_MEMORY_GPU, 0, block_size * 20);
   buffer = growable_memory->MutableBuffer(&memory_type, &memory_type_id);
   EXPECT_EQ(memory_type, TRITONSERVER_MEMORY_GPU);
   EXPECT_EQ(memory_type_id, 0);
@@ -456,7 +456,7 @@ TEST_F(GrowableMemoryTest, AllocGPU)
 
   // Try to allocate memory larger than the block size
   status = tc::GrowableMemory::Create(
-      block_size * 21, TRITONSERVER_MEMORY_GPU, 0, growable_memory,
+      growable_memory, block_size * 21, TRITONSERVER_MEMORY_GPU, 0,
       block_size * 20);
   EXPECT_FALSE(status.IsOk()) << status.Message();
 }

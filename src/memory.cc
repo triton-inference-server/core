@@ -257,8 +257,8 @@ GrowableMemory::GrowableMemory(
 
 Status
 GrowableMemory::Create(
-    size_t byte_size, TRITONSERVER_MemoryType memory_type,
-    int64_t memory_type_id, std::unique_ptr<GrowableMemory>& growable_memory,
+    std::unique_ptr<GrowableMemory>& growable_memory, size_t byte_size,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
     size_t virtual_address_size)
 {
   std::unique_ptr<Allocation> allocation =

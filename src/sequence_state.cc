@@ -91,11 +91,11 @@ SequenceState::SetStringDataToZero()
       reinterpret_cast<const std::shared_ptr<MutableMemory>&>(Data());
   char* buffer = memory->MutableBuffer(&memory_type, &memory_type_id);
   if (memory_type == TRITONSERVER_MEMORY_GPU) {
-    memset(buffer, 0, Data()->TotalByteSize());
-  } else {
     RETURN_IF_CUDA_ERR(
         cudaMemset(buffer, 0, Data()->TotalByteSize()),
         std::string("failed to set the data to zero."));
+  } else {
+    memset(buffer, 0, Data()->TotalByteSize());
   }
 
   return Status::Success;
@@ -158,9 +158,8 @@ SequenceStates::Initialize(
         // TODO: use a constant or a flag for virtual address space size.
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
-            initial_state_it->second.data_->TotalByteSize(),
-            TRITONSERVER_MEMORY_GPU, device_id, growable_memory,
-            1024 * 1024 * 1024));
+            growable_memory, initial_state_it->second.data_->TotalByteSize(),
+            TRITONSERVER_MEMORY_GPU, device_id, 1024 * 1024 * 1024));
         data = std::move(growable_memory);
 
         TRITONSERVER_MemoryType memory_type;
@@ -203,7 +202,7 @@ SequenceStates::Initialize(
         // TODO: use a constant or a flag for virtual address space size.
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
-            state_size, TRITONSERVER_MEMORY_GPU, device_id, growable_memory,
+            growable_memory, state_size, TRITONSERVER_MEMORY_GPU, device_id,
             1024 * 1024 * 1024));
         data = std::move(growable_memory);
       } else {
@@ -370,8 +369,8 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
           std::forward_as_tuple(from_input_state_tensor->Name()),
           std::forward_as_tuple(new SequenceState(
               from_input_state_tensor->Name(), from_input_state_tensor->DType(),
-              from_input_state_tensor->Shape(), false /* reused buffer */,
-              false /* use growable memory */)));
+              from_input_state_tensor->Shape(), false /* reused_buffer */,
+              false /* use_growable_memory */)));
 
       auto& input_tensor = input_pair.first->second;
       std::shared_ptr<AllocatedMemory> data;

@@ -139,7 +139,8 @@ CudaBlockManager::Free(
 
 CudaBlockManager::~CudaBlockManager()
 {
-  for (auto& [device, free_blocks] : free_blocks_) {
+  for (auto& free_block_pair : free_blocks_) {
+    auto free_blocks = free_block_pair.second;
     for (auto& free_block : free_blocks) {
       cuMemRelease(free_block);
     }
