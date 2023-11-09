@@ -224,7 +224,7 @@ class InferenceServer {
   // Get / set CUDA virtual address space size
   const std::map<int, size_t>& CudaVirtualAddressSpaceSize() const
   {
-    return cuda_memory_pool_size_;
+    return cuda_virtual_address_space_size_;
   }
 
   void SetCudaVirtualAddressSpaceSize(const std::map<int, size_t>& s)
