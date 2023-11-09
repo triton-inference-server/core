@@ -201,11 +201,12 @@ class TritonModel : public Model {
       const std::string& backend_dir, const std::string& backend_name);
 
   // Get backend library directory and path, and search paths for the library
-  // and whether the backend is based on Python backend.
+  // and whether the backend is based on Python backend. The model configuration
+  // runtime field will be updated if left empty.
   static Status GetBackendLibraryProperties(
-      const std::string& model_name, const std::string& model_path,
-      int64_t version, const std::string& backend_dir,
-      const std::string& backend_name, const std::string& runtime,
+      const std::string& model_path, int64_t version,
+      const std::string& backend_dir, const std::string& backend_name,
+      inference::ModelConfig* model_config,
       bool* is_python_backend_based_backend,
       std::vector<std::string>* search_paths, std::string* backend_libdir,
       std::string* backend_libpath);

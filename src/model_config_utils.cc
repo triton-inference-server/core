@@ -934,6 +934,26 @@ LocalizePythonBackendExecutionEnvironmentPath(
 }
 
 Status
+SetPythonBackendBasedBackendExecutionEnvironment(
+    const std::string& backend_libdir, inference::ModelConfig* model_config)
+{
+  if (!model_config->parameters().contains("EXECUTION_ENV_PATH")) {
+    std::string env_name = "pb_exec_env_" + model_config->runtime() + ".tar.gz";
+    std::string env_path = JoinPath({backend_libdir, std::move(env_name)});
+    bool env_path_exist;
+    RETURN_IF_ERROR(FileExists(env_path, &env_path_exist));
+    if (env_path_exist) {
+      inference::ModelParameter model_param;
+      model_param.set_string_value(env_path);
+      (*model_config->mutable_parameters())["EXECUTION_ENV_PATH"] =
+          std::move(model_param);
+      LOG_ERROR << "\n\n" << env_path << "\n";
+    }
+  }
+  return Status::Success;
+}
+
+Status
 SetDefaultInstanceCount(
     inference::ModelInstanceGroup* group, const std::string& backend)
 {
@@ -1134,17 +1154,23 @@ AutoCompleteBackendFields(
     }
   }
   if (config->backend() == kPyTorchBackend) {
-    if (config->platform().empty()) {
-      config->set_platform(kPyTorchLibTorchPlatform);
+    if (config->runtime() == kPythonFilename ||
+        config->default_model_filename() == kPythonFilename) {
+      if (config->platform().empty()) {
+        config->set_platform(kPyTorchPythonPlatform);
+      }
+      RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
+          RuntimeType::RUNTIME_TYPE_PYTHON, config));
+    } else {
+      if (config->platform().empty()) {
+        config->set_platform(kPyTorchLibTorchPlatform);
+      }
+      if (config->default_model_filename().empty()) {
+        config->set_default_model_filename(kPyTorchLibTorchFilename);
+      }
+      RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(
+          RuntimeType::RUNTIME_TYPE_CPP, config));
     }
-    if (config->default_model_filename().empty()) {
-      config->set_default_model_filename(kPyTorchLibTorchFilename);
-    }
-    auto runtime_type = RuntimeType::RUNTIME_TYPE_CPP;
-    if (config->default_model_filename() == kPythonFilename) {
-      runtime_type = RuntimeType::RUNTIME_TYPE_PYTHON;
-    }
-    RETURN_IF_ERROR(AutoCompleteBackendRuntimeField(runtime_type, config));
     return Status::Success;
   }
 
@@ -2312,7 +2338,8 @@ GetBackendTypeFromPlatform(const std::string& platform_name)
     return BackendType::BACKEND_TYPE_ONNXRUNTIME;
   }
 
-  if (platform_name == kPyTorchLibTorchPlatform) {
+  if (platform_name == kPyTorchLibTorchPlatform ||
+      platform_name == kPyTorchPythonPlatform) {
     return BackendType::BACKEND_TYPE_PYTORCH;
   }
 
