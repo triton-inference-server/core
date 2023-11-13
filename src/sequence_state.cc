@@ -84,19 +84,9 @@ SequenceState::SetStringDataToZero()
         "sequence state to zero.");
   }
 
-  TRITONSERVER_MemoryType memory_type;
-  int64_t memory_type_id;
-
   const std::shared_ptr<MutableMemory>& memory =
       reinterpret_cast<const std::shared_ptr<MutableMemory>&>(Data());
-  char* buffer = memory->MutableBuffer(&memory_type, &memory_type_id);
-  if (memory_type == TRITONSERVER_MEMORY_GPU) {
-    RETURN_IF_CUDA_ERR(
-        cudaMemset(buffer, 0, Data()->TotalByteSize()),
-        std::string("failed to set the data to zero."));
-  } else {
-    memset(buffer, 0, Data()->TotalByteSize());
-  }
+  RETURN_IF_ERROR(memory->SetMemory(0 /* value */));
 
   return Status::Success;
 }

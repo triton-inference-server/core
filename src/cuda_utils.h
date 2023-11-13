@@ -132,6 +132,35 @@ Status GetSupportedGPUs(
 /// \return The error status. A non-OK status means the target GPU is
 /// not supported.
 Status SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support);
+
+
+/// Set the CUDA context to the specified device ID
+/// It will rollback to the previous device upon destruction.
+class ScopedSetDevice {
+ public:
+  ScopedSetDevice(int device)
+  {
+    overriden_ = false;
+
+    prev_device_ = device;
+    cudaGetDevice(&prev_device_);
+
+    if (prev_device_ != device) {
+      overriden_ = true;
+      cudaSetDevice(device);
+    }
+  }
+  ~ScopedSetDevice()
+  {
+    if (overriden_) {
+      cudaSetDevice(prev_device_);
+    }
+  }
+
+ private:
+  int prev_device_;
+  bool overriden_;
+};
 #endif
 
 // Helper around CopyBuffer that updates the completion queue with the returned

@@ -162,6 +162,31 @@ MutableMemory::MutableBuffer(
   return buffer_;
 }
 
+Status
+MutableMemory::SetMemory(int value)
+{
+  if (buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    ScopedSetDevice scoped_set_device(buffer_attributes_.MemoryTypeId());
+    RETURN_IF_CUDA_ERR(
+        cudaMemset(buffer_, value, TotalByteSize()),
+        std::string("failed to set the data to zero."));
+#else
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Server is compiled with TRITON_ENABLE_GPU=OFF. It doesn't support "
+        "setting cuda memory to zero.");
+#endif
+
+  } else if (buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_CPU) {
+    memset(buffer_, value, TotalByteSize());
+  } else {
+    return Status(Status::Code::INVALID_ARG, "Unsupported memory type");
+  }
+
+  return Status::Success;
+}
+
 //
 // AllocatedMemory
 //

@@ -151,6 +151,9 @@ class MutableMemory : public Memory {
       TRITONSERVER_MemoryType* memory_type = nullptr,
       int64_t* memory_type_id = nullptr);
 
+  // Set the memory to the specified value.
+  Status SetMemory(int value);
+
   DISALLOW_COPY_AND_ASSIGN(MutableMemory);
 
  protected:
