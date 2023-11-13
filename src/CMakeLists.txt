@@ -512,7 +512,6 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       ${CNMEM_LIBRARY}
       CUDA::cudart
-      CUDA::cuda_driver
   )
 endif() # TRITON_ENABLE_GPU
 

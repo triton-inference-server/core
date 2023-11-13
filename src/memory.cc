@@ -250,6 +250,7 @@ GrowableMemory::GrowableMemory(
 
   access_desc_.location = allocation_prop_.location;
   access_desc_.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+
   virtual_address_size_ = virtual_address_size;
   allocation_ = std::move(allocation);
   virtual_address_offset_ = 0;
@@ -263,6 +264,12 @@ GrowableMemory::Create(
 {
   std::unique_ptr<Allocation> allocation =
       std::make_unique<Allocation>(memory_type_id);
+
+  // The virtual address size must be a factor of
+  // cudaMinimumAllocationGranularity
+  virtual_address_size =
+      (virtual_address_size + CudaBlockManager::BlockSize() - 1) *
+      CudaBlockManager::BlockSize() / CudaBlockManager::BlockSize();
 
   if (memory_type != TRITONSERVER_MEMORY_GPU) {
     return Status(
@@ -284,12 +291,10 @@ GrowableMemory::Create(
       CudaBlockManager::Allocate(byte_size, allocation, memory_type_id));
 
   void* buffer;
-  RETURN_IF_CUDA_DRIVER_ERR(
-      cuMemAddressReserve(
-          reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
-          0 /* alignment */, 0 /* start_address */, 0 /* flags */),
-      std::string("cuMemAddressReserve failed"));
-  growable_memory = std::move(std::make_unique<GrowableMemory>(
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemAddressReserve(
+      reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
+      0 /* alignment */, 0 /* start_address */, 0 /* flags */));
+  growable_memory.reset(new GrowableMemory(
       CudaBlockManager::BlockSize() * allocation->Blocks().size(), memory_type,
       memory_type_id, std::move(allocation), virtual_address_size));
   growable_memory->buffer_ = reinterpret_cast<char*>(buffer);
@@ -303,17 +308,12 @@ GrowableMemory::Create(
 Status
 GrowableMemory::Map(CUmemGenericAllocationHandle& block)
 {
-  RETURN_IF_CUDA_DRIVER_ERR(
-      cuMemMap(
-          reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
-          CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */),
-      std::string("cuMemMap failed"));
-  RETURN_IF_CUDA_DRIVER_ERR(
-      cuMemSetAccess(
-          reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
-          CudaBlockManager::BlockSize(), &access_desc_,
-          1ULL /* Mapping size */),
-      std::string("cuMemSetAccess failed"));
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemMap(
+      reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+      CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */));
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemSetAccess(
+      reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+      CudaBlockManager::BlockSize(), &access_desc_, 1ULL /* Mapping size */));
   virtual_address_offset_ += CudaBlockManager::BlockSize();
   return Status::Success;
 }
@@ -358,9 +358,9 @@ GrowableMemory::GetAllocation()
 
 GrowableMemory::~GrowableMemory()
 {
-  cuMemUnmap(
+  CudaDriverHelper::GetInstance().CuMemUnmap(
       reinterpret_cast<CUdeviceptr>(buffer_), buffer_attributes_.ByteSize());
-  cuMemAddressFree(
+  CudaDriverHelper::GetInstance().CuMemAddressFree(
       reinterpret_cast<CUdeviceptr>(buffer_), virtual_address_size_);
 }
 #endif

@@ -78,8 +78,7 @@ CudaBlockManager::Allocate(
   }
 
   std::lock_guard<std::mutex> lock(instance_->mu_);
-  if (instance_->free_blocks_.find(device_id) ==
-      instance_->free_blocks_.end()) {
+  if (instance_->free_blocks_.count(device_id) == 0) {
     return Status(
         Status::Code::INTERNAL,
         (std::string("Invalid device id '") + std::to_string(device_id) +
@@ -101,9 +100,8 @@ CudaBlockManager::Allocate(
       prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
       prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
       prop.location.id = device_id;
-      RETURN_IF_CUDA_DRIVER_ERR(
-          cuMemCreate(&block, instance_->block_size_, &prop, 0 /* flags */),
-          std::string("cuMemCreate failed:"));
+      RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemCreate(
+          &block, instance_->block_size_, &prop, 0 /* flags */));
       allocation->AddBlock(block);
     }
     num_blocks--;
@@ -125,8 +123,7 @@ CudaBlockManager::Free(
 
   std::lock_guard<std::mutex> lock(instance_->mu_);
 
-  if (instance_->free_blocks_.find(device_id) ==
-      instance_->free_blocks_.end()) {
+  if (instance_->free_blocks_.count(device_id) == 0) {
     return Status(
         Status::Code::INTERNAL,
         (std::string("Invalid device id '") + std::to_string(device_id) +
@@ -144,7 +141,7 @@ CudaBlockManager::~CudaBlockManager()
   for (auto& free_block_pair : free_blocks_) {
     auto free_blocks = free_block_pair.second;
     for (auto& free_block : free_blocks) {
-      cuMemRelease(free_block);
+      CudaDriverHelper::GetInstance().CuMemRelease(free_block);
     }
   }
 }

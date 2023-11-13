@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <dlfcn.h>
+
 #include <set>
 
 #include "status.h"
@@ -52,7 +54,8 @@ namespace triton { namespace core {
     CUresult cuda_err__ = (X);                                              \
     if (cuda_err__ != CUDA_SUCCESS) {                                       \
       const char* error_string__;                                           \
-      cuGetErrorString(cuda_err__, &error_string__);                        \
+      CudaDriverHelper::GetInstance().CuGetErrorString(                     \
+          &error_string__, cuda_err__);                                     \
       return Status(Status::Code::INTERNAL, (MSG) + ": " + error_string__); \
     }                                                                       \
   } while (false)
@@ -129,12 +132,6 @@ Status GetSupportedGPUs(
 /// \return The error status. A non-OK status means the target GPU is
 /// not supported.
 Status SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support);
-
-/// Get the minimum allocation granularity.
-/// \param aligned_size Returns minimum allocation granularity.
-/// \return The error status. A non-OK status means there were some errors
-/// when querying the allocation granularity.
-Status GetAllocationGranularity(size_t& aligned_sz);
 #endif
 
 // Helper around CopyBuffer that updates the completion queue with the returned
@@ -158,6 +155,78 @@ struct CopyParams {
   const void* src_;
   const size_t byte_size_;
 };
+
+
+#ifdef TRITON_ENABLE_GPU
+/// A singleton for Cuda Driver APIs. In order to continue supporting Triton
+/// deployments when GPUs are not available we need to use CUDA driver APIs
+/// through dlopen
+class CudaDriverHelper {
+ public:
+  static CudaDriverHelper& GetInstance()
+  {
+    static CudaDriverHelper instance;
+    return instance;
+  }
+
+ private:
+  void* dl_open_handle_ = nullptr;
+  std::string error_str_;
+  CUresult (*cu_mem_create_fn_)(
+      CUmemGenericAllocationHandle*, size_t, CUmemAllocationProp*,
+      unsigned long long) = nullptr;
+  CUresult (*cu_mem_map_fn_)(
+      CUdeviceptr ptr, size_t size, size_t offset,
+      CUmemGenericAllocationHandle handle, unsigned long long flags) = nullptr;
+  CUresult (*cu_mem_set_access_fn_)(
+      CUdeviceptr, size_t, const CUmemAccessDesc*, size_t) = nullptr;
+  CUresult (*cu_get_error_string_fn_)(CUresult, const char**) = nullptr;
+  CUresult (*cu_mem_get_allocation_granularity_fn_)(
+      size_t*, const CUmemAllocationProp*,
+      CUmemAllocationGranularity_flags) = nullptr;
+  CUresult (*cu_mem_release_fn_)(CUmemGenericAllocationHandle) = nullptr;
+  CUresult (*cu_init_fn_)(unsigned int) = nullptr;
+  CUresult (*cu_mem_address_reserve_fn_)(
+      CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr,
+      unsigned long long flags) = nullptr;
+  CUresult (*cu_mem_unmap_fn_)(CUdeviceptr ptr, size_t size) = nullptr;
+  CUresult (*cu_mem_address_free_fn_)(CUdeviceptr ptr, size_t size) = nullptr;
+  CudaDriverHelper();
+
+  ~CudaDriverHelper();
+
+ public:
+  CudaDriverHelper(CudaDriverHelper const&) = delete;
+  void operator=(CudaDriverHelper const&) = delete;
+  bool IsAvailable();
+  const std::string& GetErrorString() const { return error_str_; }
+  void ClearErrorString() { return error_str_.clear(); }
+  Status CuMemGetAllocationGranularity(
+      size_t* aligned_size, const CUmemAllocationProp* prop,
+      CUmemAllocationGranularity_flags flags);
+  Status CuMemCreate(
+      CUmemGenericAllocationHandle* block, size_t byte_size,
+      CUmemAllocationProp* prop, unsigned long long flags);
+  Status CuMemSetAccess(
+      CUdeviceptr ptr, size_t size, const CUmemAccessDesc* desc, size_t count);
+  Status CuMemMap(
+      CUdeviceptr ptr, size_t size, size_t offset,
+      CUmemGenericAllocationHandle handle, unsigned long long flags);
+  Status CuMemRelease(CUmemGenericAllocationHandle handle);
+  Status CuMemAddressFree(CUdeviceptr ptr, size_t size);
+  Status CuMemUnmap(CUdeviceptr ptr, size_t size);
+  Status CuMemAddressReserve(
+      CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr,
+      unsigned long long flags);
+  void CuGetErrorString(const char** error_string, CUresult error);
+};
+
+/// Get the minimum allocation granularity.
+/// \param aligned_size Returns minimum allocation granularity.
+/// \return The error status. A non-OK status means there were some errors
+/// when querying the allocation granularity.
+Status GetAllocationGranularity(size_t& aligned_sz);
+#endif
 
 
 }}  // namespace triton::core

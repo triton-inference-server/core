@@ -151,7 +151,6 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
-      CUDA::cuda_driver
   )
 
   if (NOT WIN32)
@@ -203,7 +202,6 @@ target_link_libraries(
     GTest::gtest_main
     GTest::gmock
     CUDA::cudart
-    CUDA::cuda_driver
 )
 
 install(
@@ -334,7 +332,6 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
-      CUDA::cuda_driver
   )
 
   if (NOT WIN32)
@@ -495,7 +492,6 @@ if(${TRITON_ENABLE_METRICS})
       prometheus-cpp::core
       protobuf::libprotobuf
       CUDA::cudart
-      CUDA::cuda_driver
   )
 
   install(
@@ -538,7 +534,6 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     CUDA::cudart
-    CUDA::cuda_driver
 )
 
 install(
@@ -580,7 +575,6 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     CUDA::cudart
-    CUDA::cuda_driver
 )
 
 install(
@@ -622,7 +616,6 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     CUDA::cudart
-    CUDA::cuda_driver
 )
 
 install(
