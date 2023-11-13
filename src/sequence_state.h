@@ -68,13 +68,18 @@ class SequenceState {
   std::shared_ptr<Memory>& Data() { return data_; }
 
   // A boolean indicating whether the state buffer should be reused or not.
-  bool ReuseBuffer() { return reuse_buffer_; }
+  bool UseSingleBuffer() { return use_single_buffer_; }
 
   // Use growable memory or not
   bool UseGrowableMemory() { return use_growable_memory_; }
 
   // Set pointer to the other sequence state
   void SetOtherState(SequenceState* other) { other_state_ = other; }
+
+  // Resize the sequence state buffer
+  Status Resize(
+      void** buffer, const uint64_t buffer_byte_size,
+      TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 
   // For input state this would point to the output state. For output state this
   // would point to the input state.
@@ -108,7 +113,7 @@ class SequenceState {
   std::vector<int64_t> batch_dim_;
   std::shared_ptr<Memory> data_;
   SequenceState* other_state_;
-  bool reuse_buffer_;
+  bool use_single_buffer_;
   bool use_growable_memory_;
   std::function<Status()> state_update_cb_ = []() {
     // By default calling the TRITONBACKEND_StateUpdate will return an error.

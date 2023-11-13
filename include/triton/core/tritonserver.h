@@ -1856,7 +1856,7 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
     struct TRITONSERVER_ServerOptions* options, int gpu_device, uint64_t size);
 
 /// Set the size of the virtual address space that will be used
-/// for growable memories in implicit state.
+/// for growable memory in implicit state.
 ///
 /// \param options The server options object.
 /// \param gpu_device The GPU device to set the CUDA virtual address space size

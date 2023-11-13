@@ -36,20 +36,20 @@ SequenceState::SequenceState() : data_(new MemoryReference) {}
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const int64_t* shape, const uint64_t dim_count, bool reuse_buffer,
+    const int64_t* shape, const uint64_t dim_count, bool use_single_buffer,
     bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape, shape + dim_count),
-      data_(new MemoryReference), reuse_buffer_(reuse_buffer),
+      data_(new MemoryReference), use_single_buffer_(use_single_buffer),
       use_growable_memory_(use_growable_memory)
 {
 }
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const std::vector<int64_t>& shape, bool reuse_buffer,
+    const std::vector<int64_t>& shape, bool use_single_buffer,
     bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape),
-      data_(new MemoryReference), reuse_buffer_(reuse_buffer),
+      data_(new MemoryReference), use_single_buffer_(use_single_buffer),
       use_growable_memory_(use_growable_memory)
 {
 }
@@ -98,6 +98,30 @@ SequenceState::SetStringDataToZero()
     memset(buffer, 0, Data()->TotalByteSize());
   }
 
+  return Status::Success;
+}
+
+Status
+SequenceState::Resize(
+    void** buffer, const uint64_t buffer_byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
+{
+  if (UseGrowableMemory()) {
+    GrowableMemory* growable_memory =
+        reinterpret_cast<GrowableMemory*>(Data().get());
+    RETURN_IF_ERROR(growable_memory->Resize(buffer_byte_size));
+    *buffer = growable_memory->MutableBuffer(memory_type, memory_type_id);
+  } else {
+    std::shared_ptr<AllocatedMemory> memory = std::make_shared<AllocatedMemory>(
+        buffer_byte_size, *memory_type, *memory_type_id);
+    *buffer = memory->MutableBuffer(memory_type, memory_type_id);
+    RemoveAllData();
+    RETURN_IF_ERROR(SetData(memory));
+    if (UseSingleBuffer()) {
+      OtherState()->RemoveAllData();
+      OtherState()->SetData(memory);
+    }
+  }
   return Status::Success;
 }
 
@@ -288,28 +312,26 @@ SequenceStates::OutputState(
   auto input_states_itr = input_states_.begin();
   std::advance(input_states_itr, iter_advance);
   auto& input_state_r = input_states_[input_states_itr->first];
-  bool reuse_buffer = output_states_[name]->ReuseBuffer();
+  bool use_single_buffer = output_states_[name]->UseSingleBuffer();
 
   if (output_state != nullptr) {
     *output_state = output_states_[name].get();
   }
 
   output_state_r->SetStateUpdateCallback(
-      [&output_state_r, &input_state_r, reuse_buffer]() {
+      [&output_state_r, &input_state_r, use_single_buffer]() {
         // Swap the internal memory if the size of the input and output state is
         // equal
 
-        if (output_state_r->Data()->TotalByteSize() ==
-            input_state_r->Data()->TotalByteSize()) {
-          if (!reuse_buffer) {
+        if (!use_single_buffer) {
+          if (output_state_r->Data()->TotalByteSize() ==
+              input_state_r->Data()->TotalByteSize()) {
             std::shared_ptr<Memory> temp_memory = input_state_r->Data();
             RETURN_IF_ERROR(input_state_r->RemoveAllData());
             RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
             RETURN_IF_ERROR(output_state_r->RemoveAllData());
             RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
-          }
-        } else {
-          if (!reuse_buffer) {
+          } else {
             // If the size of output state is different from the input state,
             // allocate a new memory for the input state with the same size as
             // output state.
@@ -330,16 +352,16 @@ SequenceStates::OutputState(
             RETURN_IF_ERROR(output_state_r->RemoveAllData());
             RETURN_IF_ERROR(output_state_r->SetData(memory));
           }
-        }
 
-        // Update the shape and data type of the output state if it doesn't
-        // match the input state.
-        if (input_state_r->Shape() != output_state_r->Shape()) {
-          *input_state_r->MutableShape() = output_state_r->Shape();
-        }
+          // Update the shape and data type of the output state if it doesn't
+          // match the input state.
+          if (input_state_r->Shape() != output_state_r->Shape()) {
+            *input_state_r->MutableShape() = output_state_r->Shape();
+          }
 
-        if (input_state_r->DType() != output_state_r->DType()) {
-          *input_state_r->MutableDType() = output_state_r->DType();
+          if (input_state_r->DType() != output_state_r->DType()) {
+            *input_state_r->MutableDType() = output_state_r->DType();
+          }
         }
 
         return Status::Success;
