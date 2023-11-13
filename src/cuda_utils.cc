@@ -27,6 +27,7 @@
 #include "cuda_utils.h"
 
 #include "model_config_utils.h"
+#include "triton/common/logging.h"
 #include "triton/common/nvtx.h"
 
 #ifdef TRITON_ENABLE_GPU
@@ -281,6 +282,7 @@ CudaDriverHelper::CudaDriverHelper()
   if (dl_open_handle_ != nullptr) {
     void* cu_mem_create_fn = dlsym(dl_open_handle_, "cuMemCreate");
     if (cu_mem_create_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemCreate";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -288,6 +290,7 @@ CudaDriverHelper::CudaDriverHelper()
 
     void* cu_get_error_string_fn = dlsym(dl_open_handle_, "cuGetErrorString");
     if (cu_get_error_string_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuGetErrorString";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -295,6 +298,7 @@ CudaDriverHelper::CudaDriverHelper()
 
     void* cu_init_fn = dlsym(dl_open_handle_, "cuInit");
     if (cu_init_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuInit";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -302,6 +306,7 @@ CudaDriverHelper::CudaDriverHelper()
 
     void* cu_mem_set_access_fn = dlsym(dl_open_handle_, "cuMemSetAccess");
     if (cu_mem_set_access_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemSetAccess";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -309,6 +314,7 @@ CudaDriverHelper::CudaDriverHelper()
 
     void* cu_mem_release_fn = dlsym(dl_open_handle_, "cuMemRelease");
     if (cu_mem_release_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemRelease";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -317,6 +323,7 @@ CudaDriverHelper::CudaDriverHelper()
     void* cu_mem_get_allocation_granularity_fn =
         dlsym(dl_open_handle_, "cuMemGetAllocationGranularity");
     if (cu_mem_get_allocation_granularity_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemGetAllocationGranularity";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -325,6 +332,7 @@ CudaDriverHelper::CudaDriverHelper()
 
     void* cu_mem_address_free_fn = dlsym(dl_open_handle_, "cuMemAddressFree");
     if (cu_mem_address_free_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemAddressFree";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -332,6 +340,7 @@ CudaDriverHelper::CudaDriverHelper()
 
     void* cu_mem_unmap_fn = dlsym(dl_open_handle_, "cuMemUnmap");
     if (cu_mem_unmap_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemUnmap";
       dl_open_handle_ = nullptr;
       return;
     }
@@ -340,10 +349,19 @@ CudaDriverHelper::CudaDriverHelper()
     void* cu_mem_address_reserve_fn =
         dlsym(dl_open_handle_, "cuMemAddressReserve");
     if (cu_mem_address_reserve_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemAddressReserve";
       dl_open_handle_ = nullptr;
       return;
     }
     *((void**)&cu_mem_address_reserve_fn_) = cu_mem_address_reserve_fn;
+
+    void* cu_mem_map_fn = dlsym(dl_open_handle_, "cuMemMap");
+    if (cu_mem_map_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemMap";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_map_fn_) = cu_mem_map_fn;
 
     // Initialize the driver API.
     CUresult cuda_err = (*cu_init_fn_)(0 /* flags */);

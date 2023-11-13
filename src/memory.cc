@@ -293,8 +293,9 @@ GrowableMemory::Create(
   // The virtual address size must be a factor of
   // cudaMinimumAllocationGranularity
   virtual_address_size =
-      (virtual_address_size + CudaBlockManager::BlockSize() - 1) *
-      CudaBlockManager::BlockSize() / CudaBlockManager::BlockSize();
+      ((virtual_address_size + CudaBlockManager::BlockSize() - 1) /
+       CudaBlockManager::BlockSize()) *
+      CudaBlockManager::BlockSize();
 
   if (memory_type != TRITONSERVER_MEMORY_GPU) {
     return Status(

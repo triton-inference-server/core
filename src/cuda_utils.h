@@ -150,6 +150,7 @@ class ScopedSetDevice {
       cudaSetDevice(device);
     }
   }
+
   ~ScopedSetDevice()
   {
     if (overriden_) {
