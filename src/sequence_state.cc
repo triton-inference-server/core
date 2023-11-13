@@ -180,10 +180,13 @@ SequenceStates::Initialize(
         TRITONSERVER_MemoryType memory_type;
         int64_t memory_type_id;
         char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
+        char* initial_state_buffer =
+            initial_state_it->second.data_->MutableBuffer(
+                &memory_type, &memory_type_id);
         RETURN_IF_CUDA_ERR(
             cudaMemcpy(
-                growable_memory->MutableBuffer(&memory_type, &memory_type_id),
-                dst_buffer, initial_state_it->second.data_->TotalByteSize(),
+                dst_buffer, initial_state_buffer,
+                initial_state_it->second.data_->TotalByteSize(),
                 cudaMemcpyHostToDevice),
             std::string("failed to copy initial state to GPU:"));
       } else {
