@@ -850,10 +850,7 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   sequencer_->AddReleaseCallback(
       irequest,
       [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
-          -> Status {
-        sequencer_->RescheduleRequest(request, flags);
-        return Status::Success;
-      });
+          -> Status { return sequencer_->RescheduleRequest(request, flags); });
 
   batchers_[model_instance]->Enqueue(seq_slot, correlation_id, irequest);
   return Status::Success;
