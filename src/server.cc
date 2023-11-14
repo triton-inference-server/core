@@ -287,6 +287,7 @@ InferenceServer::~InferenceServer()
   PinnedMemoryManager::Reset();
 #ifdef TRITON_ENABLE_GPU
   CudaMemoryManager::Reset();
+  CudaBlockManager::Reset();
 #endif  // TRITON_ENABLE_GPU
 }
 

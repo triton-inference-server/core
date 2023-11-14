@@ -56,6 +56,7 @@ class CudaBlockManager {
       std::vector<CUmemGenericAllocationHandle>&& blocks, int device_id);
   static size_t BlockSize() { return instance_->block_size_; }
   ~CudaBlockManager();
+  static void Reset() { instance_.reset(); }
 
  private:
   CudaBlockManager(){};

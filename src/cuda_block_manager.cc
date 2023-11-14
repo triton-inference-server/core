@@ -138,6 +138,7 @@ CudaBlockManager::Free(
 
 CudaBlockManager::~CudaBlockManager()
 {
+  std::lock_guard<std::mutex> lock(mu_);
   for (auto& free_block_pair : free_blocks_) {
     auto free_blocks = free_block_pair.second;
     for (auto& free_block : free_blocks) {
