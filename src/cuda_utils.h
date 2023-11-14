@@ -25,7 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#ifndef _WIN32
 #include <dlfcn.h>
+#endif
 
 #include <set>
 
