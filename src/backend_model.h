@@ -206,19 +206,18 @@ class TritonModel : public Model {
   static Status GetBackendLibraryProperties(
       const std::string& model_path, int64_t version,
       const std::string& backend_dir, const std::string& backend_name,
-      inference::ModelConfig* model_config,
-      bool* is_python_backend_based_backend,
+      inference::ModelConfig* model_config, bool* is_python_based_backend,
       std::vector<std::string>* search_paths, std::string* backend_libdir,
       std::string* backend_libpath);
 
   // Get 'backend_libname', 'backend_libdir', 'backend_libpath' and
-  // 'is_python_backend_based_backend' by searching for different possible
-  // backend library names on 'search_paths'
+  // 'is_python_based_backend' by searching for different possible backend
+  // library names on 'search_paths'
   static Status GetBackendRuntimeLibraryName(
       const std::string& backend_name,
       const std::vector<std::string>& search_paths,
       std::string* backend_libname, std::string* backend_libdir,
-      std::string* backend_libpath, bool* is_python_backend_based_backend);
+      std::string* backend_libpath, bool* is_python_based_backend);
 
   // Search for 'backend_libname' on 'search_paths'. If found, the matching
   // search path will be stored in 'backend_libdir' and the backend library path
