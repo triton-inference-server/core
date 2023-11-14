@@ -406,7 +406,7 @@ class GrowableMemoryTest : public ::testing::Test {
     EXPECT_TRUE(status.IsOk()) << status.Message();
   }
 
-  void TearDown() override {}
+  void TearDown() override { tc::CudaBlockManager::Reset(); }
 };
 
 TEST_F(GrowableMemoryTest, AllocGPU)
