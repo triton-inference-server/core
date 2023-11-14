@@ -178,7 +178,9 @@ MutableMemory::SetMemory(int value)
         "setting cuda memory to zero.");
 #endif
 
-  } else if (buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_CPU) {
+  } else if (
+      buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_CPU ||
+      buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_CPU_PINNED) {
     memset(buffer_, value, TotalByteSize());
   } else {
     return Status(Status::Code::INVALID_ARG, "Unsupported memory type");
