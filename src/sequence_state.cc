@@ -410,10 +410,15 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
     }
 
     for (auto& from_output_state : from->OutputStates()) {
+      auto& from_output_state_tensor = from_output_state.second;
       lsequence_states->output_states_.emplace(
           std::piecewise_construct,
           std::forward_as_tuple(from_output_state.first),
-          std::forward_as_tuple());
+          std::forward_as_tuple(new SequenceState(
+              from_output_state_tensor->Name(),
+              from_output_state_tensor->DType(),
+              from_output_state_tensor->Shape(), false /* reused_buffer */,
+              false /* use_growable_memory */)));
     }
   }
   return lsequence_states;
