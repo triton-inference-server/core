@@ -278,6 +278,7 @@ GetAllocationGranularity(size_t& aligned_sz)
 
 CudaDriverHelper::CudaDriverHelper()
 {
+#ifndef _WIN32
   dl_open_handle_ = dlopen("libcuda.so", RTLD_LAZY);
   if (dl_open_handle_ != nullptr) {
     void* cu_mem_create_fn = dlsym(dl_open_handle_, "cuMemCreate");
@@ -373,12 +374,13 @@ CudaDriverHelper::CudaDriverHelper()
       dl_open_handle_ = nullptr;
     }
   }
+#endif
 }
 
 bool
 CudaDriverHelper::IsAvailable()
 {
-  return dl_open_handle_ == nullptr;
+  return dl_open_handle_ != nullptr;
 }
 
 Status
@@ -386,6 +388,10 @@ CudaDriverHelper::CuMemGetAllocationGranularity(
     size_t* aligned_size, const CUmemAllocationProp* prop,
     CUmemAllocationGranularity_flags flags)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_get_allocation_granularity_fn_(aligned_size, prop, flags),
       std::string("failed to call cuMemGetAllocationGranularity"));
@@ -397,6 +403,10 @@ CudaDriverHelper::CuMemCreate(
     CUmemGenericAllocationHandle* handle, size_t allocation_size,
     CUmemAllocationProp* prop, unsigned long long flags)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_create_fn_(handle, allocation_size, prop, flags),
       std::string("failed to call cuMemCreate"));
@@ -407,6 +417,10 @@ Status
 CudaDriverHelper::CuMemSetAccess(
     CUdeviceptr ptr, size_t size, const CUmemAccessDesc* desc, size_t count)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_set_access_fn_(ptr, size, desc, count),
       std::string("failed to call cuMemSetAccess"));
@@ -418,6 +432,10 @@ CudaDriverHelper::CuMemMap(
     CUdeviceptr ptr, size_t size, size_t offset,
     CUmemGenericAllocationHandle handle, unsigned long long flags)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_map_fn_(ptr, size, offset, handle, flags),
       std::string("failed to call cuMemMap"));
@@ -427,6 +445,10 @@ CudaDriverHelper::CuMemMap(
 Status
 CudaDriverHelper::CuMemRelease(CUmemGenericAllocationHandle handle)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_release_fn_(handle), std::string("failed to call cuMemRelease"));
   return Status::Success;
@@ -435,12 +457,19 @@ CudaDriverHelper::CuMemRelease(CUmemGenericAllocationHandle handle)
 void
 CudaDriverHelper::CuGetErrorString(const char** error_string, CUresult error)
 {
-  cu_get_error_string_fn_(error, error_string);
+  *error_string = nullptr;
+  if (IsAvailable()) {
+    cu_get_error_string_fn_(error, error_string);
+  }
 }
 
 Status
 CudaDriverHelper::CuMemAddressFree(CUdeviceptr ptr, size_t size)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_address_free_fn_(ptr, size),
       std::string("failed to call cuMemAddressFree"));
@@ -450,6 +479,10 @@ CudaDriverHelper::CuMemAddressFree(CUdeviceptr ptr, size_t size)
 Status
 CudaDriverHelper::CuMemUnmap(CUdeviceptr ptr, size_t size)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_unmap_fn_(ptr, size), std::string("failed to call cuMemUnmap"));
   return Status::Success;
@@ -460,6 +493,10 @@ CudaDriverHelper::CuMemAddressReserve(
     CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr,
     unsigned long long flags)
 {
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
   RETURN_IF_CUDA_DRIVER_ERR(
       cu_mem_address_reserve_fn_(ptr, size, alignment, addr, flags),
       std::string("failed to call cuMemAddressReserve"));
@@ -469,9 +506,11 @@ CudaDriverHelper::CuMemAddressReserve(
 
 CudaDriverHelper::~CudaDriverHelper()
 {
+#ifndef _WIN32
   if (dl_open_handle_ != nullptr) {
     dlclose(dl_open_handle_);
   }
+#endif
 }
 #endif
 

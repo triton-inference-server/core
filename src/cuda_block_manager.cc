@@ -90,23 +90,26 @@ CudaBlockManager::Allocate(
   // the block size is the cuda minimum allocation granularity.
   size_t num_blocks =
       (size + instance_->block_size_ - 1) / (instance_->block_size_);
-  while (num_blocks > 0) {
-    if (instance_->free_blocks_[device_id].size() > 0) {
-      allocation->AddBlock(instance_->free_blocks_[device_id].back());
-      instance_->free_blocks_[device_id].pop_back();
-    } else {
-      CUmemGenericAllocationHandle block{};
-      CUmemAllocationProp prop = {};
-      prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
-      prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
-      prop.location.id = device_id;
-      RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemCreate(
-          &block, instance_->block_size_, &prop, 0 /* flags */));
-      allocation->AddBlock(block);
-    }
-    num_blocks--;
+
+  size_t free_blocks_size = instance_->free_blocks_[device_id].size();
+  size_t block_index = 0;
+
+  for (; block_index < num_blocks && block_index < free_blocks_size;
+       ++block_index) {
+    allocation->AddBlock(instance_->free_blocks_[device_id].back());
+    instance_->free_blocks_[device_id].pop_back();
   }
 
+  for (; block_index < num_blocks; ++block_index) {
+    CUmemGenericAllocationHandle block{};
+    CUmemAllocationProp prop = {};
+    prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    prop.location.id = device_id;
+    RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemCreate(
+        &block, instance_->block_size_, &prop, 0 /* flags */));
+    allocation->AddBlock(block);
+  }
 
   return Status::Success;
 }
