@@ -38,7 +38,6 @@
 
 #include "backend_manager.h"
 #include "constants.h"
-#include "cuda_block_manager.h"
 #include "cuda_utils.h"
 #include "model.h"
 #include "model_config.pb.h"
@@ -52,6 +51,7 @@
 #include "triton/common/table_printer.h"
 
 #ifdef TRITON_ENABLE_GPU
+#include "cuda_block_manager.h"
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 

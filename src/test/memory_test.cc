@@ -400,8 +400,6 @@ class GrowableMemoryTest : public ::testing::Test {
   // Per-test-suite set-up.
   static void SetUpTestSuite()
   {
-    cudaFree(0);
-    cuInit(0);
     auto status = tc::CudaBlockManager::Create(6.0);
     EXPECT_TRUE(status.IsOk()) << status.Message();
   }

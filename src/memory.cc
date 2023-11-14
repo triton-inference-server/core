@@ -282,6 +282,7 @@ GrowableMemory::GrowableMemory(
   allocation_ = std::move(allocation);
   virtual_address_offset_ = 0;
 }
+#endif
 
 Status
 GrowableMemory::Create(
@@ -289,6 +290,7 @@ GrowableMemory::Create(
     TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
     size_t virtual_address_size)
 {
+#ifdef TRITON_ENABLE_GPU
   std::unique_ptr<Allocation> allocation =
       std::make_unique<Allocation>(memory_type_id);
 
@@ -331,8 +333,15 @@ GrowableMemory::Create(
     RETURN_IF_ERROR(growable_memory->Map(block));
   }
   return Status::Success;
+#else
+  return Status(
+      Status::Code::INTERNAL,
+      "The server was build with TRITON_ENABLE_GPU=OFF but growable memory was "
+      "used.");
+#endif
 }
 
+#ifdef TRITON_ENABLE_GPU
 Status
 GrowableMemory::Map(CUmemGenericAllocationHandle& block)
 {
@@ -345,10 +354,12 @@ GrowableMemory::Map(CUmemGenericAllocationHandle& block)
   virtual_address_offset_ += CudaBlockManager::BlockSize();
   return Status::Success;
 }
+#endif
 
 Status
 GrowableMemory::Resize(size_t size)
 {
+#ifdef TRITON_ENABLE_GPU
   if (size > virtual_address_size_) {
     return Status(
         Status::Code::INVALID_ARG,
@@ -376,21 +387,31 @@ GrowableMemory::Resize(size_t size)
       allocation_->Blocks().size() * CudaBlockManager::BlockSize());
 
   return Status::Success;
+
+#else
+  return Status(
+      Status::Code::INTERNAL,
+      "The server was build with TRITON_ENABLE_GPU=OFF but growable memory was "
+      "used.");
+#endif
 }
 
+#ifdef TRITON_ENABLE_GPU
 std::unique_ptr<Allocation>&
 GrowableMemory::GetAllocation()
 {
   return allocation_;
 }
+#endif
 
 GrowableMemory::~GrowableMemory()
 {
+#ifdef TRITON_ENABLE_GPU
   CudaDriverHelper::GetInstance().CuMemUnmap(
       reinterpret_cast<CUdeviceptr>(buffer_), buffer_attributes_.ByteSize());
   CudaDriverHelper::GetInstance().CuMemAddressFree(
       reinterpret_cast<CUdeviceptr>(buffer_), virtual_address_size_);
-}
 #endif
+}
 
 }}  // namespace triton::core

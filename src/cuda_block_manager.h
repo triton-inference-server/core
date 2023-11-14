@@ -66,17 +66,32 @@ class CudaBlockManager {
   static std::unique_ptr<CudaBlockManager> instance_;
 };
 
+///
+/// Representing an Allocation object returned from CudaBlockManager.
+///
 class Allocation {
  public:
   Allocation(int device_id) : device_id_(device_id) {}
 
+  /// Add a block to an existing allocation.
+  ///
+  /// \param block The memory block to be added.
+  ///
   void AddBlock(CUmemGenericAllocationHandle block)
   {
     blocks_.push_back(block);
   }
 
+  /// Merge one allocation with another one.
+  ///
+  /// \param allocation The other allocation to be merged with.
+  ///
   void Merge(std::unique_ptr<Allocation>&& allocation);
 
+  /// Get the list of all the memory blocks corresponding to this
+  /// allocation.
+  ///
+  /// \return The list of all the memory blocks.
   std::vector<CUmemGenericAllocationHandle>& Blocks() { return blocks_; }
 
   ~Allocation() { CudaBlockManager::Free(this, device_id_); }
