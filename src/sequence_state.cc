@@ -92,7 +92,7 @@ SequenceState::SetStringDataToZero()
 }
 
 Status
-SequenceState::Resize(
+SequenceState::ResizeOrReallocate(
     void** buffer, const uint64_t buffer_byte_size,
     TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
 {
@@ -105,11 +105,11 @@ SequenceState::Resize(
     std::shared_ptr<AllocatedMemory> memory = std::make_shared<AllocatedMemory>(
         buffer_byte_size, *memory_type, *memory_type_id);
     *buffer = memory->MutableBuffer(memory_type, memory_type_id);
-    RemoveAllData();
+    RETURN_IF_ERROR(RemoveAllData());
     RETURN_IF_ERROR(SetData(memory));
     if (UseSingleBuffer()) {
-      OtherState()->RemoveAllData();
-      OtherState()->SetData(memory);
+      RETURN_IF_ERROR(OtherState()->RemoveAllData());
+      RETURN_IF_ERROR(OtherState()->SetData(memory));
     }
   }
   return Status::Success;
@@ -384,7 +384,7 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
           std::forward_as_tuple(from_input_state_tensor->Name()),
           std::forward_as_tuple(new SequenceState(
               from_input_state_tensor->Name(), from_input_state_tensor->DType(),
-              from_input_state_tensor->Shape(), false /* reused_buffer */,
+              from_input_state_tensor->Shape(), false /* use_single_buffer */,
               false /* use_growable_memory */)));
 
       auto& input_tensor = input_pair.first->second;

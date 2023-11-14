@@ -163,7 +163,7 @@ MutableMemory::MutableBuffer(
 }
 
 Status
-MutableMemory::SetMemory(int value)
+MutableMemory::SetMemory(unsigned char value)
 {
   if (buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_GPU) {
 #ifdef TRITON_ENABLE_GPU

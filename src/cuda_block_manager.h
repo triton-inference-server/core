@@ -52,8 +52,7 @@ class CudaBlockManager {
   static Status Create(double min_supported_compute_capability);
   static Status Allocate(
       size_t size, std::unique_ptr<Allocation>& allocation, int device_id);
-  static Status Free(
-      std::vector<CUmemGenericAllocationHandle>&& blocks, int device_id);
+  static Status Free(Allocation* allocation, int device_id);
   static size_t BlockSize() { return instance_->block_size_; }
   ~CudaBlockManager();
   static void Reset() { instance_.reset(); }
@@ -80,7 +79,7 @@ class Allocation {
 
   std::vector<CUmemGenericAllocationHandle>& Blocks() { return blocks_; }
 
-  ~Allocation() { CudaBlockManager::Free(std::move(blocks_), device_id_); }
+  ~Allocation() { CudaBlockManager::Free(this, device_id_); }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Allocation);

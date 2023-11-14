@@ -152,7 +152,7 @@ class MutableMemory : public Memory {
       int64_t* memory_type_id = nullptr);
 
   // Set the memory to the specified value.
-  Status SetMemory(int value);
+  Status SetMemory(unsigned char value);
 
   DISALLOW_COPY_AND_ASSIGN(MutableMemory);
 
@@ -198,8 +198,6 @@ class GrowableMemory : public MutableMemory {
       TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
       size_t virtual_page_size);
 
-  Status Map(CUmemGenericAllocationHandle& block);
-
   ~GrowableMemory() override;
 
   Status Resize(size_t size);
@@ -207,6 +205,8 @@ class GrowableMemory : public MutableMemory {
   std::unique_ptr<Allocation>& GetAllocation();
 
  private:
+  Status Map(CUmemGenericAllocationHandle& block);
+
   std::unique_ptr<Allocation> allocation_;
   size_t virtual_address_offset_;
   CUmemAllocationProp allocation_prop_;

@@ -31,7 +31,7 @@
 
 
 namespace triton { namespace core {
-std::unique_ptr<CudaBlockManager> CudaBlockManager::instance_;
+std::unique_ptr<CudaBlockManager> CudaBlockManager::instance_ = nullptr;
 
 void
 Allocation::Merge(std::unique_ptr<Allocation>&& allocation)
@@ -115,8 +115,7 @@ CudaBlockManager::Allocate(
 }
 
 Status
-CudaBlockManager::Free(
-    std::vector<CUmemGenericAllocationHandle>&& blocks, int device_id)
+CudaBlockManager::Free(Allocation* allocation, int device_id)
 {
   if (instance_ == nullptr) {
     return Status(
@@ -134,7 +133,10 @@ CudaBlockManager::Free(
   }
 
   auto& free_blocks = instance_->free_blocks_[device_id];
-  free_blocks.insert(free_blocks.end(), blocks.begin(), blocks.end());
+  free_blocks.insert(
+      free_blocks.end(), allocation->Blocks().begin(),
+      allocation->Blocks().end());
+  allocation->Blocks().clear();
 
   return Status::Success;
 }

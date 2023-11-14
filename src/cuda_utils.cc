@@ -278,6 +278,7 @@ GetAllocationGranularity(size_t& aligned_sz)
 
 CudaDriverHelper::CudaDriverHelper()
 {
+  dl_open_handle_ = nullptr;
 #ifndef _WIN32
   dl_open_handle_ = dlopen("libcuda.so", RTLD_LAZY);
   if (dl_open_handle_ != nullptr) {

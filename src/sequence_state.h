@@ -44,11 +44,11 @@ class SequenceState {
   SequenceState();
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const std::vector<int64_t>& shape, bool reuse_buffer,
+      const std::vector<int64_t>& shape, bool use_single_buffer,
       bool use_growable_memory);
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const int64_t* shape, const uint64_t dim_count, bool reuse_buffer,
+      const int64_t* shape, const uint64_t dim_count, bool use_single_buffer,
       bool use_growable_memory);
 
   // The name of the state tensor.
@@ -67,7 +67,8 @@ class SequenceState {
   // The data for this shape.
   std::shared_ptr<Memory>& Data() { return data_; }
 
-  // A boolean indicating whether the state buffer should be reused or not.
+  // A boolean indicating whether a single buffer is used for both input or
+  // output state or not.
   bool UseSingleBuffer() { return use_single_buffer_; }
 
   // Use growable memory or not
@@ -77,7 +78,7 @@ class SequenceState {
   void SetOtherState(SequenceState* other) { other_state_ = other; }
 
   // Resize the sequence state buffer
-  Status Resize(
+  Status ResizeOrReallocate(
       void** buffer, const uint64_t buffer_byte_size,
       TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
 

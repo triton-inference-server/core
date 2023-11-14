@@ -1372,8 +1372,8 @@ TRITONBACKEND_StateBuffer(
       current_memory_type_id == *memory_type_id) {
     *buffer = lbuffer;
   } else {
-    RETURN_TRITONSERVER_ERROR_IF_ERROR(
-        to->Resize(buffer, buffer_byte_size, memory_type, memory_type_id));
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(to->ResizeOrReallocate(
+        buffer, buffer_byte_size, memory_type, memory_type_id));
   }
 
   return nullptr;  // success
