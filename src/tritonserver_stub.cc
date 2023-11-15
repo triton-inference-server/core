@@ -381,6 +381,10 @@ TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize()
 {
 }
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCudaVirtualAddressSize()
+{
+}
 // Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetResponseCacheByteSize()

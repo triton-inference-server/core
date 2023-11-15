@@ -1382,9 +1382,16 @@ SequenceBatch::UpdateImplicitState(
     // Create the state for the first request in the sequence.
     if (sequence_states == nullptr) {
       sequence_states.reset(new SequenceStates);
-      sequence_states->Initialize(
+      Status status = sequence_states->Initialize(
           base_->StateOutputConfigMap(), base_->MaxBatchSize(),
-          base_->InitialState());
+          base_->InitialState(), model_instance_->Kind(),
+          model_instance_->DeviceId(),
+          model_instance_->Model()->Server()->CudaVirtualAddressSpaceSize());
+
+      if (!status.IsOk()) {
+        LOG_ERROR << "Failed to initialize sequence state: "
+                  << status.Message();
+      }
     }
 
     irequest->SetSequenceStates(sequence_states);

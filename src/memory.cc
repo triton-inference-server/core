@@ -33,6 +33,7 @@
 #include <cuda_runtime_api.h>
 
 #include "cuda_memory_manager.h"
+#include "cuda_utils.h"
 #endif  // TRITON_ENABLE_GPU
 
 namespace triton { namespace core {
@@ -161,6 +162,33 @@ MutableMemory::MutableBuffer(
   return buffer_;
 }
 
+Status
+MutableMemory::SetMemory(unsigned char value)
+{
+  if (buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_GPU) {
+#ifdef TRITON_ENABLE_GPU
+    ScopedSetDevice scoped_set_device(buffer_attributes_.MemoryTypeId());
+    RETURN_IF_CUDA_ERR(
+        cudaMemset(buffer_, value, TotalByteSize()),
+        std::string("failed to set the data to zero."));
+#else
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Server is compiled with TRITON_ENABLE_GPU=OFF. It doesn't support "
+        "setting cuda memory to zero.");
+#endif
+
+  } else if (
+      buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_CPU ||
+      buffer_attributes_.MemoryType() == TRITONSERVER_MEMORY_CPU_PINNED) {
+    memset(buffer_, value, TotalByteSize());
+  } else {
+    return Status(Status::Code::INVALID_ARG, "Unsupported memory type");
+  }
+
+  return Status::Success;
+}
+
 //
 // AllocatedMemory
 //
@@ -234,6 +262,156 @@ AllocatedMemory::~AllocatedMemory()
     }
     buffer_ = nullptr;
   }
+}
+
+#ifdef TRITON_ENABLE_GPU
+GrowableMemory::GrowableMemory(
+    size_t byte_size, TRITONSERVER_MemoryType memory_type,
+    int64_t memory_type_id, std::unique_ptr<Allocation>&& allocation,
+    size_t virtual_address_size)
+    : MutableMemory(nullptr, byte_size, memory_type, memory_type_id)
+{
+  allocation_prop_.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+  allocation_prop_.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+  allocation_prop_.location.id = memory_type_id;
+
+  access_desc_.location = allocation_prop_.location;
+  access_desc_.flags = CU_MEM_ACCESS_FLAGS_PROT_READWRITE;
+
+  virtual_address_size_ = virtual_address_size;
+  allocation_ = std::move(allocation);
+  virtual_address_offset_ = 0;
+}
+#endif
+
+Status
+GrowableMemory::Create(
+    std::unique_ptr<GrowableMemory>& growable_memory, size_t byte_size,
+    TRITONSERVER_MemoryType memory_type, int64_t memory_type_id,
+    size_t virtual_address_size)
+{
+#ifdef TRITON_ENABLE_GPU
+  std::unique_ptr<Allocation> allocation =
+      std::make_unique<Allocation>(memory_type_id);
+
+  // The virtual address size must be a factor of
+  // cudaMinimumAllocationGranularity
+  virtual_address_size =
+      ((virtual_address_size + CudaBlockManager::BlockSize() - 1) /
+       CudaBlockManager::BlockSize()) *
+      CudaBlockManager::BlockSize();
+
+  if (memory_type != TRITONSERVER_MEMORY_GPU) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("Only TRITONSERVER_MEMORY_GPU is supported for growable "
+                    "memory."));
+  }
+
+  if (byte_size > virtual_address_size) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("'byte_size' requested for GrowableMemory cannot be smaller"
+                    " than the virtual address size. byte_size: ") +
+            std::to_string(byte_size) +
+            ", virtual_address_size:" + std::to_string(virtual_address_size));
+  }
+
+  RETURN_IF_ERROR(
+      CudaBlockManager::Allocate(byte_size, allocation, memory_type_id));
+
+  void* buffer;
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemAddressReserve(
+      reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
+      0 /* alignment */, 0 /* start_address */, 0 /* flags */));
+  growable_memory.reset(new GrowableMemory(
+      CudaBlockManager::BlockSize() * allocation->Blocks().size(), memory_type,
+      memory_type_id, std::move(allocation), virtual_address_size));
+  growable_memory->buffer_ = reinterpret_cast<char*>(buffer);
+
+  for (auto& block : growable_memory->allocation_->Blocks()) {
+    RETURN_IF_ERROR(growable_memory->Map(block));
+  }
+  return Status::Success;
+#else
+  return Status(
+      Status::Code::INTERNAL,
+      "The server was build with TRITON_ENABLE_GPU=OFF but growable memory was "
+      "used.");
+#endif
+}
+
+#ifdef TRITON_ENABLE_GPU
+Status
+GrowableMemory::Map(CUmemGenericAllocationHandle& block)
+{
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemMap(
+      reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+      CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */));
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemSetAccess(
+      reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+      CudaBlockManager::BlockSize(), &access_desc_, 1ULL /* Mapping size */));
+  virtual_address_offset_ += CudaBlockManager::BlockSize();
+  return Status::Success;
+}
+#endif
+
+Status
+GrowableMemory::Resize(size_t size)
+{
+#ifdef TRITON_ENABLE_GPU
+  if (size > virtual_address_size_) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string(
+            "Failed to resize the GrowableMemory. The requested size is larger"
+            " than the virtual page size. requested size: ") +
+            std::to_string(size) +
+            ", virtual_address_size:" + std::to_string(virtual_address_size_));
+  }
+
+  if (size < buffer_attributes_.ByteSize()) {
+    return Status::Success;
+  } else {
+    size_t new_size = size - buffer_attributes_.ByteSize();
+    std::unique_ptr<Allocation> allocation =
+        std::make_unique<Allocation>(buffer_attributes_.MemoryTypeId());
+    RETURN_IF_ERROR(CudaBlockManager::Allocate(
+        new_size, allocation, buffer_attributes_.MemoryTypeId()));
+    for (auto& block : allocation->Blocks()) {
+      RETURN_IF_ERROR(Map(block));
+    }
+    allocation_->Merge(std::move(allocation));
+  }
+  buffer_attributes_.SetByteSize(
+      allocation_->Blocks().size() * CudaBlockManager::BlockSize());
+
+  return Status::Success;
+
+#else
+  return Status(
+      Status::Code::INTERNAL,
+      "The server was build with TRITON_ENABLE_GPU=OFF but growable memory was "
+      "used.");
+#endif
+}
+
+#ifdef TRITON_ENABLE_GPU
+std::unique_ptr<Allocation>&
+GrowableMemory::GetAllocation()
+{
+  return allocation_;
+}
+#endif
+
+GrowableMemory::~GrowableMemory()
+{
+#ifdef TRITON_ENABLE_GPU
+  CudaDriverHelper::GetInstance().CuMemUnmap(
+      reinterpret_cast<CUdeviceptr>(buffer_), buffer_attributes_.ByteSize());
+  CudaDriverHelper::GetInstance().CuMemAddressFree(
+      reinterpret_cast<CUdeviceptr>(buffer_), virtual_address_size_);
+#endif
 }
 
 }}  // namespace triton::core
