@@ -36,6 +36,7 @@ find_package(GTest REQUIRED)
 #
 set(
   CUDA_MEMORY_MANAGER_SRCS
+  ../cuda_block_manager.cc
   ../cuda_memory_manager.cc
   ../cuda_utils.cc
   ../status.cc
@@ -43,6 +44,7 @@ set(
 
 set(
   CUDA_MEMORY_MANAGER_HDRS
+  ../cuda_block_manager.h
   ../cuda_memory_manager.h
   ../cuda_utils.h
   ../status.h

@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -27,7 +27,12 @@
 #include "cuda_utils.h"
 
 #include "model_config_utils.h"
+#include "triton/common/logging.h"
 #include "triton/common/nvtx.h"
+
+#ifdef TRITON_ENABLE_GPU
+#include <cuda.h>
+#endif
 
 namespace triton { namespace core {
 
@@ -258,6 +263,256 @@ SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support)
   return Status::Success;
 }
 
+Status
+GetAllocationGranularity(size_t& aligned_sz)
+{
+  CUmemAllocationProp prop = {};
+  prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+  prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+  prop.location.id = 0;
+
+  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemGetAllocationGranularity(
+      &aligned_sz, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+  return Status::Success;
+}
+
+CudaDriverHelper::CudaDriverHelper()
+{
+  dl_open_handle_ = nullptr;
+#ifndef _WIN32
+  dl_open_handle_ = dlopen("libcuda.so", RTLD_LAZY);
+  if (dl_open_handle_ != nullptr) {
+    void* cu_mem_create_fn = dlsym(dl_open_handle_, "cuMemCreate");
+    if (cu_mem_create_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemCreate";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_create_fn_) = cu_mem_create_fn;
+
+    void* cu_get_error_string_fn = dlsym(dl_open_handle_, "cuGetErrorString");
+    if (cu_get_error_string_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuGetErrorString";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_get_error_string_fn_) = cu_get_error_string_fn;
+
+    void* cu_init_fn = dlsym(dl_open_handle_, "cuInit");
+    if (cu_init_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuInit";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_init_fn_) = cu_init_fn;
+
+    void* cu_mem_set_access_fn = dlsym(dl_open_handle_, "cuMemSetAccess");
+    if (cu_mem_set_access_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemSetAccess";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_set_access_fn_) = cu_mem_set_access_fn;
+
+    void* cu_mem_release_fn = dlsym(dl_open_handle_, "cuMemRelease");
+    if (cu_mem_release_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemRelease";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_release_fn_) = cu_mem_release_fn;
+
+    void* cu_mem_get_allocation_granularity_fn =
+        dlsym(dl_open_handle_, "cuMemGetAllocationGranularity");
+    if (cu_mem_get_allocation_granularity_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemGetAllocationGranularity";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_get_allocation_granularity_fn_) =
+        cu_mem_get_allocation_granularity_fn;
+
+    void* cu_mem_address_free_fn = dlsym(dl_open_handle_, "cuMemAddressFree");
+    if (cu_mem_address_free_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemAddressFree";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_address_free_fn_) = cu_mem_address_free_fn;
+
+    void* cu_mem_unmap_fn = dlsym(dl_open_handle_, "cuMemUnmap");
+    if (cu_mem_unmap_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemUnmap";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_unmap_fn_) = cu_mem_unmap_fn;
+
+    void* cu_mem_address_reserve_fn =
+        dlsym(dl_open_handle_, "cuMemAddressReserve");
+    if (cu_mem_address_reserve_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemAddressReserve";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_address_reserve_fn_) = cu_mem_address_reserve_fn;
+
+    void* cu_mem_map_fn = dlsym(dl_open_handle_, "cuMemMap");
+    if (cu_mem_map_fn == nullptr) {
+      LOG_WARNING << "Failed to dlsym cuMemMap";
+      dl_open_handle_ = nullptr;
+      return;
+    }
+    *((void**)&cu_mem_map_fn_) = cu_mem_map_fn;
+
+    // Initialize the driver API.
+    CUresult cuda_err = (*cu_init_fn_)(0 /* flags */);
+    if (cuda_err != CUDA_SUCCESS) {
+      const char* error_string;
+      (*cu_get_error_string_fn_)(cuda_err, &error_string);
+      error_str_ = std::string("failed to call cuInit: ") + error_string;
+      dlclose(dl_open_handle_);
+      dl_open_handle_ = nullptr;
+    }
+  }
+#endif
+}
+
+bool
+CudaDriverHelper::IsAvailable()
+{
+  return dl_open_handle_ != nullptr;
+}
+
+Status
+CudaDriverHelper::CuMemGetAllocationGranularity(
+    size_t* aligned_size, const CUmemAllocationProp* prop,
+    CUmemAllocationGranularity_flags flags)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_get_allocation_granularity_fn_(aligned_size, prop, flags),
+      std::string("failed to call cuMemGetAllocationGranularity"));
+  return Status::Success;
+}
+
+Status
+CudaDriverHelper::CuMemCreate(
+    CUmemGenericAllocationHandle* handle, size_t allocation_size,
+    CUmemAllocationProp* prop, unsigned long long flags)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_create_fn_(handle, allocation_size, prop, flags),
+      std::string("failed to call cuMemCreate"));
+  return Status::Success;
+}
+
+Status
+CudaDriverHelper::CuMemSetAccess(
+    CUdeviceptr ptr, size_t size, const CUmemAccessDesc* desc, size_t count)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_set_access_fn_(ptr, size, desc, count),
+      std::string("failed to call cuMemSetAccess"));
+  return Status::Success;
+}
+
+Status
+CudaDriverHelper::CuMemMap(
+    CUdeviceptr ptr, size_t size, size_t offset,
+    CUmemGenericAllocationHandle handle, unsigned long long flags)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_map_fn_(ptr, size, offset, handle, flags),
+      std::string("failed to call cuMemMap"));
+  return Status::Success;
+}
+
+Status
+CudaDriverHelper::CuMemRelease(CUmemGenericAllocationHandle handle)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_release_fn_(handle), std::string("failed to call cuMemRelease"));
+  return Status::Success;
+}
+
+void
+CudaDriverHelper::CuGetErrorString(const char** error_string, CUresult error)
+{
+  *error_string = nullptr;
+  if (IsAvailable()) {
+    cu_get_error_string_fn_(error, error_string);
+  }
+}
+
+Status
+CudaDriverHelper::CuMemAddressFree(CUdeviceptr ptr, size_t size)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_address_free_fn_(ptr, size),
+      std::string("failed to call cuMemAddressFree"));
+  return Status::Success;
+}
+
+Status
+CudaDriverHelper::CuMemUnmap(CUdeviceptr ptr, size_t size)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_unmap_fn_(ptr, size), std::string("failed to call cuMemUnmap"));
+  return Status::Success;
+}
+
+Status
+CudaDriverHelper::CuMemAddressReserve(
+    CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr,
+    unsigned long long flags)
+{
+  if (!IsAvailable()) {
+    return Status(
+        Status::Code::INTERNAL, "CudaDriverHelper has not been initialized.");
+  }
+  RETURN_IF_CUDA_DRIVER_ERR(
+      cu_mem_address_reserve_fn_(ptr, size, alignment, addr, flags),
+      std::string("failed to call cuMemAddressReserve"));
+  return Status::Success;
+}
+
+
+CudaDriverHelper::~CudaDriverHelper()
+{
+#ifndef _WIN32
+  if (dl_open_handle_ != nullptr) {
+    dlclose(dl_open_handle_);
+  }
+#endif
+}
 #endif
 
 }}  // namespace triton::core

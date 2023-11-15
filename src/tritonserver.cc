@@ -252,6 +252,16 @@ class TritonServerOptions {
     min_compute_capability_ = c;
   }
 
+  const std::map<int, size_t>& CudaVirtualAddressSpaceSize() const
+  {
+    return cuda_virtual_address_space_size_;
+  }
+
+  void SetCudaVirtualAddressSpaceSize(int id, size_t virtual_address_space_size)
+  {
+    cuda_virtual_address_space_size_[id] = virtual_address_space_size;
+  }
+
   bool StrictReadiness() const { return strict_readiness_; }
   void SetStrictReadiness(bool b) { strict_readiness_ = b; }
 
@@ -355,6 +365,7 @@ class TritonServerOptions {
   tc::CacheConfigMap cache_config_map_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+  std::map<int, size_t> cuda_virtual_address_space_size_;
 #ifdef TRITON_ENABLE_METRICS
   tc::MetricsConfigMap metrics_config_map_;
 #endif  // TRITON_ENABLE_METRICS
@@ -1240,6 +1251,18 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
       reinterpret_cast<TritonServerOptions*>(options);
   loptions->SetCudaMemoryPoolByteSize(gpu_device, size);
   return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetCudaVirtualAddressSize(
+    TRITONSERVER_ServerOptions* options, int gpu_device,
+    size_t cuda_virtual_address_size)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetCudaVirtualAddressSpaceSize(
+      gpu_device, cuda_virtual_address_size);
+  return nullptr;
 }
 
 // Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
@@ -2305,6 +2328,8 @@ TRITONSERVER_ServerNew(
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
   lserver->SetCudaMemoryPoolByteSize(loptions->CudaMemoryPoolByteSize());
+  lserver->SetCudaVirtualAddressSpaceSize(
+      loptions->CudaVirtualAddressSpaceSize());
   bool cache_enabled = !loptions->CacheConfig().empty();
   lserver->SetResponseCacheEnabled(cache_enabled);
   lserver->SetCacheConfig(loptions->CacheConfig());
