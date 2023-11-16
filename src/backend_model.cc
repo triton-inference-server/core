@@ -40,6 +40,7 @@
 #include "server_message.h"
 #include "shared_library.h"
 #include "triton/common/logging.h"
+#include "triton/common/nvtx.h"
 #include "tritonserver_apis.h"
 
 // For unknown reason, windows will not export the TRITONBACKEND_*
@@ -1525,6 +1526,7 @@ TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
     TRITONSERVER_Error* error)
 {
+  NVTX_RANGE(nvtx, "TRITONBACKEND_ResponseSend");
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
 
   std::unique_ptr<InferenceResponse> utr(tr);
@@ -1721,6 +1723,7 @@ TRITONBACKEND_OutputBuffer(
     const uint64_t buffer_byte_size, TRITONSERVER_MemoryType* memory_type,
     int64_t* memory_type_id)
 {
+  NVTX_RANGE(nvtx, "TRITONBACKEND_OutputBuffer");
   InferenceResponse::Output* to =
       reinterpret_cast<InferenceResponse::Output*>(output);
   Status status = to->AllocateDataBuffer(
