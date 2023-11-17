@@ -29,7 +29,7 @@
 
 namespace triton { namespace core {
 Status
-GenerativeSequencer::RescheduleRequest(
+IterativeSequencer::RescheduleRequest(
     std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
 {
   if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {

@@ -119,8 +119,8 @@ SequenceBatchScheduler::Create(
   auto& config = model->Config();
 
   // Sequencer
-  if (config.sequence_batching().generative_sequence()) {
-    sched->sequencer_.reset(new GenerativeSequencer(sched.get()));
+  if (config.sequence_batching().iterative_sequence()) {
+    sched->sequencer_.reset(new IterativeSequencer(sched.get()));
   } else {
     sched->sequencer_.reset(new Sequencer());
   }
