@@ -110,6 +110,7 @@ class SequenceStates {
     }
 
     std::string state_init_name_;
+    std::vector<int64_t> shape_{};
     std::shared_ptr<MutableMemory> data_;
   };
 
