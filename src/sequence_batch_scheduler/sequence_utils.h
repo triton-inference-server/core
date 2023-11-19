@@ -70,10 +70,10 @@ class Sequencer {
   }
 };
 
-class GenerativeSequencer : public Sequencer {
+class IterativeSequencer : public Sequencer {
  public:
-  GenerativeSequencer(SequenceBatchScheduler* base) : base_(base) {}
-  // Generative sequencer will prepare the request for sequence batcher if it is
+  IterativeSequencer(SequenceBatchScheduler* base) : base_(base) {}
+  // Iterative sequencer will prepare the request for sequence batcher if it is
   // not associated with an sequence
   Status SetupSequenceRequest(
       std::unique_ptr<InferenceRequest>& irequest) override
