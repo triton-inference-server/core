@@ -28,23 +28,33 @@
 #include "sequence_batch_scheduler.h"
 
 namespace triton { namespace core {
-void
-GenerativeSequencer::RescheduleRequest(
+Status
+IterativeSequencer::RescheduleRequest(
     std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
 {
   if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
     // set flags to be not START and not END
     request->SetFlags(0);
-    base_->Enqueue(request);
+    return base_->Enqueue(request);
   }
   // If not reschedule, use request cancellation to release sequence
-  // resources. Check RELEASE_ALL flag to break the recursive calls if
+  // resources. Check IsCancelled() to break the recursive calls if
   // the callback is called by cancellation.
-  else if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) == 0) {
-    request->SetFlags(TRITONSERVER_REQUEST_FLAG_SEQUENCE_END);
-    request->Cancel();
-    base_->Enqueue(request);
+  else if (!request->IsCancelled()) {
+    // Use a null request to trigger sequence batcher cancellation so
+    // additional request manipulation won't affect the actual request.
+    std::unique_ptr<InferenceRequest> ni(
+        InferenceRequest::CopyAsNull(*request));
+    ni->SetCorrelationId(request->CorrelationId());
+    ni->SetFlags(TRITONSERVER_REQUEST_FLAG_SEQUENCE_END);
+    ni->Cancel();
+    // result of enqueuing null request is not related to the actual request
+    auto status = base_->Enqueue(ni);
+    if (!status.IsOk()) {
+      LOG_ERROR << status.AsString();
+    }
   }
+  return Status::Success;
 }
 
 }}  // namespace triton::core

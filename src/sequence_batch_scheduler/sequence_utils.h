@@ -62,17 +62,18 @@ class Sequencer {
     irequest->AddInternalReleaseCallback(std::move(callback));
   }
 
-  virtual void RescheduleRequest(
+  virtual Status RescheduleRequest(
       std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
   {
     // Sequencer will not reschedule requests
+    return Status::Success;
   }
 };
 
-class GenerativeSequencer : public Sequencer {
+class IterativeSequencer : public Sequencer {
  public:
-  GenerativeSequencer(SequenceBatchScheduler* base) : base_(base) {}
-  // Generative sequencer will prepare the request for sequence batcher if it is
+  IterativeSequencer(SequenceBatchScheduler* base) : base_(base) {}
+  // Iterative sequencer will prepare the request for sequence batcher if it is
   // not associated with an sequence
   Status SetupSequenceRequest(
       std::unique_ptr<InferenceRequest>& irequest) override
@@ -97,8 +98,9 @@ class GenerativeSequencer : public Sequencer {
     }
   }
 
-  void RescheduleRequest(
-      std::unique_ptr<InferenceRequest>& request, const uint32_t flags);
+  Status RescheduleRequest(
+      std::unique_ptr<InferenceRequest>& request,
+      const uint32_t flags) override;
 
  private:
   std::atomic<uint64_t> sequence_id_{1};
