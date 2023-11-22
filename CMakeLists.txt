@@ -129,7 +129,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   target_compile_options(
     triton-core-serverstub
     PRIVATE
-      /Wall /D_WIN32_WINNT=0x0A00 /EHsc
+      /Wall /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
   )
 else()
   target_compile_options(
