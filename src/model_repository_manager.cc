@@ -28,6 +28,7 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <boost/filesystem.hpp>
 #include <deque>
 #include <future>
 #include <stdexcept>
@@ -82,7 +83,8 @@ class LocalizeRepoAgent : public TritonRepoAgent {
           RETURN_TRITONSERVER_ERROR_IF_ERROR(
               agent_model->AcquireMutableLocation(
                   TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
-          const std::string temp_dir = temp_dir_cstr;
+          const std::string temp_dir =
+              boost::filesystem::canonical(temp_dir_cstr).string();
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
@@ -110,10 +112,25 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                         .c_str());
               }
 
-              // Save model file to the instructed directory
-              // mkdir
+              // Resolve any relative paths or symlinks, and enforce that target
+              // directory stays within model directory for security.
+              // DLIS-5149: Can use std::filesystem over boost in C++17.
               const std::string file_path =
-                  JoinPath({temp_dir, file->Name().substr(file_prefix.size())});
+                  boost::filesystem::weakly_canonical(
+                      JoinPath(
+                          {temp_dir, file->Name().substr(file_prefix.size())}))
+                      .string();
+              if (file_path.rfind(temp_dir, 0) != 0) {
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG,
+                    (std::string("Invalid file parameter '") + file->Name() +
+                     "' with normalized path '" + file_path +
+                     "' must stay within model directory.")
+                        .c_str());
+              }
+
+              // Save model override file to the instructed directory using the
+              // temporary model directory as the basepath.
               const std::string dir = DirName(file_path);
               bool dir_exist = false;
               RETURN_TRITONSERVER_ERROR_IF_ERROR(FileExists(dir, &dir_exist));
@@ -132,7 +149,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                     MakeDirectory(dir, true /* recursive */));
               }
 
-              // write
+              // Write file contents at specified path
               RETURN_TRITONSERVER_ERROR_IF_ERROR(WriteBinaryFile(
                   file_path,
                   reinterpret_cast<const char*>(file->ValuePointer()),

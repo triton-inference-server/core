@@ -44,10 +44,12 @@ class SequenceState {
   SequenceState();
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const std::vector<int64_t>& shape);
+      const std::vector<int64_t>& shape, bool use_single_buffer,
+      bool use_growable_memory);
   SequenceState(
       const std::string& name, const inference::DataType datatype,
-      const int64_t* shape, const uint64_t dim_count);
+      const int64_t* shape, const uint64_t dim_count, bool use_single_buffer,
+      bool use_growable_memory);
 
   // The name of the state tensor.
   const std::string& Name() const { return name_; }
@@ -64,6 +66,25 @@ class SequenceState {
 
   // The data for this shape.
   std::shared_ptr<Memory>& Data() { return data_; }
+
+  // A boolean indicating whether a single buffer is used for both input or
+  // output state or not.
+  bool UseSingleBuffer() { return use_single_buffer_; }
+
+  // Use growable memory or not
+  bool UseGrowableMemory() { return use_growable_memory_; }
+
+  // Set pointer to the other sequence state
+  void SetOtherState(SequenceState* other) { other_state_ = other; }
+
+  // Resize the sequence state buffer
+  Status ResizeOrReallocate(
+      void** buffer, const uint64_t buffer_byte_size,
+      TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
+
+  // For input state this would point to the output state. For output state this
+  // would point to the input state.
+  SequenceState* OtherState() { return other_state_; }
 
   // Set the data for this shape. Error if state already has some
   // data.
@@ -92,6 +113,9 @@ class SequenceState {
   std::vector<int64_t> shape_;
   std::vector<int64_t> batch_dim_;
   std::shared_ptr<Memory> data_;
+  SequenceState* other_state_;
+  bool use_single_buffer_;
+  bool use_growable_memory_;
   std::function<Status()> state_update_cb_ = []() {
     // By default calling the TRITONBACKEND_StateUpdate will return an error.
     return Status(
@@ -110,6 +134,7 @@ class SequenceStates {
     }
 
     std::string state_init_name_;
+    std::vector<int64_t> shape_{};
     std::shared_ptr<MutableMemory> data_;
   };
 
@@ -121,7 +146,9 @@ class SequenceStates {
           std::string, const inference::ModelSequenceBatching_State&>&
           state_output_config_map,
       const size_t max_batch_size,
-      const std::unordered_map<std::string, InitialStateData>& initial_state);
+      const std::unordered_map<std::string, InitialStateData>& initial_state,
+      TRITONSERVER_InstanceGroupKind kind, int32_t device_id,
+      const std::map<int, size_t>& cuda_virtual_address_size);
 
   // Get a buffer holding the output state.
   Status OutputState(
@@ -136,12 +163,12 @@ class SequenceStates {
   static std::shared_ptr<SequenceStates> CopyAsNull(
       const std::shared_ptr<SequenceStates>& from);
 
-  const std::map<std::string, std::unique_ptr<SequenceState>>& InputStates()
+  const std::map<std::string, std::shared_ptr<SequenceState>>& InputStates()
   {
     return input_states_;
   }
 
-  std::map<std::string, std::unique_ptr<SequenceState>>& OutputStates()
+  std::map<std::string, std::shared_ptr<SequenceState>>& OutputStates()
   {
     return output_states_;
   }
@@ -160,8 +187,8 @@ class SequenceStates {
   bool IsNullRequest() { return is_null_request_; }
 
  private:
-  std::map<std::string, std::unique_ptr<SequenceState>> input_states_;
-  std::map<std::string, std::unique_ptr<SequenceState>> output_states_;
+  std::map<std::string, std::shared_ptr<SequenceState>> input_states_;
+  std::map<std::string, std::shared_ptr<SequenceState>> output_states_;
   std::shared_ptr<SequenceStates> null_sequence_states_;
   bool is_null_request_ = false;
 };

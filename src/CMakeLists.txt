@@ -65,7 +65,9 @@ endif() # TRITON_ENABLE_GPU
 # Minimum of 1.78 required for use of boost::span. This can eventually be
 # relaxed and replaced with std::span in C++20.
 #
-find_package(Boost 1.78 REQUIRED)
+# boost::filesystem can be replaced with std::filesystem in C++17.
+#
+find_package(Boost 1.78 REQUIRED COMPONENTS filesystem)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -146,7 +148,8 @@ set(
   rate_limiter.cc
   repo_agent.cc
   scheduler_utils.cc
-  sequence_batch_scheduler.cc
+  sequence_batch_scheduler/sequence_batch_scheduler.cc
+  sequence_batch_scheduler/sequence_utils.cc
   sequence_state.cc
   server.cc
   shared_library.cc
@@ -194,7 +197,8 @@ set(
   response_allocator.h
   scheduler.h
   scheduler_utils.h
-  sequence_batch_scheduler.h
+  sequence_batch_scheduler/sequence_batch_scheduler.h
+  sequence_batch_scheduler/sequence_utils.h
   sequence_state.h
   server.h
   server_message.h
@@ -208,12 +212,14 @@ if(${TRITON_ENABLE_GPU})
     SERVER_SRCS
     ${SERVER_SRCS}
     cuda_memory_manager.cc
+    cuda_block_manager.h
     model_config_cuda.cc
   )
   set(
     SERVER_HDRS
     ${SERVER_HDRS}
     cuda_memory_manager.h
+    cuda_block_manager.cc
     model_config_cuda.h
   )
 endif() # TRITON_ENABLE_GPU
@@ -248,7 +254,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   target_compile_options(
     triton-core
     PRIVATE
-      /W1 /D_WIN32_WINNT=0x0A00 /EHsc
+      /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
   )
 else()
   target_compile_options(
@@ -279,6 +285,7 @@ target_include_directories(
   triton-core
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${Boost_INCLUDE_DIRS}
     ${Protobuf_INCLUDE_DIRS}
 )
@@ -455,6 +462,7 @@ target_link_libraries(
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf
     ${RE2_LIBRARY}
+    Boost::filesystem
 )
 
 if (NOT WIN32)

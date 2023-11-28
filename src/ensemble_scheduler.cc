@@ -1328,7 +1328,13 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
   // Add additional callback to keep track of in-flight count
   ++inflight_count_;
-  request->AddInternalReleaseCallback([this]() { --inflight_count_; });
+  request->AddInternalReleaseCallback(
+      [this](
+          std::unique_ptr<InferenceRequest>& request,
+          const uint32_t flags) -> Status {
+        --inflight_count_;
+        return Status::Success;
+      });
   // Consider the top-level "ensemble" request executing once passed to a
   // composing model. Composing model requests will track their own states.
   RETURN_IF_ERROR(request->SetState(InferenceRequest::State::EXECUTING));

@@ -342,7 +342,7 @@ TritonBackendManager::CreateBackend(
 {
   std::lock_guard<std::mutex> lock(mu_);
 
-  const auto python_based_backend_path = dir + "/model.py";
+  const auto python_based_backend_path = JoinPath({dir, kPythonFilename});
   std::vector<std::string> paths = {libpath, python_based_backend_path};
   for (const auto& path : paths) {
     const auto& itr = backend_map_.find(path);
@@ -386,7 +386,7 @@ TritonBackendManager::BackendState(
   for (const auto& backend_pair : backend_map_) {
     auto& libpath = backend_pair.first;
     auto backend = backend_pair.second;
-    if (backend->Name() == "python") {
+    if (backend->Name() == kPythonBackend) {
       has_python_backend = true;
     }
     const char* backend_config;
@@ -401,7 +401,7 @@ TritonBackendManager::BackendState(
   }
 
   if (!has_python_backend && !python_backend_config.empty()) {
-    backend_state_map->insert({"python", python_backend_config});
+    backend_state_map->insert({kPythonBackend, python_backend_config});
   }
 
   *backend_state = std::move(backend_state_map);

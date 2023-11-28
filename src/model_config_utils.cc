@@ -883,7 +883,7 @@ LocalizePythonBackendExecutionEnvironmentPath(
     const std::string& model_path, inference::ModelConfig* config,
     std::shared_ptr<LocalizedPath>* localized_model_dir)
 {
-  if (config->backend() == "python") {
+  if (config->backend() == kPythonBackend) {
     if (config->parameters().contains("EXECUTION_ENV_PATH")) {
       // Read EXECUTION_ENV_PATH
       std::string exec_env_path =

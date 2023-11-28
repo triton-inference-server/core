@@ -51,6 +51,7 @@
 #include "triton/common/table_printer.h"
 
 #ifdef TRITON_ENABLE_GPU
+#include "cuda_block_manager.h"
 #include "cuda_memory_manager.h"
 #endif  // TRITON_ENABLE_GPU
 
@@ -219,6 +220,10 @@ InferenceServer::Init()
       if (cuda_memory_pool_size_.find(gpu) == cuda_memory_pool_size_.end()) {
         cuda_memory_pool_size_[gpu] = 1 << 26;
       }
+      if (cuda_virtual_address_space_size_.find(gpu) ==
+          cuda_virtual_address_space_size_.end()) {
+        cuda_virtual_address_space_size_[gpu] = 1 << 30;
+      }
     }
   }
 
@@ -230,6 +235,14 @@ InferenceServer::Init()
   if (!status.IsOk()) {
     LOG_ERROR << status.Message();
   }
+
+  status = CudaBlockManager::Create(min_supported_compute_capability_);
+  // If CUDA memory manager can't be created, just log error as the
+  // server can still function properly
+  if (!status.IsOk()) {
+    LOG_ERROR << status.Message();
+  }
+
 #endif  // TRITON_ENABLE_GPU
 
   status = EnablePeerAccess(min_supported_compute_capability_);
@@ -274,6 +287,7 @@ InferenceServer::~InferenceServer()
   PinnedMemoryManager::Reset();
 #ifdef TRITON_ENABLE_GPU
   CudaMemoryManager::Reset();
+  CudaBlockManager::Reset();
 #endif  // TRITON_ENABLE_GPU
 }
 

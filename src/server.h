@@ -221,6 +221,17 @@ class InferenceServer {
     cuda_memory_pool_size_ = s;
   }
 
+  // Get / set CUDA virtual address space size
+  const std::map<int, size_t>& CudaVirtualAddressSpaceSize() const
+  {
+    return cuda_virtual_address_space_size_;
+  }
+
+  void SetCudaVirtualAddressSpaceSize(const std::map<int, size_t>& s)
+  {
+    cuda_virtual_address_space_size_ = s;
+  }
+
   // Get / set the minimum support CUDA compute capability.
   double MinSupportedComputeCapability() const
   {
@@ -329,6 +340,7 @@ class InferenceServer {
   CacheConfigMap cache_config_map_;
   std::string cache_dir_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
+  std::map<int, size_t> cuda_virtual_address_space_size_;
   double min_supported_compute_capability_;
   triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   triton::common::HostPolicyCmdlineConfigMap host_policy_map_;

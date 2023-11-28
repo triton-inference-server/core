@@ -100,17 +100,23 @@ class GCSFileSystem : public FileSystem {
 GCSFileSystem::GCSFileSystem(const GCSCredential& gs_cred)
 {
   google::cloud::Options options;
-  auto creds = gcs::oauth2::CreateServiceAccountCredentialsFromJsonFilePath(
+  auto creds = gcs::oauth2::CreateAuthorizedUserCredentialsFromJsonFilePath(
       gs_cred.path_);
   if (creds) {
-    options.set<gcs::Oauth2CredentialsOption>(*creds);  // json credential
+    options.set<gcs::Oauth2CredentialsOption>(*creds);  // json user credential
   } else {
-    auto creds = gcs::oauth2::CreateComputeEngineCredentials();
-    if (creds->AuthorizationHeader()) {
-      options.set<gcs::Oauth2CredentialsOption>(creds);  // metadata service
+    auto creds = gcs::oauth2::CreateServiceAccountCredentialsFromJsonFilePath(
+        gs_cred.path_);
+    if (creds) {
+      options.set<gcs::Oauth2CredentialsOption>(*creds);  // json sa credential
     } else {
-      options.set<gcs::Oauth2CredentialsOption>(
-          gcs::oauth2::CreateAnonymousCredentials());  // no credential
+      auto creds = gcs::oauth2::CreateComputeEngineCredentials();
+      if (creds->AuthorizationHeader()) {
+        options.set<gcs::Oauth2CredentialsOption>(creds);  // metadata service
+      } else {
+        options.set<gcs::Oauth2CredentialsOption>(
+            gcs::oauth2::CreateAnonymousCredentials());  // no credential
+      }
     }
   }
   client_ = std::make_unique<gcs::Client>(options);
