@@ -113,7 +113,7 @@ TritonModel::Create(
       &search_paths, &backend_libdir, &backend_libpath));
 
   if (is_python_based_backend) {
-    RETURN_IF_ERROR(SetPythonBackendBasedBackendExecutionEnvironment(
+    RETURN_IF_ERROR(SetPythonBasedBackendExecutionEnvironment(
         backend_libdir, &model_config));
   }
 

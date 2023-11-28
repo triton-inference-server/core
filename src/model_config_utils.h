@@ -144,13 +144,13 @@ Status LocalizePythonBackendExecutionEnvironmentPath(
     const std::string& model_path, inference::ModelConfig* config,
     std::shared_ptr<LocalizedPath>* localized_model_dir);
 
-/// Set execution environments for Python backend based backend, if the
-/// execution environments is not already specified and the execution
-/// environment file '<backend_libdir>/pb_exec_<runtime>.tar.gz' exists.
+/// Set execution environments for Python based backends, if the execution
+/// environments is not already specified and the execution environment file
+/// '<backend_libdir>/pb_exec_<runtime>.tar.gz' exists.
 /// \param backend_libdir The backend runtime library directory path.
 /// \param model_config The model configuration.
 /// \return The error status.
-Status SetPythonBackendBasedBackendExecutionEnvironment(
+Status SetPythonBasedBackendExecutionEnvironment(
     const std::string& backend_libdir, inference::ModelConfig* model_config);
 
 /// Auto-complete the instance count based on instance kind and backend name.

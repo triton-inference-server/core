@@ -934,7 +934,7 @@ LocalizePythonBackendExecutionEnvironmentPath(
 }
 
 Status
-SetPythonBackendBasedBackendExecutionEnvironment(
+SetPythonBasedBackendExecutionEnvironment(
     const std::string& backend_libdir, inference::ModelConfig* model_config)
 {
   if (!model_config->parameters().contains("EXECUTION_ENV_PATH")) {
