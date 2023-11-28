@@ -338,7 +338,7 @@ std::string AssembleCPPRuntimeLibraryName(const std::string& backend_name);
 
 /// Check if runtime library name is well formed.
 /// \param library_name The library name to check.
-/// \return Success status if '\' and '/' characters are not in library name.
+/// \return Success status if '\', '/' and '..' are not in library name.
 /// Error status if otherwise.
 Status IsRuntimeLibraryNameWellFormed(const std::string& library_name);
 

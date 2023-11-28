@@ -2496,7 +2496,7 @@ AssembleCPPRuntimeLibraryName(const std::string& backend_name)
 Status
 IsRuntimeLibraryNameWellFormed(const std::string& library_name)
 {
-  const static std::vector<std::string> excluded_strings = {"\\", "/"};
+  const static std::vector<std::string> excluded_strings = {"\\", "/", ".."};
   for (const auto& excluded_str : excluded_strings) {
     if (library_name.find(excluded_str) != library_name.npos) {
       return Status(
