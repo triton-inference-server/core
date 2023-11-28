@@ -312,8 +312,8 @@ TritonModel::GetBackendLibraryProperties(
   std::string backend_libname = model_config->runtime();
   if (backend_libname.empty()) {
     RETURN_IF_ERROR(GetBackendRuntimeLibraryName(
-        backend_name, *search_paths, &backend_libname, backend_libdir,
-        backend_libpath, is_python_based_backend));
+        backend_dir, backend_name, *search_paths, &backend_libname,
+        backend_libdir, backend_libpath, is_python_based_backend));
     if (!*is_python_based_backend) {
       // All variables are correctly set for C++ backends on initial search.
       return Status::Success;
@@ -376,7 +376,7 @@ TritonModel::GetBackendLibraryProperties(
 
 Status
 TritonModel::GetBackendRuntimeLibraryName(
-    const std::string& backend_name,
+    const std::string& backend_dir, const std::string& backend_name,
     const std::vector<std::string>& search_paths, std::string* backend_libname,
     std::string* backend_libdir, std::string* backend_libpath,
     bool* is_python_based_backend)
@@ -390,9 +390,11 @@ TritonModel::GetBackendRuntimeLibraryName(
     return Status::Success;
   }
   // Try Python runtime
+  std::vector<std::string> python_search_paths = {
+      JoinPath({backend_dir, backend_name})};
   *backend_libname = kPythonFilename;
   RETURN_IF_ERROR(FindBackendLibraryPath(
-      search_paths, *backend_libname, backend_libdir, backend_libpath));
+      python_search_paths, *backend_libname, backend_libdir, backend_libpath));
   if (!backend_libpath->empty()) {
     *is_python_based_backend = true;
     return Status::Success;

@@ -212,9 +212,10 @@ class TritonModel : public Model {
 
   // Get 'backend_libname', 'backend_libdir', 'backend_libpath' and
   // 'is_python_based_backend' by searching for different possible backend
-  // library names on 'search_paths'
+  // library names on 'search_paths'. Searching for Python based backend
+  // runtime is limited to 'backend_dir'.
   static Status GetBackendRuntimeLibraryName(
-      const std::string& backend_name,
+      const std::string& backend_dir, const std::string& backend_name,
       const std::vector<std::string>& search_paths,
       std::string* backend_libname, std::string* backend_libdir,
       std::string* backend_libpath, bool* is_python_based_backend);
