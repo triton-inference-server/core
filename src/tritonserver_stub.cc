@@ -214,7 +214,7 @@ TRITONSERVER_InferenceRequestSetFlags()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_InferenceRequestTimeout()
+TRITONBACKEND_InferenceRequestTimeoutMicroseconds()
 {
 }
 TRITONAPI_DECLSPEC void

@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 16
+#define TRITONBACKEND_API_VERSION_MINOR 17
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -418,7 +418,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
 /// \param timeout Returns the timeout value for the request.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_InferenceRequestTimeout(
+TRITONBACKEND_InferenceRequestTimeoutMicroseconds(
     TRITONBACKEND_Request* request, uint64_t* timeout);
 
 /// Get the correlation ID of the request if it is a string.
