@@ -28,10 +28,14 @@ cmake_minimum_required (VERSION 3.18)
 
 project(triton-bindings LANGUAGES C CXX)
 
-# Top level module entry point
+# Top level module entry point and typed marker
 file(COPY __init__.py DESTINATION .)
+file(COPY py.typed DESTINATION .)
 # Copy the '__init__.py' for the '_c' module
 file(COPY _c/__init__.py DESTINATION ./_c/.)
+# Find and copy _api modules
+file(GLOB PYTHON_MODULE_FILES ./_api/*.py)
+file(COPY ${PYTHON_MODULE_FILES} DESTINATION ./_api/.)
 
 include(FetchContent)
 FetchContent_Declare(

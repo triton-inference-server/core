@@ -61,7 +61,7 @@ this_directory = os.path.abspath(os.path.dirname(__file__))
 data_files = [
     ("", ["LICENSE.txt"]),
 ]
-platform_package_data = [os.environ["TRITON_PYBIND"]]
+platform_package_data = [os.environ["TRITON_PYBIND"],"py.typed"]
 
 setup(
     name="tritonserver",
