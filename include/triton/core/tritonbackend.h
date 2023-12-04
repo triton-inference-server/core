@@ -411,8 +411,8 @@ TRITONBACKEND_ResponseFactoryIsCancelled(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
 
-/// Get the timeout of the request. A value of 0 indicates no timeout was specified for the request.
-/// provided, the timeout will default to zero.
+/// Get the timeout of the request. A value of 0 indicates no timeout was
+/// specified for the request. provided, the timeout will default to zero.
 ///
 /// \param request The inference request.
 /// \param timeout Returns the timeout value for the request.
