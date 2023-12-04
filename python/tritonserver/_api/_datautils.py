@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Annotated, ClassVar, Dict, List
 
 import tritonserver._api._dlpack as _dlpack
-import cupy
+    
 import numpy
 from tritonserver import _c as triton_bindings
 
@@ -99,46 +99,49 @@ class MemoryAllocator(ABC):
         if hasattr(self, "set_attributes"):
             self._allocator.set_buffer_attributes_function(self.set_buffer_attributes)
         return self._allocator
+    
+try:
+    import cupy
+    
+    class CupyAllocator(MemoryAllocator):
+        def __init__(self):
+            pass
 
+        def start(self, allocator, user_object):
+            pass
 
-class CupyAllocator(MemoryAllocator):
-    def __init__(self):
-        pass
+        def release(
+            self,
+            allocator,
+            buffer_,
+            buffer_user_object,
+            byte_size,
+            memory_type,
+            memory_type_id,
+        ):
+            pass
 
-    def start(self, allocator, user_object):
-        pass
+        def allocate(
+            self,
+            allocator,
+            tensor_name,
+            byte_size,
+            memory_type,
+            memory_type_id,
+            user_object,
+        ):
+            _buffer = cupy.empty(byte_size, cupy.byte)
 
-    def release(
-        self,
-        allocator,
-        buffer_,
-        buffer_user_object,
-        byte_size,
-        memory_type,
-        memory_type_id,
-    ):
-        pass
+            dlpack_object = DLPackObject(_buffer)
 
-    def allocate(
-        self,
-        allocator,
-        tensor_name,
-        byte_size,
-        memory_type,
-        memory_type_id,
-        user_object,
-    ):
-        _buffer = cupy.empty(byte_size, cupy.byte)
-
-        dlpack_object = DLPackObject(_buffer)
-
-        return (
-            dlpack_object.data_ptr,
-            _buffer,
-            dlpack_object.memory_type,
-            dlpack_object.memory_type_id,
-        )
-
+            return (
+                dlpack_object.data_ptr,
+                _buffer,
+                dlpack_object.memory_type,
+                dlpack_object.memory_type_id,
+            )
+except Exception as e:
+    pass
 
 class NumpyAllocator(MemoryAllocator):
     def __init__(self):
