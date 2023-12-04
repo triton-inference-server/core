@@ -31,6 +31,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION ${TRITON_VERSION})
 configure_file(../LICENSE LICENSE.txt COPYONLY)
 configure_file(setup.py setup.py @ONLY)
 file(COPY test/test_binding.py DESTINATION ./test/.)
+file(COPY test/test_api.py DESTINATION ./test/.)
 
 set(WHEEL_DEPENDS
       ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION
@@ -66,4 +67,5 @@ install(
 # Test
 install(
   CODE "file(INSTALL ${CMAKE_CURRENT_BINARY_DIR}/test/test_binding.py DESTINATION \"${CMAKE_INSTALL_PREFIX}/python\")"
+  CODE "file(INSTALL ${CMAKE_CURRENT_BINARY_DIR}/test/test_api.py DESTINATION \"${CMAKE_INSTALL_PREFIX}/python\")"
 )
