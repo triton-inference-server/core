@@ -319,17 +319,16 @@ class Server:
         def __setattr__(self, name, value):
             raise triton_bindings.InvalidArgumentError("Server not started")
 
-    def __init__(self, options: Options = None, **kwargs):
-        if options is None:
-            options = Options(**kwargs)
-        self._options = options
+    def __init__(self):
         self._server = Server.UnstartedServer()
 
-    def start(self, blocking=False):
+    def start(self, options: Options = None, block_until_ready=False, **kwargs):
+        if options is None:
+            options = Options(**kwargs)
         self._server = triton_bindings.TRITONSERVER_Server(
-            self._options.create_server_options()
+            options._create_server_options()
         )
-        while blocking and not self.is_ready():
+        while block_until_ready and not self.is_ready():
             time.sleep(0.1)
 
     def stop(self):
