@@ -12,47 +12,67 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Annotated, Dict, List
 
-import tritonserver._api._datautils as _datautils
 import numpy
+import tritonserver._api._datautils as _datautils
 from tritonserver import _c as triton_bindings
+from tritonserver._c import TRITONSERVER_InstanceGroupKind as InstanceGroupKind
+from tritonserver._c import TRITONSERVER_LogFormat as LogFormat
 from tritonserver._c import TRITONSERVER_MetricFamily as MetricFamily
+from tritonserver._c import TRITONSERVER_MetricFormat as MetricFormat
+from tritonserver._c import TRITONSERVER_MetricKind as MetricKind
 from tritonserver._c import TRITONSERVER_ModelBatchFlag as ModelBatchFlag
+from tritonserver._c import TRITONSERVER_ModelControlMode as ModelControlMode
 from tritonserver._c import TRITONSERVER_ModelIndexFlag as ModelIndexFlag
 from tritonserver._c import TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag
-from tritonserver._c import TRITONSERVER_MetricFormat as MetricFormat
-from tritonserver._c import TRITONSERVER_ModelControlMode as ModelControlMode
 from tritonserver._c import TRITONSERVER_RateLimitMode as RateLimitMode
-from tritonserver._c import TRITONSERVER_LogFormat as LogFormat
-from tritonserver._c import TRITONSERVER_InstanceGroupKind as InstanceGroupKind
-from tritonserver._c import TRITONSERVER_MetricKind as MetricKind
+
+uint = Annotated[int, ctypes.c_uint]
 
 
 @dataclass
 class RateLimiterResource:
+    """RateLimiterResource.
+
+    The amount of a resource available on a device. See
+    [rate_limiter](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/rate_limiter.md)
+    for details.
+
+    Parameters
+    ----------
+    name : str
+           Name of resource
+    count : uint
+           Count of resource available
+    device: uint
+           Device
+    """
+
     name: str
-    count: Annotated[int, ctypes.c_uint]
-    device: Annotated[int, ctypes.c_uint]
+    count: uint
+    device: uint
 
 
 @dataclass
 class ModelLoadDeviceLimit:
     kind: InstanceGroupKind
-    device: Annotated[int, ctypes.c_uint]
+    device: uint
     fraction: float
 
 
 @dataclass
 class Options:
-    """Server Options
+    """Server Options.
 
     Parameters
     ----------
     server_id: str
             Id for server.
 
+
     """
 
     server_id: str = "triton"
+    model_repository: str = ""
     model_repository_paths: List[str] = dataclasses.field(default_factory=list[str])
     model_control_mode: ModelControlMode = ModelControlMode.POLL
     startup_models: List[str] = dataclasses.field(default_factory=list[str])
@@ -119,6 +139,8 @@ class Options:
 
         options.set_server_id(self.server_id)
 
+        if self.model_repository:
+            self.model_repository_paths.append(self.model_repository)
         for model_repository_path in self.model_repository_paths:
             options.set_model_repository_path(model_repository_path)
         options.set_model_control_mode(self.model_control_mode)
@@ -189,36 +211,38 @@ class Options:
 
         return options
 
+
 class ModelDictionary(dict):
     def __init__(self, server, models):
         super().__init__()
         for model in models:
-            self[(model.name,model.version)] = model
+            self[(model.name, model.version)] = model
         self._server = server
+
     def __getitem__(self, key):
-        if isinstance(key,tuple):
-            return dict.__getitem__(self,key)
+        if isinstance(key, tuple):
+            try:
+                return dict.__getitem__(self, key)
+            except KeyError:
+                raise KeyError(f"Unknown Model: {key}")
         else:
             names = [x[0] for x in self.keys()]
             if key in names:
-                return Model(self._server,name=key,version=-1)
+                return Model(self._server, name=key, version=-1)
             else:
-                raise KeyError(key)
-            
+                raise KeyError(f"Unknown Model: {key}")
+
+
 class Server:
     class UnstartedServer(object):
         def __init__(self):
             pass
 
         def __getattribute__(self, name):
-            raise triton_bindings.InvalidArgumentError(
-                "Server not started"
-            )
+            raise triton_bindings.InvalidArgumentError("Server not started")
 
         def __setattr__(self, name, value):
-            raise triton_bindings.InvalidArgumentError(
-                "Server not started"
-            )
+            raise triton_bindings.InvalidArgumentError("Server not started")
 
     def __init__(self, options: Options = None, **kwargs):
         if options is None:
@@ -267,7 +291,7 @@ class Server:
 
     @property
     def models(self):
-        return ModelDictionary(self._server,self._model_index())
+        return ModelDictionary(self._server, self._model_index())
 
     def _model_index(self, ready=False):
         models = json.loads(self._server.model_index(ready).serialize_to_json())
@@ -382,7 +406,9 @@ class AsyncResponseIterator:
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
             if self._user_queue is not None:
-                asyncio.run_coroutine_threadsafe(self._user_queue.put(response), self._loop)
+                asyncio.run_coroutine_threadsafe(
+                    self._user_queue.put(response), self._loop
+                )
 
         except Exception as e:
             triton_bindings.TRITONSERVER_LogMessage(
@@ -412,13 +438,16 @@ class AsyncResponseIterator:
         response = await self._queue.get()
         self._complete = response.final
         return response
-    
+
     def cancel(self):
         self._request.cancel()
-        
+
+
 class ResponseIterator:
     def response_callback(self, response, flags, unused):
-        response = InferenceResponse.set_from_server_response(self._server, self._request, response, flags)
+        response = InferenceResponse.set_from_server_response(
+            self._server, self._request, response, flags
+        )
         self._queue.put(response)
         if self._user_queue is not None:
             self._user_queue.put(response)
@@ -439,6 +468,7 @@ class ResponseIterator:
         response = self._queue.get()
         self._complete = response.final
         return response
+
     def cancel(self):
         self._request.cancel()
 
@@ -487,7 +517,7 @@ class InferenceResponse:
             outputs[name] = memory_buffer.value
         values["outputs"] = outputs
         values["_server"] = server
-        
+
         # values["classification_label"] = response.output_classification_label()
 
         return InferenceResponse(**values)
@@ -510,7 +540,7 @@ class InferenceRequest:
     _default_allocator = _datautils.NumpyAllocator().create_response_allocator()
 
     def _release_request(self, request, flags, user_object):
-        pass    
+        pass
 
     def _add_inputs(self, request):
         for name, value in self.inputs.items():
