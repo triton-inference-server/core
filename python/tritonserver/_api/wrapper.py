@@ -54,6 +54,14 @@ class RateLimiterResource:
 
 @dataclass
 class ModelLoadDeviceLimit:
+    """Memory limit for loading models on a device.
+
+    The amount of memory available for model loading on a device. See
+    [https://github.com/triton-inference-server/server/blob/main/docs/user_guide/rate_limiter.md
+
+    https://github.com/triton-inference-server/core/blob/ad1817647c17f1b593dbf88e6d12174512d88f8d/include/triton/core/tritonserver.h#L2111
+    """
+
     kind: InstanceGroupKind
     device: uint
     fraction: float
@@ -155,14 +163,14 @@ class Options:
             options.set_rate_limiter_resouces(
                 rate_limiter_resource.name,
                 rate_limiter_resource.count,
-                tate_limiter_resource.device,
+                rate_limiter_resource.device,
             )
         options.set_pinned_memory_pool_byte_size(self.pinned_memory_pool_size)
 
         for device, memory_size in self.cuda_memory_pool_sizes.items():
             options.set_cuda_memory_pool_byte_size(device, memory_size)
         for cache_name, settings in self.cache_config:
-            options.set_cache_config(cache, json.dumps(settings))
+            options.set_cache_config(cache_name, json.dumps(settings))
 
         options.set_cache_directory(self.cache_directory)
         options.set_min_supported_compute_capability(
