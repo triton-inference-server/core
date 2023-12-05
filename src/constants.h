@@ -55,13 +55,10 @@ constexpr char kOpenVINORuntimeBackend[] = "openvino";
 
 constexpr char kPyTorchLibTorchPlatform[] = "pytorch_libtorch";
 constexpr char kPyTorchLibTorchFilename[] = "model.pt";
-constexpr char kPyTorchPythonPlatform[] = "pytorch_python";
 constexpr char kPyTorchBackend[] = "pytorch";
 
 constexpr char kPythonFilename[] = "model.py";
 constexpr char kPythonBackend[] = "python";
-
-constexpr char kVLLMBackend[] = "vllm";
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 constexpr char kEnsemblePlatform[] = "ensemble";

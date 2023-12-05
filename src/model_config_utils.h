@@ -42,13 +42,6 @@ enum BackendType {
   BACKEND_TYPE_PYTORCH = 4
 };
 
-/// Enumeration for different runtime types.
-enum RuntimeType {
-  RUNTIME_TYPE_UNKNOWN = 0,
-  RUNTIME_TYPE_CPP = 1,
-  RUNTIME_TYPE_PYTHON = 2
-};
-
 // Get version of a model from the path containing the model
 /// definition file.
 /// \param path The path to the model definition file.
@@ -94,9 +87,9 @@ Status GetNormalizedModelConfig(
     const std::string& model_name, const std::string& path,
     const double min_compute_capability, inference::ModelConfig* config);
 
-/// Auto-complete backend related fields (platform, backend, default model
-/// filename and runtime) if not set, note that only Triton recognized backends
-/// will be checked.
+/// Auto-complete backend related fields (platform, backend and default model
+/// filename) if not set, note that only Triton recognized backends will be
+/// checked.
 /// \param model_name The name of the model.
 /// \param model_path The full-path to the directory containing the
 /// model configuration.
@@ -105,14 +98,6 @@ Status GetNormalizedModelConfig(
 Status AutoCompleteBackendFields(
     const std::string& model_name, const std::string& model_path,
     inference::ModelConfig* config);
-
-/// Auto-complete backend runtime field if not set.
-/// \param runtime_type Specify the runtime type for the model (C++ or Python).
-/// If unknown, it will be determined from the default model filename.
-/// \param config Returns the auto-completed model configuration.
-/// \return The error status.
-Status AutoCompleteBackendRuntimeField(
-    RuntimeType runtime_type, inference::ModelConfig* config);
 
 /// Detects and adds missing fields in the model configuration.
 /// \param min_compute_capability The minimum supported CUDA compute
