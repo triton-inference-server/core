@@ -1,3 +1,32 @@
+# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+""" Python API for Triton Server
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -6,15 +35,12 @@ import dataclasses
 import inspect
 import json
 import queue
-import struct
 import time
-from collections import defaultdict
 from dataclasses import dataclass
-from typing import Annotated, Dict, List
+from typing import Annotated, Any
 
-import numpy
-import tritonserver._api._datautils as _datautils
 from tritonserver import _c as triton_bindings
+from tritonserver._api import _datautils
 from tritonserver._c import TRITONSERVER_InstanceGroupKind as InstanceGroupKind
 from tritonserver._c import TRITONSERVER_LogFormat as LogFormat
 from tritonserver._c import TRITONSERVER_MetricFamily as MetricFamily
@@ -31,20 +57,20 @@ uint = Annotated[int, ctypes.c_uint]
 
 @dataclass
 class RateLimiterResource:
-    """RateLimiterResource.
+    """Resource count for rate limiting.
 
-    The amount of a resource available on a device. See
-    [rate_limiter](https://github.com/triton-inference-server/server/blob/main/docs/user_guide/rate_limiter.md)
-    for details.
+    The amount of a resource available.
+
+    See :c:func:`TRITONSERVER_ServerOptionsAddRateLimiterResource`
 
     Parameters
     ----------
     name : str
-           Name of resource
+         Name of resource
     count : uint
-           Count of resource available
-    device: uint
-           Device
+          Count of resource available
+    device : uint
+           The id of the device
     """
 
     name: str
@@ -56,10 +82,16 @@ class RateLimiterResource:
 class ModelLoadDeviceLimit:
     """Memory limit for loading models on a device.
 
-    The amount of memory available for model loading on a device. See
-    [https://github.com/triton-inference-server/server/blob/main/docs/user_guide/rate_limiter.md
+    See :c:func:`TRITONSERVER_ServerOptionsSetModelLoadDeviceLimit`
 
-    https://github.com/triton-inference-server/core/blob/ad1817647c17f1b593dbf88e6d12174512d88f8d/include/triton/core/tritonserver.h#L2111
+    Parameters
+    ----------
+    kind : InstanceGroupKind
+         The kind of device
+    device : uint
+           The id of the device
+    fraction : float
+             The limit on memory usage as a fraction
     """
 
     kind: InstanceGroupKind
@@ -73,36 +105,71 @@ class Options:
 
     Parameters
     ----------
-    server_id: str
-            Id for server.
-
+    server_id : str
+              Id for server.
+    model_repository : str
+                     Model repository path.
+                     If provided will be appended to model_repository_paths.
+                     At least one path is required
+    model_repository_paths : list[str]
+                           List of model repository paths.
+                           At least one path is required.
+    model_control_mode : ModelControlMode
+                       Model control mode.
+                       See :c:func:`TRITONSERVER_ServerOptionsSetModelControlMode`
+    startup_models : list[str]
+                   List of models to load at startup.
+                   See :c:func:`TRITONSERVER_ServerOptionsSetStartupModel`
+    strict_model_config : bool
+                        Enable or disable strict model configuration.
+                        See :c:func:`TRITONSERVER_ServerOptionsSetStrictModelConfig`
+    rate_limiter_mode : RateLimitMode
+                      Rate limit mode.
+                      See :c:func:`TRITONSERVER_ServerOptionsSetRateLimiterMode`
+    rate_limiter_resources : list[RateLimiterResource]
+                      Rate limited resources.
+                      See :c:func:`TRITONSERVER_ServerOptionsAddRateLimiterResource`
+    pinned_memory_pool_size : uint
+                            Total pinned memory size.
+                            See :c:func:`TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize`
+    cuda_memory_pool_sizes : dict[uint, uint]
+                           Total cuda memory pool size per device.
+                           See :c:func:`TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize`
+    cache_config : dict[str, dict[str, Any]]
+                 Key value configuration parameters for cache provider.
+                 See :c:func:`TRITONSERVER_ServerOptionsSetCacheConfig`
+    cache_directory : str
+                    Directory for cache provider implementations.
+                    See :c:func:`TRITONSERVER_ServerOptionsSetCacheDirectory`
+    min_supported_compute_capability : float
+                                     Minimum required cuda compute capability.
+                                     See :c:func:`TRITONSERVER_ServerOptionsSetMinSupportedComputeCapability`
+    exit_on_error : bool
+                  Whether to exit on an initialization error.
+                  See :c:func:`TRITONSERVER_ServerOptionsSetExitOnError`
 
     """
 
     server_id: str = "triton"
     model_repository: str = ""
-    model_repository_paths: List[str] = dataclasses.field(default_factory=list[str])
-    model_control_mode: ModelControlMode = ModelControlMode.POLL
-    startup_models: List[str] = dataclasses.field(default_factory=list[str])
+    model_repository_paths: list[str] = dataclasses.field(default_factory=list[str])
+    model_control_mode: ModelControlMode = ModelControlMode.NONE
+    startup_models: list[str] = dataclasses.field(default_factory=list[str])
     strict_model_config: bool = True
 
     rate_limiter_mode: RateLimitMode = RateLimitMode.OFF
-    rate_limiter_resources: List[RateLimiterResource] = dataclasses.field(
+    rate_limiter_resources: list[RateLimiterResource] = dataclasses.field(
         default_factory=list[RateLimiterResource]
     )
 
-    pinned_memory_pool_size: Annotated[int, ctypes.c_uint] = 1 << 28
-    cuda_memory_pool_sizes: Dict[
-        Annotated[int, ctypes.c_uint], Annotated[int, ctypes.c_uint]
-    ] = dataclasses.field(
-        default_factory=dict[
-            Annotated[int, ctypes.c_uint], Annotated[int, ctypes.c_uint]
-        ]
+    pinned_memory_pool_size: uint = 1 << 28
+    cuda_memory_pool_sizes: dict[uint, uint] = dataclasses.field(
+        default_factory=dict[uint, uint]
     )
 
     #   response_cache_size: Annotated[int, ctypes.c_uint] = 0
-    cache_config: Dict[str, Dict[str, str]] = dataclasses.field(
-        default_factory=dict[str, dict[str, str]]
+    cache_config: dict[str, dict[str, Any]] = dataclasses.field(
+        default_factory=dict[str, dict[str, Any]]
     )
     cache_directory: str = "/opt/tritonserver/caches"
 
@@ -110,9 +177,9 @@ class Options:
 
     exit_on_error: bool = True
     strict_readiness: bool = True
-    exit_timeout: Annotated[int, ctypes.c_uint] = 30
-    buffer_manager_thread_count: Annotated[int, ctypes.c_uint] = 0
-    model_load_thread_count: Annotated[int, ctypes.c_uint] = 4
+    exit_timeout: uint = 30
+    buffer_manager_thread_count: uint = 0
+    model_load_thread_count: uint = 4
     model_namespacing: bool = False
 
     log_file: str = None
@@ -125,24 +192,24 @@ class Options:
     metrics: bool = True
     gpu_metrics: bool = True
     cpu_metrics: bool = True
-    metrics_interval: Annotated[int, ctypes.c_uint] = 2000
+    metrics_interval: uint = 2000
 
     backend_directory: str = "/opt/tritonserver/backends"
     repo_agent_directory: str = "/opt/tritonserver/repoagents"
-    model_load_device_limits: List[ModelLoadDeviceLimit] = dataclasses.field(
+    model_load_device_limits: list[ModelLoadDeviceLimit] = dataclasses.field(
         default_factory=list[ModelLoadDeviceLimit]
     )
-    backend_configuration: Dict[str, Dict[str, str]] = dataclasses.field(
+    backend_configuration: dict[str, dict[str, str]] = dataclasses.field(
         default_factory=dict[str, dict[str, str]]
     )
-    host_policies: Dict[str, Dict[str, str]] = dataclasses.field(
-        default_factory=dict[str, Dict[str, str]]
+    host_policies: dict[str, dict[str, str]] = dataclasses.field(
+        default_factory=dict[str, dict[str, str]]
     )
-    metrics_configuration: Dict[str, Dict[str, str]] = dataclasses.field(
-        default_factory=dict[str, Dict[str, str]]
+    metrics_configuration: dict[str, dict[str, str]] = dataclasses.field(
+        default_factory=dict[str, dict[str, str]]
     )
 
-    def create_server_options(self):
+    def _create_server_options(self):
         options = triton_bindings.TRITONSERVER_ServerOptions()
 
         options.set_server_id(self.server_id)
