@@ -16,12 +16,18 @@ class TrtionServerAPITest(unittest.TestCase):
             server.is_ready()
 
     def test_gpu_memory(self):
-        server = tritonserver.Server(
-            model_repository_paths=["/workspace/models"],
+        #        server = tritonserver.Server(
+        #           model_repository_paths=["/workspace/models"],
+        #          log_verbose=True,
+        #         log_error=True,
+        #    )
+        server = tritonserver.Server()
+        server.start(
+            model_repository="/workspace/models",
             log_verbose=True,
             log_error=True,
+            blocking=True,
         )
-        server.start(blocking=True)
 
         test = server.get_model("test")
         fp16_input = cupy.array([[5], [6], [7], [8]], dtype=numpy.float16)
@@ -41,8 +47,8 @@ class TrtionServerAPITest(unittest.TestCase):
     def test_inference(self):
         server = tritonserver.Server(
             model_repository_paths=["/workspace/models"],
- #           log_verbose=True,
-#            log_error=True,
+            #           log_verbose=True,
+            #            log_error=True,
         )
         server.start()
         while not server.is_ready():
@@ -105,16 +111,22 @@ class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
             pass
 
         test = server.models["test"]
-        
+
         inputs = {
             "text_input": numpy.array(["hello"], dtype=numpy.object_),
             "fp16_input": numpy.array([["1"]], dtype=numpy.float16),
         }
 
         response_queue = asyncio.Queue()
-        responses = test.async_infer(inputs=inputs, response_queue = response_queue, request_id="1")
-        responses_2 = test.async_infer(inputs=inputs, response_queue=response_queue, request_id="2")
-        responses_3 = test.async_infer(inputs=inputs, response_queue=response_queue, request_id="3")
+        responses = test.async_infer(
+            inputs=inputs, response_queue=response_queue, request_id="1"
+        )
+        responses_2 = test.async_infer(
+            inputs=inputs, response_queue=response_queue, request_id="2"
+        )
+        responses_3 = test.async_infer(
+            inputs=inputs, response_queue=response_queue, request_id="3"
+        )
         responses.cancel()
         async for response in responses:
             print(response.outputs["text_output"])

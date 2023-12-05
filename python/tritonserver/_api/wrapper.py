@@ -41,6 +41,8 @@ from typing import Annotated, Any
 
 from tritonserver import _c as triton_bindings
 from tritonserver._api import _datautils
+
+# :MetricFamily Metric group created with MetricKind, name, and description
 from tritonserver._c import TRITONSERVER_InstanceGroupKind as InstanceGroupKind
 from tritonserver._c import TRITONSERVER_LogFormat as LogFormat
 from tritonserver._c import TRITONSERVER_MetricFamily as MetricFamily
@@ -309,26 +311,17 @@ class ModelDictionary(dict):
 
 
 class Server:
-    class UnstartedServer(object):
-        def __init__(self):
-            pass
-
-        def __getattribute__(self, name):
-            raise triton_bindings.InvalidArgumentError("Server not started")
-
-        def __setattr__(self, name, value):
-            raise triton_bindings.InvalidArgumentError("Server not started")
-
-    def __init__(self):
-        self._server = Server.UnstartedServer()
-
-    def start(self, options: Options = None, block_until_ready=False, **kwargs):
+    def __init__(self, options: Options = None, **kwargs):
         if options is None:
             options = Options(**kwargs)
+        self._options = options
+        self._server = Server._UnstartedServer()
+
+    def start(self, blocking=False):
         self._server = triton_bindings.TRITONSERVER_Server(
-            options._create_server_options()
+            self._options.create_server_options()
         )
-        while block_until_ready and not self.is_ready():
+        while blocking and not self.is_ready():
             time.sleep(0.1)
 
     def stop(self):
@@ -339,8 +332,26 @@ class Server:
         self._server.unregister_model_repository(repository_path)
 
     def register_model_repository(
-        self, repository_path: str, name_mapping: Dict[str, str]
+        self, repository_path: str, name_mapping: dict[str, str]
     ):
+        """Add a new model repository.
+
+        Adds a new model repository.
+
+        See :c:func:`TRITONSERVER_ServerRegisterModelRepository`
+
+        Parameters
+        ----------
+        repository_path : str
+            repository path
+        name_mapping : dict[str, str]
+            override model names
+
+        Examples
+        --------
+        server.register_model_repository("/workspace/models",{"test_model":"new_model"})
+
+        """
         name_mapping_list = [
             triton_bindings.TRITONSERVER_Parameter(name, value)
             for name, value in name_mapping.items()
@@ -394,6 +405,16 @@ class Server:
 
     def metrics(self, metric_format: MetricFormat = MetricFormat.PROMETHEUS):
         return self._server.metrics().formatted(metric_format)
+
+    class _UnstartedServer(object):
+        def __init__(self):
+            pass
+
+        def __getattribute__(self, name):
+            raise triton_bindings.InvalidArgumentError("Server not started")
+
+        def __setattr__(self, name, value):
+            raise triton_bindings.InvalidArgumentError("Server not started")
 
 
 class Model:
@@ -669,7 +690,7 @@ class InferenceRequest:
 
 
 class Metric(triton_bindings.TRITONSERVER_Metric):
-    def __init__(self, family: MetricFamily, labels: Dict[str, str] = None):
+    def __init__(self, family: MetricFamily, labels: dict[str, str] = None):
         if labels is not None:
             parameters = [
                 triton_bindings.TRITONSERVER_Parameter(name, value)
