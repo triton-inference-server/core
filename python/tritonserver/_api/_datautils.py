@@ -7,9 +7,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Annotated, ClassVar, Dict, List
 
-import tritonserver._api._dlpack as _dlpack
-    
 import numpy
+import tritonserver._api._dlpack as _dlpack
 from tritonserver import _c as triton_bindings
 
 DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE = defaultdict(
@@ -99,10 +98,11 @@ class MemoryAllocator(ABC):
         if hasattr(self, "set_attributes"):
             self._allocator.set_buffer_attributes_function(self.set_buffer_attributes)
         return self._allocator
-    
+
+
 try:
     import cupy
-    
+
     class CupyAllocator(MemoryAllocator):
         def __init__(self):
             pass
@@ -140,8 +140,10 @@ try:
                 dlpack_object.memory_type,
                 dlpack_object.memory_type_id,
             )
+
 except Exception as e:
     pass
+
 
 class NumpyAllocator(MemoryAllocator):
     def __init__(self):
@@ -245,7 +247,7 @@ class MemoryBuffer:
             return MemoryBuffer._from_dlpack(value)
         else:
             raise triton_bindings.InvalidArgumentError(
-                f"Input type {type(value)} not supported"
+                f"Input type {type(value)} not supported. Must be one of {list(MemoryBufer._supported_conversions.keys())} or the type must support __dlpack__"
             )
 
     @staticmethod
