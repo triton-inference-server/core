@@ -24,8 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-""" Python API for Triton Server
-"""
+"""Python API for Triton Server."""
 
 from __future__ import annotations
 
@@ -101,7 +100,7 @@ class ModelLoadDeviceLimit:
     fraction: float
 
 
-@dataclass
+@dataclass(slots=True)
 class Options:
     """Server Options.
 
@@ -109,13 +108,10 @@ class Options:
     ----------
     server_id : str
               Id for server.
-    model_repository : str
-                     Model repository path.
-                     If provided will be appended to model_repository_paths.
+    model_repository : str | list[str]
+                     Model repository path(s).
                      At least one path is required
-    model_repository_paths : list[str]
-                           List of model repository paths.
-                           At least one path is required.
+                     See :c:func:`TRITONSERVER_ServerOptionsSetModelRepositoryPath`
     model_control_mode : ModelControlMode
                        Model control mode.
                        See :c:func:`TRITONSERVER_ServerOptionsSetModelControlMode`
@@ -153,8 +149,7 @@ class Options:
     """
 
     server_id: str = "triton"
-    model_repository: str = ""
-    model_repository_paths: list[str] = dataclasses.field(default_factory=list[str])
+    model_repository: str | list[str] = dataclasses.field(default_factory=list[str])
     model_control_mode: ModelControlMode = ModelControlMode.NONE
     startup_models: list[str] = dataclasses.field(default_factory=list[str])
     strict_model_config: bool = True
@@ -216,9 +211,9 @@ class Options:
 
         options.set_server_id(self.server_id)
 
-        if self.model_repository:
-            self.model_repository_paths.append(self.model_repository)
-        for model_repository_path in self.model_repository_paths:
+        if not isinstance(self.model_repository, list):
+            self.model_repository = [self.model_repository]
+        for model_repository_path in self.model_repository:
             options.set_model_repository_path(model_repository_path)
         options.set_model_control_mode(self.model_control_mode)
 
@@ -319,7 +314,7 @@ class Server:
 
     def start(self, blocking=False):
         self._server = triton_bindings.TRITONSERVER_Server(
-            self._options.create_server_options()
+            self._options._create_server_options()
         )
         while blocking and not self.is_ready():
             time.sleep(0.1)
@@ -388,7 +383,7 @@ class Server:
         return [Model(self._server, **model) for model in models]
 
     def load_model(
-        self, model_name: str, parameters: Dict[str, str | int | bool | bytes] = None
+        self, model_name: str, parameters: dict[str, str | int | bool | bytes] = None
     ):
         if parameters:
             parameter_list = [
