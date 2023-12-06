@@ -1,4 +1,4 @@
-// Copyright 2019-2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,12 +25,17 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#ifndef _WIN32
+#include <dlfcn.h>
+#endif
+
 #include <set>
 
 #include "status.h"
 #include "triton/common/sync_queue.h"
 
 #ifdef TRITON_ENABLE_GPU
+#include <cuda.h>
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
@@ -44,6 +49,17 @@ namespace triton { namespace core {
       return Status(                                                         \
           Status::Code::INTERNAL, (MSG) + ": " + cudaGetErrorString(err__)); \
     }                                                                        \
+  } while (false)
+
+#define RETURN_IF_CUDA_DRIVER_ERR(X, MSG)                                   \
+  do {                                                                      \
+    CUresult cuda_err__ = (X);                                              \
+    if (cuda_err__ != CUDA_SUCCESS) {                                       \
+      const char* error_string__;                                           \
+      CudaDriverHelper::GetInstance().CuGetErrorString(                     \
+          &error_string__, cuda_err__);                                     \
+      return Status(Status::Code::INTERNAL, (MSG) + ": " + error_string__); \
+    }                                                                       \
   } while (false)
 #endif  // TRITON_ENABLE_GPU
 
@@ -118,6 +134,36 @@ Status GetSupportedGPUs(
 /// \return The error status. A non-OK status means the target GPU is
 /// not supported.
 Status SupportsIntegratedZeroCopy(const int gpu_id, bool* zero_copy_support);
+
+
+/// Set the CUDA context to the specified device ID
+/// It will rollback to the previous device upon destruction.
+class ScopedSetDevice {
+ public:
+  ScopedSetDevice(int device)
+  {
+    overriden_ = false;
+
+    prev_device_ = device;
+    cudaGetDevice(&prev_device_);
+
+    if (prev_device_ != device) {
+      overriden_ = true;
+      cudaSetDevice(device);
+    }
+  }
+
+  ~ScopedSetDevice()
+  {
+    if (overriden_) {
+      cudaSetDevice(prev_device_);
+    }
+  }
+
+ private:
+  int prev_device_;
+  bool overriden_;
+};
 #endif
 
 // Helper around CopyBuffer that updates the completion queue with the returned
@@ -141,5 +187,78 @@ struct CopyParams {
   const void* src_;
   const size_t byte_size_;
 };
+
+
+#ifdef TRITON_ENABLE_GPU
+/// A singleton for Cuda Driver APIs. In order to continue supporting Triton
+/// deployments when GPUs are not available we need to use CUDA driver APIs
+/// through dlopen
+class CudaDriverHelper {
+ public:
+  static CudaDriverHelper& GetInstance()
+  {
+    static CudaDriverHelper instance;
+    return instance;
+  }
+
+ private:
+  void* dl_open_handle_ = nullptr;
+  std::string error_str_;
+  CUresult (*cu_mem_create_fn_)(
+      CUmemGenericAllocationHandle*, size_t, CUmemAllocationProp*,
+      unsigned long long) = nullptr;
+  CUresult (*cu_mem_map_fn_)(
+      CUdeviceptr ptr, size_t size, size_t offset,
+      CUmemGenericAllocationHandle handle, unsigned long long flags) = nullptr;
+  CUresult (*cu_mem_set_access_fn_)(
+      CUdeviceptr, size_t, const CUmemAccessDesc*, size_t) = nullptr;
+  CUresult (*cu_get_error_string_fn_)(CUresult, const char**) = nullptr;
+  CUresult (*cu_mem_get_allocation_granularity_fn_)(
+      size_t*, const CUmemAllocationProp*,
+      CUmemAllocationGranularity_flags) = nullptr;
+  CUresult (*cu_mem_release_fn_)(CUmemGenericAllocationHandle) = nullptr;
+  CUresult (*cu_init_fn_)(unsigned int) = nullptr;
+  CUresult (*cu_mem_address_reserve_fn_)(
+      CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr,
+      unsigned long long flags) = nullptr;
+  CUresult (*cu_mem_unmap_fn_)(CUdeviceptr ptr, size_t size) = nullptr;
+  CUresult (*cu_mem_address_free_fn_)(CUdeviceptr ptr, size_t size) = nullptr;
+  CudaDriverHelper();
+
+  ~CudaDriverHelper();
+
+ public:
+  CudaDriverHelper(CudaDriverHelper const&) = delete;
+  void operator=(CudaDriverHelper const&) = delete;
+  bool IsAvailable();
+  const std::string& GetErrorString() const { return error_str_; }
+  void ClearErrorString() { return error_str_.clear(); }
+  Status CuMemGetAllocationGranularity(
+      size_t* aligned_size, const CUmemAllocationProp* prop,
+      CUmemAllocationGranularity_flags flags);
+  Status CuMemCreate(
+      CUmemGenericAllocationHandle* block, size_t byte_size,
+      CUmemAllocationProp* prop, unsigned long long flags);
+  Status CuMemSetAccess(
+      CUdeviceptr ptr, size_t size, const CUmemAccessDesc* desc, size_t count);
+  Status CuMemMap(
+      CUdeviceptr ptr, size_t size, size_t offset,
+      CUmemGenericAllocationHandle handle, unsigned long long flags);
+  Status CuMemRelease(CUmemGenericAllocationHandle handle);
+  Status CuMemAddressFree(CUdeviceptr ptr, size_t size);
+  Status CuMemUnmap(CUdeviceptr ptr, size_t size);
+  Status CuMemAddressReserve(
+      CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr,
+      unsigned long long flags);
+  void CuGetErrorString(const char** error_string, CUresult error);
+};
+
+/// Get the minimum allocation granularity.
+/// \param aligned_size Returns minimum allocation granularity.
+/// \return The error status. A non-OK status means there were some errors
+/// when querying the allocation granularity.
+Status GetAllocationGranularity(size_t& aligned_sz);
+#endif
+
 
 }}  // namespace triton::core

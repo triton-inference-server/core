@@ -214,6 +214,10 @@ TRITONSERVER_InferenceRequestSetFlags()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_InferenceRequestTimeoutMicroseconds()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestCorrelationId()
 {
 }
@@ -379,6 +383,10 @@ TRITONSERVER_ServerOptionsSetPinnedMemoryPoolByteSize()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetCudaVirtualAddressSize()
 {
 }
 // Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.

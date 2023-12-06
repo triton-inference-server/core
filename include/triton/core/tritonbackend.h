@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 16
+#define TRITONBACKEND_API_VERSION_MINOR 17
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -410,6 +410,16 @@ TRITONBACKEND_ResponseFactoryIsCancelled(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_RequestCorrelationId(
     TRITONBACKEND_Request* request, uint64_t* id);
+
+/// Get the timeout of the request. A value of 0 indicates no timeout was
+/// specified for the request. provided, the timeout will default to zero.
+///
+/// \param request The inference request.
+/// \param timeout Returns the timeout value for the request.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_InferenceRequestTimeoutMicroseconds(
+    TRITONBACKEND_Request* request, uint64_t* timeout);
 
 /// Get the correlation ID of the request if it is a string.
 /// Empty string indicates that the request does not have a correlation ID.

@@ -212,12 +212,14 @@ if(${TRITON_ENABLE_GPU})
     SERVER_SRCS
     ${SERVER_SRCS}
     cuda_memory_manager.cc
+    cuda_block_manager.h
     model_config_cuda.cc
   )
   set(
     SERVER_HDRS
     ${SERVER_HDRS}
     cuda_memory_manager.h
+    cuda_block_manager.cc
     model_config_cuda.h
   )
 endif() # TRITON_ENABLE_GPU
@@ -252,7 +254,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   target_compile_options(
     triton-core
     PRIVATE
-      /W1 /D_WIN32_WINNT=0x0A00 /EHsc
+      /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
   )
 else()
   target_compile_options(

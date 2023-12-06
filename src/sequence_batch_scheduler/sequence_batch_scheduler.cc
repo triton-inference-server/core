@@ -119,8 +119,8 @@ SequenceBatchScheduler::Create(
   auto& config = model->Config();
 
   // Sequencer
-  if (config.sequence_batching().generative_sequence()) {
-    sched->sequencer_.reset(new GenerativeSequencer(sched.get()));
+  if (config.sequence_batching().iterative_sequence()) {
+    sched->sequencer_.reset(new IterativeSequencer(sched.get()));
   } else {
     sched->sequencer_.reset(new Sequencer());
   }
@@ -367,6 +367,14 @@ SequenceBatchScheduler::GenerateInitialStateData(
             std::to_string(initial_state.dims().size()) +
             " != " + std::to_string(state.dims().size()));
   }
+  const auto& initial_state_pair = initial_state_.emplace(
+      std::piecewise_construct, std::forward_as_tuple(state.input_name()),
+      std::forward_as_tuple(initial_state.name()));
+  auto& initial_state_data = initial_state_pair.first->second;
+
+  if (max_batch_size_ > 0) {
+    initial_state_data.shape_.emplace_back(1);
+  }
 
   // Check the dimensions to make sure it doesn't have variable-sized dims and
   // matches the state description.
@@ -390,12 +398,8 @@ SequenceBatchScheduler::GenerateInitialStateData(
                 " != " + std::to_string(*state_dim));
       }
     }
+    initial_state_data.shape_.emplace_back(*initial_state_dim);
   }
-
-  const auto& initial_state_pair = initial_state_.emplace(
-      std::piecewise_construct, std::forward_as_tuple(state.input_name()),
-      std::forward_as_tuple(initial_state.name()));
-  auto& initial_state_data = initial_state_pair.first->second;
 
   // Calculate total memory byte size
   auto element_count = triton::common::GetElementCount(initial_state.dims());
@@ -1382,9 +1386,16 @@ SequenceBatch::UpdateImplicitState(
     // Create the state for the first request in the sequence.
     if (sequence_states == nullptr) {
       sequence_states.reset(new SequenceStates);
-      sequence_states->Initialize(
+      Status status = sequence_states->Initialize(
           base_->StateOutputConfigMap(), base_->MaxBatchSize(),
-          base_->InitialState());
+          base_->InitialState(), model_instance_->Kind(),
+          model_instance_->DeviceId(),
+          model_instance_->Model()->Server()->CudaVirtualAddressSpaceSize());
+
+      if (!status.IsOk()) {
+        LOG_ERROR << "Failed to initialize sequence state: "
+                  << status.Message();
+      }
     }
 
     irequest->SetSequenceStates(sequence_states);

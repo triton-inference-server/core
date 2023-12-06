@@ -26,6 +26,7 @@
 
 #include "sequence_state.h"
 
+#include "cuda_utils.h"
 #include "memory.h"
 #include "triton/common/logging.h"
 
@@ -35,17 +36,21 @@ SequenceState::SequenceState() : data_(new MemoryReference) {}
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const int64_t* shape, const uint64_t dim_count)
+    const int64_t* shape, const uint64_t dim_count, bool use_single_buffer,
+    bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape, shape + dim_count),
-      data_(new MemoryReference)
+      data_(new MemoryReference), use_single_buffer_(use_single_buffer),
+      use_growable_memory_(use_growable_memory)
 {
 }
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
-    const std::vector<int64_t>& shape)
+    const std::vector<int64_t>& shape, bool use_single_buffer,
+    bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape),
-      data_(new MemoryReference)
+      data_(new MemoryReference), use_single_buffer_(use_single_buffer),
+      use_growable_memory_(use_growable_memory)
 {
 }
 
@@ -79,14 +84,34 @@ SequenceState::SetStringDataToZero()
         "sequence state to zero.");
   }
 
-  TRITONSERVER_MemoryType memory_type;
-  int64_t memory_type_id;
-
   const std::shared_ptr<MutableMemory>& memory =
       reinterpret_cast<const std::shared_ptr<MutableMemory>&>(Data());
-  char* buffer = memory->MutableBuffer(&memory_type, &memory_type_id);
-  memset(buffer, 0, Data()->TotalByteSize());
+  RETURN_IF_ERROR(memory->SetMemory(0 /* value */));
 
+  return Status::Success;
+}
+
+Status
+SequenceState::ResizeOrReallocate(
+    void** buffer, const uint64_t buffer_byte_size,
+    TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
+{
+  if (UseGrowableMemory()) {
+    GrowableMemory* growable_memory =
+        reinterpret_cast<GrowableMemory*>(Data().get());
+    RETURN_IF_ERROR(growable_memory->Resize(buffer_byte_size));
+    *buffer = growable_memory->MutableBuffer(memory_type, memory_type_id);
+  } else {
+    std::shared_ptr<AllocatedMemory> memory = std::make_shared<AllocatedMemory>(
+        buffer_byte_size, *memory_type, *memory_type_id);
+    *buffer = memory->MutableBuffer(memory_type, memory_type_id);
+    RETURN_IF_ERROR(RemoveAllData());
+    RETURN_IF_ERROR(SetData(memory));
+    if (UseSingleBuffer()) {
+      RETURN_IF_ERROR(OtherState()->RemoveAllData());
+      RETURN_IF_ERROR(OtherState()->SetData(memory));
+    }
+  }
   return Status::Success;
 }
 
@@ -96,13 +121,36 @@ SequenceStates::Initialize(
         std::string, const inference::ModelSequenceBatching_State&>&
         state_output_config_map,
     const size_t max_batch_size,
-    const std::unordered_map<std::string, InitialStateData>& initial_state)
+    const std::unordered_map<std::string, InitialStateData>& initial_state,
+    TRITONSERVER_InstanceGroupKind kind, int32_t device_id,
+    const std::map<int, size_t>& cuda_virtual_address_size)
 {
   input_states_.clear();
   output_states_.clear();
 
   for (auto& state : state_output_config_map) {
     auto& state_config = state.second;
+    bool use_single_buffer = state_config.use_same_buffer_for_input_output();
+    bool use_growable_memory = state_config.use_growable_memory();
+
+    if (use_growable_memory) {
+      if (!use_single_buffer) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string("In order to 'use_growable_memory', you must also "
+                        "enable 'use_single_buffer' for state input name '") +
+                state_config.input_name() + ("'."));
+      }
+      if (kind != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string("'use_growable_memory' can only work with KIND_GPU "
+                        "model instances right now. Please either change the "
+                        "instance type to KIND_GPU or set "
+                        "'use_growable_memory' to false for state input '") +
+                state_config.input_name() + ("'."));
+      }
+    }
 
     std::vector<int64_t> dims;
     if (max_batch_size != 0) {
@@ -118,23 +166,48 @@ SequenceStates::Initialize(
       }
     }
 
-    std::shared_ptr<AllocatedMemory> data;
+    std::shared_ptr<MutableMemory> data;
     auto initial_state_it = initial_state.find(state_config.input_name());
     if (initial_state_it != initial_state.end()) {
-      data = std::make_shared<AllocatedMemory>(
-          initial_state_it->second.data_->TotalByteSize(),
-          TRITONSERVER_MEMORY_CPU, 0);
+      if (use_growable_memory) {
+        std::unique_ptr<GrowableMemory> growable_memory;
+        RETURN_IF_ERROR(GrowableMemory::Create(
+            growable_memory, initial_state_it->second.data_->TotalByteSize(),
+            TRITONSERVER_MEMORY_GPU, device_id,
+            cuda_virtual_address_size.at(device_id)));
+        data = std::move(growable_memory);
 
-      TRITONSERVER_MemoryType memory_type;
-      int64_t memory_type_id;
-      char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
-      char* initial_state_buffer =
-          initial_state_it->second.data_->MutableBuffer(
-              &memory_type, &memory_type_id);
+#ifdef TRITON_ENABLE_GPU
+        TRITONSERVER_MemoryType memory_type;
+        int64_t memory_type_id;
+        char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
+        char* initial_state_buffer =
+            initial_state_it->second.data_->MutableBuffer(
+                &memory_type, &memory_type_id);
 
-      memcpy(
-          dst_buffer, initial_state_buffer,
-          initial_state_it->second.data_->TotalByteSize());
+        RETURN_IF_CUDA_ERR(
+            cudaMemcpy(
+                dst_buffer, initial_state_buffer,
+                initial_state_it->second.data_->TotalByteSize(),
+                cudaMemcpyHostToDevice),
+            std::string("failed to copy initial state to GPU:"));
+#endif
+      } else {
+        data = std::make_shared<AllocatedMemory>(
+            initial_state_it->second.data_->TotalByteSize(),
+            TRITONSERVER_MEMORY_CPU, 0);
+
+        TRITONSERVER_MemoryType memory_type;
+        int64_t memory_type_id;
+        char* dst_buffer = data->MutableBuffer(&memory_type, &memory_type_id);
+        char* initial_state_buffer =
+            initial_state_it->second.data_->MutableBuffer(
+                &memory_type, &memory_type_id);
+
+        memcpy(
+            dst_buffer, initial_state_buffer,
+            initial_state_it->second.data_->TotalByteSize());
+      }
     } else {
       size_t state_size;
       if (state.second.data_type() == inference::DataType::TYPE_STRING) {
@@ -146,15 +219,24 @@ SequenceStates::Initialize(
         state_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
       }
-      data = std::make_shared<AllocatedMemory>(
-          state_size, TRITONSERVER_MEMORY_CPU, 0);
+      if (use_growable_memory) {
+        std::unique_ptr<GrowableMemory> growable_memory;
+        RETURN_IF_ERROR(GrowableMemory::Create(
+            growable_memory, state_size, TRITONSERVER_MEMORY_GPU, device_id,
+            cuda_virtual_address_size.at(device_id)));
+        data = std::move(growable_memory);
+      } else {
+        data = std::make_shared<AllocatedMemory>(
+            state_size, TRITONSERVER_MEMORY_CPU, 0);
+      }
     }
 
     const auto& input_pair = input_states_.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(state_config.input_name()),
         std::forward_as_tuple(new SequenceState(
-            state_config.input_name(), state.second.data_type(), dims)));
+            state_config.input_name(), state.second.data_type(), dims,
+            use_single_buffer, use_growable_memory)));
 
     if (!input_pair.second) {
       LOG_WARNING
@@ -173,7 +255,9 @@ SequenceStates::Initialize(
     const auto& output_pair = output_states_.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(state_config.output_name()),
-        std::forward_as_tuple());
+        std::forward_as_tuple(new SequenceState(
+            state_config.output_name(), state.second.data_type(), dims,
+            use_single_buffer, use_growable_memory)));
     if (!output_pair.second) {
       // Remove the corresponding state from the input_states_map
       input_states_.erase(state_config.input_name());
@@ -184,6 +268,14 @@ SequenceStates::Initialize(
 
       continue;
     }
+
+    auto& output_tensor = output_pair.first->second;
+    if (use_single_buffer) {
+      output_tensor->SetData(data);
+    }
+
+    output_tensor->SetOtherState(input_tensor.get());
+    input_tensor->SetOtherState(output_tensor.get());
   }
 
   return Status::Success;
@@ -204,19 +296,9 @@ SequenceStates::OutputState(
         "state '" + name + "' is not a valid state name.");
   }
 
-  if (output_states_[name] == nullptr) {
-    output_states_[name] = std::unique_ptr<SequenceState>(
-        new SequenceState(name, datatype, shape, dim_count));
-  } else {
-    // A new SequenceState is created here in case the shape for the new output
-    // state is different from the shape of the originally stored state.
-    std::unique_ptr<SequenceState> output_state(
-        new SequenceState(name, datatype, shape, dim_count));
-
-    // Transfer the previously allocated buffer to the new output_state.
-    output_state->SetData(output_states_[name]->Data());
-    output_states_[name] = std::move(output_state);
-  }
+  std::vector<int64_t> new_shape(shape, shape + dim_count);
+  *output_states_[name]->MutableDType() = datatype;
+  *output_states_[name]->MutableShape() = new_shape;
 
   auto& output_state_r = output_states_[name];
   size_t iter_advance =
@@ -226,55 +308,60 @@ SequenceStates::OutputState(
   auto input_states_itr = input_states_.begin();
   std::advance(input_states_itr, iter_advance);
   auto& input_state_r = input_states_[input_states_itr->first];
+  bool use_single_buffer = output_states_[name]->UseSingleBuffer();
 
   if (output_state != nullptr) {
     *output_state = output_states_[name].get();
   }
 
-  output_state_r->SetStateUpdateCallback([&output_state_r, &input_state_r]() {
-    // Swap the internal memory if the size of the input and output state is
-    // equal
+  output_state_r->SetStateUpdateCallback(
+      [&output_state_r, &input_state_r, use_single_buffer]() {
+        // Swap the internal memory if the size of the input and output state is
+        // equal
 
-    if (output_state_r->Data()->TotalByteSize() ==
-        input_state_r->Data()->TotalByteSize()) {
-      std::shared_ptr<Memory> temp_memory = input_state_r->Data();
-      RETURN_IF_ERROR(input_state_r->RemoveAllData());
-      RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-      RETURN_IF_ERROR(output_state_r->RemoveAllData());
-      RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
-    } else {
-      // If the size of output state is different from the input state, allocate
-      // a new memory for the input state with the same size as output state.
-      TRITONSERVER_MemoryType memory_type;
-      int64_t memory_type_id;
+        if (!use_single_buffer) {
+          if (output_state_r->Data()->TotalByteSize() ==
+              input_state_r->Data()->TotalByteSize()) {
+            std::shared_ptr<Memory> temp_memory = input_state_r->Data();
+            RETURN_IF_ERROR(input_state_r->RemoveAllData());
+            RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
+            RETURN_IF_ERROR(output_state_r->RemoveAllData());
+            RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
+          } else {
+            // If the size of output state is different from the input state,
+            // allocate a new memory for the input state with the same size as
+            // output state.
+            TRITONSERVER_MemoryType memory_type;
+            int64_t memory_type_id;
 
-      const std::shared_ptr<MutableMemory>& input_memory =
-          reinterpret_cast<const std::shared_ptr<MutableMemory>&>(
-              input_state_r->Data());
+            const std::shared_ptr<MutableMemory>& input_memory =
+                reinterpret_cast<const std::shared_ptr<MutableMemory>&>(
+                    input_state_r->Data());
 
-      input_memory->MutableBuffer(&memory_type, &memory_type_id);
-      std::shared_ptr<AllocatedMemory> memory =
-          std::make_shared<AllocatedMemory>(
-              output_state_r->Data()->TotalByteSize(), memory_type,
-              memory_type_id);
-      RETURN_IF_ERROR(input_state_r->RemoveAllData());
-      RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-      RETURN_IF_ERROR(output_state_r->RemoveAllData());
-      RETURN_IF_ERROR(output_state_r->SetData(memory));
-    }
+            input_memory->MutableBuffer(&memory_type, &memory_type_id);
+            std::shared_ptr<AllocatedMemory> memory =
+                std::make_shared<AllocatedMemory>(
+                    output_state_r->Data()->TotalByteSize(), memory_type,
+                    memory_type_id);
+            RETURN_IF_ERROR(input_state_r->RemoveAllData());
+            RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
+            RETURN_IF_ERROR(output_state_r->RemoveAllData());
+            RETURN_IF_ERROR(output_state_r->SetData(memory));
+          }
 
-    // Update the shape and data type of the output state if it doesn't match
-    // the input state.
-    if (input_state_r->Shape() != output_state_r->Shape()) {
-      *input_state_r->MutableShape() = output_state_r->Shape();
-    }
+          // Update the shape and data type of the output state if it doesn't
+          // match the input state.
+          if (input_state_r->Shape() != output_state_r->Shape()) {
+            *input_state_r->MutableShape() = output_state_r->Shape();
+          }
 
-    if (input_state_r->DType() != output_state_r->DType()) {
-      *input_state_r->MutableDType() = output_state_r->DType();
-    }
+          if (input_state_r->DType() != output_state_r->DType()) {
+            *input_state_r->MutableDType() = output_state_r->DType();
+          }
+        }
 
-    return Status::Success;
-  });
+        return Status::Success;
+      });
 
   return Status::Success;
 }
@@ -300,7 +387,8 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
           std::forward_as_tuple(from_input_state_tensor->Name()),
           std::forward_as_tuple(new SequenceState(
               from_input_state_tensor->Name(), from_input_state_tensor->DType(),
-              from_input_state_tensor->Shape())));
+              from_input_state_tensor->Shape(), false /* use_single_buffer */,
+              false /* use_growable_memory */)));
 
       auto& input_tensor = input_pair.first->second;
       std::shared_ptr<AllocatedMemory> data;
@@ -325,10 +413,15 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
     }
 
     for (auto& from_output_state : from->OutputStates()) {
+      auto& from_output_state_tensor = from_output_state.second;
       lsequence_states->output_states_.emplace(
           std::piecewise_construct,
           std::forward_as_tuple(from_output_state.first),
-          std::forward_as_tuple());
+          std::forward_as_tuple(new SequenceState(
+              from_output_state_tensor->Name(),
+              from_output_state_tensor->DType(),
+              from_output_state_tensor->Shape(), false /* reused_buffer */,
+              false /* use_growable_memory */)));
     }
   }
   return lsequence_states;
