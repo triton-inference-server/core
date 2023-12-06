@@ -21,6 +21,17 @@ class TrtionServerAPITest(unittest.TestCase):
         #          log_verbose=True,
         #         log_error=True,
         #    )
+
+        server.start()
+
+        tritonserver.start()
+        tritonserver.stop()
+        tritonserver.Server().start()
+
+        request.get()
+
+        request.post()
+
         server = tritonserver.Server()
         server.start(
             model_repository="/workspace/models",
