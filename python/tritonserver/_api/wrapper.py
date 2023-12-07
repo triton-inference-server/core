@@ -438,7 +438,7 @@ class Model:
             inference_request = InferenceRequest(
                 model=self, _server=self._server, **kwargs
             )
-        server_request, response_iterator = inference_request.create_server_request(
+        server_request, response_iterator = inference_request._create_server_request(
             use_async_iterator=True
         )
         self._server.infer_async(server_request)
@@ -451,7 +451,7 @@ class Model:
             inference_request = InferenceRequest(
                 model=self, _server=self._server, **kwargs
             )
-        server_request, response_iterator = inference_request.create_server_request()
+        server_request, response_iterator = inference_request._create_server_request()
         self._server.infer_async(server_request)
         return response_iterator
 
@@ -485,6 +485,9 @@ class Model:
             ).serialize_to_json()
         )
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
         return "%s" % (
             {"name": self.name, "version": self.version, "state": self.state}
@@ -510,7 +513,6 @@ class AsyncResponseIterator:
                 inspect.currentframe().f_lineno,
                 str(e),
             )
-            raise e
 
     def __init__(self, server, request, loop=None, user_queue=None):
         self._server = server
@@ -538,12 +540,20 @@ class AsyncResponseIterator:
 
 class ResponseIterator:
     def response_callback(self, response, flags, unused):
-        response = InferenceResponse.set_from_server_response(
-            self._server, self._request, response, flags
-        )
-        self._queue.put(response)
-        if self._user_queue is not None:
-            self._user_queue.put(response)
+        try:
+            response = InferenceResponse.set_from_server_response(
+                self._server, self._request, response, flags
+            )
+            self._queue.put(response)
+            if self._user_queue is not None:
+                self._user_queue.put(response)
+        except Exception as e:
+            triton_bindings.TRITONSERVER_LogMessage(
+                triton_bindings.TRITONSERVER_LogLevel.ERROR,
+                __file__,
+                inspect.currentframe().f_lineno,
+                str(e),
+            )
 
     def __init__(self, server, request, user_queue: queue.SimpleQueue = None):
         self._queue = queue.SimpleQueue()
@@ -624,7 +634,7 @@ class InferenceRequest:
     priority: int = 0
     timeout: int = 0
     inputs: dict = dataclasses.field(default_factory=dict)
-    parameters: dict = dataclasses.field(default_factory=dict)
+    parameters: dict[str, str | int | bool] = dataclasses.field(default_factory=dict)
     model: Model = None
     response_queue: queue.SimpleQueue | asyncio.Queue = None
     _server: triton_bindings.TRITONSERVER_Server = None
@@ -665,7 +675,20 @@ class InferenceRequest:
         )
         return response_iterator
 
-    def create_server_request(self, use_async_iterator=False):
+    def _set_parameters(self, request):
+        for key, value in self.parameters.items():
+            if isinstance(value, str):
+                request.set_string_parameter(key, value)
+            elif isinstance(value, int):
+                request.set_int_parameter(key, value)
+            elif isinstance(value, bool):
+                request.set_bool_parameter(key, value)
+            else:
+                raise triton_bindings.InvalidArgumentError(
+                    f"Invalid parameter type {type(value)} for key {key}"
+                )
+
+    def _create_server_request(self, use_async_iterator=False):
         request = triton_bindings.TRITONSERVER_InferenceRequest(
             self._server, self.model.name, self.model.version
         )
@@ -681,6 +704,8 @@ class InferenceRequest:
         request.flags = self.flags
 
         self._add_inputs(request)
+
+        self._set_parameters(request)
 
         response_iterator = self._set_callbacks(request, use_async_iterator)
 
