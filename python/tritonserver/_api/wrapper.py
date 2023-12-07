@@ -24,7 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Python API for Triton Server."""
+"""In process Python API for Triton Inference Server."""
 
 from __future__ import annotations
 
@@ -290,16 +290,16 @@ class ModelDictionary(dict):
         for model in models:
             self[(model.name, model.version)] = model
         self._server = server
+        self._model_names = [x[0] for x in self.keys()]
 
     def __getitem__(self, key):
         if isinstance(key, tuple):
             try:
                 return dict.__getitem__(self, key)
             except KeyError:
-                raise KeyError(f"Unknown Model: {key}")
+                raise KeyError(f"Unknown Model: {key}") from None
         else:
-            names = [x[0] for x in self.keys()]
-            if key in names:
+            if key in self._model_names:
                 return Model(self._server, name=key, version=-1)
             else:
                 raise KeyError(f"Unknown Model: {key}")
@@ -312,12 +312,15 @@ class Server:
         self._options = options
         self._server = Server._UnstartedServer()
 
-    def start(self, blocking=False):
+    def start(self, blocking=False, polling_interval=0.1):
+        if not isinstance(self._server, Server._UnstartedServer):
+            raise triton_bindings.InvalidArgumentError("Server already started")
+
         self._server = triton_bindings.TRITONSERVER_Server(
             self._options._create_server_options()
         )
         while blocking and not self.is_ready():
-            time.sleep(0.1)
+            time.sleep(polling_interval)
 
     def stop(self):
         self._server.stop()
@@ -417,7 +420,7 @@ class Model:
         self,
         server: triton_bindings.TRITONSERVER_Server,
         name: str,
-        version: int = None,
+        version: int = -1,
         state: str = None,
     ):
         self.name = name
@@ -695,9 +698,3 @@ class Metric(triton_bindings.TRITONSERVER_Metric):
             parameters = []
 
         triton_bindings.TRITONSERVER_Metric.__init__(self, family, parameters)
-
-
-def serve(options: Options = None, **kwargs):
-    server = Server(options, **kwargs)
-    server.start()
-    return server

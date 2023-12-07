@@ -1159,10 +1159,9 @@ class PyInferenceRequest
     ThrowIfError(TRITONSERVER_InferenceRequestSetBoolParameter(
         triton_object_, key.c_str(), value));
   }
-  void Cancel(const std::string& key)
+  void Cancel()
   {
-    ThrowIfError(TRITONSERVER_InferenceRequestCancel(
-        triton_object_));
+    ThrowIfError(TRITONSERVER_InferenceRequestCancel(triton_object_));
   }
 
 
@@ -1965,7 +1964,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_int_parameter", &PyInferenceRequest::SetIntParameter)
       .def("set_bool_parameter", &PyInferenceRequest::SetBoolParameter)
       .def("cancel", &PyInferenceRequest::Cancel);
-  
+
   // TRITONSERVER_InferenceResponse
   py::enum_<TRITONSERVER_ResponseCompleteFlag>(
       m, "TRITONSERVER_ResponseCompleteFlag")
