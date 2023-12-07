@@ -24,6 +24,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""In process Python API for Triton Inference Server."""
+
 import tritonserver._c as triton_bindings
 from tritonserver._api.wrapper import (
     InferenceRequest,
