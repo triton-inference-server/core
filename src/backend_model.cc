@@ -308,7 +308,7 @@ TritonModel::GetBackendLibraryProperties(
     std::vector<std::string>* search_paths, std::string* backend_libdir,
     std::string* backend_libpath)
 {
-  std::string python_backend_based_backend_libdir;
+  std::string python_based_backend_libdir;
   std::string backend_libname = model_config->runtime();
   if (backend_libname.empty()) {
     RETURN_IF_ERROR(GetBackendRuntimeLibraryName(
@@ -318,10 +318,9 @@ TritonModel::GetBackendLibraryProperties(
       // All variables are correctly set for C++ backends on initial search.
       return Status::Success;
     }
-    python_backend_based_backend_libdir = *backend_libdir;
+    python_based_backend_libdir = *backend_libdir;
     model_config->set_runtime(backend_libname);
   } else {
-    RETURN_IF_ERROR(IsRuntimeLibraryNameWellFormed(backend_libname));
     *is_python_based_backend = backend_libname == kPythonFilename;
   }
 
@@ -347,17 +346,26 @@ TritonModel::GetBackendLibraryProperties(
                                        model_config->name() +
                                        "', searched: " + search_paths_str);
   }
+  if (IsChildPathEscapingParentPath(
+          *backend_libpath /* child_path */,
+          *backend_libdir /* parent_path */)) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "backend library name '" + cpp_backend_libname +
+            "' escapes backend directory '" + *backend_libdir +
+            "', for model '" + model_config->name() +
+            "', check model config runtime field");
+  }
 
   // Both 'backend_libdir' and 'backend_libpath' are now pointing to the C++
   // backend library, 'backend_libdir' needs adjustment for Python backend based
   // backend.
   if (*is_python_based_backend) {
-    if (python_backend_based_backend_libdir.empty()) {
-      python_backend_based_backend_libdir =
-          JoinPath({backend_dir, backend_name});
+    if (python_based_backend_libdir.empty()) {
+      python_based_backend_libdir = JoinPath({backend_dir, backend_name});
       // Make sure the library and its directory exist.
       std::string path =
-          JoinPath({python_backend_based_backend_libdir, kPythonFilename});
+          JoinPath({python_based_backend_libdir, kPythonFilename});
       bool path_exist;
       RETURN_IF_ERROR(FileExists(path, &path_exist));
       if (!path_exist) {
@@ -368,7 +376,7 @@ TritonModel::GetBackendLibraryProperties(
                 "', searched: '" + path + "'");
       }
     }
-    *backend_libdir = python_backend_based_backend_libdir;
+    *backend_libdir = python_based_backend_libdir;
   }
 
   return Status::Success;
@@ -426,6 +434,16 @@ TritonModel::FindBackendLibraryPath(
   }
 
   return Status::Success;
+}
+
+std::string
+TritonModel::AssembleCPPRuntimeLibraryName(const std::string& backend_name)
+{
+#ifdef _WIN32
+  return "triton_" + backend_name + ".dll";
+#else
+  return "libtriton_" + backend_name + ".so";
+#endif
 }
 
 Status

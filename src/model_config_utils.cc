@@ -2425,29 +2425,4 @@ InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
   return config.SerializeAsString();
 }
 
-std::string
-AssembleCPPRuntimeLibraryName(const std::string& backend_name)
-{
-#ifdef _WIN32
-  return "triton_" + backend_name + ".dll";
-#else
-  return "libtriton_" + backend_name + ".so";
-#endif
-}
-
-Status
-IsRuntimeLibraryNameWellFormed(const std::string& library_name)
-{
-  const static std::vector<std::string> excluded_strings = {"\\", "/", ".."};
-  for (const auto& excluded_str : excluded_strings) {
-    if (library_name.find(excluded_str) != library_name.npos) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          "Model configuration runtime field contains illegal sub-string '" +
-              excluded_str + "'");
-    }
-  }
-  return Status::Success;
-}
-
 }}  // namespace triton::core

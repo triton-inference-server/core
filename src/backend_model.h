@@ -229,6 +229,10 @@ class TritonModel : public Model {
       const std::string& backend_libname, std::string* backend_libdir,
       std::string* backend_libpath);
 
+  // Assemble the C++ runtime library name.
+  static std::string AssembleCPPRuntimeLibraryName(
+      const std::string& backend_name);
+
   // Clear library handles.
   void ClearHandles();
 

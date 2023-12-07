@@ -316,15 +316,4 @@ bool EquivalentInInstanceConfig(
 std::string InstanceConfigSignature(
     const inference::ModelInstanceGroup& instance_config);
 
-/// Assemble the C++ runtime library name.
-/// \param backend_name The backend name.
-/// \return The assembled C++ runtime library name.
-std::string AssembleCPPRuntimeLibraryName(const std::string& backend_name);
-
-/// Check if runtime library name is well formed.
-/// \param library_name The library name to check.
-/// \return Success status if '\', '/' and '..' are not in library name.
-/// Error status if otherwise.
-Status IsRuntimeLibraryNameWellFormed(const std::string& library_name);
-
 }}  // namespace triton::core

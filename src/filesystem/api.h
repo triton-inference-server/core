@@ -78,6 +78,14 @@ class LocalizedPath {
 /// \return true if absolute path, false if relative path.
 bool IsAbsolutePath(const std::string& path);
 
+/// Check if the child path escapes from its parent path.
+/// \param child_path The child path.
+/// \param parent_path The parent path. The path must exist.
+/// \return true if the child path escapes from its parent path, false if the
+/// child path is within its parent path.
+bool IsChildPathEscapingParentPath(
+    const std::string& child_path, const std::string& parent_path);
+
 /// Join path segments into a longer path
 /// \param segments The path segments.
 /// \return the path formed by joining the segments.
