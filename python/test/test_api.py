@@ -16,48 +16,33 @@ class TrtionServerAPITest(unittest.TestCase):
             server.is_ready()
 
     def test_gpu_memory(self):
-        #        server = tritonserver.Server(
-        #           model_repository_paths=["/workspace/models"],
-        #          log_verbose=True,
-        #         log_error=True,
-        #    )
-
-        server.start()
-
-        tritonserver.start()
-        tritonserver.stop()
-        tritonserver.Server().start()
-
-        request.get()
-
-        request.post()
-
-        server = tritonserver.Server()
-        server.start(
+        server = tritonserver.Server(
             model_repository="/workspace/models",
             log_verbose=True,
             log_error=True,
-            blocking=True,
         )
+
+        server.start(blocking=True)
 
         test = server.get_model("test")
         fp16_input = cupy.array([[5], [6], [7], [8]], dtype=numpy.float16)
+        responses = test.infer(inputs={"fp16_input": fp16_input}, request_id="1")
 
-        # text_input = numpy.array([c for c in "hello"], dtype=numpy.object_).astype(numpy.byte)
+        for response in responses:
+            print(response)
 
-        # text_input = cupy.array(["hello"], dtype=numpy.str_),
-        # text_input_device = numba.cuda.to_device(text_input)
-        #        fp16_input = numpy.array([["1"]], dtype=numpy.float16)
-        responses_1 = test.infer(inputs={"fp16_input": fp16_input}, request_id="1")
+        responses = server.models["test"].infer(
+            inputs={"fp16_input": fp16_input}, request_id="1"
+        )
 
-        for response in responses_1:
+        for response in responses:
             print(response)
 
         server.stop()
 
     def test_inference(self):
         server = tritonserver.Server(
-            model_repository_paths=["/workspace/models"],
+            model_repository="/workspace/models",
             #           log_verbose=True,
             #            log_error=True,
         )
@@ -113,7 +98,7 @@ class TrtionServerAPITest(unittest.TestCase):
 class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
     async def test_async_inference(self):
         server = tritonserver.Server(
-            model_repository_paths=["/workspace/models"],
+            model_repository=["/workspace/models"],
             #                                         log_verbose=True,
             #                                        log_error=True)
         )
@@ -138,7 +123,11 @@ class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
         responses_3 = test.async_infer(
             inputs=inputs, response_queue=response_queue, request_id="3"
         )
+
+        print("here cancelling!", flush=True)
         responses.cancel()
+        print("here cancelling!", flush=True)
+
         async for response in responses:
             print(response.outputs["text_output"])
             print(response.outputs["fp16_output"])
@@ -150,6 +139,8 @@ class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
             print(response, count)
             count += 1
 
+        print("calling stop!")
+
         server.stop()
 
-        pass
+        print("stopping!", flush=True)
