@@ -692,7 +692,7 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
     }
     RETURN_IF_TRITONSERVER_ERROR(
         TRITONSERVER_InferenceResponseOutputCount(response, &count));
-    // Continuously shrink 'output_to_tensor' to identity missing outputs,
+    // Continuously shrink 'output_to_tensor' to identify missing outputs,
     // a placeholder tensor will be put for missing output, which will be
     // used to relax the connectivity constraint if the output happens to be
     // an optional input for the next model.
