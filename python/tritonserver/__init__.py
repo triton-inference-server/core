@@ -31,6 +31,7 @@ from tritonserver._api.wrapper import (
     InferenceRequest,
     InstanceGroupKind,
     LogFormat,
+    Metric,
     MetricFamily,
     MetricFormat,
     MetricKind,
