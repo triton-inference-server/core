@@ -30,8 +30,8 @@ add_subdirectory(tritonserver)
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION ${TRITON_VERSION})
 configure_file(../LICENSE LICENSE.txt COPYONLY)
 configure_file(setup.py setup.py @ONLY)
-file(GLOB _Tests test/*.py)
-file(COPY ${_Tests} DESTINATION ./test/.)
+file(GLOB TESTS test/*.py)
+file(COPY ${TESTS} DESTINATION ./test/.)
 
 set(WHEEL_DEPENDS
       ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION
@@ -61,18 +61,18 @@ add_custom_target(
 
 
 # Wheel
-file(GLOB _Wheel "${CMAKE_CURRENT_BINARY_DIR}/generic/triton*.whl")
+file(GLOB WHEEL "${CMAKE_CURRENT_BINARY_DIR}/generic/triton*.whl")
 install(
   FILES
-  ${_Wheel}
+  ${WHEEL}
   DESTINATION "${CMAKE_INSTALL_PREFIX}/python"
 )
 
 
 # Tests
-file(GLOB _Tests "${CMAKE_CURRENT_BINARY_DIR}/test/*.py")
+file(GLOB TESTS "${CMAKE_CURRENT_BINARY_DIR}/test/*.py")
 install(
   FILES
-  ${_Tests}
+  ${TESTS}
   DESTINATION "${CMAKE_INSTALL_PREFIX}/python"
 )
