@@ -1632,6 +1632,10 @@ operator<<(std::ostream& out, const InferenceRequest::State& state)
       out << "RELEASED";
       break;
     }
+    case InferenceRequest::State::FAILED_ENQUEUE: {
+      out << "FAILED_ENQUEUE";
+      break;
+    }
     default:
       out << "UNKNOWN";
   }

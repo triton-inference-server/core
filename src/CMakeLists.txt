@@ -124,8 +124,8 @@ set(
   cache_manager.cc
   cuda_utils.cc
   dynamic_batch_scheduler.cc
-  ensemble_scheduler.cc
-  ensemble_utils.cc
+  ensemble_scheduler/ensemble_scheduler.cc
+  ensemble_scheduler/ensemble_utils.cc
   filesystem/api.cc
   infer_parameter.cc
   infer_request.cc
@@ -171,8 +171,8 @@ set(
   constants.h
   cuda_utils.h
   dynamic_batch_scheduler.h
-  ensemble_scheduler.h
-  ensemble_utils.h
+  ensemble_scheduler/ensemble_scheduler.h
+  ensemble_scheduler/ensemble_utils.h
   filesystem/api.h
   infer_parameter.h
   infer_request.h
@@ -228,12 +228,12 @@ if(${TRITON_ENABLE_ENSEMBLE})
   set(
     SERVER_SRCS
     ${SERVER_SRCS}
-    ensemble_model.cc
+    ensemble_scheduler/ensemble_model.cc
   )
   set(
     SERVER_HDRS
     ${SERVER_HDRS}
-    ensemble_model.h
+    ensemble_scheduler/ensemble_model.h
   )
 endif() # TRITON_ENABLE_ENSEMBLE
 
