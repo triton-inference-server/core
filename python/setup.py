@@ -61,7 +61,10 @@ this_directory = os.path.abspath(os.path.dirname(__file__))
 data_files = [
     ("", ["LICENSE.txt"]),
 ]
-platform_package_data = [os.environ["TRITON_PYBIND"],"py.typed"]
+
+# Type checking marker file indicating support for type checkers.
+# https://peps.python.org/pep-0561/
+platform_package_data = [os.environ["TRITON_PYBIND"], "py.typed"]
 
 setup(
     name="tritonserver",
