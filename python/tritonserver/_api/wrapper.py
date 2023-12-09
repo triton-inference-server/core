@@ -306,6 +306,8 @@ class ModelDictionary(dict):
 
 
 class Server:
+    UNLOADED_STATES = [None, "UNAVAILABLE"]
+
     def __init__(self, options: Options = None, **kwargs):
         if options is None:
             options = Options(**kwargs)
@@ -324,7 +326,7 @@ class Server:
 
     def stop(self):
         self._server.stop()
-        self._server = Server.UnstartedServer()
+        self._server = Server._UnstartedServer()
 
     def unregister_model_repository(self, repository_path: str):
         self._server.unregister_model_repository(repository_path)
@@ -398,8 +400,42 @@ class Server:
             self._server.load_model(model_name)
         return self.get_model(model_name)
 
-    def unload_model(self, model_name: str):
-        self._server.unload_model(model_name)
+    def unload_model(
+        self,
+        model_name: str,
+        unload_dependents: bool = False,
+        blocking: bool = False,
+        polling_interval: float = 0.1,
+    ):
+        """Unload model and dependents (optional)
+
+        Parameters
+        ----------
+        model_name : str
+            model name
+        unload_dependents : bool
+            if True unload models dependent on this (ensembles)
+        blocking: bool
+            if True block until model is unavailable
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        """
+
+        if unload_dependents:
+            self._server.unload_model_and_dependents(model_name)
+        else:
+            self._server.unload_model(model_name)
+        if blocking:
+            model_versions = [key for key in self.models.keys() if key[0] == model_name]
+            while [
+                key
+                for key in model_versions
+                if self.models[key].state not in Server.UNLOADED_STATES
+            ]:
+                time.sleep(polling_interval)
 
     def metrics(self, metric_format: MetricFormat = MetricFormat.PROMETHEUS):
         return self._server.metrics().formatted(metric_format)
@@ -422,11 +458,13 @@ class Model:
         name: str,
         version: int = -1,
         state: str = None,
+        reason: str = None,
     ):
         self.name = name
         self.version = version
         self._server = server
         self.state = state
+        self.reason = reason
 
     def create_inference_request(self, **kwargs):
         return InferenceRequest(model=self, _server=self._server, **kwargs)
@@ -490,7 +528,12 @@ class Model:
 
     def __str__(self):
         return "%s" % (
-            {"name": self.name, "version": self.version, "state": self.state}
+            {
+                "name": self.name,
+                "version": self.version,
+                "state": self.state,
+                "reason": self.reason,
+            }
         )
 
 
@@ -505,7 +548,8 @@ class AsyncResponseIterator:
                 asyncio.run_coroutine_threadsafe(
                     self._user_queue.put(response), self._loop
                 )
-
+            if flags == triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+                del self._request
         except Exception as e:
             triton_bindings.TRITONSERVER_LogMessage(
                 triton_bindings.TRITONSERVER_LogLevel.ERROR,
@@ -547,6 +591,8 @@ class ResponseIterator:
             self._queue.put(response)
             if self._user_queue is not None:
                 self._user_queue.put(response)
+            if flags == triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+                del self._request
         except Exception as e:
             triton_bindings.TRITONSERVER_LogMessage(
                 triton_bindings.TRITONSERVER_LogLevel.ERROR,

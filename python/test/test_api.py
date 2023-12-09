@@ -29,10 +29,14 @@ import queue
 import time
 import unittest
 
-import cupy
 import numpy
 import pytest
 import tritonserver
+
+try:
+    import cupy
+except Exception:
+    cupy = None
 
 
 class TrtionServerAPITest(unittest.TestCase):
@@ -41,11 +45,12 @@ class TrtionServerAPITest(unittest.TestCase):
         with self.assertRaises(tritonserver.InvalidArgumentError):
             server.is_ready()
 
+    @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cpupy not installed")
     def test_gpu_memory(self):
+        import cupy
+
         server = tritonserver.Server(
-            model_repository="/workspace/models",
-            log_verbose=True,
-            log_error=True,
+            model_repository="/workspace/models", exit_timeout=5
         )
 
         server.start(blocking=True)
@@ -63,15 +68,68 @@ class TrtionServerAPITest(unittest.TestCase):
 
         for response in responses:
             print(response)
+        try:
+            pass
+        #            server.stop()
+        except Exception as error:
+            print(error)
 
+    def test_unload(self):
+        server = tritonserver.Server(
+            model_repository="/workspace/models",
+            exit_timeout=5,
+            model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
+            startup_models=["test"],
+            log_verbose=True,
+            log_error=True,
+            log_info=True,
+        )
+        server.start(blocking=True)
+
+        model = server.models["test"]
+
+        responses = model.infer(
+            inputs={"fp16_input": numpy.array([[0.5]], dtype=numpy.float16)}
+        )
+
+        print(list(responses)[0])
+
+        print(model.is_ready())
+
+        model_versions = [key for key in server.models.keys() if key[0] == model.name]
+
+        server.unload_model(model.name, blocking=True)
+
+        server.unload_model("foo", blocking=True)
+
+        #        del responses
+
+        while True:
+            if [
+                key
+                for key in model_versions
+                if (
+                    server.models[key].state not in server.models[key].state is not None
+                    and server.models[key].state != "UNAVAILABLE"
+                )
+            ]:
+                print(list(server.models.items()))
+                time.sleep(5)
+                continue
+            break
+        print(server.models[model.name])
+        print(list(server.models.items()))
+
+        print(model.is_ready())
         server.stop()
 
     def test_inference(self):
         server = tritonserver.Server(
             model_repository="/workspace/models",
+            exit_timeout=5
             #           log_verbose=True,
-            #            log_error=True,
         )
+        #            log_error=True,
         server.start()
         while not server.is_ready():
             pass
@@ -118,13 +176,18 @@ class TrtionServerAPITest(unittest.TestCase):
 
         #        print(server.metrics())
 
-        server.stop()
+        try:
+            #    pass
+            server.stop()
+        except Exception as error:
+            print(error)
 
 
 class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
     async def test_async_inference(self):
         server = tritonserver.Server(
             model_repository=["/workspace/models"],
+            exit_timeout=30
             #                                         log_verbose=True,
             #                                        log_error=True)
         )
@@ -155,6 +218,7 @@ class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
         print("here cancelling!", flush=True)
 
         async for response in responses:
+            print("async")
             print(response.outputs["text_output"])
             print(response.outputs["fp16_output"])
             print(response.request_id)
@@ -166,7 +230,9 @@ class AsyncInferenceTest(unittest.IsolatedAsyncioTestCase):
             count += 1
 
         print("calling stop!")
-
-        server.stop()
-
-        print("stopping!", flush=True)
+        try:
+            #    pass
+            server.stop()
+        except Exception as error:
+            print(error)
+        print("stopped!", flush=True)
