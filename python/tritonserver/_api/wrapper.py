@@ -38,7 +38,7 @@ import time
 from dataclasses import dataclass
 from typing import Annotated, Any
 
-from tritonserver import _c as triton_bindings
+from tritonserver import _c as _triton_bindings
 from tritonserver._api import _datautils
 
 # :MetricFamily Metric group created with MetricKind, name, and description
@@ -207,7 +207,7 @@ class Options:
     )
 
     def _create_server_options(self):
-        options = triton_bindings.TRITONSERVER_ServerOptions()
+        options = _triton_bindings.TRITONSERVER_ServerOptions()
 
         options.set_server_id(self.server_id)
 
@@ -316,9 +316,9 @@ class Server:
 
     def start(self, blocking=False, polling_interval=0.1):
         if not isinstance(self._server, Server._UnstartedServer):
-            raise triton_bindings.InvalidArgumentError("Server already started")
+            raise _triton_bindings.InvalidArgumentError("Server already started")
 
-        self._server = triton_bindings.TRITONSERVER_Server(
+        self._server = _triton_bindings.TRITONSERVER_Server(
             self._options._create_server_options()
         )
         while blocking and not self.is_ready():
@@ -353,7 +353,7 @@ class Server:
 
         """
         name_mapping_list = [
-            triton_bindings.TRITONSERVER_Parameter(name, value)
+            _triton_bindings.TRITONSERVER_Parameter(name, value)
             for name, value in name_mapping.items()
         ]
 
@@ -392,7 +392,7 @@ class Server:
     ):
         if parameters:
             parameter_list = [
-                triton_bindings.TRITONSERVER_Parameter(name, value)
+                _triton_bindings.TRITONSERVER_Parameter(name, value)
                 for name, value in parameters.items()
             ]
             self._server.load_model_with_parameters(model_name, parameter_list)
@@ -402,17 +402,18 @@ class Server:
 
     def unload_model(
         self,
-        model_name: str,
+        model: str | Model = None,
         unload_dependents: bool = False,
         blocking: bool = False,
         polling_interval: float = 0.1,
+        **kwargs,
     ):
         """Unload model and dependents (optional)
 
         Parameters
         ----------
-        model_name : str
-            model name
+        model : str | Model
+            model name or model object
         unload_dependents : bool
             if True unload models dependent on this (ensembles)
         blocking: bool
@@ -423,13 +424,17 @@ class Server:
         FIXME: Add docs.
 
         """
+        if model is None:
+            model = Model(**kwargs)
+        elif isinstance(model, str):
+            model = Model(self._server, model)
 
         if unload_dependents:
-            self._server.unload_model_and_dependents(model_name)
+            self._server.unload_model_and_dependents(model.name)
         else:
-            self._server.unload_model(model_name)
+            self._server.unload_model(model.name)
         if blocking:
-            model_versions = [key for key in self.models.keys() if key[0] == model_name]
+            model_versions = [key for key in self.models.keys() if key[0] == model.name]
             while [
                 key
                 for key in model_versions
@@ -445,16 +450,16 @@ class Server:
             pass
 
         def __getattribute__(self, name):
-            raise triton_bindings.InvalidArgumentError("Server not started")
+            raise _triton_bindings.InvalidArgumentError("Server not started")
 
         def __setattr__(self, name, value):
-            raise triton_bindings.InvalidArgumentError("Server not started")
+            raise _triton_bindings.InvalidArgumentError("Server not started")
 
 
 class Model:
     def __init__(
         self,
-        server: triton_bindings.TRITONSERVER_Server,
+        server: _triton_bindings.TRITONSERVER_Server,
         name: str,
         version: int = -1,
         state: str = None,
@@ -528,12 +533,7 @@ class Model:
 
     def __str__(self):
         return "%s" % (
-            {
-                "name": self.name,
-                "version": self.version,
-                "state": self.state,
-                "reason": self.reason,
-            }
+            {"name": self.name, "version": self.version, "state": self.state}
         )
 
 
@@ -548,11 +548,12 @@ class AsyncResponseIterator:
                 asyncio.run_coroutine_threadsafe(
                     self._user_queue.put(response), self._loop
                 )
-            if flags == triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+            if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
                 del self._request
+                self._request = None
         except Exception as e:
-            triton_bindings.TRITONSERVER_LogMessage(
-                triton_bindings.TRITONSERVER_LogLevel.ERROR,
+            _triton_bindings.TRITONSERVER_LogMessage(
+                _triton_bindings.TRITONSERVER_LogLevel.ERROR,
                 __file__,
                 inspect.currentframe().f_lineno,
                 str(e),
@@ -591,11 +592,12 @@ class ResponseIterator:
             self._queue.put(response)
             if self._user_queue is not None:
                 self._user_queue.put(response)
-            if flags == triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+            if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
                 del self._request
+                self._request = None
         except Exception as e:
-            triton_bindings.TRITONSERVER_LogMessage(
-                triton_bindings.TRITONSERVER_LogLevel.ERROR,
+            _triton_bindings.TRITONSERVER_LogMessage(
+                _triton_bindings.TRITONSERVER_LogLevel.ERROR,
                 __file__,
                 inspect.currentframe().f_lineno,
                 str(e),
@@ -619,7 +621,8 @@ class ResponseIterator:
         return response
 
     def cancel(self):
-        self._request.cancel()
+        if self._request is not None:
+            self._request.cancel()
 
 
 @dataclass
@@ -627,17 +630,17 @@ class InferenceResponse:
     request_id: str = None
     parameters: dict = dataclasses.field(default_factory=dict)
     outputs: dict = dataclasses.field(default_factory=dict)
-    error: triton_bindings.TritonError = None
+    error: _triton_bindings.TritonError = None
     classification_label: str = None
     final: bool = False
-    _server: triton_bindings.TRITONSERVER_Server = None
+    _server: _triton_bindings.TRITONSERVER_Server = None
     model: Model = None
 
     @staticmethod
     def set_from_server_response(server, request, response, flags):
         values = {}
         if response is None:
-            if flags == triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+            if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
                 values["final"] = True
             if request.id:
                 values["request_id"] = request.id
@@ -645,10 +648,10 @@ class InferenceResponse:
 
         try:
             response.throw_if_response_error()
-        except triton_bindings.TritonError as error:
+        except _triton_bindings.TritonError as error:
             values["error"] = error
 
-        if flags == triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+        if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
             values["final"] = True
 
         name, version = response.model
@@ -683,7 +686,7 @@ class InferenceRequest:
     parameters: dict[str, str | int | bool] = dataclasses.field(default_factory=dict)
     model: Model = None
     response_queue: queue.SimpleQueue | asyncio.Queue = None
-    _server: triton_bindings.TRITONSERVER_Server = None
+    _server: _triton_bindings.TRITONSERVER_Server = None
     _serialized_inputs: dict = dataclasses.field(default_factory=dict)
 
     _default_allocator = _datautils.NumpyAllocator().create_response_allocator()
@@ -694,7 +697,7 @@ class InferenceRequest:
     def _add_inputs(self, request):
         for name, value in self.inputs.items():
             memory_buffer = _datautils.MemoryBuffer.from_value(value)
-            if memory_buffer.data_type == triton_bindings.TRITONSERVER_DataType.BYTES:
+            if memory_buffer.data_type == _triton_bindings.TRITONSERVER_DataType.BYTES:
                 # to ensure lifetime of array
                 self._serialized_inputs[name] = memory_buffer.value
             request.add_input(name, memory_buffer.data_type, memory_buffer.shape)
@@ -730,12 +733,12 @@ class InferenceRequest:
             elif isinstance(value, bool):
                 request.set_bool_parameter(key, value)
             else:
-                raise triton_bindings.InvalidArgumentError(
+                raise _triton_bindings.InvalidArgumentError(
                     f"Invalid parameter type {type(value)} for key {key}"
                 )
 
     def _create_server_request(self, use_async_iterator=False):
-        request = triton_bindings.TRITONSERVER_InferenceRequest(
+        request = _triton_bindings.TRITONSERVER_InferenceRequest(
             self._server, self.model.name, self.model.version
         )
         if self.request_id is not None:
@@ -758,14 +761,14 @@ class InferenceRequest:
         return request, response_iterator
 
 
-class Metric(triton_bindings.TRITONSERVER_Metric):
+class Metric(_triton_bindings.TRITONSERVER_Metric):
     def __init__(self, family: MetricFamily, labels: dict[str, str] = None):
         if labels is not None:
             parameters = [
-                triton_bindings.TRITONSERVER_Parameter(name, value)
+                _triton_bindings.TRITONSERVER_Parameter(name, value)
                 for name, value in labels.items()
             ]
         else:
             parameters = []
 
-        triton_bindings.TRITONSERVER_Metric.__init__(self, family, parameters)
+        _triton_bindings.TRITONSERVER_Metric.__init__(self, family, parameters)
