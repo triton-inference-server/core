@@ -42,7 +42,7 @@
 #include "triton/common/logging.h"
 #include "triton/common/thread_pool.h"
 #ifdef TRITON_ENABLE_ENSEMBLE
-#include "ensemble_model.h"
+#include "ensemble_scheduler/ensemble_model.h"
 #endif  // TRITON_ENABLE_ENSEMBLE
 #include "server.h"
 
