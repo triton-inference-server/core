@@ -156,7 +156,8 @@ try:
             memory_type_id,
             user_object,
         ):
-            _buffer = cupy.empty(byte_size, cupy.byte)
+            with cupy.cuda.Device(memory_type_id):
+                _buffer = cupy.empty(byte_size, cupy.byte)
 
             dlpack_object = DLPackObject(_buffer)
 
@@ -167,7 +168,7 @@ try:
                 dlpack_object.memory_type_id,
             )
 
-except Exception as e:
+except Exception:
     pass
 
 
@@ -193,6 +194,52 @@ class NumpyAllocator(MemoryAllocator):
             _buffer,
             triton_bindings.TRITONSERVER_MemoryType.CPU,
             0,
+        )
+
+    def release(
+        self,
+        allocator,
+        buffer_,
+        buffer_user_object,
+        byte_size,
+        memory_type,
+        memory_type_id,
+    ):
+        pass
+
+
+class DefaultAllocator(MemoryAllocator):
+    def __init__(self):
+        self._cpu_allocator = NumpyAllocator()
+        try:
+            self._gpu_allocator = CupyAllocator()
+        except Exception:
+            self._gpu_allocator = None
+        self._allocators: dict(
+            triton_bindings.TRITONSERVER_MemoryType, MemoryAllocator
+        ) = defaultdict(lambda: self._cpu_allocator)
+        self._allocators[
+            triton_bindings.TRITONSERVER_MemoryType.CPU
+        ] = self._cpu_allocator
+        if self._gpu_allocator is not None:
+            self._allocators[
+                triton_bindings.TRITONSERVER_MemoryType.GPU
+            ] = self._gpu_allocator
+
+    def start(self, allocator, user_object):
+        pass
+
+    def allocate(
+        self,
+        allocator,
+        tensor_name,
+        byte_size,
+        memory_type,
+        memory_type_id,
+        user_object,
+    ):
+        return self._allocators[memory_type].allocate(
+            allocator, tensor_name, byte_size, memory_type, memory_type_id, user_object
         )
 
     def release(
@@ -307,12 +354,12 @@ class MemoryBuffer:
         try:
             _buffer = memoryview(array)
         except:
-            _buffer = array
+            _buffer = array.tobytes()
         offset = 0
         while offset < len(_buffer):
             (item_length,) = struct.unpack_from("@I", _buffer, offset)
             offset += 4
-            result.append(_buffer[offset : offset + item_length].tobytes())
+            result.append(bytes(_buffer[offset : offset + item_length]))
             offset += item_length
         return numpy.array(result, dtype=numpy.object_)
 

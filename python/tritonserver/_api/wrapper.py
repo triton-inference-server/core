@@ -40,6 +40,7 @@ from typing import Annotated, Any
 
 from tritonserver import _c as _triton_bindings
 from tritonserver._api import _datautils
+from tritonserver._api._datautils import MemoryAllocator
 
 # :MetricFamily Metric group created with MetricKind, name, and description
 from tritonserver._c import TRITONSERVER_InstanceGroupKind as InstanceGroupKind
@@ -540,7 +541,7 @@ class Model:
 class AsyncResponseIterator:
     def response_callback(self, response, flags, unused):
         try:
-            response = InferenceResponse.set_from_server_response(
+            response = InferenceResponse._set_from_server_response(
                 self._server, self._request, response, flags
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
@@ -586,7 +587,7 @@ class AsyncResponseIterator:
 class ResponseIterator:
     def response_callback(self, response, flags, unused):
         try:
-            response = InferenceResponse.set_from_server_response(
+            response = InferenceResponse._set_from_server_response(
                 self._server, self._request, response, flags
             )
             self._queue.put(response)
@@ -637,7 +638,7 @@ class InferenceResponse:
     model: Model = None
 
     @staticmethod
-    def set_from_server_response(server, request, response, flags):
+    def _set_from_server_response(server, request, response, flags):
         values = {}
         if response is None:
             if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
@@ -684,12 +685,13 @@ class InferenceRequest:
     timeout: int = 0
     inputs: dict = dataclasses.field(default_factory=dict)
     parameters: dict[str, str | int | bool] = dataclasses.field(default_factory=dict)
+    response_allocator: MemoryAllocator = None
     model: Model = None
     response_queue: queue.SimpleQueue | asyncio.Queue = None
     _server: _triton_bindings.TRITONSERVER_Server = None
     _serialized_inputs: dict = dataclasses.field(default_factory=dict)
 
-    _default_allocator = _datautils.NumpyAllocator().create_response_allocator()
+    _default_allocator = _datautils.DefaultAllocator().create_response_allocator()
 
     def _release_request(self, request, flags, user_object):
         pass
@@ -716,8 +718,14 @@ class InferenceRequest:
                 self._server, request, user_queue=self.response_queue
             )
         request.set_release_callback(self._release_request, None)
+
+        allocator = InferenceRequest._default_allocator
+
+        if self.response_allocator is not None:
+            allocator = self.response_allocator.create_response_allocator()
+
         request.set_response_callback(
-            InferenceRequest._default_allocator,
+            allocator,
             None,
             response_iterator.response_callback,
             None,
