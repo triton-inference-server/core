@@ -65,7 +65,8 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 }  // namespace
 
 std::unique_ptr<PinnedMemoryManager> PinnedMemoryManager::instance_;
-uint64_t PinnedMemoryManager::pinned_memory_byte_size_;
+uint64_t PinnedMemoryManager::pinned_memory_byte_size_ = 0;
+uint64_t PinnedMemoryManager::available_pinned_memory_byte_size_ = 0;
 
 PinnedMemoryManager::PinnedMemory::PinnedMemory(
     void* pinned_memory_buffer, uint64_t size)
@@ -125,6 +126,11 @@ PinnedMemoryManager::AllocInternal(
     status = Status(
         Status::Code::INTERNAL,
         "failed to allocate pinned system memory: no pinned memory pool");
+  }
+
+  if (status.IsOk()) {
+    available_pinned_memory_byte_size_ -= size;
+    allocated_memory_info_.emplace(*ptr, size);
   }
 
   bool is_pinned = true;
@@ -197,6 +203,12 @@ PinnedMemoryManager::FreeInternal(void* ptr)
           Status::Code::INTERNAL, "unexpected memory address '" +
                                       PointerToString(ptr) +
                                       "' is not being managed");
+    }
+
+    auto ix = allocated_memory_info_.find(ptr);
+    if (ix != allocated_memory_info_.end()) {
+      available_pinned_memory_byte_size_ += ix->second;
+      allocated_memory_info_.erase(ptr);
     }
   }
 
@@ -335,6 +347,7 @@ PinnedMemoryManager::Create(const Options& options)
     }
   }
   pinned_memory_byte_size_ = options.pinned_memory_pool_byte_size_;
+  available_pinned_memory_byte_size_ = pinned_memory_byte_size_;
   return Status::Success;
 }
 
@@ -374,6 +387,18 @@ PinnedMemoryManager::Free(void* ptr)
   }
 
   return instance_->FreeInternal(ptr);
+}
+
+uint64_t
+PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
+{
+  return pinned_memory_byte_size_;
+}
+
+uint64_t
+PinnedMemoryManager::GetAvailablePinnedMemoryByteSize()
+{
+  return available_pinned_memory_byte_size_;
 }
 
 }}  // namespace triton::core

@@ -32,6 +32,7 @@
 #include <thread>
 
 #include "constants.h"
+#include "pinned_memory_manager.h"
 #include "prometheus/detail/utils.h"
 #include "triton/common/logging.h"
 
@@ -106,6 +107,18 @@ Metrics::Metrics()
               .Name("nv_inference_pending_request_count")
               .Help("Instantaneous number of pending requests awaiting "
                     "execution per-model.")
+              .Register(*registry_)),
+
+      pinned_memory_pool_total_family_(
+          prometheus::BuildGauge()
+              .Name("nv_pinned_memory_pool_total_bytes")
+              .Help("Pinned memory pool total size, in bytes")
+              .Register(*registry_)),
+
+      pinned_memory_pool_available_family_(
+          prometheus::BuildGauge()
+              .Name("nv_pinned_memory_pool_available_bytes")
+              .Help("Pinned memory pool available size, in bytes")
               .Register(*registry_)),
 
       // Per-model cache metric families
@@ -222,7 +235,8 @@ Metrics::Metrics()
 #endif  // TRITON_ENABLE_METRICS_CPU
 
       metrics_enabled_(false), gpu_metrics_enabled_(false),
-      cpu_metrics_enabled_(false), metrics_interval_ms_(2000)
+      cpu_metrics_enabled_(false), pinned_memory_metrics_enabled_(false),
+      metrics_interval_ms_(2000)
 {
 }
 
@@ -295,7 +309,22 @@ Metrics::EnableMetrics()
 {
   auto singleton = GetSingleton();
   singleton->metrics_enabled_ = true;
+
+  EnablePinnedMemoryMetrics();
 }
+
+void
+Metrics::EnablePinnedMemoryMetrics()
+{
+  auto singleton = GetSingleton();
+  if (singleton->pinned_memory_metrics_enabled_) {
+    return;
+  }
+  // Initialize
+  singleton->InitializePinnedMemoryMetrics();
+  singleton->pinned_memory_metrics_enabled_ = true;
+}
+
 
 void
 Metrics::EnableGPUMetrics()
@@ -357,8 +386,10 @@ bool
 Metrics::StartPollingThread()
 {
   // Nothing to poll if no polling metrics enabled, don't spawn a thread
-  if (!gpu_metrics_enabled_ && !cpu_metrics_enabled_) {
-    LOG_WARNING << "No polling metrics (CPU, GPU) are enabled. Will not "
+  if (!gpu_metrics_enabled_ && !cpu_metrics_enabled_ &&
+      !pinned_memory_metrics_enabled_) {
+    LOG_WARNING << "No polling metrics (CPU, GPU, Pinned memory) are "
+                   "enabled. Will not "
                    "poll for them.";
     return false;
   }
@@ -371,6 +402,10 @@ Metrics::StartPollingThread()
       // Sleep for metric interval
       std::this_thread::sleep_for(
           std::chrono::milliseconds(metrics_interval_ms_ / 2));
+
+      if (pinned_memory_metrics_enabled_) {
+        PollPinnedMemoryMetrics();
+      }
 
 #ifdef TRITON_ENABLE_METRICS_GPU
       // Poll DCGM GPU metrics
@@ -387,6 +422,20 @@ Metrics::StartPollingThread()
 #endif  // TRITON_ENABLE_METRICS_CPU
     }
   }));
+
+  return true;
+}
+
+bool
+Metrics::PollPinnedMemoryMetrics()
+{
+  uint64_t pinned_memory_byte_size =
+      PinnedMemoryManager::GetTotalPinnedMemoryByteSize();
+  uint64_t available_pinned_memory_byte_size =
+      PinnedMemoryManager::GetAvailablePinnedMemoryByteSize();
+
+  pinned_memory_pool_total_->Set(pinned_memory_byte_size);
+  pinned_memory_pool_available_->Set(available_pinned_memory_byte_size);
 
   return true;
 }
@@ -674,6 +723,17 @@ Metrics::PollDcgmMetrics()
   }
   return true;
 #endif  // TRITON_ENABLE_METRICS_GPU
+}
+
+bool
+Metrics::InitializePinnedMemoryMetrics()
+{
+  const std::map<std::string, std::string> pinned_memory_labels;
+  pinned_memory_pool_total_ =
+      &pinned_memory_pool_total_family_.Add(pinned_memory_labels);
+  pinned_memory_pool_available_ =
+      &pinned_memory_pool_available_family_.Add(pinned_memory_labels);
+  return true;
 }
 
 bool

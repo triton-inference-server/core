@@ -77,6 +77,9 @@ class PinnedMemoryManager {
   // Return Status object indicating success or failure.
   static Status Free(void* ptr);
 
+  static uint64_t GetTotalPinnedMemoryByteSize();
+  static uint64_t GetAvailablePinnedMemoryByteSize();
+
  private:
   class PinnedMemory {
    public:
@@ -99,9 +102,11 @@ class PinnedMemoryManager {
 
   static std::unique_ptr<PinnedMemoryManager> instance_;
   static uint64_t pinned_memory_byte_size_;
+  static uint64_t available_pinned_memory_byte_size_;
 
   std::mutex info_mtx_;
   std::map<void*, std::pair<bool, PinnedMemory*>> memory_info_;
+  std::map<void*, uint64_t> allocated_memory_info_;
   std::map<unsigned long, std::shared_ptr<PinnedMemory>> pinned_memory_buffers_;
 };
 

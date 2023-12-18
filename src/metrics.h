@@ -117,6 +117,9 @@ class Metrics {
   // Enable reporting of metrics
   static void EnableMetrics();
 
+  // Enable reporting of Pinned memory metrics
+  static void EnablePinnedMemoryMetrics();
+
   // Enable reporting of GPU metrics
   static void EnableGPUMetrics();
 
@@ -270,7 +273,9 @@ class Metrics {
   static Metrics* GetSingleton();
   bool InitializeDcgmMetrics();
   bool InitializeCpuMetrics();
+  bool InitializePinnedMemoryMetrics();
   bool StartPollingThread();
+  bool PollPinnedMemoryMetrics();
   bool PollDcgmMetrics();
   bool PollCpuMetrics();
 
@@ -294,6 +299,11 @@ class Metrics {
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
   prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
+
+  prometheus::Family<prometheus::Gauge>& pinned_memory_pool_total_family_;
+  prometheus::Family<prometheus::Gauge>& pinned_memory_pool_available_family_;
+  prometheus::Gauge* pinned_memory_pool_total_;
+  prometheus::Gauge* pinned_memory_pool_available_;
 
   // Per-model Response Cache metrics
   // NOTE: Per-model metrics are used in infer_stats for perf_analyzer. Global
@@ -356,6 +366,7 @@ class Metrics {
   bool metrics_enabled_;
   bool gpu_metrics_enabled_;
   bool cpu_metrics_enabled_;
+  bool pinned_memory_metrics_enabled_;
   bool poll_thread_started_;
   std::mutex metrics_enabling_;
   std::mutex poll_thread_starting_;
