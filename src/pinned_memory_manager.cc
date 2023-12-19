@@ -220,7 +220,7 @@ PinnedMemoryManager::FreeInternal(void* ptr)
                << "\n"
                << "Updated used_pinned_memory_byte_size_ : "
                << used_pinned_memory_byte_size_ << "\n***************\n";
-      allocated_memory_info_.erase(ptr);
+      allocated_memory_info_.erase(ix);
     }
 
   } else {
