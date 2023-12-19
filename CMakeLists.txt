@@ -34,25 +34,15 @@ project(tritoncore LANGUAGES C CXX)
 option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 
 #
-# C++ standard
+# Setting C++ standard
 #
-
 set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard whose features are requested to build this target.")
 
-# Unset CMAKE_CXX_STANDARD if it's too low and in the CMakeCache.txt
-if($CACHE{CMAKE_CXX_STANDARD} AND $CACHE{CMAKE_CXX_STANDARD} LESS ${TRITON_MIN_CXX_STANDARD})
-  message(WARNING "Resetting cache value for CMAKE_CXX_STANDARD to ${TRITON_MIN_CXX_STANDARD}")
-  unset(CMAKE_CXX_STANDARD CACHE)
+if (NOT DEFINED CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS ${TRITON_MIN_CXX_STANDARD})
+  set(CORE_CMAKE_CXX_STANDARD ${TRITON_MIN_CXX_STANDARD})
+else()
+  set(CORE_CMAKE_CXX_STANDARD ${CMAKE_CXX_STANDARD})
 endif()
-
-# Allow manually specified CMAKE_CXX_STANDARD if it's greater than the minimum
-# required C++ version
-if(DEFINED CMAKE_CXX_STANDARD AND CMAKE_CXX_STANDARD LESS ${TRITON_MIN_CXX_STANDARD})
-  message(FATAL_ERROR "Requested CMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD} which is less than the minimum C++ standard ${TRITON_MIN_CXX_STANDARD}")
-endif()
-
-set(CMAKE_CXX_STANDARD ${TRITON_MIN_CXX_STANDARD} CACHE STRING "C++ standard to conform to")
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 #
 # Triton Server API
@@ -140,6 +130,7 @@ add_library(
 add_library(
   TritonCore::triton-core-serverstub ALIAS triton-core-serverstub
 )
+target_compile_features(triton-core-serverstub PRIVATE cxx_std_${CORE_CMAKE_CXX_STANDARD})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
