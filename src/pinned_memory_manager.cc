@@ -128,12 +128,6 @@ PinnedMemoryManager::AllocInternal(
         "failed to allocate pinned system memory: no pinned memory pool");
   }
 
-  if (status.IsOk()) {
-    used_pinned_memory_byte_size_ += size;
-    LOG_INFO << "*\n----------------\nAllocated Pinned memory : " << size << "\n" << "Updated used_pinned_memory_byte_size_ : " << used_pinned_memory_byte_size_ << "\n----------------\n";
-    allocated_memory_info_.emplace(*ptr, size);
-  }
-
   bool is_pinned = true;
   if ((!status.IsOk()) && allow_nonpinned_fallback) {
     static bool warning_logged = false;
@@ -160,6 +154,14 @@ PinnedMemoryManager::AllocInternal(
     if (status.IsOk()) {
       auto res = memory_info_.emplace(
           *ptr, std::make_pair(is_pinned, pinned_memory_buffer));
+      if (is_pinned) {
+        used_pinned_memory_byte_size_ += size;
+        LOG_INFO << "*\n----------------\nAllocated Pinned memory : " << size
+                 << "\n"
+                 << "Updated used_pinned_memory_byte_size_ : "
+                 << used_pinned_memory_byte_size_ << "\n----------------\n";
+        allocated_memory_info_.emplace(*ptr, size);
+      }
       if (!res.second) {
         status = Status(
             Status::Code::INTERNAL, "unexpected memory address collision, '" +
@@ -205,18 +207,22 @@ PinnedMemoryManager::FreeInternal(void* ptr)
                                       PointerToString(ptr) +
                                       "' is not being managed");
     }
-
-    auto ix = allocated_memory_info_.find(ptr);
-    if (ix != allocated_memory_info_.end()) {
-      used_pinned_memory_byte_size_ -= ix->second;
-      LOG_INFO << "*\n***************\nFreed Pinned memory : " << ix->second << "\n" << "Updated used_pinned_memory_byte_size_ : " << used_pinned_memory_byte_size_ << "\n***************\n";
-      allocated_memory_info_.erase(ptr);
-    }
   }
 
   if (is_pinned) {
     std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
     pinned_memory_buffer->managed_pinned_memory_.deallocate(ptr);
+
+    auto ix = allocated_memory_info_.find(ptr);
+    if (ix != allocated_memory_info_.end()) {
+      used_pinned_memory_byte_size_ -= ix->second;
+      LOG_INFO << "*\n***************\nFreed Pinned memory : " << ix->second
+               << "\n"
+               << "Updated used_pinned_memory_byte_size_ : "
+               << used_pinned_memory_byte_size_ << "\n***************\n";
+      allocated_memory_info_.erase(ptr);
+    }
+
   } else {
     free(ptr);
   }
@@ -349,7 +355,8 @@ PinnedMemoryManager::Create(const Options& options)
     }
   }
   pinned_memory_byte_size_ = options.pinned_memory_pool_byte_size_;
-  LOG_INFO << "*\n***************\nCreated used_pinned_memory_byte_size_ : " << used_pinned_memory_byte_size_ << "\n***************\n";
+  LOG_INFO << "*\n***************\nCreated used_pinned_memory_byte_size_ : "
+           << used_pinned_memory_byte_size_ << "\n***************\n";
   return Status::Success;
 }
 
@@ -358,7 +365,8 @@ PinnedMemoryManager::Alloc(
     void** ptr, uint64_t size, TRITONSERVER_MemoryType* allocated_type,
     bool allow_nonpinned_fallback)
 {
-  LOG_INFO << "*\n************\nNew ALLOC request received : " << size << "************\n";
+  LOG_INFO << "*\n************\nNew ALLOC request received : " << size
+           << "************\n";
   if (instance_ == nullptr) {
     return Status(
         Status::Code::UNAVAILABLE, "PinnedMemoryManager has not been created");
