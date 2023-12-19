@@ -49,10 +49,51 @@ DLPACK_TO_TRITON_DTYPE = defaultdict(
     lambda: triton_bindings.TRITONSERVER_DataType.INVALID,
     {
         (_dlpack.DLDataTypeCode.kDLBool, 1): triton_bindings.TRITONSERVER_DataType.BOOL,
+        (_dlpack.DLDataTypeCode.kDLInt, 8): triton_bindings.TRITONSERVER_DataType.INT8,
+        (
+            _dlpack.DLDataTypeCode.kDLInt,
+            16,
+        ): triton_bindings.TRITONSERVER_DataType.INT16,
+        (
+            _dlpack.DLDataTypeCode.kDLInt,
+            32,
+        ): triton_bindings.TRITONSERVER_DataType.INT32,
+        (
+            _dlpack.DLDataTypeCode.kDLInt,
+            64,
+        ): triton_bindings.TRITONSERVER_DataType.INT64,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            8,
+        ): triton_bindings.TRITONSERVER_DataType.UINT8,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            16,
+        ): triton_bindings.TRITONSERVER_DataType.UINT16,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            32,
+        ): triton_bindings.TRITONSERVER_DataType.UINT32,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            64,
+        ): triton_bindings.TRITONSERVER_DataType.UINT64,
         (
             _dlpack.DLDataTypeCode.kDLFloat,
             16,
         ): triton_bindings.TRITONSERVER_DataType.FP16,
+        (
+            _dlpack.DLDataTypeCode.kDLFloat,
+            32,
+        ): triton_bindings.TRITONSERVER_DataType.FP32,
+        (
+            _dlpack.DLDataTypeCode.kDLFloat,
+            64,
+        ): triton_bindings.TRITONSERVER_DataType.FP64,
+        (
+            _dlpack.DLDataTypeCode.kDLBfloat,
+            16,
+        ): triton_bindings.TRITONSERVER_DataType.BF16,
     },
 )
 
