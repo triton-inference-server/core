@@ -78,7 +78,7 @@ class PinnedMemoryManager {
   static Status Free(void* ptr);
 
   static uint64_t GetTotalPinnedMemoryByteSize();
-  static uint64_t GetAvailablePinnedMemoryByteSize();
+  static uint64_t GetUsedPinnedMemoryByteSize();
 
  private:
   class PinnedMemory {
@@ -102,7 +102,7 @@ class PinnedMemoryManager {
 
   static std::unique_ptr<PinnedMemoryManager> instance_;
   static uint64_t pinned_memory_byte_size_;
-  static uint64_t available_pinned_memory_byte_size_;
+  static uint64_t used_pinned_memory_byte_size_;
 
   std::mutex info_mtx_;
   std::map<void*, std::pair<bool, PinnedMemory*>> memory_info_;

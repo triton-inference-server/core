@@ -301,9 +301,9 @@ class Metrics {
   prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
 
   prometheus::Family<prometheus::Gauge>& pinned_memory_pool_total_family_;
-  prometheus::Family<prometheus::Gauge>& pinned_memory_pool_available_family_;
+  prometheus::Family<prometheus::Gauge>& pinned_memory_pool_used_family_;
   prometheus::Gauge* pinned_memory_pool_total_;
-  prometheus::Gauge* pinned_memory_pool_available_;
+  prometheus::Gauge* pinned_memory_pool_used_;
 
   // Per-model Response Cache metrics
   // NOTE: Per-model metrics are used in infer_stats for perf_analyzer. Global

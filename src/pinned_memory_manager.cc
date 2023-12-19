@@ -66,7 +66,7 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 
 std::unique_ptr<PinnedMemoryManager> PinnedMemoryManager::instance_;
 uint64_t PinnedMemoryManager::pinned_memory_byte_size_ = 0;
-uint64_t PinnedMemoryManager::available_pinned_memory_byte_size_ = 0;
+uint64_t PinnedMemoryManager::used_pinned_memory_byte_size_ = 0;
 
 PinnedMemoryManager::PinnedMemory::PinnedMemory(
     void* pinned_memory_buffer, uint64_t size)
@@ -129,7 +129,8 @@ PinnedMemoryManager::AllocInternal(
   }
 
   if (status.IsOk()) {
-    available_pinned_memory_byte_size_ -= size;
+    used_pinned_memory_byte_size_ += size;
+    LOG_INFO << "*\n----------------\nAllocated Pinned memory : " << size << "\n" << "Updated used_pinned_memory_byte_size_ : " << used_pinned_memory_byte_size_ << "\n----------------\n";
     allocated_memory_info_.emplace(*ptr, size);
   }
 
@@ -207,7 +208,8 @@ PinnedMemoryManager::FreeInternal(void* ptr)
 
     auto ix = allocated_memory_info_.find(ptr);
     if (ix != allocated_memory_info_.end()) {
-      available_pinned_memory_byte_size_ += ix->second;
+      used_pinned_memory_byte_size_ -= ix->second;
+      LOG_INFO << "*\n***************\nFreed Pinned memory : " << ix->second << "\n" << "Updated used_pinned_memory_byte_size_ : " << used_pinned_memory_byte_size_ << "\n***************\n";
       allocated_memory_info_.erase(ptr);
     }
   }
@@ -347,7 +349,7 @@ PinnedMemoryManager::Create(const Options& options)
     }
   }
   pinned_memory_byte_size_ = options.pinned_memory_pool_byte_size_;
-  available_pinned_memory_byte_size_ = pinned_memory_byte_size_;
+  LOG_INFO << "*\n***************\nCreated used_pinned_memory_byte_size_ : " << used_pinned_memory_byte_size_ << "\n***************\n";
   return Status::Success;
 }
 
@@ -356,6 +358,7 @@ PinnedMemoryManager::Alloc(
     void** ptr, uint64_t size, TRITONSERVER_MemoryType* allocated_type,
     bool allow_nonpinned_fallback)
 {
+  LOG_INFO << "*\n************\nNew ALLOC request received : " << size << "************\n";
   if (instance_ == nullptr) {
     return Status(
         Status::Code::UNAVAILABLE, "PinnedMemoryManager has not been created");
@@ -396,9 +399,9 @@ PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
 }
 
 uint64_t
-PinnedMemoryManager::GetAvailablePinnedMemoryByteSize()
+PinnedMemoryManager::GetUsedPinnedMemoryByteSize()
 {
-  return available_pinned_memory_byte_size_;
+  return used_pinned_memory_byte_size_;
 }
 
 }}  // namespace triton::core

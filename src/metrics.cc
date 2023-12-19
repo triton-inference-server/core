@@ -112,13 +112,13 @@ Metrics::Metrics()
       pinned_memory_pool_total_family_(
           prometheus::BuildGauge()
               .Name("nv_pinned_memory_pool_total_bytes")
-              .Help("Pinned memory pool total size, in bytes")
+              .Help("Pinned memory pool total memory size, in bytes")
               .Register(*registry_)),
 
-      pinned_memory_pool_available_family_(
+      pinned_memory_pool_used_family_(
           prometheus::BuildGauge()
-              .Name("nv_pinned_memory_pool_available_bytes")
-              .Help("Pinned memory pool available size, in bytes")
+              .Name("nv_pinned_memory_pool_used_bytes")
+              .Help("Pinned memory pool used memory size, in bytes")
               .Register(*registry_)),
 
       // Per-model cache metric families
@@ -316,6 +316,7 @@ Metrics::EnableMetrics()
 void
 Metrics::EnablePinnedMemoryMetrics()
 {
+  LOG_INFO << "#\n############\nEnablePinnedMemoryMetrics called !\n############\n";
   auto singleton = GetSingleton();
   if (singleton->pinned_memory_metrics_enabled_) {
     return;
@@ -431,11 +432,11 @@ Metrics::PollPinnedMemoryMetrics()
 {
   uint64_t pinned_memory_byte_size =
       PinnedMemoryManager::GetTotalPinnedMemoryByteSize();
-  uint64_t available_pinned_memory_byte_size =
-      PinnedMemoryManager::GetAvailablePinnedMemoryByteSize();
+  uint64_t used_pinned_memory_byte_size =
+      PinnedMemoryManager::GetUsedPinnedMemoryByteSize();
 
   pinned_memory_pool_total_->Set(pinned_memory_byte_size);
-  pinned_memory_pool_available_->Set(available_pinned_memory_byte_size);
+  pinned_memory_pool_used_->Set(used_pinned_memory_byte_size);
 
   return true;
 }
@@ -731,8 +732,8 @@ Metrics::InitializePinnedMemoryMetrics()
   const std::map<std::string, std::string> pinned_memory_labels;
   pinned_memory_pool_total_ =
       &pinned_memory_pool_total_family_.Add(pinned_memory_labels);
-  pinned_memory_pool_available_ =
-      &pinned_memory_pool_available_family_.Add(pinned_memory_labels);
+  pinned_memory_pool_used_ =
+      &pinned_memory_pool_used_family_.Add(pinned_memory_labels);
   return true;
 }
 
