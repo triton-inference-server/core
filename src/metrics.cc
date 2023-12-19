@@ -316,7 +316,6 @@ Metrics::EnableMetrics()
 void
 Metrics::EnablePinnedMemoryMetrics()
 {
-  LOG_INFO << "#\n############\nEnablePinnedMemoryMetrics called !\n############\n";
   auto singleton = GetSingleton();
   if (singleton->pinned_memory_metrics_enabled_) {
     return;
