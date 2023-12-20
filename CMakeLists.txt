@@ -34,15 +34,9 @@ project(tritoncore LANGUAGES C CXX)
 option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 
 #
-# Setting C++ standard
+# Specifying min required C++ standard
 #
-set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard whose features are requested to build this target.")
-
-if (NOT DEFINED CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS ${TRITON_MIN_CXX_STANDARD})
-  set(CORE_CMAKE_CXX_STANDARD ${TRITON_MIN_CXX_STANDARD})
-else()
-  set(CORE_CMAKE_CXX_STANDARD ${CMAKE_CXX_STANDARD})
-endif()
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
 
 #
 # Triton Server API
@@ -130,7 +124,7 @@ add_library(
 add_library(
   TritonCore::triton-core-serverstub ALIAS triton-core-serverstub
 )
-target_compile_features(triton-core-serverstub PRIVATE cxx_std_${CORE_CMAKE_CXX_STANDARD})
+target_compile_features(triton-core-serverstub PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
@@ -347,7 +341,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DTRITON_ENABLE_AZURE_STORAGE:BOOL=${TRITON_ENABLE_AZURE_STORAGE}
       -DTRITON_ENABLE_S3:BOOL=${TRITON_ENABLE_S3}
       -DTRITON_ENABLE_ENSEMBLE:BOOL=${TRITON_ENABLE_ENSEMBLE}
-      -DCORE_CMAKE_CXX_STANDARD:STRING=${CORE_CMAKE_CXX_STANDARD}
+      -DTRITON_MIN_CXX_STANDARD:STRING=${TRITON_MIN_CXX_STANDARD}
       -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
       -DCMAKE_INSTALL_PREFIX:PATH=${TRITON_INSTALL_PREFIX}
       -DTRITON_VERSION:STRING=${TRITON_VERSION}
