@@ -266,7 +266,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(TRITON_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
   endif()
 
-  set(TRITON_DEPENDS googletest protobuf)
+  set(TRITON_DEPENDS googletest protobuf re2)
   if(${TRITON_ENABLE_GCS})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} google-cloud-cpp)
   endif() # TRITON_ENABLE_GCS
