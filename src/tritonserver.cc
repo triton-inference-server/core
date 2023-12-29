@@ -37,7 +37,7 @@
 #include "metrics.h"
 #include "model.h"
 #include "model_config_utils.h"
-#include "model_repository_manager.h"
+#include "model_repository_manager/model_repository_manager.h"
 #include "rate_limiter.h"
 #include "response_allocator.h"
 #include "server.h"

@@ -42,7 +42,6 @@
 #include "model.h"
 #include "model_config.pb.h"
 #include "model_config_utils.h"
-#include "model_repository_manager.h"
 #include "pinned_memory_manager.h"
 #include "repo_agent.h"
 #include "triton/common/async_work_queue.h"

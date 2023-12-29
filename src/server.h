@@ -38,7 +38,7 @@
 #include "cache_manager.h"
 #include "infer_parameter.h"
 #include "model_config.pb.h"
-#include "model_repository_manager.h"
+#include "model_repository_manager/model_repository_manager.h"
 #include "rate_limiter.h"
 #include "status.h"
 #include "triton/common/model_config.h"
