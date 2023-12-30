@@ -79,7 +79,7 @@ class InferenceParameter {
   //   TRITONSERVER_PARAMETER_STRING -> const char*
   //   TRITONSERVER_PARAMETER_INT -> int64_t*
   //   TRITONSERVER_PARAMETER_BOOL -> bool*
-  //   TRITONSERVER_PARAMETER_BOOL -> double*
+  //   TRITONSERVER_PARAMETER_DOUBLE -> double*
   //   TRITONSERVER_PARAMETER_BYTES -> const void*
   const void* ValuePointer() const;
 
