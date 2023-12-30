@@ -55,8 +55,8 @@ class InferenceParameter {
   {
   }
 
-  InferenceParameter(const char* name, const void* ptr, const double size)
-      : name_(name), type_(TRITONSERVER_PARAMETER_DOUBLE), value_double_(ptr),
+  InferenceParameter(const char* name, const double value)
+      : name_(name), type_(TRITONSERVER_PARAMETER_INT), value_double_(value),
         byte_size_(sizeof(double))
   {
   }

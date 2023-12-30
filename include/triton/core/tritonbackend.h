@@ -732,7 +732,7 @@ TRITONBACKEND_ResponseSetBoolParameter(
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_ResponseSetBoolParameter(
+TRITONBACKEND_ResponseSetDoubleParameter(
     TRITONBACKEND_Response* response, const char* name, const double value);
 
 /// Create an output tensor in the response. The lifetime of the

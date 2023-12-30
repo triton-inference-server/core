@@ -182,6 +182,7 @@ typedef enum TRITONSERVER_parametertype_enum {
   TRITONSERVER_PARAMETER_STRING,
   TRITONSERVER_PARAMETER_INT,
   TRITONSERVER_PARAMETER_BOOL,
+  TRITONSERVER_PARAMETER_DOUBLE,
   TRITONSERVER_PARAMETER_BYTES
 } TRITONSERVER_ParameterType;
 
@@ -1429,7 +1430,7 @@ TRITONSERVER_InferenceRequestSetBoolParameter(
 /// \param value The value of the parameter.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
-TRITONSERVER_InferenceRequestSetBoolParameter(
+TRITONSERVER_InferenceRequestSetDoubleParameter(
     struct TRITONSERVER_InferenceRequest* request, const char* key,
     const double value);
 
