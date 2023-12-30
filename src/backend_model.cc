@@ -1570,6 +1570,15 @@ TRITONBACKEND_ResponseSetBoolParameter(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseSetDoubleParameter(
+    TRITONBACKEND_Response* response, const char* name, const double value)
+{
+  InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
+  RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseOutput(
     TRITONBACKEND_Response* response, TRITONBACKEND_Output** output,
     const char* name, const TRITONSERVER_DataType datatype,

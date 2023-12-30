@@ -55,6 +55,12 @@ class InferenceParameter {
   {
   }
 
+  InferenceParameter(const char* name, const void* ptr, const double size)
+      : name_(name), type_(TRITONSERVER_PARAMETER_DOUBLE), value_double_(ptr),
+        byte_size_(sizeof(double))
+  {
+  }
+
   InferenceParameter(const char* name, const void* ptr, const uint64_t size)
       : name_(name), type_(TRITONSERVER_PARAMETER_BYTES), value_bytes_(ptr),
         byte_size_(size)
@@ -73,6 +79,7 @@ class InferenceParameter {
   //   TRITONSERVER_PARAMETER_STRING -> const char*
   //   TRITONSERVER_PARAMETER_INT -> int64_t*
   //   TRITONSERVER_PARAMETER_BOOL -> bool*
+  //   TRITONSERVER_PARAMETER_BOOL -> double*
   //   TRITONSERVER_PARAMETER_BYTES -> const void*
   const void* ValuePointer() const;
 
@@ -93,6 +100,7 @@ class InferenceParameter {
   std::string value_string_;
   int64_t value_int64_;
   bool value_bool_;
+  double value_double_;
   const void* value_bytes_;
   uint64_t byte_size_;
 };

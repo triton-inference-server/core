@@ -132,6 +132,13 @@ InferenceResponse::AddParameter(const char* name, const bool value)
 }
 
 Status
+InferenceResponse::AddParameter(const char* name, const double value)
+{
+  parameters_.emplace_back(name, value);
+  return Status::Success;
+}
+
+Status
 InferenceResponse::AddOutput(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape, InferenceResponse::Output** output)

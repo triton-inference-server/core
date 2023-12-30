@@ -267,6 +267,13 @@ InferenceRequest::AddParameter(const char* name, const bool value)
 }
 
 Status
+InferenceRequest::AddParameter(const char* name, const double value)
+{
+  parameters_.emplace_back(name, value);
+  return Status::Success;
+}
+
+Status
 InferenceRequest::SetParameters(
     const std::deque<InferenceParameter>& parameters)
 {
