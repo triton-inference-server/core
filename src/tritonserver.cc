@@ -280,6 +280,9 @@ class TritonServerOptions {
   unsigned int ModelLoadThreadCount() const { return model_load_thread_count_; }
   void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
 
+  unsigned int ModelLoadRetryCount() const { return model_load_retry_count_; }
+  void SetModelLoadRetryCount(unsigned int c) { model_load_retry_count_ = c; }
+
   bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
   void SetModelNamespacingEnabled(const bool e)
   {
@@ -356,6 +359,7 @@ class TritonServerOptions {
   uint64_t pinned_memory_pool_size_;
   unsigned int buffer_manager_thread_count_;
   unsigned int model_load_thread_count_;
+  unsigned int model_load_retry_count_;
   bool enable_model_namespacing_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
@@ -1356,6 +1360,16 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelLoadRetryCount(
+    TRITONSERVER_ServerOptions* options, unsigned int retry_count)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelLoadRetryCount(retry_count);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelNamespacing(
     TRITONSERVER_ServerOptions* options, bool enable_namespace)
 {
@@ -2342,6 +2356,7 @@ TRITONSERVER_ServerNew(
   lserver->SetRepoAgentDir(loptions->RepoAgentDir());
   lserver->SetBufferManagerThreadCount(loptions->BufferManagerThreadCount());
   lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
+  lserver->SetModelLoadRetryCount(loptions->ModelLoadRetryCount());
   lserver->SetModelNamespacingEnabled(loptions->ModelNamespacingEnabled());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
