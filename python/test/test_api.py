@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -35,15 +35,14 @@ import tritonserver
 
 try:
     import cupy
-except Exception:
+except ImportError:
     cupy = None
-
 
 class TrtionServerAPITest(unittest.TestCase):
     def test_not_started(self):
         server = tritonserver.Server()
         with self.assertRaises(tritonserver.InvalidArgumentError):
-            server.is_ready()
+            server.ready()
 
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cpupy not installed")
     def test_gpu_memory(self):
@@ -55,14 +54,14 @@ class TrtionServerAPITest(unittest.TestCase):
 
         server.start(blocking=True)
 
-        test = server.get_model("test")
+        test = server.model("test")
         fp16_input = cupy.array([[5], [6], [7], [8]], dtype=numpy.float16)
         responses = test.infer(inputs={"fp16_input": fp16_input}, request_id="1")
 
         for response in responses:
             print(response)
 
-        responses = server.models["test"].infer(
+        responses = server.models()["test"].infer(
             inputs={"fp16_input": fp16_input}, request_id="1"
         )
 
@@ -131,7 +130,7 @@ class TrtionServerAPITest(unittest.TestCase):
         )
         #            log_error=True,
         server.start()
-        while not server.is_ready():
+        while not server.ready():
             pass
 
         response_queue = queue.SimpleQueue()

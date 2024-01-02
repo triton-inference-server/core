@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -42,6 +42,16 @@ from tritonserver._api.wrapper import ModelTxnPropertyFlag as ModelTxnPropertyFl
 from tritonserver._api.wrapper import Options as Options
 from tritonserver._api.wrapper import RateLimitMode as RateLimitMode
 from tritonserver._api.wrapper import Server as Server
+from tritonserver._api._datautils import MemoryAllocator as MemoryAllocator
+from tritonserver._api._datautils import NumpyAllocator as NumpyAllocator
+from tritonserver._c import TRITONSERVER_DataType as DataType
+from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
+
+try:
+    from tritonserver._api._datautils import CupyAllocator as CupyAllocator
+except ImportError:
+    pass
+
 from tritonserver._c import AlreadyExistsError as AlreadyExistsError
 from tritonserver._c import InternalError as InternalError
 from tritonserver._c import InvalidArgumentError as InvalidArgumentError
