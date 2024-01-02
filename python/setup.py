@@ -68,8 +68,8 @@ data_files = [
 platform_package_data = [
     os.environ["TRITON_PYBIND"],
     "py.typed",
-    "._c/__init__.pyi",
-    "._c/triton_bindings.pyi",
+    "_c/__init__.pyi",
+    "_c/triton_bindings.pyi",
 ]
 
 setup(
