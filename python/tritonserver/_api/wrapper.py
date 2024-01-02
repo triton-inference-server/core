@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -36,26 +36,38 @@ import json
 import queue
 import time
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
-from tritonserver import _c as _triton_bindings
+from typing_extensions import Unpack
+import typing_extensions
+
+import tritonserver._c.triton_bindings as _triton_bindings
 from tritonserver._api import _datautils
 from tritonserver._api._datautils import MemoryAllocator
 
 # :MetricFamily Metric group created with MetricKind, name, and description
-from tritonserver._c import TRITONSERVER_InstanceGroupKind as InstanceGroupKind
-from tritonserver._c import TRITONSERVER_LogFormat as LogFormat
-from tritonserver._c import TRITONSERVER_MetricFamily as MetricFamily
-from tritonserver._c import TRITONSERVER_MetricFormat as MetricFormat
-from tritonserver._c import TRITONSERVER_MetricKind as MetricKind
-from tritonserver._c import TRITONSERVER_ModelBatchFlag as ModelBatchFlag
-from tritonserver._c import TRITONSERVER_ModelControlMode as ModelControlMode
-from tritonserver._c import TRITONSERVER_ModelIndexFlag as ModelIndexFlag
-from tritonserver._c import TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag
-from tritonserver._c import TRITONSERVER_RateLimitMode as RateLimitMode
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
+)
+from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
+from tritonserver._c.triton_bindings import TRITONSERVER_MetricFamily as MetricFamily
+from tritonserver._c.triton_bindings import TRITONSERVER_MetricFormat as MetricFormat
+from tritonserver._c.triton_bindings import TRITONSERVER_MetricKind as MetricKind
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
+)
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_ModelControlMode as ModelControlMode,
+)
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_ModelIndexFlag as ModelIndexFlag,
+)
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag,
+)
+from tritonserver._c.triton_bindings import TRITONSERVER_RateLimitMode as RateLimitMode
 
 uint = Annotated[int, ctypes.c_uint]
-
 
 @dataclass
 class RateLimiterResource:
@@ -180,7 +192,7 @@ class Options:
     model_load_thread_count: uint = 4
     model_namespacing: bool = False
 
-    log_file: str = None
+    log_file: Optional[str] = None
     log_info: bool = False
     log_warn: bool = False
     log_error: bool = False
@@ -307,23 +319,35 @@ class ModelDictionary(dict):
 
 
 class Server:
-    UNLOADED_STATES = [None, "UNAVAILABLE"]
+    _UNLOADED_STATES = [None, "UNAVAILABLE"]
 
-    def __init__(self, options: Options = None, **kwargs):
+    def __init__(self, options: Options = None, **kwargs: Unpack[Options]):
         if options is None:
             options = Options(**kwargs)
         self._options = options
         self._server = Server._UnstartedServer()
 
-    def start(self, blocking=False, polling_interval=0.1):
+    def start(
+        self,
+        wait_until_ready=False,
+        polling_interval: float = 0.1,
+        timeout: Optional[float] = None,
+    ):
         if not isinstance(self._server, Server._UnstartedServer):
             raise _triton_bindings.InvalidArgumentError("Server already started")
 
         self._server = _triton_bindings.TRITONSERVER_Server(
             self._options._create_server_options()
         )
-        while blocking and not self.is_ready():
+        start_time = time.time()
+        while (
+            wait_until_ready
+            and not self.ready()
+            and ((timeout is None) or (time.time() - start_time) < timeout)
+        ):
             time.sleep(polling_interval)
+        if not self.ready():
+            raise _triton_bindings.UnavailableError("Timeout before ready")
 
     def stop(self):
         self._server.stop()
@@ -366,16 +390,15 @@ class Server:
     def metadata(self):
         return json.loads(self._server.metadata().serialize_to_json())
 
-    def is_live(self):
+    def live(self):
         return self._server.is_live()
 
-    def is_ready(self):
+    def ready(self):
         return self._server.is_ready()
 
-    def get_model(self, model_name, model_version=-1):
+    def model(self, model_name, model_version=-1):
         return Model(self._server, model_name, model_version)
 
-    @property
     def models(self):
         return ModelDictionary(self._server, self._model_index())
 
@@ -666,8 +689,8 @@ class InferenceResponse:
         outputs = {}
         for output_index in range(response.output_count):
             (name, *buffer_details) = response.output(output_index)
-            memory_buffer = _datautils.MemoryBuffer.from_details(*buffer_details)
-            outputs[name] = memory_buffer.value
+            tensor = _datautils.Tensor.from_buffer(*buffer_details)
+            outputs[name] = tensor
         values["outputs"] = outputs
         values["_server"] = server
 
@@ -687,25 +710,27 @@ class InferenceRequest:
     parameters: dict[str, str | int | bool] = dataclasses.field(default_factory=dict)
     response_allocator: MemoryAllocator = None
     model: Model = None
-    response_queue: queue.SimpleQueue | asyncio.Queue = None
+    response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
     _server: _triton_bindings.TRITONSERVER_Server = None
     _serialized_inputs: dict = dataclasses.field(default_factory=dict)
 
-    _default_allocator = _datautils.DefaultAllocator().create_response_allocator()
+    _default_allocator = _datautils._ResponseAllocator(
+        _datautils.DefaultAllocator()
+    ).create_response_allocator()
 
     def _release_request(self, request, flags, user_object):
         pass
 
     def _add_inputs(self, request):
         for name, value in self.inputs.items():
-            memory_buffer = _datautils.MemoryBuffer.from_value(value)
-            if memory_buffer.data_type == _triton_bindings.TRITONSERVER_DataType.BYTES:
+            tensor = _datautils.Tensor.from_value(value)
+            if tensor.data_type == _triton_bindings.TRITONSERVER_DataType.BYTES:
                 # to ensure lifetime of array
-                self._serialized_inputs[name] = memory_buffer.value
-            request.add_input(name, memory_buffer.data_type, memory_buffer.shape)
+                self._serialized_inputs[name] = tensor._value
+            request.add_input(name, tensor.data_type, tensor.shape)
 
             request.append_input_data_with_buffer_attributes(
-                name, memory_buffer.buffer_, memory_buffer.buffer_attributes
+                name, tensor._buffer, tensor.buffer_attributes
             )
 
     def _set_callbacks(self, request, use_async_iterator=False):
@@ -713,10 +738,15 @@ class InferenceRequest:
             response_iterator = AsyncResponseIterator(
                 self._server, request, user_queue=self.response_queue
             )
+        elif isinstance(self.response_queue, queue.SimpleQueue):
+            response_iterator = ResponseIterator(
+                self._server, request, user_queue=self.response_queue
+            )
         else:
             response_iterator = ResponseIterator(
                 self._server, request, user_queue=self.response_queue
             )
+
         request.set_release_callback(self._release_request, None)
 
         allocator = InferenceRequest._default_allocator
@@ -770,7 +800,7 @@ class InferenceRequest:
 
 
 class Metric(_triton_bindings.TRITONSERVER_Metric):
-    def __init__(self, family: MetricFamily, labels: dict[str, str] = None):
+    def __init__(self, family: MetricFamily, labels: Optional[dict[str, str]] = None):
         if labels is not None:
             parameters = [
                 _triton_bindings.TRITONSERVER_Parameter(name, value)
