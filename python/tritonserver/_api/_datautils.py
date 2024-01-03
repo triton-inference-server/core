@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -30,16 +30,19 @@ import ctypes
 import struct
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import ClassVar, Any, Optional, Type
+from typing import Any, ClassVar, Optional, Sequence, Type
+
 import numpy
-from . import _dlpack
-import tritonserver._c as triton_bindings
-from tritonserver._c import TRITONSERVER_DataType as DataType
+import tritonserver._c as _triton_bindings
+from tritonserver._c import InvalidArgumentError
 from tritonserver._c import TRITONSERVER_BufferAttributes as BufferAttributes
+from tritonserver._c import TRITONSERVER_DataType as DataType
 from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
-from tritonserver._c.triton_bindings import InvalidArgumentError
+from tritonserver._c import UnsupportedError
+
+from . import _dlpack
+
 
 class _CustomKeyErrorDict(dict):
     def __init__(
@@ -64,7 +67,9 @@ class _CustomKeyErrorDict(dict):
             ) from None
 
 
-DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE = _CustomKeyErrorDict(
+DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE: dict[
+    _dlpack.DLDeviceType, MemoryType
+] = _CustomKeyErrorDict(
     "DLPack device type",
     "Triton server memory type",
     {
@@ -73,89 +78,113 @@ DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE = _CustomKeyErrorDict(
     },
 )
 
-# TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE = (lambda: None, {})
-
-
-DLPACK_TO_TRITON_DTYPE = _CustomKeyErrorDict(
-    "DLPack data type",
-    "Triton server data type",
+TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE: dict[
+    MemoryType, _dlpack.DLDeviceType
+] = _CustomKeyErrorDict(
+    "Triton server memory type",
+    "DLPack device type",
     {
-        (_dlpack.DLDataTypeCode.kDLBool, 1): triton_bindings.TRITONSERVER_DataType.BOOL,
-        (_dlpack.DLDataTypeCode.kDLInt, 8): triton_bindings.TRITONSERVER_DataType.INT8,
-        (
-            _dlpack.DLDataTypeCode.kDLInt,
-            16,
-        ): triton_bindings.TRITONSERVER_DataType.INT16,
-        (
-            _dlpack.DLDataTypeCode.kDLInt,
-            32,
-        ): triton_bindings.TRITONSERVER_DataType.INT32,
-        (
-            _dlpack.DLDataTypeCode.kDLInt,
-            64,
-        ): triton_bindings.TRITONSERVER_DataType.INT64,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            8,
-        ): triton_bindings.TRITONSERVER_DataType.UINT8,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            16,
-        ): triton_bindings.TRITONSERVER_DataType.UINT16,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            32,
-        ): triton_bindings.TRITONSERVER_DataType.UINT32,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            64,
-        ): triton_bindings.TRITONSERVER_DataType.UINT64,
-        (
-            _dlpack.DLDataTypeCode.kDLFloat,
-            16,
-        ): triton_bindings.TRITONSERVER_DataType.FP16,
-        (
-            _dlpack.DLDataTypeCode.kDLFloat,
-            32,
-        ): triton_bindings.TRITONSERVER_DataType.FP32,
-        (
-            _dlpack.DLDataTypeCode.kDLFloat,
-            64,
-        ): triton_bindings.TRITONSERVER_DataType.FP64,
-        (
-            _dlpack.DLDataTypeCode.kDLBfloat,
-            16,
-        ): triton_bindings.TRITONSERVER_DataType.BF16,
+        **{
+            value: key
+            for key, value in DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE.items()
+        },
+        **{MemoryType.CPU_PINNED: _dlpack.DLDeviceType.kDLCPU},
     },
 )
 
+DLPACK_TO_TRITON_DTYPE: dict[
+    tuple[_dlpack.DLDataTypeCode, int], DataType
+] = _CustomKeyErrorDict(
+    "DLPack data type",
+    "Triton server data type",
+    {
+        (_dlpack.DLDataTypeCode.kDLBool, 1): DataType.BOOL,
+        (_dlpack.DLDataTypeCode.kDLInt, 8): DataType.INT8,
+        (
+            _dlpack.DLDataTypeCode.kDLInt,
+            16,
+        ): DataType.INT16,
+        (
+            _dlpack.DLDataTypeCode.kDLInt,
+            32,
+        ): DataType.INT32,
+        (
+            _dlpack.DLDataTypeCode.kDLInt,
+            64,
+        ): DataType.INT64,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            8,
+        ): DataType.UINT8,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            16,
+        ): DataType.UINT16,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            32,
+        ): DataType.UINT32,
+        (
+            _dlpack.DLDataTypeCode.kDLUInt,
+            64,
+        ): DataType.UINT64,
+        (
+            _dlpack.DLDataTypeCode.kDLFloat,
+            16,
+        ): DataType.FP16,
+        (
+            _dlpack.DLDataTypeCode.kDLFloat,
+            32,
+        ): DataType.FP32,
+        (
+            _dlpack.DLDataTypeCode.kDLFloat,
+            64,
+        ): DataType.FP64,
+        (
+            _dlpack.DLDataTypeCode.kDLBfloat,
+            16,
+        ): DataType.BF16,
+    },
+)
+
+TRITON_TO_DLPACK_DTYPE: dict[DataType, _dlpack.DLDataType] = _CustomKeyErrorDict(
+    "Triton server data type",
+    "DLPack data type",
+    {
+        value: _dlpack.DLDataType(type_code=key[0], bits=key[1], lanes=1)
+        for key, value in DLPACK_TO_TRITON_DTYPE.items()
+    },
+)
 
 NUMPY_TO_TRITON_DTYPE = _CustomKeyErrorDict(
     "Numpy data type",
     "Triton server data type",
     {
-        bool: triton_bindings.TRITONSERVER_DataType.BOOL,
-        numpy.int8: triton_bindings.TRITONSERVER_DataType.INT8,
-        numpy.int16: triton_bindings.TRITONSERVER_DataType.INT16,
-        numpy.int32: triton_bindings.TRITONSERVER_DataType.INT32,
-        numpy.int64: triton_bindings.TRITONSERVER_DataType.INT64,
-        numpy.uint8: triton_bindings.TRITONSERVER_DataType.UINT8,
-        numpy.uint16: triton_bindings.TRITONSERVER_DataType.UINT16,
-        numpy.uint32: triton_bindings.TRITONSERVER_DataType.UINT32,
-        numpy.uint64: triton_bindings.TRITONSERVER_DataType.UINT64,
-        numpy.float16: triton_bindings.TRITONSERVER_DataType.FP16,
-        numpy.float32: triton_bindings.TRITONSERVER_DataType.FP32,
-        numpy.float64: triton_bindings.TRITONSERVER_DataType.FP64,
-        numpy.bytes_: triton_bindings.TRITONSERVER_DataType.BYTES,
-        numpy.str_: triton_bindings.TRITONSERVER_DataType.BYTES,
-        numpy.object_: triton_bindings.TRITONSERVER_DataType.BYTES,
+        bool: DataType.BOOL,
+        numpy.int8: DataType.INT8,
+        numpy.int16: DataType.INT16,
+        numpy.int32: DataType.INT32,
+        numpy.int64: DataType.INT64,
+        numpy.uint8: DataType.UINT8,
+        numpy.uint16: DataType.UINT16,
+        numpy.uint32: DataType.UINT32,
+        numpy.uint64: DataType.UINT64,
+        numpy.float16: DataType.FP16,
+        numpy.float32: DataType.FP32,
+        numpy.float64: DataType.FP64,
+        numpy.bytes_: DataType.BYTES,
+        numpy.str_: DataType.BYTES,
+        numpy.object_: DataType.BYTES,
     },
 )
 
 TRITON_TO_NUMPY_DTYPE = _CustomKeyErrorDict(
     "Triton data type",
     "Numpy data type",
-    {value: key for key, value in NUMPY_TO_TRITON_DTYPE.items()},
+    {
+        **{value: key for key, value in NUMPY_TO_TRITON_DTYPE.items()},
+        **{DataType.BYTES: numpy.object_},
+    },
 )
 
 
@@ -187,12 +216,12 @@ class MemoryBuffer:
     @staticmethod
     def from_dlpack(owner: Any) -> MemoryBuffer:
         if not hasattr(owner, "__dlpack__"):
-            raise InvalidArgument("Object does not support DLpack protocol")
+            raise InvalidArgumentError("Object does not support DLpack protocol")
 
         dlpack_object = DLPackObject(owner)
 
         if not dlpack_object.contiguous:
-            raise InvalidArgument("Only contiguous memory is supported")
+            raise InvalidArgumentError("Only contiguous memory is supported")
 
         return MemoryBuffer(
             dlpack_object.data_ptr,
@@ -201,6 +230,14 @@ class MemoryBuffer:
             dlpack_object.byte_size,
             owner,
         )
+
+    def _create_buffer_attributes(self) -> BufferAttributes:
+        buffer_attributes = BufferAttributes()
+        buffer_attributes.memory_type = self.memory_type
+        buffer_attributes.memory_type_id = self.memory_type_id
+        buffer_attributes.byte_size = self.size
+        buffer_attributes.cuda_ipc_handle = 0
+        return buffer_attributes
 
 
 class MemoryAllocator(ABC):
@@ -249,7 +286,7 @@ class _ResponseAllocator:
 
     def _set_memory_type(self, memory_type: DeviceOrMemoryType) -> None:
         self._memory_type = None
-        self._memory_type_id = None
+        self._memory_type_id = 0
 
         if memory_type is None:
             return
@@ -310,8 +347,7 @@ class _ResponseAllocator:
 
     def create_response_allocator(self):
         if self._response_allocator is None:
-            print("creating allocator", flush=True)
-            self._response_allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
+            self._response_allocator = _triton_bindings.TRITONSERVER_ResponseAllocator(
                 self.allocate, self.release, self.start
             )
 
@@ -391,16 +427,12 @@ class DefaultAllocator(MemoryAllocator):
             self._gpu_allocator = CupyAllocator()
         except Exception:
             self._gpu_allocator = None
-        self._allocators: dict[
-            triton_bindings.TRITONSERVER_MemoryType, MemoryAllocator
-        ] = defaultdict(lambda: self._cpu_allocator)
-        self._allocators[
-            triton_bindings.TRITONSERVER_MemoryType.CPU
-        ] = self._cpu_allocator
+        self._allocators: dict[MemoryType, MemoryAllocator] = defaultdict(
+            lambda: self._cpu_allocator
+        )
+        self._allocators[MemoryType.CPU] = self._cpu_allocator
         if self._gpu_allocator is not None:
-            self._allocators[
-                triton_bindings.TRITONSERVER_MemoryType.GPU
-            ] = self._gpu_allocator
+            self._allocators[MemoryType.GPU] = self._gpu_allocator
 
     def allocate(
         self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
@@ -411,78 +443,183 @@ class DefaultAllocator(MemoryAllocator):
 
 
 class DLPackObject:
-    def __init__(self, value):
+    def __init__(self, value) -> None:
         try:
             self._capsule = _dlpack.get_dlpack_capsule(value)
             self._tensor = _dlpack.get_managed_tensor(self._capsule).dl_tensor
-        except Exception:
+        except Exception as e:
             raise InvalidArgumentError(
-                "Object does not support DLPack protocol"
+                f"Object does not support DLPack protocol: {e}"
             ) from None
 
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, DLPackObject):
+            return False
+        if self.byte_size != other.byte_size:
+            return False
+        if self.memory_type != other.memory_type:
+            return False
+        if self.memory_type_id != other.memory_type_id:
+            return False
+        if self.shape != other.shape:
+            return False
+        if self.data_ptr != other.data_ptr:
+            return False
+        if self.contiguous != other.contiguous:
+            return False
+        if self.triton_data_type != other.triton_data_type:
+            return False
+        return True
+
     @property
-    def byte_size(self):
+    def byte_size(self) -> int:
         return _dlpack.get_byte_size(
             self._tensor.dtype, self._tensor.ndim, self._tensor.shape
         )
 
     @property
-    def memory_type(self):
+    def memory_type(self) -> MemoryType:
         return DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE[self._tensor.device.device_type]
 
     @property
-    def memory_type_id(self):
+    def memory_type_id(self) -> int:
         return self._tensor.device.device_id
 
     @property
-    def shape(self):
+    def shape(self) -> list[int]:
         return [self._tensor.shape[i] for i in range(self._tensor.ndim)]
 
     @property
-    def triton_data_type(self):
+    def triton_data_type(self) -> DataType:
         return DLPACK_TO_TRITON_DTYPE[self.data_type]
 
     @property
-    def data_type(self):
+    def data_type(self) -> tuple[_dlpack.DLDataTypeCode, int]:
         return (self._tensor.dtype.type_code, self._tensor.dtype.bits)
 
     @property
-    def data_ptr(self):
+    def data_ptr(self) -> ctypes.c_void_p:
         return self._tensor.data + self._tensor.byte_offset
 
     @property
-    def contiguous(self):
+    def contiguous(self) -> bool:
         return _dlpack.is_contiguous_data(
             self._tensor.ndim, self._tensor.shape, self._tensor.strides
         )
 
 
+#
+# tensor = Tensor()
+# tensor.memory_buffer.data_ptr
+# tensor.memory_buffer.memory_type
+# tensor.memory_buffer.memory_type_id
+# tensor.memory_buffer.size
+#
+# tensor.data
+# tensor.memory_type
+# tensor.memory_type_id
+# tensor.size
+# tensor.dtype
+# tensor.shape
+
+
 @dataclass
 class Tensor:
     data_type: DataType
-    shape: Iterable[int]
-    buffer_attributes: BufferAttributes
-    _buffer: ctypes.c_void_p
-    _value: Any
+    shape: Sequence[int]
+    memory_buffer: MemoryBuffer
+
+    @property
+    def data_ptr(self) -> ctypes.c_void_p:
+        return self.memory_buffer.data_ptr
+
+    @property
+    def memory_type(self) -> MemoryType:
+        return self.memory_buffer.memory_type
+
+    @property
+    def memory_type_id(self) -> int:
+        return self.memory_buffer.memory_type_id
+
+    @property
+    def size(self) -> int:
+        return self.memory_buffer.size
 
     @staticmethod
     def _create_managed_tensor():
         size = ctypes.c_size_t(ctypes.sizeof(_dlpack.DLManagedTensor))
-        return _dlpack.DLManagedTensor.from_address(
-            ctypes.pythonapi.PyMem_RawMalloc(size)
+        address = ctypes.pythonapi.PyMem_RawMalloc(size)
+        return _dlpack.DLManagedTensor.from_address(address)
+
+    @staticmethod
+    @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    def _managed_tensor_deleter(handle: ctypes.c_void_p) -> None:
+        dl_managed_tensor = _dlpack.DLManagedTensor.from_address(handle)
+        self_obj_ptr = ctypes.cast(
+            dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
+        )
+        self_obj = self_obj_ptr.contents
+        ctypes.pythonapi.Py_DecRef(self_obj)
+        shapes_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
+        ctypes.pythonapi.Py_DecRef(shapes_obj)
+        ctypes.pythonapi.PyMem_RawFree(handle)
+
+    @staticmethod
+    @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    def _pycapsule_deleter(handle: ctypes.c_void_p) -> None:
+        pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
+        if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, _dlpack.c_str_dltensor):
+            dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
+                pycapsule, _dlpack.c_str_dltensor
+            )
+
+            Tensor._managed_tensor_deleter(dl_managed_tensor)
+            ctypes.pythonapi.PyCapsule_SetDestructor(pycapsule, None)
+
+    def __dlpack__(self, *, stream=None):
+        if not (stream is None or (isinstance(stream, int) and stream == 0)):
+            raise UnsupportedError(
+                "DLPack stream synchronization not currently supported"
+            )
+
+        dl_managed_tensor = Tensor._create_managed_tensor()
+        dl_managed_tensor.dl_tensor.data = self.data_ptr
+        dl_managed_tensor.dl_tensor.device = _dlpack.DLDevice(
+            TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
+            self.memory_type_id,
         )
 
-    def __dlpack__(self, stream=None):
-        context = _dlpack.DataViewContext(self.shape)
-        dl_managed_tensor = Tensor._create_managed_tensor()
-        dl_managed_tensor.dl_tensor.data = self._buffer
-        dl_managed_tensor.dl_tensor.device = self.buffer_attributes.memory_type
+        dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
+        dl_managed_tensor.dl_tensor.ndim = len(self.shape)
+        dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
+            *self.shape
+        )
+        dl_managed_tensor.dl_tensor.strides = ctypes.POINTER(ctypes.c_int64)()
+        dl_managed_tensor.dl_tensor.byte_offset = 0
+        dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
 
-    def __dlpack__(self, stream=None):
+        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
+        self_obj = ctypes.py_object(self)
+        self_obj_ptr = ctypes.pointer(self_obj)
+        dl_managed_tensor.manager_ctx = ctypes.cast(self_obj_ptr, ctypes.c_void_p)
+        ctypes.pythonapi.Py_IncRef(self_obj)
+        ctypes.pythonapi.Py_IncRef(shape_obj)
+
+        pycapsule = ctypes.pythonapi.PyCapsule_New(
+            ctypes.byref(dl_managed_tensor),
+            _dlpack.c_str_dltensor,
+            Tensor._pycapsule_deleter,
+        )
+        return pycapsule
+
+    def __dlpack2__(self, stream=None):
         return self._value.__dlpack__(stream)
 
     def __dlpack_device__(self):
-        return self._value.__dlpack_device__()
+        return (
+            TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
+            self.memory_type_id,
+        )
 
     @property
     def squeeze(self):
@@ -564,12 +701,12 @@ class Tensor:
     def _from_dlpack(value):
         dlpack_object = DLPackObject(value)
         data_type = dlpack_object.triton_data_type
-        if data_type == triton_bindings.TRITONSERVER_DataType.INVALID:
+        if data_type == DataType.INVALID:
             raise triton_bindings.InvalidArgumentError(
                 f"DLPack dtype {dlpack_object.data_type} not supported"
             )
 
-        if data_type == triton_bindings.TRITONSERVER_DataType.BYTES:
+        if data_type == DataType.BYTES:
             raise triton_bindings.InvalidArgumentError(
                 f"DLPack does not support {data_type}"
             )
@@ -614,12 +751,12 @@ class Tensor:
     @staticmethod
     def _from_numpy(value: numpy.ndarray | numpy.generic) -> Tensor:
         data_type = NUMPY_TO_TRITON_DTYPE[value.dtype.type]
-        if data_type == triton_bindings.TRITONSERVER_DataType.INVALID:
+        if data_type == DataType.INVALID:
             raise triton_bindings.InvalidArgumentError(
                 f"Numpy type {value.dtype.type} not supported"
             )
         shape = value.shape
-        if data_type == triton_bindings.TRITONSERVER_DataType.BYTES:
+        if data_type == DataType.BYTES:
             value = Tensor._serialize_numpy_bytes_array(value)
         buffer_ = value.ctypes.data
         buffer_attributes = triton_bindings.TRITONSERVER_BufferAttributes()
