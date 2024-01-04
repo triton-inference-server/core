@@ -67,6 +67,7 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 std::unique_ptr<PinnedMemoryManager> PinnedMemoryManager::instance_;
 uint64_t PinnedMemoryManager::pinned_memory_byte_size_ = 0;
 uint64_t PinnedMemoryManager::used_pinned_memory_byte_size_ = 0;
+std::mutex PinnedMemoryManager::alloc_info_mtx_;
 
 PinnedMemoryManager::PinnedMemory::PinnedMemory(
     void* pinned_memory_buffer, uint64_t size)
@@ -155,9 +156,12 @@ PinnedMemoryManager::AllocInternal(
       auto res = memory_info_.emplace(
           *ptr, std::make_pair(is_pinned, pinned_memory_buffer));
 
-      if (is_pinned) {
-        used_pinned_memory_byte_size_ += size;
-        allocated_memory_info_.emplace(*ptr, size);
+      {
+        std::lock_guard<std::mutex> lk(alloc_info_mtx_);
+        if (is_pinned) {
+          used_pinned_memory_byte_size_ += size;
+          allocated_memory_info_.emplace(*ptr, size);
+        }
       }
 
       if (!res.second) {
@@ -200,11 +204,14 @@ PinnedMemoryManager::FreeInternal(void* ptr)
                      << "addr " << ptr;
       memory_info_.erase(it);
 
-      if (is_pinned) {
-        auto ix = allocated_memory_info_.find(ptr);
-        if (ix != allocated_memory_info_.end()) {
-          used_pinned_memory_byte_size_ -= ix->second;
-          allocated_memory_info_.erase(ix);
+      {
+        std::lock_guard<std::mutex> lk(alloc_info_mtx_);
+        if (is_pinned) {
+          auto ix = allocated_memory_info_.find(ptr);
+          if (ix != allocated_memory_info_.end()) {
+            used_pinned_memory_byte_size_ -= ix->second;
+            allocated_memory_info_.erase(ix);
+          }
         }
       }
     } else {
@@ -394,12 +401,14 @@ PinnedMemoryManager::Free(void* ptr)
 uint64_t
 PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
 {
+  std::lock_guard<std::mutex> lk(alloc_info_mtx_);
   return pinned_memory_byte_size_;
 }
 
 uint64_t
 PinnedMemoryManager::GetUsedPinnedMemoryByteSize()
 {
+  std::lock_guard<std::mutex> lk(alloc_info_mtx_);
   return used_pinned_memory_byte_size_;
 }
 
