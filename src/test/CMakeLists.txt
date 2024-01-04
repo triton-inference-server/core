@@ -491,9 +491,16 @@ if(${TRITON_ENABLE_METRICS})
       GTest::gmock
       prometheus-cpp::core
       protobuf::libprotobuf
-      ${CNMEM_LIBRARY}
-      CUDA::cudart
   )
+
+  if (TRITON_ENABLE_GPU)
+    target_link_libraries(
+      metrics_api_test
+      PRIVATE
+        ${CNMEM_LIBRARY}
+        CUDA::cudart
+    )
+  endif()
 
   if (NOT WIN32)
     target_link_libraries(
