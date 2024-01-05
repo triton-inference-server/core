@@ -31,17 +31,29 @@ import struct
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, ClassVar, Optional, Sequence, Type
+from types import ModuleType
+from typing import Any, Callable, ClassVar, Optional, Sequence, Type
 
 import numpy
 import tritonserver._c as _triton_bindings
+from cupy.cuda import Device
 from tritonserver._c import InvalidArgumentError
 from tritonserver._c import TRITONSERVER_BufferAttributes as BufferAttributes
 from tritonserver._c import TRITONSERVER_DataType as DataType
 from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c import UnsupportedError
+from typing_extensions import Self
 
 from . import _dlpack
+
+try:
+    import cupy
+except ImportError:
+    cupy = None
+
+DeviceOrMemoryType = Optional[
+    tuple[MemoryType, int] | MemoryType | tuple[_dlpack.DLDeviceType, int] | str
+]
 
 
 class _CustomKeyErrorDict(dict):
@@ -65,6 +77,13 @@ class _CustomKeyErrorDict(dict):
             raise self._exception(
                 f"Unsupported {self._from_name}. Can't convert {key} to {self._to_name}"
             ) from None
+
+
+STRING_TO_TRITON_MEMORY_TYPE: dict[str, MemoryType] = _CustomKeyErrorDict(
+    "String",
+    "Triton server memory type",
+    {"CPU": MemoryType.CPU, "CPU_PINNED": MemoryType.CPU_PINNED, "GPU": MemoryType.GPU},
+)
 
 
 DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE: dict[
@@ -156,7 +175,7 @@ TRITON_TO_DLPACK_DTYPE: dict[DataType, _dlpack.DLDataType] = _CustomKeyErrorDict
     },
 )
 
-NUMPY_TO_TRITON_DTYPE = _CustomKeyErrorDict(
+NUMPY_TO_TRITON_DTYPE: dict[type, DataType] = _CustomKeyErrorDict(
     "Numpy data type",
     "Triton server data type",
     {
@@ -178,7 +197,7 @@ NUMPY_TO_TRITON_DTYPE = _CustomKeyErrorDict(
     },
 )
 
-TRITON_TO_NUMPY_DTYPE = _CustomKeyErrorDict(
+TRITON_TO_NUMPY_DTYPE: dict[DataType, type] = _CustomKeyErrorDict(
     "Triton data type",
     "Numpy data type",
     {
@@ -188,43 +207,31 @@ TRITON_TO_NUMPY_DTYPE = _CustomKeyErrorDict(
 )
 
 
-class _UnsupportedModule:
-    def __init__(self, module_name):
-        self._module_name = module_name
-
-    def __getattribute__(self, name):
-        raise triton_bindings.UnsupportedError(f"{self._module_name} not supported")
-
-    def __setattribute__(self, name):
-        raise triton_bindings.UnsupportedError(f"{self._module_name} not supported")
-
-
-try:
-    import cupy
-except ImportError:
-    cupy = _UnsupportedModule("cupy")
-
-
 @dataclass
 class MemoryBuffer:
-    data_ptr: ctypes.c_void_p
+    """Memory allocated for a Tensor"""
+
+    data_ptr: int
     memory_type: MemoryType
     memory_type_id: int
     size: int
     owner: Any
 
     @staticmethod
-    def from_dlpack(owner: Any) -> MemoryBuffer:
-        if not hasattr(owner, "__dlpack__"):
-            raise InvalidArgumentError("Object does not support DLpack protocol")
+    def from_dlpack(
+        owner: Any, dlpack_object: Optional[DLPackObject] = None
+    ) -> MemoryBuffer:
+        if dlpack_object is None:
+            if not hasattr(owner, "__dlpack__"):
+                raise InvalidArgumentError("Object does not support DLpack protocol")
 
-        dlpack_object = DLPackObject(owner)
+            dlpack_object = DLPackObject(owner)
 
         if not dlpack_object.contiguous:
             raise InvalidArgumentError("Only contiguous memory is supported")
 
         return MemoryBuffer(
-            dlpack_object.data_ptr,
+            int(dlpack_object.data_ptr),
             dlpack_object.memory_type,
             dlpack_object.memory_type_id,
             dlpack_object.byte_size,
@@ -261,7 +268,7 @@ class MemoryAllocator(ABC):
         Returns
         -------
         MemoryBuffer
-            return a memory buffer with requested size
+            memory buffer with requested size
 
         Examples
         --------
@@ -271,23 +278,57 @@ class MemoryAllocator(ABC):
         pass
 
 
-DeviceOrMemoryType = Optional[
-    tuple[MemoryType, int] | MemoryType | tuple[_dlpack.DLDeviceType, int] | str
-]
+class NumpyAllocator(MemoryAllocator):
+    def __init__(self):
+        pass
+
+    def allocate(
+        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
+    ) -> MemoryBuffer:
+        ndarray = numpy.empty(size, numpy.byte)
+        return MemoryBuffer.from_dlpack(ndarray)
 
 
-class _ResponseAllocator:
+default_memory_allocators: dict[MemoryType, MemoryAllocator] = dict(
+    {
+        MemoryType.CPU: NumpyAllocator(),
+    }
+)
+
+if cupy is not None:
+
+    class CupyAllocator(MemoryAllocator):
+        def __init__(self):
+            pass
+
+        def allocate(
+            self,
+            size: int,
+            memory_type: MemoryType,
+            memory_type_id: int,
+            tensor_name: str,
+        ) -> MemoryBuffer:
+            with cupy.cuda.Device(memory_type_id):
+                ndarray = cupy.empty(size, cupy.byte)
+
+            return MemoryBuffer.from_dlpack(ndarray)
+
+    default_memory_allocators[MemoryType.GPU] = CupyAllocator()
+
+
+class ResponseAllocator:
     def __init__(
-        self, memory_allocator: MemoryAllocator, memory_type: DeviceOrMemoryType = None
+        self,
+        memory_allocator: Optional[MemoryAllocator] = None,
+        memory_type: DeviceOrMemoryType = None,
     ):
         self._memory_allocator = memory_allocator
-        self._set_memory_type(memory_type)
+        self._memory_type: Optional[MemoryType] = None
+        self._memory_type_id: int = 0
         self._response_allocator = None
+        self._set_memory_type(memory_type)
 
     def _set_memory_type(self, memory_type: DeviceOrMemoryType) -> None:
-        self._memory_type = None
-        self._memory_type_id = 0
-
         if memory_type is None:
             return
         if isinstance(memory_type, tuple):
@@ -305,7 +346,17 @@ class _ResponseAllocator:
             self._memory_type = memory_type
             self._memory_type_id = 0
         if isinstance(memory_type, str):
-            return
+            memory_str_tuple = memory_type.split(":")
+            if len(memory_str_tuple) > 2:
+                raise InvalidArgumentError(f"Invalid memory type string {memory_type}")
+            self._memory_type = STRING_TO_TRITON_MEMORY_TYPE[memory_str_tuple[0]]
+            if len(memory_str_tuple) == 2:
+                try:
+                    self._memory_type_id = int(memory_str_tuple[1])
+                except ValueError:
+                    raise InvalidArgumentError(
+                        f"Invalid memory type string {memory_type}"
+                    ) from None
 
     def allocate(
         self,
@@ -320,7 +371,11 @@ class _ResponseAllocator:
             memory_type = self._memory_type
             memory_type_id = self._memory_type_id
 
-        memory_buffer = self._memory_allocator.allocate(
+        memory_allocator = self._memory_allocator
+        if memory_allocator is None:
+            memory_allocator = default_memory_allocators[memory_type]
+
+        memory_buffer = memory_allocator.allocate(
             byte_size, memory_type, memory_type_id, tensor_name
         )
 
@@ -345,101 +400,39 @@ class _ResponseAllocator:
     def start(self, allocator, user_object):
         pass
 
+    def query_preferred_memory_type(
+        self,
+        allocator,
+        user_object,
+        tensor_name,
+        byte_size,
+        memory_type: MemoryType,
+        memory_type_id,
+    ):
+        if self._memory_type is not None:
+            memory_type = self._memory_type
+            memory_type_id = self._memory_type_id
+
+        return (memory_type, memory_type_id)
+
+    def set_buffer_attributes(
+        self, allocator, tensor_name, buffer_attributes, user_object, buffer_user_object
+    ):
+        if self._memory_type:
+            buffer_attributes.memory_type = self._memory_type
+            buffer_attributes.memory_type_id = self._memory_type_id
+        return buffer_attributes
+
     def create_response_allocator(self):
-        if self._response_allocator is None:
-            self._response_allocator = _triton_bindings.TRITONSERVER_ResponseAllocator(
-                self.allocate, self.release, self.start
-            )
+        self._response_allocator = _triton_bindings.TRITONSERVER_ResponseAllocator(
+            self.allocate, self.release, self.start
+        )
+        self._response_allocator.set_query_function(self.query_preferred_memory_type)
 
-            if hasattr(self, "query_preferred_memory_type"):
-                self._response_allocator.set_query_function(
-                    self.query_preferred_memory_type
-                )
-
-            if hasattr(self, "set_buffer_attributes"):
-                self._response_allocator.set_buffer_attributes_function(
-                    self.set_buffer_attributes
-                )
+        self._response_allocator.set_buffer_attributes_function(
+            self.set_buffer_attributes
+        )
         return self._response_allocator
-
-
-try:
-    import cupy
-
-    class CupyAllocator(MemoryAllocator):
-        def __init__(self):
-            pass
-
-        def start(self, allocator, user_object):
-            pass
-
-        def release(
-            self,
-            allocator,
-            buffer_,
-            buffer_user_object,
-            byte_size,
-            memory_type,
-            memory_type_id,
-        ):
-            pass
-
-        def allocate(
-            self,
-            allocator,
-            tensor_name,
-            byte_size,
-            memory_type,
-            memory_type_id,
-            user_object,
-        ):
-            with cupy.cuda.Device(memory_type_id):
-                _buffer = cupy.empty(byte_size, cupy.byte)
-
-            dlpack_object = DLPackObject(_buffer)
-
-            return (
-                dlpack_object.data_ptr,
-                _buffer,
-                dlpack_object.memory_type,
-                dlpack_object.memory_type_id,
-            )
-
-except ImportError:
-    pass
-
-
-class NumpyAllocator(MemoryAllocator):
-    def __init__(self):
-        pass
-
-    def allocate(
-        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
-    ) -> MemoryBuffer:
-        ndarray = numpy.empty(size, numpy.byte)
-        return MemoryBuffer.from_dlpack(ndarray)
-
-
-class DefaultAllocator(MemoryAllocator):
-    def __init__(self):
-        self._cpu_allocator = NumpyAllocator()
-        try:
-            self._gpu_allocator = CupyAllocator()
-        except Exception:
-            self._gpu_allocator = None
-        self._allocators: dict[MemoryType, MemoryAllocator] = defaultdict(
-            lambda: self._cpu_allocator
-        )
-        self._allocators[MemoryType.CPU] = self._cpu_allocator
-        if self._gpu_allocator is not None:
-            self._allocators[MemoryType.GPU] = self._gpu_allocator
-
-    def allocate(
-        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
-    ) -> MemoryBuffer:
-        return self._allocators[memory_type].allocate(
-            size, memory_type, memory_type_id, tensor_name
-        )
 
 
 class DLPackObject:
@@ -508,21 +501,6 @@ class DLPackObject:
         )
 
 
-#
-# tensor = Tensor()
-# tensor.memory_buffer.data_ptr
-# tensor.memory_buffer.memory_type
-# tensor.memory_buffer.memory_type_id
-# tensor.memory_buffer.size
-#
-# tensor.data
-# tensor.memory_type
-# tensor.memory_type_id
-# tensor.size
-# tensor.dtype
-# tensor.shape
-
-
 @dataclass
 class Tensor:
     data_type: DataType
@@ -544,37 +522,6 @@ class Tensor:
     @property
     def size(self) -> int:
         return self.memory_buffer.size
-
-    @staticmethod
-    def _create_managed_tensor():
-        size = ctypes.c_size_t(ctypes.sizeof(_dlpack.DLManagedTensor))
-        address = ctypes.pythonapi.PyMem_RawMalloc(size)
-        return _dlpack.DLManagedTensor.from_address(address)
-
-    @staticmethod
-    @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
-    def _managed_tensor_deleter(handle: ctypes.c_void_p) -> None:
-        dl_managed_tensor = _dlpack.DLManagedTensor.from_address(handle)
-        self_obj_ptr = ctypes.cast(
-            dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
-        )
-        self_obj = self_obj_ptr.contents
-        ctypes.pythonapi.Py_DecRef(self_obj)
-        shapes_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        ctypes.pythonapi.Py_DecRef(shapes_obj)
-        ctypes.pythonapi.PyMem_RawFree(handle)
-
-    @staticmethod
-    @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
-    def _pycapsule_deleter(handle: ctypes.c_void_p) -> None:
-        pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
-        if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, _dlpack.c_str_dltensor):
-            dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
-                pycapsule, _dlpack.c_str_dltensor
-            )
-
-            Tensor._managed_tensor_deleter(dl_managed_tensor)
-            ctypes.pythonapi.PyCapsule_SetDestructor(pycapsule, None)
 
     def __dlpack__(self, *, stream=None):
         if not (stream is None or (isinstance(stream, int) and stream == 0)):
@@ -598,13 +545,7 @@ class Tensor:
         dl_managed_tensor.dl_tensor.byte_offset = 0
         dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
 
-        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        self_obj = ctypes.py_object(self)
-        self_obj_ptr = ctypes.pointer(self_obj)
-        dl_managed_tensor.manager_ctx = ctypes.cast(self_obj_ptr, ctypes.c_void_p)
-        ctypes.pythonapi.Py_IncRef(self_obj)
-        ctypes.pythonapi.Py_IncRef(shape_obj)
-
+        self._set_dlpack_manager_ctx(dl_managed_tensor)
         pycapsule = ctypes.pythonapi.PyCapsule_New(
             ctypes.byref(dl_managed_tensor),
             _dlpack.c_str_dltensor,
@@ -612,123 +553,71 @@ class Tensor:
         )
         return pycapsule
 
-    def __dlpack2__(self, stream=None):
-        return self._value.__dlpack__(stream)
-
     def __dlpack_device__(self):
         return (
             TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
             self.memory_type_id,
         )
 
-    @property
-    def squeeze(self):
-        return self._value.squeeze
-
-    @property
-    def __array_interface__(self):
-        print("hello")
-        return self._value.__array_interface__
-
-    @property
-    def __array__(self):
-        print("hello foo")
-        return self._value.__array_()
-
-    @property
-    def __cuda_array_interface__(self):
-        print("goodbye")
-        return self._value.__cuda_array_interface__
-
-    # if object has __cuda_array_interface
-    # or __array_interface__ interface
-    # else fail
-
-    def as_array(self) -> cp.ndarray | numpy.ndarray:
-        return self._value
-
-    # convert to cpu / numpy if possible
-    def as_numpy(self):
-        if (
-            self.buffer_attributes.memory_type
-            == triton_bindings.TRITONSERVER_MemoryType.CPU
-        ):
-            return numpy.from_dlpack(self._value)
-        else:
-            return cupy.asnumpy(self._value)
-
-    # def to_cpu(self):
-    #     if self.buffer_attributes.memory_type == triton_bindings.TRITONSERVER_MemoryType.CPU:
-    #         return numpy.from_dlpack(self._value)
-    #     else:
-    #         return cupy.asnumpy(self._value)
-    #     pass
-
-    # def to_gpu(self, device_id):
-    #     pass
-
-    # def ndarray(self):
-    #     print(dir(self._value))
-    #     return numpy.from_dlpack(self._value)
-    #     pass
+    def to_ndarray(self, _type: ModuleType | type) -> Any:
+        if _type in Tensor._to_converters:
+            return Tensor._to_converters[_type](self)
+        elif hasattr(_type, "from_dlpack"):
+            return _type.from_dlpack(self)
+        raise InvalidArgumentError(
+            f"Output type {_type} not supported. Must be one of {list(Tensor._to_converters.keys())} or the type must support from_dlpack"
+        )
 
     @staticmethod
-    def from_buffer(
-        data_type, shape, buffer_, byte_size, memory_type, memory_type_id, value
-    ):
-        buffer_attributes = BufferAttributes()
-        buffer_attributes.memory_type = memory_type
-        buffer_attributes.memory_type_id = memory_type_id
-        buffer_attributes.byte_size = byte_size
-        if data_type == DataType.BYTES:
-            value = Tensor._deserialize_bytes_array(value)
-        numpy_dtype = TRITON_TO_NUMPY_DTYPE[data_type]
-        value = value.view(numpy_dtype).reshape(shape)
-        return Tensor(data_type, shape, buffer_attributes, buffer_, value)
+    def from_memory_buffer(data_type, shape, memory_buffer):
+        return Tensor(data_type, shape, memory_buffer)
 
     @staticmethod
-    def from_value(value):
-        if type(value) in Tensor._supported_conversions:
-            return Tensor._supported_conversions[type(value)](value)
-        elif hasattr(value, "__dlpack__"):
-            return Tensor._from_dlpack(value)
+    def from_ndarray(obj: Any):
+        if type(obj) in Tensor._from_converters:
+            return Tensor._from_converters[type(obj)](obj)
+        elif hasattr(obj, "__dlpack__"):
+            return Tensor.from_dlpack(obj)
         else:
-            raise triton_bindings.InvalidArgumentError(
-                f"Input type {type(value)} not supported. Must be one of {list(Tensor._supported_conversions.keys())} or the type must support __dlpack__"
+            raise InvalidArgumentError(
+                f"Input type {type(obj)} not supported. Must be one of {list(Tensor._from_converters.keys())} or the type must support __dlpack__"
             )
 
     @staticmethod
-    def _from_dlpack(value):
-        dlpack_object = DLPackObject(value)
+    def from_dlpack(obj: Any) -> Tensor:
+        dlpack_object = DLPackObject(obj)
         data_type = dlpack_object.triton_data_type
-        if data_type == DataType.INVALID:
-            raise triton_bindings.InvalidArgumentError(
-                f"DLPack dtype {dlpack_object.data_type} not supported"
-            )
-
-        if data_type == DataType.BYTES:
-            raise triton_bindings.InvalidArgumentError(
-                f"DLPack does not support {data_type}"
-            )
-
         shape = dlpack_object.shape
+        memory_buffer = MemoryBuffer.from_dlpack(obj, dlpack_object=dlpack_object)
+        return Tensor(data_type, shape, memory_buffer)
 
-        buffer_ = dlpack_object.data_ptr
+    def _to_host(self) -> numpy.ndarray:
+        array_module = Tensor._array_modules[self.memory_type]
+        if array_module is not None:
+            array_obj = array_module.from_dlpack(self)
+            if hasattr(array_module, "asnumpy"):
+                return array_module.asnumpy(array_obj)
+            if hasattr(array_obj, "numpy"):
+                return array_obj.numpy(force=True)
+        raise UnsupportedError(
+            f"Conversion from {self.memory_type} to numpy array not supported."
+        )
 
-        buffer_attributes = triton_bindings.TRITONSERVER_BufferAttributes()
-        buffer_attributes.memory_type = dlpack_object.memory_type
-        buffer_attributes.memory_type_id = dlpack_object.memory_type_id
-        buffer_attributes.byte_size = dlpack_object.byte_size
+    def _to_numpy(self) -> numpy.ndarray:
+        if self.memory_type == MemoryType.GPU:
+            numpy_ndarray = self._to_host()
+        else:
+            numpy_ndarray = numpy.from_dlpack(self)
 
-        return Tensor(data_type, shape, buffer_attributes, buffer_, value)
+        if self.data_type == DataType.BYTES:
+            numpy_ndarray = Tensor._deserialize_bytes_array(numpy_ndarray)
+
+        return numpy_ndarray
 
     @staticmethod
-    def _deserialize_bytes_array(array):
+    def _deserialize_bytes_array(numpy_ndarray: numpy.ndarray) -> numpy.ndarray:
         result = []
-        try:
-            _buffer = memoryview(array)
-        except:
-            _buffer = array.tobytes()
+        _buffer = memoryview(numpy_ndarray)
         offset = 0
         while offset < len(_buffer):
             (item_length,) = struct.unpack_from("@I", _buffer, offset)
@@ -738,37 +627,87 @@ class Tensor:
         return numpy.array(result, dtype=numpy.object_)
 
     @staticmethod
-    def _serialize_numpy_bytes_array(array):
+    def _serialize_numpy_bytes_array(array: numpy.ndarray) -> numpy.ndarray:
         result = []
         for array_item in numpy.nditer(array, flags=["refs_ok"], order="C"):
             item = array_item.item()
-            if type(item) != bytes:
+            if not isinstance(item, bytes):
                 item = str(item).encode("utf-8")
             result.append(struct.pack("@I", len(item)))
             result.append(item)
         return numpy.frombuffer(b"".join(result), dtype=numpy.byte)
 
     @staticmethod
-    def _from_numpy(value: numpy.ndarray | numpy.generic) -> Tensor:
-        data_type = NUMPY_TO_TRITON_DTYPE[value.dtype.type]
-        if data_type == DataType.INVALID:
-            raise triton_bindings.InvalidArgumentError(
-                f"Numpy type {value.dtype.type} not supported"
-            )
-        shape = value.shape
+    def _from_numpy(obj: numpy.ndarray | numpy.generic) -> Tensor:
+        data_type = NUMPY_TO_TRITON_DTYPE[obj.dtype.type]
+        shape = obj.shape
+
+        if isinstance(obj, numpy.generic):
+            obj = numpy.asarray(obj)
+
         if data_type == DataType.BYTES:
-            value = Tensor._serialize_numpy_bytes_array(value)
-        buffer_ = value.ctypes.data
-        buffer_attributes = triton_bindings.TRITONSERVER_BufferAttributes()
-        buffer_attributes.memory_type = triton_bindings.TRITONSERVER_MemoryType.CPU
-        buffer_attributes.memory_type_id = 0
-        buffer_attributes.byte_size = value.itemsize * value.size
+            obj = Tensor._serialize_numpy_bytes_array(obj)
 
-        return Tensor(data_type, shape, buffer_attributes, buffer_, value)
+        memory_buffer = MemoryBuffer(
+            data_ptr=obj.ctypes.data,
+            memory_type=MemoryType.CPU,
+            memory_type_id=0,
+            size=obj.itemsize * obj.size,
+            owner=obj,
+        )
 
-    _supported_conversions: ClassVar[dict] = dict(
+        return Tensor(data_type, shape, memory_buffer)
+
+    @staticmethod
+    def _create_managed_tensor():
+        size = ctypes.c_size_t(ctypes.sizeof(_dlpack.DLManagedTensor))
+        address = ctypes.pythonapi.PyMem_RawMalloc(size)
+        return _dlpack.DLManagedTensor.from_address(address)
+
+    @staticmethod
+    @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    def _managed_tensor_deleter(handle: int) -> None:
+        dl_managed_tensor = _dlpack.DLManagedTensor.from_address(handle)
+        tensor_obj_ptr = ctypes.cast(
+            dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
+        )
+        tensor_obj = tensor_obj_ptr.contents
+        ctypes.pythonapi.Py_DecRef(tensor_obj)
+        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
+        ctypes.pythonapi.Py_DecRef(shape_obj)
+        ctypes.pythonapi.PyMem_RawFree(handle)
+
+    @staticmethod
+    @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+    def _pycapsule_deleter(handle: ctypes.c_void_p) -> None:
+        pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
+        if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, _dlpack.c_str_dltensor):
+            dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
+                pycapsule, _dlpack.c_str_dltensor
+            )
+
+            Tensor._managed_tensor_deleter(dl_managed_tensor)
+            ctypes.pythonapi.PyCapsule_SetDestructor(pycapsule, None)
+
+    def _set_dlpack_manager_ctx(self, dl_managed_tensor):
+        tensor_obj = ctypes.py_object(self)
+        tensor_obj_ptr = ctypes.pointer(tensor_obj)
+        dl_managed_tensor.manager_ctx = ctypes.cast(tensor_obj_ptr, ctypes.c_void_p)
+        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
+        ctypes.pythonapi.Py_IncRef(tensor_obj)
+        ctypes.pythonapi.Py_IncRef(shape_obj)
+
+    _from_converters: ClassVar[dict[type, Callable[[Any], Tensor]]] = dict(
         {
             numpy.ndarray: _from_numpy,
             numpy.generic: _from_numpy,
         },
+    )
+
+    _to_converters: ClassVar[dict[type | ModuleType, Callable[[Self], Any]]] = dict(
+        {numpy.ndarray: _to_numpy, numpy: _to_numpy},
+    )
+
+    _array_modules: ClassVar[dict[MemoryType, ModuleType | None]] = dict(
+        {MemoryType.CPU: numpy, MemoryType.GPU: cupy},
     )
