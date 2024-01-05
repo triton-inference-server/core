@@ -250,7 +250,7 @@ class MemoryBuffer:
 class MemoryAllocator(ABC):
     @abstractmethod
     def allocate(
-        self, size: int, memory_type: Any, memory_type_id: int, tensor_name: str
+        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
     ) -> MemoryBuffer:
         """Allocate memory buffer for tensor.
 
