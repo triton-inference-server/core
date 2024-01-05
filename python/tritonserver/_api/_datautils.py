@@ -243,7 +243,7 @@ class MemoryBuffer:
         buffer_attributes.memory_type = self.memory_type
         buffer_attributes.memory_type_id = self.memory_type_id
         buffer_attributes.byte_size = self.size
-        buffer_attributes.cuda_ipc_handle = 0
+        #        buffer_attributes.cuda_ipc_handle = None
         return buffer_attributes
 
 
