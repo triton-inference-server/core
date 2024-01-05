@@ -36,8 +36,9 @@
 #
 # Todo: add stub generation to build process
 
-import numpy
 from typing import Callable, ClassVar, List, Optional, Tuple, overload
+
+import numpy
 
 ALL: TRITONSERVER_RequestReleaseFlag
 COMPUTE_END: TRITONSERVER_InferenceTraceActivity
