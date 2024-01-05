@@ -680,14 +680,19 @@ class Tensor:
     @staticmethod
     @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
     def _pycapsule_deleter(handle: ctypes.c_void_p) -> None:
-        pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
-        if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, _dlpack.c_str_dltensor):
-            dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
-                pycapsule, _dlpack.c_str_dltensor
-            )
+        try:
+            pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
+            if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, _dlpack.c_str_dltensor):
+                dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
+                    pycapsule, _dlpack.c_str_dltensor
+                )
 
-            Tensor._managed_tensor_deleter(dl_managed_tensor)
-            ctypes.pythonapi.PyCapsule_SetDestructor(pycapsule, None)
+                Tensor._managed_tensor_deleter(dl_managed_tensor)
+
+                ctypes.pythonapi.PyCapsule_SetDestructor(pycapsule, None)
+        except Exception as e:
+            print(f"Exception occurred while deleting capsule: {e}")
+            raise e
 
     def _set_dlpack_manager_ctx(self, dl_managed_tensor):
         tensor_obj = ctypes.py_object(self)
