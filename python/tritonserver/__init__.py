@@ -29,7 +29,12 @@
 import tritonserver._c as _triton_bindings
 from tritonserver._api._datautils import DataType as DataType
 from tritonserver._api._datautils import MemoryAllocator as MemoryAllocator
+from tritonserver._api._datautils import MemoryBuffer as MemoryBuffer
+from tritonserver._api._datautils import MemoryType as MemoryType
 from tritonserver._api._datautils import NumpyAllocator as NumpyAllocator
+from tritonserver._api._datautils import (
+    default_memory_allocators as default_memory_allocators,
+)
 from tritonserver._api.wrapper import InferenceRequest as InferenceRequest
 from tritonserver._api.wrapper import InstanceGroupKind as InstanceGroupKind
 from tritonserver._api.wrapper import LogFormat as LogFormat
@@ -46,7 +51,6 @@ from tritonserver._api.wrapper import Options as Options
 from tritonserver._api.wrapper import RateLimiterResource as RateLimiterResource
 from tritonserver._api.wrapper import RateLimitMode as RateLimitMode
 from tritonserver._api.wrapper import Server as Server
-from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
 
 try:
     from tritonserver._api._datautils import CupyAllocator as CupyAllocator
