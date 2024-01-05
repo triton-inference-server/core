@@ -156,12 +156,10 @@ PinnedMemoryManager::AllocInternal(
       auto res = memory_info_.emplace(
           *ptr, std::make_pair(is_pinned, pinned_memory_buffer));
 
-      {
+      if (is_pinned) {
         std::lock_guard<std::mutex> lk(alloc_info_mtx_);
-        if (is_pinned) {
-          used_pinned_memory_byte_size_ += size;
-          allocated_memory_info_.emplace(*ptr, size);
-        }
+        used_pinned_memory_byte_size_ += size;
+        allocated_memory_info_.emplace(*ptr, size);
       }
 
       if (!res.second) {
@@ -204,14 +202,12 @@ PinnedMemoryManager::FreeInternal(void* ptr)
                      << "addr " << ptr;
       memory_info_.erase(it);
 
-      {
+      if (is_pinned) {
         std::lock_guard<std::mutex> lk(alloc_info_mtx_);
-        if (is_pinned) {
-          auto ix = allocated_memory_info_.find(ptr);
-          if (ix != allocated_memory_info_.end()) {
-            used_pinned_memory_byte_size_ -= ix->second;
-            allocated_memory_info_.erase(ix);
-          }
+        auto ix = allocated_memory_info_.find(ptr);
+        if (ix != allocated_memory_info_.end()) {
+          used_pinned_memory_byte_size_ -= ix->second;
+          allocated_memory_info_.erase(ix);
         }
       }
     } else {
