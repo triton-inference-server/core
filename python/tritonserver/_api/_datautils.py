@@ -508,7 +508,7 @@ class Tensor:
     memory_buffer: MemoryBuffer
 
     @property
-    def data_ptr(self) -> ctypes.c_void_p:
+    def data_ptr(self) -> int:
         return self.memory_buffer.data_ptr
 
     @property
@@ -524,10 +524,10 @@ class Tensor:
         return self.memory_buffer.size
 
     def __dlpack__(self, *, stream=None):
-        if not (stream is None or (isinstance(stream, int) and stream == 0)):
-            raise UnsupportedError(
-                "DLPack stream synchronization not currently supported"
-            )
+        #        if not (stream is None or (isinstance(stream, int) and stream == 0)):
+        #           raise UnsupportedError(
+        #              f"DLPack stream synchronization on {stream} not currently supported"
+        #         )
 
         dl_managed_tensor = Tensor._create_managed_tensor()
         dl_managed_tensor.dl_tensor.data = self.data_ptr
