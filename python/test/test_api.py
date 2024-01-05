@@ -38,6 +38,7 @@ try:
 except ImportError:
     cupy = None
 
+
 class TrtionServerAPITest(unittest.TestCase):
     def test_not_started(self):
         server = tritonserver.Server()
