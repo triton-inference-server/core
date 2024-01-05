@@ -30,22 +30,19 @@ from __future__ import annotations
 
 import asyncio
 import ctypes
-import dataclasses
 import inspect
 import json
 import queue
 import time
-from dataclasses import dataclass
-from typing import Annotated, Any, Optional
-
-from typing_extensions import Unpack
-import typing_extensions
+from dataclasses import dataclass, field
+from types import ModuleType
+from typing import Annotated, Any, Optional, TypedDict
 
 import tritonserver._c.triton_bindings as _triton_bindings
 from tritonserver._api import _datautils
 from tritonserver._api._datautils import MemoryAllocator
-
-# :MetricFamily Metric group created with MetricKind, name, and description
+from tritonserver._c import InternalError
+from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
 )
@@ -66,10 +63,13 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_RateLimitMode as RateLimitMode
+from tritonserver._c.triton_bindings import UnavailableError, UnsupportedError
+from typing_extensions import NotRequired, Unpack
 
 uint = Annotated[int, ctypes.c_uint]
 
-@dataclass
+
+@dataclass(slots=True)
 class RateLimiterResource:
     """Resource count for rate limiting.
 
@@ -92,7 +92,7 @@ class RateLimiterResource:
     device: uint
 
 
-@dataclass
+@dataclass(slots=True)
 class ModelLoadDeviceLimit:
     """Memory limit for loading models on a device.
 
@@ -162,23 +162,21 @@ class Options:
     """
 
     server_id: str = "triton"
-    model_repository: str | list[str] = dataclasses.field(default_factory=list[str])
+    model_repository: str | list[str] = field(default_factory=list[str])
     model_control_mode: ModelControlMode = ModelControlMode.NONE
-    startup_models: list[str] = dataclasses.field(default_factory=list[str])
+    startup_models: list[str] = field(default_factory=list[str])
     strict_model_config: bool = True
 
     rate_limiter_mode: RateLimitMode = RateLimitMode.OFF
-    rate_limiter_resources: list[RateLimiterResource] = dataclasses.field(
+    rate_limiter_resources: list[RateLimiterResource] = field(
         default_factory=list[RateLimiterResource]
     )
 
     pinned_memory_pool_size: uint = 1 << 28
-    cuda_memory_pool_sizes: dict[uint, uint] = dataclasses.field(
-        default_factory=dict[uint, uint]
-    )
+    cuda_memory_pool_sizes: dict[uint, uint] = field(default_factory=dict[uint, uint])
 
     #   response_cache_size: Annotated[int, ctypes.c_uint] = 0
-    cache_config: dict[str, dict[str, Any]] = dataclasses.field(
+    cache_config: dict[str, dict[str, Any]] = field(
         default_factory=dict[str, dict[str, Any]]
     )
     cache_directory: str = "/opt/tritonserver/caches"
@@ -206,20 +204,22 @@ class Options:
 
     backend_directory: str = "/opt/tritonserver/backends"
     repo_agent_directory: str = "/opt/tritonserver/repoagents"
-    model_load_device_limits: list[ModelLoadDeviceLimit] = dataclasses.field(
+    model_load_device_limits: list[ModelLoadDeviceLimit] = field(
         default_factory=list[ModelLoadDeviceLimit]
     )
-    backend_configuration: dict[str, dict[str, str]] = dataclasses.field(
+    backend_configuration: dict[str, dict[str, str]] = field(
         default_factory=dict[str, dict[str, str]]
     )
-    host_policies: dict[str, dict[str, str]] = dataclasses.field(
+    host_policies: dict[str, dict[str, str]] = field(
         default_factory=dict[str, dict[str, str]]
     )
-    metrics_configuration: dict[str, dict[str, str]] = dataclasses.field(
+    metrics_configuration: dict[str, dict[str, str]] = field(
         default_factory=dict[str, dict[str, str]]
     )
 
-    def _create_server_options(self):
+    def _create_TRITONSERVER_ServerOptions(
+        self,
+    ) -> _triton_bindings.TRITONSERVER_ServerOptions:
         options = _triton_bindings.TRITONSERVER_ServerOptions()
 
         options.set_server_id(self.server_id)
@@ -237,7 +237,7 @@ class Options:
         options.set_rate_limiter_mode(self.rate_limiter_mode)
 
         for rate_limiter_resource in self.rate_limiter_resources:
-            options.set_rate_limiter_resouces(
+            options.add_rate_limiter_resource(
                 rate_limiter_resource.name,
                 rate_limiter_resource.count,
                 rate_limiter_resource.device,
@@ -298,7 +298,7 @@ class Options:
 
 
 class ModelDictionary(dict):
-    def __init__(self, server, models):
+    def __init__(self, server, models) -> None:
         super().__init__()
         for model in models:
             self[(model.name, model.version)] = model
@@ -318,10 +318,17 @@ class ModelDictionary(dict):
                 raise KeyError(f"Unknown Model: {key}")
 
 
-class Server:
-    _UNLOADED_STATES = [None, "UNAVAILABLE"]
+@dataclass
+class ServerMetadata:
+    name: Optional[str] = None
+    version: Optional[str] = None
+    extensions: Optional[list[str]] = None
 
-    def __init__(self, options: Options = None, **kwargs: Unpack[Options]):
+
+class Server:
+    def __init__(
+        self, options: Optional[Options] = None, **kwargs: Unpack[Options]
+    ) -> None:
         if options is None:
             options = Options(**kwargs)
         self._options = options
@@ -329,15 +336,15 @@ class Server:
 
     def start(
         self,
-        wait_until_ready=False,
+        wait_until_ready: bool = False,
         polling_interval: float = 0.1,
         timeout: Optional[float] = None,
-    ):
+    ) -> None:
         if not isinstance(self._server, Server._UnstartedServer):
-            raise _triton_bindings.InvalidArgumentError("Server already started")
+            raise InvalidArgumentError("Server already started")
 
         self._server = _triton_bindings.TRITONSERVER_Server(
-            self._options._create_server_options()
+            self._options._create_TRITONSERVER_ServerOptions()
         )
         start_time = time.time()
         while (
@@ -347,18 +354,18 @@ class Server:
         ):
             time.sleep(polling_interval)
         if not self.ready():
-            raise _triton_bindings.UnavailableError("Timeout before ready")
+            raise UnavailableError("Timeout before ready")
 
-    def stop(self):
+    def stop(self) -> None:
         self._server.stop()
         self._server = Server._UnstartedServer()
 
-    def unregister_model_repository(self, repository_path: str):
+    def unregister_model_repository(self, repository_path: str) -> None:
         self._server.unregister_model_repository(repository_path)
 
     def register_model_repository(
         self, repository_path: str, name_mapping: dict[str, str]
-    ):
+    ) -> None:
         """Add a new model repository.
 
         Adds a new model repository.
@@ -384,37 +391,53 @@ class Server:
 
         self._server.register_model_repository(repository_path, name_mapping_list)
 
-    def poll_model_repository(self):
+    def poll_model_repository(self) -> None:
         return self._server.poll_model_repository()
 
-    def metadata(self):
+    def metadata(self) -> dict[str, Any]:
         return json.loads(self._server.metadata().serialize_to_json())
 
-    def live(self):
+    def get_metadata(self) -> dict[str, Any]:
+        return json.loads(self._server.metadata().serialize_to_json())
+
+    def live(self) -> bool:
         return self._server.is_live()
 
-    def ready(self):
+    def is_live(self) -> bool:
+        return self._server.is_live()
+
+    def ready(self) -> bool:
         return self._server.is_ready()
 
-    def model(self, model_name, model_version=-1):
+    def is_ready(self) -> bool:
+        return self._server.is_ready()
+
+    def model(self, model_name: str, model_version: int = -1) -> Model:
+        if isinstance(self._server, Server._UnstartedServer):
+            raise InvalidArgumentError("Server not started")
         return Model(self._server, model_name, model_version)
 
-    def models(self):
-        return ModelDictionary(self._server, self._model_index())
+    def get_model(self, model_name, model_version=-1) -> Model:
+        if isinstance(self._server, Server._UnstartedServer):
+            raise InvalidArgumentError("Server not started")
 
-    def _model_index(self, ready=False):
-        models = json.loads(self._server.model_index(ready).serialize_to_json())
+        return Model(self._server, model_name, model_version)
 
-        for model in models:
-            if "version" in model:
-                model["version"] = int(model["version"])
+    def models(self, exclude_not_ready: bool = False) -> ModelDictionary:
+        return ModelDictionary(self._server, self._model_index(exclude_not_ready))
 
-        return [Model(self._server, **model) for model in models]
+    def get_models(self, exclude_not_ready: bool = False) -> ModelDictionary:
+        return ModelDictionary(self._server, self._model_index(exclude_not_ready))
+
+    def model_index(self, exclude_not_ready: bool = False) -> ModelDictionary:
+        return ModelDictionary(self._server, self._model_index(exclude_not_ready))
 
     def load_model(
-        self, model_name: str, parameters: dict[str, str | int | bool | bytes] = None
-    ):
-        if parameters:
+        self,
+        model_name: str,
+        parameters: Optional[dict[str, str | int | bool | bytes]] = None,
+    ) -> Model:
+        if parameters is not None:
             parameter_list = [
                 _triton_bindings.TRITONSERVER_Parameter(name, value)
                 for name, value in parameters.items()
@@ -422,16 +445,17 @@ class Server:
             self._server.load_model_with_parameters(model_name, parameter_list)
         else:
             self._server.load_model(model_name)
-        return self.get_model(model_name)
+        return self.model(model_name)
 
     def unload_model(
         self,
-        model: str | Model = None,
+        model: Optional[str | Model] = None,
         unload_dependents: bool = False,
-        blocking: bool = False,
+        wait_until_unloaded: bool = False,
         polling_interval: float = 0.1,
+        timeout: Optional[float] = None,
         **kwargs,
-    ):
+    ) -> None:
         """Unload model and dependents (optional)
 
         Parameters
@@ -448,7 +472,11 @@ class Server:
         FIXME: Add docs.
 
         """
+        if isinstance(self._server, Server._UnstartedServer):
+            raise InvalidArgumentError("Server not started")
+
         if model is None:
+            kwargs["server"] = self._server
             model = Model(**kwargs)
         elif isinstance(model, str):
             model = Model(self._server, model)
@@ -457,16 +485,21 @@ class Server:
             self._server.unload_model_and_dependents(model.name)
         else:
             self._server.unload_model(model.name)
-        if blocking:
-            model_versions = [key for key in self.models.keys() if key[0] == model.name]
-            while [
-                key
-                for key in model_versions
-                if self.models[key].state not in Server.UNLOADED_STATES
-            ]:
+
+        if wait_until_unloaded:
+            model_versions = [
+                key for key in self.models().keys() if key[0] == model.name
+            ]
+            start_time = time.time()
+            while not self._model_unloaded(model_versions) and (
+                (timeout is None) or (time.time() - start_time < timeout)
+            ):
                 time.sleep(polling_interval)
 
-    def metrics(self, metric_format: MetricFormat = MetricFormat.PROMETHEUS):
+    def metrics(self, metric_format: MetricFormat = MetricFormat.PROMETHEUS) -> str:
+        return self._server.metrics().formatted(metric_format)
+
+    def get_metrics(self, metric_format: MetricFormat = MetricFormat.PROMETHEUS) -> str:
         return self._server.metrics().formatted(metric_format)
 
     class _UnstartedServer(object):
@@ -479,6 +512,29 @@ class Server:
         def __setattr__(self, name, value):
             raise _triton_bindings.InvalidArgumentError("Server not started")
 
+    def _model_unloaded(self, model_versions: list[tuple[str, int]]) -> bool:
+        model_states = self.models()
+        for model_version in model_versions:
+            if model_states[model_version].state not in Server._UNLOADED_STATES:
+                return False
+        return True
+
+    def _model_index(self, exclude_not_ready=False) -> list[Model]:
+        if isinstance(self._server, Server._UnstartedServer):
+            raise InvalidArgumentError("Server not started")
+
+        models = json.loads(
+            self._server.model_index(exclude_not_ready).serialize_to_json()
+        )
+
+        for model in models:
+            if "version" in model:
+                model["version"] = int(model["version"])
+
+        return [Model(self._server, **model) for model in models]
+
+    _UNLOADED_STATES = [None, "UNAVAILABLE"]
+
 
 class Model:
     def __init__(
@@ -486,66 +542,118 @@ class Model:
         server: _triton_bindings.TRITONSERVER_Server,
         name: str,
         version: int = -1,
-        state: str = None,
-        reason: str = None,
-    ):
+        state: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> None:
         self.name = name
         self.version = version
         self._server = server
         self.state = state
         self.reason = reason
 
-    def create_inference_request(self, **kwargs):
+    def create_request(self, **kwargs) -> InferenceRequest:
         return InferenceRequest(model=self, _server=self._server, **kwargs)
 
     def async_infer(
-        self, inference_request: InferenceRequest = None, **kwargs
+        self,
+        inference_request: Optional[InferenceRequest] = None,
+        **kwargs: Unpack[InferenceRequest],
     ) -> AsyncResponseIterator:
         if inference_request is None:
             inference_request = InferenceRequest(
                 model=self, _server=self._server, **kwargs
             )
-        server_request, response_iterator = inference_request._create_server_request(
-            use_async_iterator=True
+
+        if (inference_request.response_queue is not None) and (
+            not isinstance(inference_request.response_queue, asyncio.Queue)
+        ):
+            raise InvalidArgumentError(
+                "asyncio.Queue must be used for async response iterator"
+            )
+
+        request = inference_request._create_TRITONSERVER_InferenceRequest()
+
+        response_iterator = AsyncResponseIterator(
+            self, self._server, request, inference_request.response_queue
         )
-        self._server.infer_async(server_request)
+
+        response_allocator = _datautils.ResponseAllocator(
+            inference_request.output_memory_allocator,
+            inference_request.output_memory_type,
+        ).create_response_allocator()
+
+        request.set_response_callback(
+            response_allocator, None, response_iterator._response_callback, None
+        )
+
+        self._server.infer_async(request)
         return response_iterator
 
     def infer(
-        self, inference_request: InferenceRequest = None, **kwargs
+        self,
+        inference_request: Optional[InferenceRequest] = None,
+        **kwargs: Unpack[InferenceRequest],
     ) -> ResponseIterator:
         if inference_request is None:
             inference_request = InferenceRequest(
                 model=self, _server=self._server, **kwargs
             )
-        server_request, response_iterator = inference_request._create_server_request()
-        self._server.infer_async(server_request)
+
+        if (inference_request.response_queue is not None) and (
+            not isinstance(inference_request.response_queue, queue.SimpleQueue)
+        ):
+            raise InvalidArgumentError(
+                "queue.SimpleQueue must be used for response iterator"
+            )
+
+        request = inference_request._create_TRITONSERVER_InferenceRequest()
+        response_iterator = ResponseIterator(
+            self, self._server, request, inference_request.response_queue
+        )
+        response_allocator = _datautils.ResponseAllocator(
+            inference_request.output_memory_allocator,
+            inference_request.output_memory_type,
+        ).create_response_allocator()
+
+        request.set_response_callback(
+            response_allocator, None, response_iterator._response_callback, None
+        )
+
+        self._server.infer_async(request)
         return response_iterator
 
-    def metadata(self):
+    def metadata(self) -> dict[str, Any]:
         return json.loads(
             self._server.model_metadata(self.name, self.version).serialize_to_json()
         )
 
-    def is_ready(self):
+    def get_metadata(self) -> dict[str, Any]:
+        return json.loads(
+            self._server.model_metadata(self.name, self.version).serialize_to_json()
+        )
+
+    def is_ready(self) -> bool:
         return self._server.model_is_ready(self.name, self.version)
 
-    def batch_properties(self):
+    def ready(self) -> bool:
+        return self._server.model_is_ready(self.name, self.version)
+
+    def batch_properties(self) -> ModelBatchFlag:
         flags, _ = self._server.model_batch_properties(self.name, self.version)
         return ModelBatchFlag(flags)
 
-    def transaction_properties(self):
+    def transaction_properties(self) -> ModelTxnPropertyFlag:
         txn_properties, _ = self._server.model_transaction_properties(
             self.name, self.version
         )
         return ModelTxnPropertyFlag(txn_properties)
 
-    def statistics(self):
+    def statistics(self) -> dict[str, Any]:
         return json.loads(
             self._server.model_statistics(self.name, self.version).serialize_to_json()
         )
 
-    def config(self, config_version=1):
+    def config(self, config_version: int = 1) -> dict[str, Any]:
         return json.loads(
             self._server.model_config(
                 self.name, self.version, config_version
@@ -562,10 +670,45 @@ class Model:
 
 
 class AsyncResponseIterator:
-    def response_callback(self, response, flags, unused):
+    def __init__(
+        self,
+        model: Model,
+        server: _triton_bindings.TRITONSERVER_Server,
+        request: _triton_bindings.TRITONSERVER_InferenceRequest,
+        user_queue: Optional[asyncio.Queue] = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+    ) -> None:
+        self._server = server
+        if loop is None:
+            loop = asyncio.get_running_loop()
+        self._loop = loop
+        self._queue = asyncio.Queue()
+        self._user_queue = user_queue
+        self._complete = False
+        self._request = request
+        self._model = model
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._complete:
+            raise StopAsyncIteration
+        response = await self._queue.get()
+        self._complete = response.final
+        return response
+
+    def cancel(self) -> None:
+        if self._request is not None:
+            self._request.cancel()
+
+    def _response_callback(self, response, flags, unused):
         try:
+            if self._request is None:
+                raise InternalError("Response received after final response flag")
+
             response = InferenceResponse._set_from_server_response(
-                self._server, self._request, response, flags
+                self._model, self._server, self._request, response, flags
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
             if self._user_queue is not None:
@@ -583,56 +726,21 @@ class AsyncResponseIterator:
                 str(e),
             )
 
-    def __init__(self, server, request, loop=None, user_queue=None):
-        self._server = server
-        if loop is None:
-            loop = asyncio.get_running_loop()
-        self._loop = loop
-        self._queue = asyncio.Queue()
-        self._user_queue = user_queue
-        self._complete = False
-        self._request = request
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        if self._complete:
-            raise StopAsyncIteration
-        response = await self._queue.get()
-        self._complete = response.final
-        return response
-
-    def cancel(self):
-        self._request.cancel()
-
 
 class ResponseIterator:
-    def response_callback(self, response, flags, unused):
-        try:
-            response = InferenceResponse._set_from_server_response(
-                self._server, self._request, response, flags
-            )
-            self._queue.put(response)
-            if self._user_queue is not None:
-                self._user_queue.put(response)
-            if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
-                del self._request
-                self._request = None
-        except Exception as e:
-            _triton_bindings.TRITONSERVER_LogMessage(
-                _triton_bindings.TRITONSERVER_LogLevel.ERROR,
-                __file__,
-                inspect.currentframe().f_lineno,
-                str(e),
-            )
-
-    def __init__(self, server, request, user_queue: queue.SimpleQueue = None):
+    def __init__(
+        self,
+        model: Model,
+        server: _triton_bindings.TRITONSERVER_Server,
+        request: _triton_bindings.TRITONSERVER_InferenceRequest,
+        user_queue: Optional[queue.SimpleQueue] = None,
+    ):
         self._queue = queue.SimpleQueue()
         self._user_queue = user_queue
         self._server = server
         self._complete = False
         self._request = request
+        self._model = model
 
     def __iter__(self):
         return self
@@ -648,35 +756,62 @@ class ResponseIterator:
         if self._request is not None:
             self._request.cancel()
 
+    def _response_callback(self, response, flags, unused):
+        try:
+            if self._request is None:
+                raise InternalError("Response received after final response flag")
+
+            response = InferenceResponse._set_from_server_response(
+                self._model, self._server, self._request, response, flags
+            )
+            self._queue.put(response)
+            if self._user_queue is not None:
+                self._user_queue.put(response)
+            if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
+                del self._request
+                self._request = None
+        except Exception as e:
+            _triton_bindings.TRITONSERVER_LogMessage(
+                _triton_bindings.TRITONSERVER_LogLevel.ERROR,
+                __file__,
+                inspect.currentframe().f_lineno,
+                str(e),
+            )
+
 
 @dataclass
 class InferenceResponse:
-    request_id: str = None
-    parameters: dict = dataclasses.field(default_factory=dict)
-    outputs: dict = dataclasses.field(default_factory=dict)
-    error: _triton_bindings.TritonError = None
-    classification_label: str = None
+    model: Model
+    _server: _triton_bindings.TRITONSERVER_Server
+    request_id: Optional[str] = None
+    parameters: dict = field(default_factory=dict)
+    outputs: dict = field(default_factory=dict)
+    error: Optional[_triton_bindings.TritonError] = None
+    classification_label: Optional[str] = None
     final: bool = False
-    _server: _triton_bindings.TRITONSERVER_Server = None
-    model: Model = None
 
     @staticmethod
-    def _set_from_server_response(server, request, response, flags):
-        values = {}
+    def _set_from_server_response(
+        model: Model,
+        server: _triton_bindings.TRITONSERVER_Server,
+        request: _triton_bindings.TRITONSERVER_InferenceRequest,
+        response,
+        flags: _triton_bindings.TRITONSERVER_ResponseCompleteFlag,
+    ):
+        values: dict = {
+            "_server": server,
+            "model": model,
+            "request_id": request.id,
+            "final": flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL,
+        }
+
         if response is None:
-            if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
-                values["final"] = True
-            if request.id:
-                values["request_id"] = request.id
             return InferenceResponse(**values)
 
         try:
             response.throw_if_response_error()
         except _triton_bindings.TritonError as error:
             values["error"] = error
-
-        if flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL:
-            values["final"] = True
 
         name, version = response.model
         values["model"] = Model(server, name, version)
@@ -688,11 +823,21 @@ class InferenceResponse:
         values["parameters"] = parameters
         outputs = {}
         for output_index in range(response.output_count):
-            (name, *buffer_details) = response.output(output_index)
-            tensor = _datautils.Tensor.from_buffer(*buffer_details)
+            (
+                name,
+                data_type,
+                shape,
+                data_ptr,
+                byte_size,
+                memory_type,
+                memory_type_id,
+                memory_buffer,
+            ) = response.output(output_index)
+            tensor = _datautils.Tensor.from_memory_buffer(
+                data_type, shape, memory_buffer
+            )
             outputs[name] = tensor
         values["outputs"] = outputs
-        values["_server"] = server
 
         # values["classification_label"] = response.output_classification_label()
 
@@ -701,66 +846,38 @@ class InferenceResponse:
 
 @dataclass
 class InferenceRequest:
-    request_id: str = None
+    model: Model
+    _server: _triton_bindings.TRITONSERVER_Server
+    request_id: Optional[str] = None
     flags: int = 0
-    correlation_id: int | str = None
+    correlation_id: Optional[int | str] = None
     priority: int = 0
     timeout: int = 0
-    inputs: dict = dataclasses.field(default_factory=dict)
-    parameters: dict[str, str | int | bool] = dataclasses.field(default_factory=dict)
-    response_allocator: MemoryAllocator = None
-    model: Model = None
+    inputs: dict[str, _datautils.Tensor | Any] = field(default_factory=dict)
+    parameters: dict[str, str | int | bool] = field(default_factory=dict)
+    output_memory_type: Optional[_datautils.DeviceOrMemoryType] = None
+    output_memory_allocator: Optional[_datautils.MemoryAllocator] = None
+    output_array_module: Optional[ModuleType] = None
     response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
-    _server: _triton_bindings.TRITONSERVER_Server = None
-    _serialized_inputs: dict = dataclasses.field(default_factory=dict)
-
-    _default_allocator = _datautils._ResponseAllocator(
-        _datautils.DefaultAllocator()
-    ).create_response_allocator()
+    _serialized_inputs: dict[str, _datautils.Tensor] = field(default_factory=dict)
 
     def _release_request(self, request, flags, user_object):
         pass
 
     def _add_inputs(self, request):
         for name, value in self.inputs.items():
-            tensor = _datautils.Tensor.from_value(value)
+            if not isinstance(value, _datautils.Tensor):
+                tensor = _datautils.Tensor.from_ndarray(value)
+            else:
+                tensor = value
             if tensor.data_type == _triton_bindings.TRITONSERVER_DataType.BYTES:
                 # to ensure lifetime of array
-                self._serialized_inputs[name] = tensor._value
+                self._serialized_inputs[name] = tensor
             request.add_input(name, tensor.data_type, tensor.shape)
 
             request.append_input_data_with_buffer_attributes(
-                name, tensor._buffer, tensor.buffer_attributes
+                name, tensor.data_ptr, tensor.memory_buffer._create_buffer_attributes()
             )
-
-    def _set_callbacks(self, request, use_async_iterator=False):
-        if use_async_iterator:
-            response_iterator = AsyncResponseIterator(
-                self._server, request, user_queue=self.response_queue
-            )
-        elif isinstance(self.response_queue, queue.SimpleQueue):
-            response_iterator = ResponseIterator(
-                self._server, request, user_queue=self.response_queue
-            )
-        else:
-            response_iterator = ResponseIterator(
-                self._server, request, user_queue=self.response_queue
-            )
-
-        request.set_release_callback(self._release_request, None)
-
-        allocator = InferenceRequest._default_allocator
-
-        if self.response_allocator is not None:
-            allocator = self.response_allocator.create_response_allocator()
-
-        request.set_response_callback(
-            allocator,
-            None,
-            response_iterator.response_callback,
-            None,
-        )
-        return response_iterator
 
     def _set_parameters(self, request):
         for key, value in self.parameters.items():
@@ -775,7 +892,7 @@ class InferenceRequest:
                     f"Invalid parameter type {type(value)} for key {key}"
                 )
 
-    def _create_server_request(self, use_async_iterator=False):
+    def _create_TRITONSERVER_InferenceRequest(self):
         request = _triton_bindings.TRITONSERVER_InferenceRequest(
             self._server, self.model.name, self.model.version
         )
@@ -794,9 +911,9 @@ class InferenceRequest:
 
         self._set_parameters(request)
 
-        response_iterator = self._set_callbacks(request, use_async_iterator)
+        request.set_release_callback(self._release_request, None)
 
-        return request, response_iterator
+        return request
 
 
 class Metric(_triton_bindings.TRITONSERVER_Metric):
