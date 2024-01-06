@@ -140,8 +140,8 @@ set(
   metric_family.cc
   model.cc
   model_config_utils.cc
-  model_lifecycle.cc
-  model_repository_manager.cc
+  model_repository_manager/model_lifecycle.cc
+  model_repository_manager/model_repository_manager.cc
   numa_utils.cc
   payload.cc
   pinned_memory_manager.cc
@@ -187,8 +187,8 @@ set(
   metric_family.h
   model_config_utils.h
   model.h
-  model_lifecycle.h
-  model_repository_manager.h
+  model_repository_manager/model_lifecycle.h
+  model_repository_manager/model_repository_manager.h
   numa_utils.h
   payload.h
   pinned_memory_manager.h
@@ -447,7 +447,7 @@ FOREACH(p ${TRITON_EXTRA_LIB_PATHS})
   )
 ENDFOREACH(p)
 
-find_library(RE2_LIBRARY NAMES re2)
+find_package(re2 REQUIRED)
 
 target_link_libraries(
   triton-core
@@ -461,7 +461,7 @@ target_link_libraries(
     triton-common-json               # from repo-common
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf
-    ${RE2_LIBRARY}
+    re2::re2
     Boost::filesystem
 )
 
