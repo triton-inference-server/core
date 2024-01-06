@@ -26,6 +26,8 @@
 
 """In process Python API for Triton Inference Server."""
 
+from importlib.metadata import version
+
 import tritonserver._c as _triton_bindings
 from tritonserver._api._datautils import DataType as DataType
 from tritonserver._api._datautils import MemoryAllocator as MemoryAllocator
@@ -83,6 +85,9 @@ for exception in _exceptions:
     exception.__module__ = "tritonserver"
     globals()[exception.__name__] = exception
 
+__all__ = []
+__version__ = version("tritonserver")
+
 del _triton_bindings
 del _exceptions
-__all__ = []
+del version
