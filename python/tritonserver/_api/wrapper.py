@@ -574,11 +574,7 @@ class Model:
         request = inference_request._create_TRITONSERVER_InferenceRequest()
 
         response_iterator = AsyncResponseIterator(
-            self,
-            self._server,
-            request,
-            inference_request.response_queue,
-            inference_request.output_array_module,
+            self, self._server, request, inference_request.response_queue
         )
 
         response_allocator = _datautils.ResponseAllocator(
@@ -612,11 +608,7 @@ class Model:
 
         request = inference_request._create_TRITONSERVER_InferenceRequest()
         response_iterator = ResponseIterator(
-            self,
-            self._server,
-            request,
-            inference_request.response_queue,
-            inference_request.output_array_module,
+            self, self._server, request, inference_request.response_queue
         )
         response_allocator = _datautils.ResponseAllocator(
             inference_request.output_memory_allocator,
@@ -684,7 +676,6 @@ class AsyncResponseIterator:
         server: _triton_bindings.TRITONSERVER_Server,
         request: _triton_bindings.TRITONSERVER_InferenceRequest,
         user_queue: Optional[asyncio.Queue] = None,
-        output_array_module: Optional[ModuleType] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         self._server = server
@@ -696,7 +687,6 @@ class AsyncResponseIterator:
         self._complete = False
         self._request = request
         self._model = model
-        self._output_array_module = output_array_module
 
     def __aiter__(self):
         return self
@@ -718,12 +708,7 @@ class AsyncResponseIterator:
                 raise InternalError("Response received after final response flag")
 
             response = InferenceResponse._set_from_server_response(
-                self._model,
-                self._server,
-                self._request,
-                response,
-                flags,
-                self._output_array_module,
+                self._model, self._server, self._request, response, flags
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
             if self._user_queue is not None:
@@ -749,7 +734,6 @@ class ResponseIterator:
         server: _triton_bindings.TRITONSERVER_Server,
         request: _triton_bindings.TRITONSERVER_InferenceRequest,
         user_queue: Optional[queue.SimpleQueue] = None,
-        output_array_module: Optional[ModuleType] = None,
     ):
         self._queue = queue.SimpleQueue()
         self._user_queue = user_queue
@@ -757,7 +741,6 @@ class ResponseIterator:
         self._complete = False
         self._request = request
         self._model = model
-        self._output_array_module = output_array_module
 
     def __iter__(self):
         return self
@@ -779,12 +762,7 @@ class ResponseIterator:
                 raise InternalError("Response received after final response flag")
 
             response = InferenceResponse._set_from_server_response(
-                self._model,
-                self._server,
-                self._request,
-                response,
-                flags,
-                self._output_array_module,
+                self._model, self._server, self._request, response, flags
             )
             self._queue.put(response)
             if self._user_queue is not None:
@@ -819,7 +797,6 @@ class InferenceResponse:
         request: _triton_bindings.TRITONSERVER_InferenceRequest,
         response,
         flags: _triton_bindings.TRITONSERVER_ResponseCompleteFlag,
-        output_array_module: Optional[ModuleType] = None,
     ):
         values: dict = {
             "_server": server,
@@ -859,10 +836,8 @@ class InferenceResponse:
             tensor = _datautils.Tensor.from_memory_buffer(
                 data_type, shape, memory_buffer
             )
-            if output_array_module:
-                outputs[name] = tensor.to_ndarray(output_array_module)
-            else:
-                outputs[name] = tensor
+
+            outputs[name] = tensor
         values["outputs"] = outputs
 
         # values["classification_label"] = response.output_classification_label()
@@ -883,7 +858,6 @@ class InferenceRequest:
     parameters: dict[str, str | int | bool] = field(default_factory=dict)
     output_memory_type: Optional[_datautils.DeviceOrMemoryType] = None
     output_memory_allocator: Optional[_datautils.MemoryAllocator] = None
-    output_array_module: Optional[ModuleType] = None
     response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
     _serialized_inputs: dict[str, _datautils.Tensor] = field(default_factory=dict)
 
