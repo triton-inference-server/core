@@ -26,7 +26,7 @@
 
 """In process Python API for Triton Inference Server."""
 
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 import tritonserver._c as _triton_bindings
 from tritonserver._api._datautils import DataType as DataType
@@ -86,8 +86,14 @@ for exception in _exceptions:
     globals()[exception.__name__] = exception
 
 __all__ = []
-__version__ = version("tritonserver")
+__version__ = "UNKNOWN"
+
+try:
+    __version__ = version("tritonserver")
+except PackageNotFoundError:
+    pass
 
 del _triton_bindings
 del _exceptions
 del version
+del PackageNotFoundError
