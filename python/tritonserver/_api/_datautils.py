@@ -35,14 +35,11 @@ from types import ModuleType
 from typing import Any, Callable, ClassVar, Optional, Sequence, Type
 
 import numpy
-import tritonserver._c as _triton_bindings
-from cupy.cuda import Device
 from tritonserver._c import InvalidArgumentError
 from tritonserver._c import TRITONSERVER_BufferAttributes as BufferAttributes
 from tritonserver._c import TRITONSERVER_DataType as DataType
 from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
-from tritonserver._c import UnsupportedError
-from typing_extensions import Self
+from tritonserver._c import TRITONSERVER_ResponseAllocator, UnsupportedError
 
 from . import _dlpack
 
@@ -317,28 +314,35 @@ if cupy is not None:
 
 
 def _parse_device_or_memory_type(
-    memory_type: DeviceOrMemoryType,
+    device_or_memory_type: DeviceOrMemoryType,
 ) -> tuple[MemoryType, int]:
-    if isinstance(memory_type, tuple):
-        if isinstance(memory_type[0], MemoryType):
-            memory_type = memory_type[0]
-            memory_type_id = memory_type[1]
-        elif isinstance(memory_type[0], _dlpack.DLDeviceType):
-            memory_type = DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE[memory_type[0]]
-            memory_type_id = memory_type[1]
-    elif isinstance(memory_type, MemoryType):
+    if isinstance(device_or_memory_type, tuple):
+        if isinstance(device_or_memory_type[0], MemoryType):
+            memory_type = device_or_memory_type[0]
+            memory_type_id = device_or_memory_type[1]
+        elif isinstance(device_or_memory_type[0], _dlpack.DLDeviceType):
+            memory_type = DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE[
+                device_or_memory_type[0]
+            ]
+            memory_type_id = device_or_memory_type[1]
+        else:
+            raise InvalidArgumentError(f"Invalid memory type {device_or_memory_type}")
+    elif isinstance(device_or_memory_type, MemoryType):
+        memory_type = device_or_memory_type
         memory_type_id = 0
-    elif isinstance(memory_type, str):
-        memory_str_tuple = memory_type.split(":")
+    elif isinstance(device_or_memory_type, str):
+        memory_str_tuple = device_or_memory_type.split(":")
         if len(memory_str_tuple) > 2:
-            raise InvalidArgumentError(f"Invalid memory type string {memory_type}")
+            raise InvalidArgumentError(
+                f"Invalid memory type string {device_or_memory_type}"
+            )
         memory_type = STRING_TO_TRITON_MEMORY_TYPE[memory_str_tuple[0].upper()]
         if len(memory_str_tuple) == 2:
             try:
                 memory_type_id = int(memory_str_tuple[1])
             except ValueError:
                 raise InvalidArgumentError(
-                    f"Invalid memory type string {memory_type}"
+                    f"Invalid memory type string {device_or_memory_type}"
                 ) from None
         else:
             memory_type_id = 0
@@ -349,25 +353,25 @@ class ResponseAllocator:
     def __init__(
         self,
         memory_allocator: Optional[MemoryAllocator] = None,
-        memory_type: Optional[DeviceOrMemoryType] = None,
+        device_or_memory_type: Optional[DeviceOrMemoryType] = None,
     ):
         self._memory_allocator = memory_allocator
         self._memory_type: Optional[MemoryType] = None
         self._memory_type_id: int = 0
         self._response_allocator = None
-        if memory_type is not None:
+        if device_or_memory_type is not None:
             self._memory_type, self._memory_type_id = _parse_device_or_memory_type(
-                memory_type
+                device_or_memory_type
             )
 
     def allocate(
         self,
-        allocator,
+        _allocator,
         tensor_name,
         byte_size,
         memory_type,
         memory_type_id,
-        user_object,
+        _user_object,
     ):
         if self._memory_type is not None:
             memory_type = self._memory_type
@@ -390,24 +394,24 @@ class ResponseAllocator:
 
     def release(
         self,
-        allocator,
-        buffer_,
-        buffer_user_object,
-        byte_size,
-        memory_type,
-        memory_type_id,
+        _allocator,
+        _buffer_,
+        _buffer_user_object,
+        _byte_size,
+        _memory_type,
+        _memory_type_id,
     ):
         pass
 
-    def start(self, allocator, user_object):
+    def start(self, _allocator, _user_object):
         pass
 
     def query_preferred_memory_type(
         self,
-        allocator,
-        user_object,
-        tensor_name,
-        byte_size,
+        _allocator,
+        _user_object,
+        _tensor_name,
+        _byte_size,
         memory_type: MemoryType,
         memory_type_id,
     ):
@@ -418,15 +422,20 @@ class ResponseAllocator:
         return (memory_type, memory_type_id)
 
     def set_buffer_attributes(
-        self, allocator, tensor_name, buffer_attributes, user_object, buffer_user_object
+        self,
+        _allocator,
+        _tensor_name,
+        buffer_attributes,
+        _user_object,
+        _buffer_user_object,
     ):
-        if self._memory_type:
+        if self._memory_type is not None:
             buffer_attributes.memory_type = self._memory_type
             buffer_attributes.memory_type_id = self._memory_type_id
         return buffer_attributes
 
     def create_TRITONSERVER_ResponseAllocator(self):
-        self._response_allocator = _triton_bindings.TRITONSERVER_ResponseAllocator(
+        self._response_allocator = TRITONSERVER_ResponseAllocator(
             self.allocate, self.release, self.start
         )
         self._response_allocator.set_query_function(self.query_preferred_memory_type)
