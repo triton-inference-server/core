@@ -604,6 +604,11 @@ class Tensor:
         memory_buffer = MemoryBuffer.from_dlpack(obj, dlpack_object=dlpack_object)
         return Tensor(data_type, shape, memory_buffer)
 
+    def to_host(self) -> Tensor:
+        if self.memory_type in (MemoryType.CPU, MemoryType.CPU_PINNED):
+            return self
+        return Tensor.from_dlpack(self._to_host())
+
     def _to_host(self) -> numpy.ndarray:
         array_module = Tensor._array_modules[self.memory_type]
         if array_module is not None:
