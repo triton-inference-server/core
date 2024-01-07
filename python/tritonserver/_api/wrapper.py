@@ -721,7 +721,7 @@ class AsyncResponseIterator:
             if self._request is None:
                 raise InternalError("Response received after final response flag")
 
-            response = InferenceResponse._set_from_server_response(
+            response = InferenceResponse._from_TRITONSERVER_InferenceResponse(
                 self._model, self._server, self._request, response, flags
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
@@ -779,7 +779,7 @@ class ResponseIterator:
             if self._request is None:
                 raise InternalError("Response received after final response flag")
 
-            response = InferenceResponse._set_from_server_response(
+            response = InferenceResponse._from_TRITONSERVER_InferenceResponse(
                 self._model, self._server, self._request, response, flags
             )
             self._queue.put(response)
@@ -809,7 +809,7 @@ class InferenceResponse:
     final: bool = False
 
     @staticmethod
-    def _set_from_server_response(
+    def _from_TRITONSERVER_InferenceResponse(
         model: Model,
         server: _triton_bindings.TRITONSERVER_Server,
         request: _triton_bindings.TRITONSERVER_InferenceRequest,

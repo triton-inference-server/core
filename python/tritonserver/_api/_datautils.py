@@ -51,9 +51,9 @@ try:
 except ImportError:
     cupy = None
 
-DeviceOrMemoryType = Optional[
+DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[_dlpack.DLDeviceType, int] | str
-]
+)
 
 
 class _CustomKeyErrorDict(dict):
@@ -80,7 +80,7 @@ class _CustomKeyErrorDict(dict):
 
 
 STRING_TO_TRITON_MEMORY_TYPE: dict[str, MemoryType] = _CustomKeyErrorDict(
-    "String",
+    "Memory Type String",
     "Triton server memory type",
     {"CPU": MemoryType.CPU, "CPU_PINNED": MemoryType.CPU_PINNED, "GPU": MemoryType.GPU},
 )
@@ -316,47 +316,49 @@ if cupy is not None:
     default_memory_allocators[MemoryType.GPU] = CupyAllocator()
 
 
+def _parse_device_or_memory_type(
+    memory_type: DeviceOrMemoryType,
+) -> tuple[MemoryType, int]:
+    if isinstance(memory_type, tuple):
+        if isinstance(memory_type[0], MemoryType):
+            memory_type = memory_type[0]
+            memory_type_id = memory_type[1]
+        elif isinstance(memory_type[0], _dlpack.DLDeviceType):
+            memory_type = DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE[memory_type[0]]
+            memory_type_id = memory_type[1]
+    elif isinstance(memory_type, MemoryType):
+        memory_type_id = 0
+    elif isinstance(memory_type, str):
+        memory_str_tuple = memory_type.split(":")
+        if len(memory_str_tuple) > 2:
+            raise InvalidArgumentError(f"Invalid memory type string {memory_type}")
+        memory_type = STRING_TO_TRITON_MEMORY_TYPE[memory_str_tuple[0].upper()]
+        if len(memory_str_tuple) == 2:
+            try:
+                memory_type_id = int(memory_str_tuple[1])
+            except ValueError:
+                raise InvalidArgumentError(
+                    f"Invalid memory type string {memory_type}"
+                ) from None
+        else:
+            memory_type_id = 0
+    return (memory_type, memory_type_id)
+
+
 class ResponseAllocator:
     def __init__(
         self,
         memory_allocator: Optional[MemoryAllocator] = None,
-        memory_type: DeviceOrMemoryType = None,
+        memory_type: Optional[DeviceOrMemoryType] = None,
     ):
         self._memory_allocator = memory_allocator
         self._memory_type: Optional[MemoryType] = None
         self._memory_type_id: int = 0
         self._response_allocator = None
-        self._set_memory_type(memory_type)
-
-    def _set_memory_type(self, memory_type: DeviceOrMemoryType) -> None:
-        if memory_type is None:
-            return
-        if isinstance(memory_type, tuple):
-            if isinstance(memory_type[0], MemoryType):
-                self._memory_type = memory_type[0]
-                self._memory_type_id = memory_type[1]
-                return
-            if isinstance(memory_type[0], _dlpack.DLDeviceType):
-                self._memory_type = DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE[
-                    memory_type[0]
-                ]
-                self._memory_type_id = memory_type[1]
-                return
-        if isinstance(memory_type, MemoryType):
-            self._memory_type = memory_type
-            self._memory_type_id = 0
-        if isinstance(memory_type, str):
-            memory_str_tuple = memory_type.split(":")
-            if len(memory_str_tuple) > 2:
-                raise InvalidArgumentError(f"Invalid memory type string {memory_type}")
-            self._memory_type = STRING_TO_TRITON_MEMORY_TYPE[memory_str_tuple[0]]
-            if len(memory_str_tuple) == 2:
-                try:
-                    self._memory_type_id = int(memory_str_tuple[1])
-                except ValueError:
-                    raise InvalidArgumentError(
-                        f"Invalid memory type string {memory_type}"
-                    ) from None
+        if memory_type is not None:
+            self._memory_type, self._memory_type_id = _parse_device_or_memory_type(
+                memory_type
+            )
 
     def allocate(
         self,
@@ -570,11 +572,7 @@ class Tensor:
         original_shape = self.shape
         self.data_type = DataType.UINT8
         self.shape = [self.size]
-
-        if self.memory_type == MemoryType.GPU:
-            numpy_ndarray = self._to_host()
-        else:
-            numpy_ndarray = numpy.from_dlpack(self)
+        numpy_ndarray = self._to_numpy_on_host()
 
         # Deserialize bytes array and reshape
         self.shape = original_shape
@@ -605,18 +603,37 @@ class Tensor:
         return Tensor(data_type, shape, memory_buffer)
 
     def to_host(self) -> Tensor:
-        if self.memory_type in (MemoryType.CPU, MemoryType.CPU_PINNED):
-            return self
-        return Tensor.from_dlpack(self._to_host())
+        return self.to_device("cpu")
 
-    def _to_host(self) -> numpy.ndarray:
-        array_module = Tensor._array_modules[self.memory_type]
-        if array_module is not None:
-            array_obj = array_module.from_dlpack(self)
-            if hasattr(array_module, "asnumpy"):
-                return array_module.asnumpy(array_obj)
-            if hasattr(array_obj, "numpy"):
-                return array_obj.numpy(force=True)
+    def to_device(self, device: DeviceOrMemoryType) -> Tensor:
+        memory_type, memory_type_id = _parse_device_or_memory_type(device)
+        if self.memory_type == memory_type and self.memory_type_id == memory_type_id:
+            return self
+        if self.memory_type == MemoryType.CPU_PINNED and memory_type == MemoryType.CPU:
+            return self
+        if cupy is not None:
+            if self.memory_type in (MemoryType.CPU, MemoryType.CPU_PINNED):
+                ndarray = numpy.from_dlpack(self)
+            else:
+                ndarray = cupy.from_dlpack(self)
+
+            if memory_type == MemoryType.CPU:
+                return Tensor.from_dlpack(cupy.asnumpy(ndarray))
+            if memory_type == MemoryType.GPU:
+                with cupy.cuda.Device(memory_type_id):
+                    return Tensor.from_dlpack(cupy.asarray(ndarray))
+
+        raise UnsupportedError(
+            f"Conversion from {(self.memory_type,self.memory_type_id)} to {(memory_type, memory_type_id)} not supported."
+        )
+
+    def _to_numpy_on_host(self) -> numpy.ndarray:
+        if self.memory_type in (MemoryType.CPU, MemoryType.CPU_PINNED):
+            return numpy.from_dlpack(self)
+
+        if cupy is not None:
+            return cupy.asnumpy(cupy.from_dlpack(self))
+
         raise UnsupportedError(
             f"Conversion from {self.memory_type} to numpy array not supported."
         )
