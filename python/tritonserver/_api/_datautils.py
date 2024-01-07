@@ -559,21 +559,34 @@ class Tensor:
             self.memory_type_id,
         )
 
-    def to_ndarray(self, _type: ModuleType | type) -> Any:
-        if _type in Tensor._to_converters:
-            return Tensor._to_converters[_type](self)
-        elif hasattr(_type, "from_dlpack"):
-            return _type.from_dlpack(self)
-        raise InvalidArgumentError(
-            f"Output type {_type} not supported. Must be one of {list(Tensor._to_converters.keys())} or the type must support from_dlpack"
-        )
+    def to_bytes_array(self) -> numpy.ndarray:
+        if self.data_type != DataType.BYTES:
+            raise InvalidArgumentError(
+                f"Tensor has data type {self.data_type} not {DataType.BYTES}"
+            )
+
+        # Reshape into 1d array of bytes on host
+        original_data_type = self.data_type
+        original_shape = self.shape
+        self.data_type = DataType.UINT8
+        self.shape = [self.size]
+
+        if self.memory_type == MemoryType.GPU:
+            numpy_ndarray = self._to_host()
+        else:
+            numpy_ndarray = numpy.from_dlpack(self)
+
+        # Deserialize bytes array and reshape
+        self.shape = original_shape
+        self.data_type = original_data_type
+        return Tensor._deserialize_bytes_array(numpy_ndarray).reshape(self.shape)
 
     @staticmethod
     def from_memory_buffer(data_type, shape, memory_buffer):
         return Tensor(data_type, shape, memory_buffer)
 
     @staticmethod
-    def from_ndarray(obj: Any):
+    def from_object(obj: Any):
         if type(obj) in Tensor._from_converters:
             return Tensor._from_converters[type(obj)](obj)
         elif hasattr(obj, "__dlpack__"):
@@ -603,17 +616,6 @@ class Tensor:
             f"Conversion from {self.memory_type} to numpy array not supported."
         )
 
-    def _to_numpy(self) -> numpy.ndarray:
-        if self.memory_type == MemoryType.GPU:
-            numpy_ndarray = self._to_host()
-        else:
-            numpy_ndarray = numpy.from_dlpack(self)
-
-        if self.data_type == DataType.BYTES:
-            numpy_ndarray = Tensor._deserialize_bytes_array(numpy_ndarray)
-
-        return numpy_ndarray
-
     @staticmethod
     def _deserialize_bytes_array(numpy_ndarray: numpy.ndarray) -> numpy.ndarray:
         result = []
@@ -636,6 +638,15 @@ class Tensor:
             result.append(struct.pack("@I", len(item)))
             result.append(item)
         return numpy.frombuffer(b"".join(result), dtype=numpy.byte)
+
+    @staticmethod
+    def _from_list(obj: list[Any]) -> Tensor:
+        try:
+            return Tensor._from_numpy(numpy.array(obj))
+        except Exception as e:
+            raise InvalidArgumentError(
+                f"Conversion from {obj} to tensor not supported."
+            ) from e
 
     @staticmethod
     def _from_numpy(obj: numpy.ndarray | numpy.generic) -> Tensor:
@@ -703,14 +714,7 @@ class Tensor:
         ctypes.pythonapi.Py_IncRef(shape_obj)
 
     _from_converters: ClassVar[dict[type, Callable[[Any], Tensor]]] = dict(
-        {
-            numpy.ndarray: _from_numpy,
-            numpy.generic: _from_numpy,
-        },
-    )
-
-    _to_converters: ClassVar[dict[type | ModuleType, Callable[[Self], Any]]] = dict(
-        {numpy.ndarray: _to_numpy, numpy: _to_numpy},
+        {numpy.ndarray: _from_numpy, numpy.generic: _from_numpy, list: _from_list},
     )
 
     _array_modules: ClassVar[dict[MemoryType, ModuleType | None]] = dict(

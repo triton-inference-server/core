@@ -557,6 +557,7 @@ class Model:
     def async_infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
+        raise_on_error: bool = False,
         **kwargs: Unpack[InferenceRequest],
     ) -> AsyncResponseIterator:
         if inference_request is None:
@@ -574,7 +575,11 @@ class Model:
         request = inference_request._create_TRITONSERVER_InferenceRequest()
 
         response_iterator = AsyncResponseIterator(
-            self, self._server, request, inference_request.response_queue
+            self,
+            self._server,
+            request,
+            inference_request.response_queue,
+            raise_on_error,
         )
 
         response_allocator = _datautils.ResponseAllocator(
@@ -592,6 +597,7 @@ class Model:
     def infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
+        raise_on_error: bool = False,
         **kwargs: Unpack[InferenceRequest],
     ) -> ResponseIterator:
         if inference_request is None:
@@ -608,7 +614,11 @@ class Model:
 
         request = inference_request._create_TRITONSERVER_InferenceRequest()
         response_iterator = ResponseIterator(
-            self, self._server, request, inference_request.response_queue
+            self,
+            self._server,
+            request,
+            inference_request.response_queue,
+            raise_on_error,
         )
         response_allocator = _datautils.ResponseAllocator(
             inference_request.output_memory_allocator,
@@ -676,6 +686,7 @@ class AsyncResponseIterator:
         server: _triton_bindings.TRITONSERVER_Server,
         request: _triton_bindings.TRITONSERVER_InferenceRequest,
         user_queue: Optional[asyncio.Queue] = None,
+        raise_on_error: bool = False,
         loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         self._server = server
@@ -687,6 +698,7 @@ class AsyncResponseIterator:
         self._complete = False
         self._request = request
         self._model = model
+        self._raise_on_error = raise_on_error
 
     def __aiter__(self):
         return self
@@ -696,6 +708,8 @@ class AsyncResponseIterator:
             raise StopAsyncIteration
         response = await self._queue.get()
         self._complete = response.final
+        if response.error is not None and self._raise_on_error:
+            raise response.error
         return response
 
     def cancel(self) -> None:
@@ -734,6 +748,7 @@ class ResponseIterator:
         server: _triton_bindings.TRITONSERVER_Server,
         request: _triton_bindings.TRITONSERVER_InferenceRequest,
         user_queue: Optional[queue.SimpleQueue] = None,
+        raise_on_error: bool = False,
     ):
         self._queue = queue.SimpleQueue()
         self._user_queue = user_queue
@@ -741,6 +756,7 @@ class ResponseIterator:
         self._complete = False
         self._request = request
         self._model = model
+        self._raise_on_error = raise_on_error
 
     def __iter__(self):
         return self
@@ -750,6 +766,8 @@ class ResponseIterator:
             raise StopIteration
         response = self._queue.get()
         self._complete = response.final
+        if response.error is not None and self._raise_on_error:
+            raise response.error
         return response
 
     def cancel(self):
@@ -805,40 +823,46 @@ class InferenceResponse:
             "final": flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL,
         }
 
-        if response is None:
-            return InferenceResponse(**values)
-
         try:
-            response.throw_if_response_error()
-        except _triton_bindings.TritonError as error:
+            if response is None:
+                return InferenceResponse(**values)
+
+            try:
+                response.throw_if_response_error()
+            except _triton_bindings.TritonError as error:
+                error.args += tuple(values.items())
+                values["error"] = error
+
+            name, version = response.model
+            values["model"] = Model(server, name, version)
+            values["request_id"] = response.id
+            parameters = {}
+            for parameter_index in range(response.parameter_count):
+                name, type_, value = response.parameter(parameter_index)
+                parameters[name] = value
+            values["parameters"] = parameters
+            outputs = {}
+            for output_index in range(response.output_count):
+                (
+                    name,
+                    data_type,
+                    shape,
+                    data_ptr,
+                    byte_size,
+                    memory_type,
+                    memory_type_id,
+                    memory_buffer,
+                ) = response.output(output_index)
+                tensor = _datautils.Tensor.from_memory_buffer(
+                    data_type, shape, memory_buffer
+                )
+
+                outputs[name] = tensor
+            values["outputs"] = outputs
+        except Exception as e:
+            error = InternalError(f"Unexpected error in creating response object: {e}")
+            error.args += tuple(values.items())
             values["error"] = error
-
-        name, version = response.model
-        values["model"] = Model(server, name, version)
-        values["request_id"] = response.id
-        parameters = {}
-        for parameter_index in range(response.parameter_count):
-            name, type_, value = response.parameter(parameter_index)
-            parameters[name] = value
-        values["parameters"] = parameters
-        outputs = {}
-        for output_index in range(response.output_count):
-            (
-                name,
-                data_type,
-                shape,
-                data_ptr,
-                byte_size,
-                memory_type,
-                memory_type_id,
-                memory_buffer,
-            ) = response.output(output_index)
-            tensor = _datautils.Tensor.from_memory_buffer(
-                data_type, shape, memory_buffer
-            )
-
-            outputs[name] = tensor
-        values["outputs"] = outputs
 
         # values["classification_label"] = response.output_classification_label()
 
@@ -867,7 +891,7 @@ class InferenceRequest:
     def _add_inputs(self, request):
         for name, value in self.inputs.items():
             if not isinstance(value, _datautils.Tensor):
-                tensor = _datautils.Tensor.from_ndarray(value)
+                tensor = _datautils.Tensor.from_object(value)
             else:
                 tensor = value
             if tensor.data_type == _triton_bindings.TRITONSERVER_DataType.BYTES:
