@@ -885,7 +885,7 @@ class InferenceRequest:
     response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
     _serialized_inputs: dict[str, _datautils.Tensor] = field(default_factory=dict)
 
-    def _release_request(self, request, flags, user_object):
+    def _release_request(self, _request, _flags, _user_object):
         pass
 
     def _add_inputs(self, request):
