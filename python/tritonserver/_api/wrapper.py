@@ -580,7 +580,7 @@ class Model:
         response_allocator = _datautils.ResponseAllocator(
             inference_request.output_memory_allocator,
             inference_request.output_memory_type,
-        ).create_response_allocator()
+        ).create_TRITONSERVER_ResponseAllocator()
 
         request.set_response_callback(
             response_allocator, None, response_iterator._response_callback, None
@@ -613,7 +613,7 @@ class Model:
         response_allocator = _datautils.ResponseAllocator(
             inference_request.output_memory_allocator,
             inference_request.output_memory_type,
-        ).create_response_allocator()
+        ).create_TRITONSERVER_ResponseAllocator()
 
         request.set_response_callback(
             response_allocator, None, response_iterator._response_callback, None
@@ -876,7 +876,9 @@ class InferenceRequest:
             request.add_input(name, tensor.data_type, tensor.shape)
 
             request.append_input_data_with_buffer_attributes(
-                name, tensor.data_ptr, tensor.memory_buffer._create_buffer_attributes()
+                name,
+                tensor.data_ptr,
+                tensor.memory_buffer._create_TRITONSERVER_BufferAttributes(),
             )
 
     def _set_parameters(self, request):

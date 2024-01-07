@@ -238,7 +238,7 @@ class MemoryBuffer:
             owner,
         )
 
-    def _create_buffer_attributes(self) -> BufferAttributes:
+    def _create_TRITONSERVER_BufferAttributes(self) -> BufferAttributes:
         buffer_attributes = BufferAttributes()
         buffer_attributes.memory_type = self.memory_type
         buffer_attributes.memory_type_id = self.memory_type_id
@@ -423,7 +423,7 @@ class ResponseAllocator:
             buffer_attributes.memory_type_id = self._memory_type_id
         return buffer_attributes
 
-    def create_response_allocator(self):
+    def create_TRITONSERVER_ResponseAllocator(self):
         self._response_allocator = _triton_bindings.TRITONSERVER_ResponseAllocator(
             self.allocate, self.release, self.start
         )
