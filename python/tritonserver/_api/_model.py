@@ -32,6 +32,7 @@ import queue
 from typing import Annotated, Any, Optional, TypedDict
 
 import _datautils
+from _request import InferenceRequest
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
