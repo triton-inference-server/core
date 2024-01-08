@@ -427,6 +427,10 @@ TRITONSERVER_ServerOptionsSetModelLoadThreadCount()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetModelLoadRetryCount()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetModelNamespacing()
 {
 }

@@ -38,7 +38,7 @@
 #include "cache_manager.h"
 #include "infer_parameter.h"
 #include "model_config.pb.h"
-#include "model_repository_manager.h"
+#include "model_repository_manager/model_repository_manager.h"
 #include "rate_limiter.h"
 #include "status.h"
 #include "triton/common/model_config.h"
@@ -257,6 +257,8 @@ class InferenceServer {
 
   void SetModelLoadThreadCount(unsigned int c) { model_load_thread_count_ = c; }
 
+  void SetModelLoadRetryCount(unsigned int c) { model_load_retry_count_ = c; }
+
   void SetModelNamespacingEnabled(const bool e)
   {
     enable_model_namespacing_ = e;
@@ -334,6 +336,7 @@ class InferenceServer {
   uint32_t exit_timeout_secs_;
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;
+  uint32_t model_load_retry_count_;
   bool enable_model_namespacing_;
   uint64_t pinned_memory_pool_size_;
   bool response_cache_enabled_;
