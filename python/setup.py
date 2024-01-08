@@ -77,7 +77,7 @@ setup(
     version=VERSION,
     author="NVIDIA Inc.",
     author_email="sw-dl-triton@nvidia.com",
-    description="Python API of the Triton In-Process Server",
+    description="Triton Inference Server Python API",
     license="BSD",
     url="https://developer.nvidia.com/nvidia-triton-inference-server",
     classifiers=[
@@ -104,4 +104,6 @@ setup(
     zip_safe=False,
     cmdclass={"bdist_wheel": bdist_wheel},
     data_files=data_files,
+    install_requires=["numpy"],
+    extras_require={"GPU": ["cupy-cuda12x"], "all": ["cupy-cuda12x"]},
 )

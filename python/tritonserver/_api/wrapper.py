@@ -35,7 +35,6 @@ import json
 import queue
 import time
 from dataclasses import dataclass, field
-from types import ModuleType
 from typing import Annotated, Any, Optional, TypedDict
 
 import tritonserver._c.triton_bindings as _triton_bindings
@@ -64,7 +63,6 @@ from tritonserver._c.triton_bindings import (
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_RateLimitMode as RateLimitMode
 from tritonserver._c.triton_bindings import UnavailableError, UnsupportedError
-from typing_extensions import NotRequired, Unpack
 
 uint = Annotated[int, ctypes.c_uint]
 
