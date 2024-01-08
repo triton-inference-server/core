@@ -25,9 +25,20 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """Class for interacting with Triton Inference Server Models"""
+
 import asyncio
+import json
+import queue
 from typing import Annotated, Any, Optional, TypedDict
 
+import _datautils
+from tritonserver._c.triton_bindings import InvalidArgumentError
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
+)
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag,
+)
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
 
 
@@ -90,7 +101,7 @@ class Model:
         ----------
 
         kwargs : Unpack[InferenceRequest]
-            Keyname arguments passed to `InferenceRequest` constructor. See
+            Keyword arguments passed to `InferenceRequest` constructor. See
             `InferenceRequest` documentation for details.
 
         Returns
@@ -132,7 +143,7 @@ class Model:
         ----------
         inference_request : Optional[InferenceRequest]
             inference request object. If not provided inference
-            request will be created using remaining key,value
+            request will be created using remaining keyword
             arguments.
         raise_on_error : bool
             if True iterator will raise an error on any response
@@ -140,7 +151,7 @@ class Model:
             returned as part of the response object.
         kwargs : Unpack[InferenceRequest]
             If a request object is not provided, a new object will be
-            created with remaining keyname arguments. See
+            created with remaining keyword arguments. See
             `InferenceRequest` documentation for valid arguments.
 
 
@@ -199,6 +210,64 @@ class Model:
         raise_on_error: bool = False,
         **kwargs: Unpack[InferenceRequest],
     ) -> ResponseIterator:
+        """Send an inference request to the model for execution
+
+        Sends an inference request to the model. Responses are
+        returned asynchronously using an iterator. See
+        c:func:`TRITONSERVER_ServerInferAsync`
+
+
+        Parameters
+        ----------
+        inference_request : Optional[InferenceRequest]
+            inference request object. If not provided inference
+            request will be created using remaining keyword
+            arguments.
+        raise_on_error : bool
+            if True iterator will raise an error on any response
+            errors returned from the model. If False errors will be
+            returned as part of the response object.
+        kwargs : Unpack[InferenceRequest]
+            If a request object is not provided, a new object will be
+            created with remaining keyword arguments. See
+            `InferenceRequest` documentation for valid arguments.
+
+        Returns
+        -------
+        ResponseIterator
+            Response iterator
+
+        Raises
+        ------
+        InvalidArgumentError
+            if any invalid arguments are provided
+
+        Examples
+        --------
+        >>> responses = server.model("test_2").infer(inputs={"text_input":["hello"]})
+        responses = list(server.model("test_2").infer(inputs={"text_input":["hello"]}))
+
+        >>> response = responses[0]
+        print(respponse)
+        InferenceResponse(model={'name': 'test_2', 'version': 1,
+        'state': None},
+        _server=<tritonserver._c.triton_bindings.TRITONSERVER_Server
+        object at 0x7f5827156bf0>, request_id='', parameters={},
+        outputs={'text_output':
+        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        shape=array([1]),
+        memory_buffer=MemoryBuffer(data_ptr=140003384498080,
+        memory_type=<TRITONSERVER_MemoryType.CPU: 0>,
+        memory_type_id=0, size=9, owner=array([ 5, 0, 0, 0, 104, 101,
+        108, 108, 111], dtype=int8)))}, error=None,
+        classification_label=None, final=False)
+
+        >>> response.outputs["text_output"].to_bytes_array()
+        response.outputs["text_output"].to_bytes_array()
+        array([b'hello'], dtype=object)
+
+        """
+
         if inference_request is None:
             inference_request = InferenceRequest(
                 model=self, _server=self._server, **kwargs
@@ -232,37 +301,177 @@ class Model:
         return response_iterator
 
     def metadata(self) -> dict[str, Any]:
+        """Returns medatadata about a model and its inputs and outputs
+
+        See c:func:`TRITONSERVER_ServerModelMetadata()`
+
+        Returns
+        -------
+        dict[str, Any]
+            Model metadata as a dictionary of key value pairs
+
+        Examples
+        --------
+        server.model("test").metadata()
+        {'name': 'test', 'versions': ['1'], 'platform': 'python',
+        'inputs': [{'name': 'text_input', 'datatype': 'BYTES',
+        'shape': [-1]}, {'name': 'fp16_input', 'datatype': 'FP16',
+        'shape': [-1, 1]}], 'outputs': [{'name': 'text_output',
+        'datatype': 'BYTES', 'shape': [-1]}, {'name': 'fp16_output',
+        'datatype': 'FP16', 'shape': [-1, 1]}]}
+
+        """
+
         return json.loads(
             self._server.model_metadata(self.name, self.version).serialize_to_json()
         )
-
-    def get_metadata(self) -> dict[str, Any]:
-        return json.loads(
-            self._server.model_metadata(self.name, self.version).serialize_to_json()
-        )
-
-    def is_ready(self) -> bool:
-        return self._server.model_is_ready(self.name, self.version)
 
     def ready(self) -> bool:
+        """Returns whether a model is ready to accept requests
+
+        See :c:func:`TRITONSERVER_ServerModelIsReady()`
+
+        Returns
+        -------
+        bool
+            True if model is ready. False otherwise.
+
+        Examples
+        --------
+        >>> server.model("test").ready()
+        server.model("test").ready()
+        True
+
+        """
+
         return self._server.model_is_ready(self.name, self.version)
 
     def batch_properties(self) -> ModelBatchFlag:
+        """Returns the batch properties of the model
+
+        See :c:func:`TRITONSERVER_ServerModelBatchProperties`
+
+        Returns
+        -------
+        ModelBatchFlag
+            ModelBatchFlag.UNKNOWN or ModelBatchFlag.FIRST_DIM
+
+        Examples
+        --------
+        >>> server.model("resnet50_libtorch").batch_properties()
+        server.model("resnet50_libtorch").batch_properties()
+        <TRITONSERVER_ModelBatchFlag.FIRST_DIM: 2>
+
+        """
+
         flags, _ = self._server.model_batch_properties(self.name, self.version)
         return ModelBatchFlag(flags)
 
     def transaction_properties(self) -> ModelTxnPropertyFlag:
+        """Returns the transaction properties of the model
+
+        See :c:func:`TRITONSERVER_ServerModelTransactionProperties`
+
+        Returns
+        -------
+        ModelTxnPropertyFlag
+            ModelTxnPropertyFlag.ONE_TO_ONE or
+            ModelTxnPropertyFlag.DECOUPLED
+
+        Examples
+        --------
+        >>> server.model("resnet50_libtorch").transaction_properties()
+        server.model("resnet50_libtorch").transaction_properties()
+        <TRITONSERVER_ModelTxnPropertyFlag.ONE_TO_ONE: 1>
+
+        """
+
         txn_properties, _ = self._server.model_transaction_properties(
             self.name, self.version
         )
         return ModelTxnPropertyFlag(txn_properties)
 
     def statistics(self) -> dict[str, Any]:
+        """Returns model statistics
+
+        See :c:func:`TRITONSERVER_ServerModelStatistics`
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of key value pairs representing model
+            statistics
+
+        Examples
+        --------
+        >>> server.model("test").statistics()
+        server.model("test").statistics()
+
+        {'model_stats': [{'name':
+        'test', 'version': '1', 'last_inference': 1704731597736,
+        'inference_count': 2, 'execution_count': 2, 'inference_stats':
+        {'success': {'count': 2, 'ns': 3079473}, 'fail': {'count': 0, 'ns':
+        0}, 'queue': {'count': 2, 'ns': 145165}, 'compute_input': {'count': 2,
+        'ns': 124645}, 'compute_infer': {'count': 2, 'ns': 2791809},
+        'compute_output': {'count': 2, 'ns': 10240}, 'cache_hit': {'count': 0,
+        'ns': 0}, 'cache_miss': {'count': 0, 'ns': 0}}, 'batch_stats':
+        [{'batch_size': 1, 'compute_input': {'count': 2, 'ns': 124645},
+        'compute_infer': {'count': 2, 'ns': 2791809}, 'compute_output':
+        {'count': 2, 'ns': 10240}}], 'memory_usage': []}]}
+
+        """
+
         return json.loads(
             self._server.model_statistics(self.name, self.version).serialize_to_json()
         )
 
     def config(self, config_version: int = 1) -> dict[str, Any]:
+        """Returns model configuration
+
+        See :c:func:`TRITONSERVER_ServerModelConfiguration`
+
+        Parameters
+        ----------
+        config_version : int
+            configuration version in case multiple are supported
+
+        Returns
+        -------
+        dict[str, Any]
+            Dictionary of key value pairs for model configuration
+
+        Examples
+        --------
+        FIXME: Add docs.
+
+        >>> server.model("test").config()
+        server.model("test").config()
+
+        {'name': 'test', 'platform':
+        '', 'backend': 'python', 'version_policy': {'latest':
+        {'num_versions': 1}}, 'max_batch_size': 0, 'input': [{'name':
+        'text_input', 'data_type': 'TYPE_STRING', 'format':
+        'FORMAT_NONE', 'dims': [-1], 'is_shape_tensor': False,
+        'allow_ragged_batch': False, 'optional': True}, {'name':
+        'fp16_input', 'data_type': 'TYPE_FP16', 'format':
+        'FORMAT_NONE', 'dims': [-1, 1], 'is_shape_tensor': False,
+        'allow_ragged_batch': False, 'optional': True}], 'output':
+        [{'name': 'text_output', 'data_type': 'TYPE_STRING', 'dims':
+        [-1], 'label_filename': '', 'is_shape_tensor': False},
+        {'name': 'fp16_output', 'data_type': 'TYPE_FP16', 'dims': [-1,
+        1], 'label_filename': '', 'is_shape_tensor': False}],
+        'batch_input': [], 'batch_output': [], 'optimization':
+        {'priority': 'PRIORITY_DEFAULT', 'input_pinned_memory':
+        {'enable': True}, 'output_pinned_memory': {'enable': True},
+        'gather_kernel_buffer_threshold': 0, 'eager_batching': False},
+        'instance_group': [{'name': 'test_2', 'kind': 'KIND_GPU',
+        'count': 1, 'gpus': [0], 'secondary_devices': [], 'profile':
+        [], 'passive': False, 'host_policy': ''}],
+        'default_model_filename': 'model.py', 'cc_model_filenames':
+        {}, 'metric_tags': {}, 'parameters': {}, 'model_warmup': [],
+        'model_transaction_policy': {'decoupled': True}}
+        """
+
         return json.loads(
             self._server.model_config(
                 self.name, self.version, config_version
