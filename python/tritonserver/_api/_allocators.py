@@ -149,7 +149,6 @@ class MemoryAllocator(ABC):
                 device = "cuda"
 
             tensor = torch.zeros(size,dtype=torch.uint8,device=device)
-            print("torch allocator!")
             return tritonserver.MemoryBuffer.from_dlpack(tensor)
 
     """

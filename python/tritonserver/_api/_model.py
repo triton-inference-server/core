@@ -443,7 +443,6 @@ class Model:
 
         Examples
         --------
-        FIXME: Add docs.
 
         >>> server.model("test").config()
         server.model("test").config()
