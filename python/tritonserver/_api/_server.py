@@ -53,6 +53,8 @@ from tritonserver._c.triton_bindings import (
     UnavailableError,
 )
 
+from ._model import Model
+
 uint = Annotated[int, ctypes.c_uint]
 
 
@@ -998,10 +1000,10 @@ class Server:
             pass
 
         def __getattribute__(self, name):
-            raise _triton_bindings.InvalidArgumentError("Server not started")
+            raise InvalidArgumentError("Server not started")
 
         def __setattr__(self, name, value):
-            raise _triton_bindings.InvalidArgumentError("Server not started")
+            raise InvalidArgumentError("Server not started")
 
     def _model_unloaded(self, model_versions: list[tuple[str, int]]) -> bool:
         model_states = self.models()
