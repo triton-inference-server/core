@@ -28,11 +28,11 @@ from __future__ import annotations
 
 import ctypes
 import struct
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Sequence
 
 import numpy
+from _allocators import MemoryBuffer
 from _datautils import (
     NUMPY_TO_TRITON_DTYPE,
     TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE,
@@ -57,145 +57,6 @@ try:
     import cupy
 except ImportError:
     cupy = None
-
-
-@dataclass
-class MemoryBuffer:
-    """Memory allocated for a Tensor.
-
-    This object does not own the memory but holds a reference to the
-    owner.
-
-    Parameters
-    ----------
-    data_ptr : int
-        Pointer to the allocated memory.
-    memory_type : MemoryType
-        memory type
-    memory_type_id : int
-        memory type id (typically the same as device id)
-    size : int
-        Size of the allocated memory in bytes.
-    owner : Any
-        Object that owns or manages the memory buffer.  Allocated
-        memory must not be freed while a reference to the owner is
-        held.
-
-    Examples
-    --------
-    >>> buffer = MemoryBuffer.from_dlpack(numpy.array([100],dtype=numpy.uint8))
-
-    """
-
-    data_ptr: int
-    memory_type: MemoryType
-    memory_type_id: int
-    size: int
-    owner: Any
-
-    @staticmethod
-    def from_dlpack(owner: Any) -> MemoryBuffer:
-        if not hasattr(owner, "__dlpack__"):
-            raise InvalidArgumentError("Object does not support DLpack protocol")
-
-        dlpack_object = DLPackObject(owner)
-
-        if not dlpack_object.contiguous:
-            raise InvalidArgumentError("Only contiguous memory is supported")
-
-        return MemoryBuffer(
-            int(dlpack_object.data_ptr),
-            dlpack_object.memory_type,
-            dlpack_object.memory_type_id,
-            dlpack_object.byte_size,
-            owner,
-        )
-
-    @staticmethod
-    def _from_dlpack_object(owner: Any, dlpack_object: DLPackObject) -> MemoryBuffer:
-        if not dlpack_object.contiguous:
-            raise InvalidArgumentError("Only contiguous memory is supported")
-
-        return MemoryBuffer(
-            int(dlpack_object.data_ptr),
-            dlpack_object.memory_type,
-            dlpack_object.memory_type_id,
-            dlpack_object.byte_size,
-            owner,
-        )
-
-    def _create_TRITONSERVER_BufferAttributes(self) -> TRITONSERVER_BufferAttributes:
-        buffer_attributes = TRITONSERVER_BufferAttributes()
-        buffer_attributes.memory_type = self.memory_type
-        buffer_attributes.memory_type_id = self.memory_type_id
-        buffer_attributes.byte_size = self.size
-        #        buffer_attributes.cuda_ipc_handle = None
-        return buffer_attributes
-
-
-class MemoryAllocator(ABC):
-    """Abstract interface to allow for custom memory allocation strategies
-
-    Classes implementing the MemoryAllocator interface have to provide
-    an allocate method returning MemoryBuffer objects.  A memory
-    allocator implementation does not need to match the requested
-    memory type or memory type id.
-
-
-
-    Examples
-    --------
-
-    class TorchAllocator(tritonserver.MemoryAllocator):
-        def allocate(self,
-                     size,
-                     memory_type,
-                     memory_type_id,
-                     tensor_name):
-
-            device = "cpu"
-
-            if memory_type == tritonserver.MemoryType.GPU:
-                device = "cuda"
-
-            tensor = torch.zeros(size,dtype=torch.uint8,device=device)
-            print("torch allocator!")
-            return tritonserver.MemoryBuffer.from_dlpack(tensor)
-
-    """
-
-    @abstractmethod
-    def allocate(
-        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
-    ) -> MemoryBuffer:
-        """Allocate memory buffer for tensor.
-
-        Note: A memory allocator implementation does not need to honor
-        the requested memory type or memory type id
-
-        Parameters
-        ----------
-        size : int
-            number of bytes requested
-        memory_type : MemoryType
-                type of memory requested (CPU, GPU, etc.)
-        memory_type_id : int
-            memory type id requested (typically device id)
-        tensor_name : str
-            name of tensor
-
-        Returns
-        -------
-        MemoryBuffer
-            memory buffer with requested size
-
-        Examples
-        --------
-        memory_buffer = allocator.allocate(100,MemoryType.CPU,0,"output")
-
-        """
-
-        pass
 
 
 @dataclass
