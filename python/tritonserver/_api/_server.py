@@ -33,15 +33,17 @@ import ctypes
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Optional, TypedDict
+from typing import Annotated, Any, Optional
 
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
 )
-from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
+from tritonserver._c.triton_bindings import TRITONSERVER_Metric
+from tritonserver._c.triton_bindings import TRITONSERVER_MetricFamily as MetricFamily
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFormat as MetricFormat
+from tritonserver._c.triton_bindings import TRITONSERVER_MetricKind as MetricKind
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelControlMode as ModelControlMode,
 )
@@ -1027,3 +1029,48 @@ class Server:
         return [Model(self._server, **model) for model in models]
 
     _UNLOADED_STATES = [None, "UNAVAILABLE"]
+
+
+class Metric(TRITONSERVER_Metric):
+    """Class for adding a custom metric to Triton inference server metrics reporting
+
+    Metric objects are created as part of a MetricFamily where the
+    MetricFamily defines the type and name of the metric. When a
+    metric is added to a family it can further add additional labels
+    allowing for multiple metrics to be associated with the same
+    family. For more details see c:func:`TRITONSERVER_Metric`
+    documentation.
+
+    Examples
+    --------
+    Todo
+
+    """
+
+    def __init__(self, family: MetricFamily, labels: Optional[dict[str, str]] = None):
+        """Initialize Metric object
+
+        Parameters
+        ----------
+        family : MetricFamily
+            Metric family that includes MetricKind, name, and
+            description.
+        labels : Optional[dict[str, str]]
+            Additional labels for the metric (returned in reporting to
+            distinguish multiple metrics within a family)
+
+        Examples
+        --------
+
+        Todo
+
+        """
+
+        if labels is not None:
+            parameters = [
+                TRITONSERVER_Parameter(name, value) for name, value in labels.items()
+            ]
+        else:
+            parameters = []
+
+        TRITONSERVER_Metric.__init__(self, family, parameters)
