@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import queue
+from dataclasses import dataclass, field
 from typing import Optional
 
 from _model import Model
