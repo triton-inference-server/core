@@ -24,41 +24,49 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""In process Python API for Triton Inference Server."""
+"""Triton Inference Server Python API
+
+The Triton Inference Server Python API enables developers to easily
+embed a Triton inference server within their python
+application. Developers can load and interact with models, send
+inference requests, query metrics, etc. Everything available through
+the C API for emebedding a Triton Inference Server in C / C++
+applications has been provided within a Python API.
+
+Note: The Python API is currently in BETA and interfaces and
+capabilities are subject to change. Any feedback is welcome.
+
+Note: Any objects not explicitly exported here are considered private.
+Note: Any methods, properties, or arguments prefixed with `_` are
+considered private.
+
+"""
 
 from importlib.metadata import PackageNotFoundError, version
 
-import tritonserver._c as _triton_bindings
-from tritonserver._api._datautils import DataType as DataType
-from tritonserver._api._datautils import MemoryAllocator as MemoryAllocator
-from tritonserver._api._datautils import MemoryBuffer as MemoryBuffer
-from tritonserver._api._datautils import MemoryType as MemoryType
-from tritonserver._api._datautils import NumpyAllocator as NumpyAllocator
-from tritonserver._api._datautils import (
+from tritonserver._api._allocators import MemoryAllocator as MemoryAllocator
+from tritonserver._api._allocators import MemoryBuffer as MemoryBuffer
+from tritonserver._api._allocators import MemoryType as MemoryType
+from tritonserver._api._allocators import (
     default_memory_allocators as default_memory_allocators,
 )
-from tritonserver._api.wrapper import InferenceRequest as InferenceRequest
-from tritonserver._api.wrapper import InstanceGroupKind as InstanceGroupKind
-from tritonserver._api.wrapper import LogFormat as LogFormat
-from tritonserver._api.wrapper import Metric as Metric
-from tritonserver._api.wrapper import MetricFamily as MetricFamily
-from tritonserver._api.wrapper import MetricFormat as MetricFormat
-from tritonserver._api.wrapper import MetricKind as MetricKind
-from tritonserver._api.wrapper import Model as Model
-from tritonserver._api.wrapper import ModelBatchFlag as ModelBatchFlag
-from tritonserver._api.wrapper import ModelControlMode as ModelControlMode
-from tritonserver._api.wrapper import ModelIndexFlag as ModelIndexFlag
-from tritonserver._api.wrapper import ModelTxnPropertyFlag as ModelTxnPropertyFlag
-from tritonserver._api.wrapper import Options as Options
-from tritonserver._api.wrapper import RateLimiterResource as RateLimiterResource
-from tritonserver._api.wrapper import RateLimitMode as RateLimitMode
-from tritonserver._api.wrapper import Server as Server
-
-try:
-    from tritonserver._api._datautils import CupyAllocator as CupyAllocator
-except ImportError:
-    pass
-
+from tritonserver._api._model import Model as Model
+from tritonserver._api._model import ModelBatchFlag as ModelBatchFlag
+from tritonserver._api._model import ModelTxnPropertyFlag as ModelTxnPropertyFlag
+from tritonserver._api._request import InferenceRequest as InferenceRequest
+from tritonserver._api._server import InstanceGroupKind as InstanceGroupKind
+from tritonserver._api._server import LogFormat as LogFormat
+from tritonserver._api._server import Metric as Metric
+from tritonserver._api._server import MetricFamily as MetricFamily
+from tritonserver._api._server import MetricFormat as MetricFormat
+from tritonserver._api._server import MetricKind as MetricKind
+from tritonserver._api._server import ModelControlMode as ModelControlMode
+from tritonserver._api._server import Options as Options
+from tritonserver._api._server import RateLimiterResource as RateLimiterResource
+from tritonserver._api._server import RateLimitMode as RateLimitMode
+from tritonserver._api._server import Server as Server
+from tritonserver._api._tensor import DataType as DataType
+from tritonserver._api._tensor import Tensor as Tensor
 from tritonserver._c import AlreadyExistsError as AlreadyExistsError
 from tritonserver._c import InternalError as InternalError
 from tritonserver._c import InvalidArgumentError as InvalidArgumentError
@@ -69,14 +77,14 @@ from tritonserver._c import UnknownError as UnknownError
 from tritonserver._c import UnsupportedError as UnsupportedError
 
 _exceptions = [
-    _triton_bindings.TritonError,
-    _triton_bindings.NotFoundError,
-    _triton_bindings.UnknownError,
-    _triton_bindings.InternalError,
-    _triton_bindings.InvalidArgumentError,
-    _triton_bindings.UnavailableError,
-    _triton_bindings.AlreadyExistsError,
-    _triton_bindings.UnsupportedError,
+    TritonError,
+    NotFoundError,
+    UnknownError,
+    InternalError,
+    InvalidArgumentError,
+    UnavailableError,
+    AlreadyExistsError,
+    UnsupportedError,
 ]
 
 
@@ -93,7 +101,6 @@ try:
 except PackageNotFoundError:
     pass
 
-del _triton_bindings
 del _exceptions
 del version
 del PackageNotFoundError
