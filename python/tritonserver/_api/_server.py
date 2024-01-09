@@ -322,6 +322,14 @@ class Options:
         default_factory=dict[str, dict[str, str]]
     )
 
+    def _cascade_log_levels(self) -> None:
+        if self.log_verbose > 0:
+            self.log_info = True
+        if self.log_info:
+            self.log_warn = True
+        if self.log_warn:
+            self.log_error = True
+
     def _create_TRITONSERVER_ServerOptions(
         self,
     ) -> TRITONSERVER_ServerOptions:
@@ -367,6 +375,8 @@ class Options:
 
         if self.log_file:
             options.set_log_file(self.log_file)
+
+        self._cascade_log_levels()
 
         options.set_log_info(self.log_info)
         options.set_log_warn(self.log_warn)
@@ -572,7 +582,7 @@ class Server:
             and ((timeout is None) or (time.time() - start_time) < timeout)
         ):
             time.sleep(polling_interval)
-        if not self.ready():
+        if wait_until_ready and not self.ready():
             raise UnavailableError("Timeout before ready")
         return self
 
