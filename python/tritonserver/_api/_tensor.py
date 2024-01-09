@@ -143,7 +143,8 @@ class Tensor:
         Any
             A DLPack-compatible object representing the tensor.
         """
-
+        # TODO:  Handle the stream argument correctly
+        #
         #        if not (stream is None or (isinstance(stream, int) and stream == 0)):
         #           raise UnsupportedError(
         #              f"DLPack stream synchronization on {stream} not currently supported"
@@ -364,6 +365,34 @@ class Tensor:
         -------
         Tensor
             The tensor moved to the specified device.
+
+        Examples
+        --------
+
+        tensor_cpu = tritonserver.Tensor.from_dlpack(numpy.array([0,1,2], dtype=numpy.float16))
+
+        # Different ways to specify the device
+
+        tensor_gpu = tensor_cpu.to_device(MemoryType.GPU)
+
+        tensor_gpu = tensor_cpu.to_device((MemoryType.GPU,0))
+
+        tensor_gpu = tensor_cpu.to_device((DLDeviceType.kDLCUDA,0))
+
+        tensor_gpu = tensor_cpu.to_device("gpu")
+
+        tensor_gpu = tensor_cpu.to_device("gpu:0")
+
+        ndarray_gpu = cupy.from_dlpack(tensor_gpu)
+
+        ndarray_gpu[0] = ndarray_gpu.mean()
+
+        tensor_cpu = tensor_gpu.to_device("cpu")
+
+        ndarray_cpu = numpy.from_dlpack(tensor_cpu)
+
+        assert ndarray_cpu[0] == ndarray_gpu[0]
+
         """
         memory_type, memory_type_id = parse_device_or_memory_type(device)
         if self.memory_type == memory_type and self.memory_type_id == memory_type_id:

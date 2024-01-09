@@ -397,7 +397,7 @@ class InferenceResponse:
     final: bool = False
 
     @staticmethod
-    def _from_TRITONSERVER_InferenceResponse(
+    def _from_tritonserver_inference_response(
         model: _model.Model,
         server: TRITONSERVER_Server,
         request: TRITONSERVER_InferenceRequest,
@@ -435,10 +435,10 @@ class InferenceResponse:
                     name,
                     data_type,
                     shape,
-                    data_ptr,
-                    byte_size,
-                    memory_type,
-                    memory_type_id,
+                    _data_ptr,
+                    _byte_size,
+                    _memory_type,
+                    _memory_type_id,
                     memory_buffer,
                 ) = response.output(output_index)
                 tensor = Tensor(data_type, shape, memory_buffer)
@@ -450,6 +450,7 @@ class InferenceResponse:
             error.args += tuple(asdict(result).items())
             result.error = error
 
+        # TODO: support classification
         # values["classification_label"] = response.output_classification_label()
 
         return result

@@ -50,6 +50,7 @@ from tritonserver._api._allocators import MemoryType as MemoryType
 from tritonserver._api._allocators import (
     default_memory_allocators as default_memory_allocators,
 )
+from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._model import Model as Model
 from tritonserver._api._model import ModelBatchFlag as ModelBatchFlag
 from tritonserver._api._model import ModelTxnPropertyFlag as ModelTxnPropertyFlag
