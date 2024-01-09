@@ -572,7 +572,7 @@ class Server:
             raise InvalidArgumentError("Server already started")
 
         self._server = TRITONSERVER_Server(
-            self.options._create_TRITONSERVER_ServerOptions()
+            self.options._create_tritonserver_server_options()
         )
         start_time = time.time()
         while (

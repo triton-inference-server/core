@@ -183,7 +183,7 @@ class AsyncResponseIterator:
             if self._request is None:
                 raise InternalError("Response received after final response flag")
 
-            response = InferenceResponse._from_TRITONSERVER_InferenceResponse(
+            response = InferenceResponse._from_tritonserver_inference_response(
                 self._model, self._server, self._request, response, flags
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
@@ -206,6 +206,8 @@ class AsyncResponseIterator:
                 line_number,
                 str(e),
             )
+            # catastrophic failure
+            raise e from None
 
 
 class ResponseIterator:
@@ -330,7 +332,7 @@ class ResponseIterator:
             if self._request is None:
                 raise InternalError("Response received after final response flag")
 
-            response = InferenceResponse._from_TRITONSERVER_InferenceResponse(
+            response = InferenceResponse._from_tritonserver_inference_response(
                 self._model, self._server, self._request, response, flags
             )
             self._queue.put(response)
@@ -352,6 +354,8 @@ class ResponseIterator:
                 line_number,
                 str(e),
             )
+            # catastrophic failure
+            raise e from None
 
 
 @dataclass

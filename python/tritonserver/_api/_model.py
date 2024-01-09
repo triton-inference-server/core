@@ -26,11 +26,14 @@
 
 """Class for interacting with Triton Inference Server Models"""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import queue
 from typing import Any, Optional
 
+from tritonserver._api._allocators import ResponseAllocator
 from tritonserver._api._request import InferenceRequest
 from tritonserver._api._response import AsyncResponseIterator, ResponseIterator
 from tritonserver._c.triton_bindings import InvalidArgumentError
@@ -194,7 +197,7 @@ class Model:
             raise_on_error,
         )
 
-        response_allocator = _datautils.ResponseAllocator(
+        response_allocator = ResponseAllocator(
             inference_request.output_memory_allocator,
             inference_request.output_memory_type,
         ).create_TRITONSERVER_ResponseAllocator()
@@ -290,7 +293,7 @@ class Model:
             inference_request.response_queue,
             raise_on_error,
         )
-        response_allocator = _datautils.ResponseAllocator(
+        response_allocator = ResponseAllocator(
             inference_request.output_memory_allocator,
             inference_request.output_memory_type,
         ).create_TRITONSERVER_ResponseAllocator()
