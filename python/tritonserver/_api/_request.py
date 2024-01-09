@@ -159,7 +159,7 @@ class InferenceRequest:
             request.append_input_data_with_buffer_attributes(
                 name,
                 tensor.data_ptr,
-                tensor.memory_buffer._create_TRITONSERVER_BufferAttributes(),
+                tensor.memory_buffer._create_tritonserver_buffer_attributes(),
             )
 
     def _set_parameters(self, request):
@@ -175,7 +175,7 @@ class InferenceRequest:
                     f"Invalid parameter type {type(value)} for key {key}"
                 )
 
-    def _create_TRITONSERVER_InferenceRequest(self):
+    def _create_tritonserver_inference_request(self):
         request = TRITONSERVER_InferenceRequest(
             self._server, self.model.name, self.model.version
         )

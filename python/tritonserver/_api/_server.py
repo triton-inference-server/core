@@ -35,6 +35,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Optional
 
+from tritonserver._api._model import Model
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
@@ -54,8 +55,6 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ServerOptions,
     UnavailableError,
 )
-
-from ._model import Model
 
 uint = Annotated[int, ctypes.c_uint]
 
@@ -330,7 +329,7 @@ class Options:
         if self.log_warn:
             self.log_error = True
 
-    def _create_TRITONSERVER_ServerOptions(
+    def _create_tritonserver_server_options(
         self,
     ) -> TRITONSERVER_ServerOptions:
         options = TRITONSERVER_ServerOptions()

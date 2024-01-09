@@ -34,6 +34,7 @@ import queue
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
+import tritonserver._api._model as _model
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
@@ -46,8 +47,6 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ResponseCompleteFlag,
     TRITONSERVER_Server,
 )
-
-from . import _model
 
 
 class AsyncResponseIterator:
@@ -62,12 +61,12 @@ class AsyncResponseIterator:
 
     def __init__(
         self,
-        _model: _model.Model,
-        _server: TRITONSERVER_Server,
-        _request: TRITONSERVER_InferenceRequest,
-        _user_queue: Optional[asyncio.Queue] = None,
-        _raise_on_error: bool = False,
-        _loop: Optional[asyncio.AbstractEventLoop] = None,
+        model: _model.Model,
+        server: TRITONSERVER_Server,
+        request: TRITONSERVER_InferenceRequest,
+        user_queue: Optional[asyncio.Queue] = None,
+        raise_on_error: bool = False,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
     ) -> None:
         """Initialize AsyncResponseIterator
 
@@ -76,19 +75,19 @@ class AsyncResponseIterator:
 
         Parameters
         ----------
-        _model : Model
+        model : Model
             model associated with inference request
-        _server : TRITONSERVER_Server
+        server : TRITONSERVER_Server
             Underlying C binding server object. Private.
-        _request : TRITONSERVER_InferenceRequest
+        request : TRITONSERVER_InferenceRequest
             Underlying C binding TRITONSERVER_InferenceRequest
             object. Private.
-        _user_queue : Optional[asyncio.Queue]
+        user_queue : Optional[asyncio.Queue]
             Optional user queue for responses in addition to internal
             iterator queue.
-        _raise_on_error : bool
+        raise_on_error : bool
             if True response errors will be raised as exceptions.
-        _loop : Optional[asyncio.AbstractEventLoop]
+        loop : Optional[asyncio.AbstractEventLoop]
             asyncio loop object
 
 
@@ -99,16 +98,16 @@ class AsyncResponseIterator:
 
         """
 
-        self._server = _server
-        if _loop is None:
-            _loop = asyncio.get_running_loop()
-        self._loop = _loop
+        self._server = server
+        if loop is None:
+            loop = asyncio.get_running_loop()
+        self._loop = loop
         self._queue = asyncio.Queue()
-        self._user_queue = _user_queue
+        self._user_queue = user_queue
         self._complete = False
-        self._request = _request
-        self._model = _model
-        self._raise_on_error = _raise_on_error
+        self._request = request
+        self._model = model
+        self._raise_on_error = raise_on_error
 
     def __aiter__(self) -> AsyncResponseIterator:
         """Return async iterator. For use with async for loops.
@@ -220,11 +219,11 @@ class ResponseIterator:
 
     def __init__(
         self,
-        _model: Model,
-        _server: TRITONSERVER_Server,
-        _request: TRITONSERVER_InferenceRequest,
-        _user_queue: Optional[queue.SimpleQueue] = None,
-        _raise_on_error: bool = False,
+        model: _model.Model,
+        server: TRITONSERVER_Server,
+        request: TRITONSERVER_InferenceRequest,
+        user_queue: Optional[queue.SimpleQueue] = None,
+        raise_on_error: bool = False,
     ):
         """Initialize ResponseIterator
 
@@ -233,17 +232,17 @@ class ResponseIterator:
 
         Parameters
         ----------
-        _model : Model
+        model : Model
             model associated with inference request
-        _server : TRITONSERVER_Server
+        server : TRITONSERVER_Server
             Underlying C binding server object. Private.
-        _request : TRITONSERVER_InferenceRequest
+        request : TRITONSERVER_InferenceRequest
             Underlying C binding TRITONSERVER_InferenceRequest
             object. Private.
-        _user_queue : Optional[asyncio.Queue]
+        user_queue : Optional[asyncio.Queue]
             Optional user queue for responses in addition to internal
             iterator queue.
-        _raise_on_error : bool
+        raise_on_error : bool
             if True response errors will be raised as exceptions.
 
         Examples
@@ -254,12 +253,12 @@ class ResponseIterator:
         """
 
         self._queue = queue.SimpleQueue()
-        self._user_queue = _user_queue
-        self._server = _server
+        self._user_queue = user_queue
+        self._server = server
         self._complete = False
-        self._request = _request
+        self._request = request
         self._model = _model
-        self._raise_on_error = _raise_on_error
+        self._raise_on_error = raise_on_error
 
     def __iter__(self) -> ResponseIterator:
         """Return response iterator.
@@ -388,7 +387,7 @@ class InferenceResponse:
 
     """
 
-    model: Model
+    model: _model.Model
     _server: TRITONSERVER_Server
     request_id: Optional[str] = None
     parameters: dict[str, str | int | bool] = field(default_factory=dict)
@@ -399,7 +398,7 @@ class InferenceResponse:
 
     @staticmethod
     def _from_TRITONSERVER_InferenceResponse(
-        model: Model,
+        model: _model.Model,
         server: TRITONSERVER_Server,
         request: TRITONSERVER_InferenceRequest,
         response,
@@ -423,7 +422,7 @@ class InferenceResponse:
                 result.error = error
 
             name, version = response.model
-            result.model = Model(server, name, version)
+            result.model = _model.Model(server, name, version)
             result.request_id = response.id
             parameters = {}
             for parameter_index in range(response.parameter_count):

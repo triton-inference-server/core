@@ -119,7 +119,7 @@ class MemoryBuffer:
             owner,
         )
 
-    def _create_TRITONSERVER_BufferAttributes(self) -> TRITONSERVER_BufferAttributes:
+    def _create_tritonserver_buffer_attributes(self) -> TRITONSERVER_BufferAttributes:
         buffer_attributes = TRITONSERVER_BufferAttributes()
         buffer_attributes.memory_type = self.memory_type
         buffer_attributes.memory_type_id = self.memory_type_id
@@ -145,8 +145,7 @@ class MemoryAllocator(ABC):
         def allocate(self,
                      size,
                      memory_type,
-                     memory_type_id,
-                     tensor_name):
+                     memory_type_id):
 
             device = "cpu"
 
@@ -160,7 +159,7 @@ class MemoryAllocator(ABC):
 
     @abstractmethod
     def allocate(
-        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
+        self, size: int, memory_type: MemoryType, memory_type_id: int
     ) -> MemoryBuffer:
         """Allocate memory buffer for tensor.
 
@@ -175,8 +174,6 @@ class MemoryAllocator(ABC):
                 type of memory requested (CPU, GPU, etc.)
         memory_type_id : int
             memory type id requested (typically device id)
-        tensor_name : str
-            name of tensor
 
         Returns
         -------
@@ -185,7 +182,7 @@ class MemoryAllocator(ABC):
 
         Examples
         --------
-        memory_buffer = allocator.allocate(100,MemoryType.CPU,0,"output")
+        memory_buffer = allocator.allocate(100,MemoryType.CPU,0)
 
         """
 
@@ -197,7 +194,7 @@ class NumpyAllocator(MemoryAllocator):
         pass
 
     def allocate(
-        self, size: int, memory_type: MemoryType, memory_type_id: int, tensor_name: str
+        self, size: int, memory_type: MemoryType, memory_type_id: int
     ) -> MemoryBuffer:
         ndarray = numpy.empty(size, numpy.byte)
         return MemoryBuffer.from_dlpack(ndarray)
@@ -216,7 +213,6 @@ if cupy is not None:
             size: int,
             memory_type: MemoryType,
             memory_type_id: int,
-            tensor_name: str,
         ) -> MemoryBuffer:
             with cupy.cuda.Device(memory_type_id):
                 ndarray = cupy.empty(size, cupy.byte)
@@ -259,7 +255,7 @@ class ResponseAllocator:
             memory_allocator = default_memory_allocators[memory_type]
 
         memory_buffer = memory_allocator.allocate(
-            byte_size, memory_type, memory_type_id, tensor_name
+            byte_size, memory_type, memory_type_id
         )
 
         return (
