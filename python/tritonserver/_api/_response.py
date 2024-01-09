@@ -35,7 +35,12 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from _model import Model
-from tritonserver._c.triton_bindings import InternalError, TRITONSERVER_InferenceRequest
+from _tensor import Tensor
+from tritonserver._c.triton_bindings import (
+    InternalError,
+    TritonError,
+    TRITONSERVER_InferenceRequest,
+)
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
 from tritonserver._c.triton_bindings import TRITONSERVER_LogMessage as LogMessage
 from tritonserver._c.triton_bindings import (
@@ -320,27 +325,27 @@ class ResponseIterator:
 @dataclass
 class InferenceResponse:
     model: Model
-    _server: _triton_bindings.TRITONSERVER_Server
+    _server: TRITONSERVER_Server
     request_id: Optional[str] = None
     parameters: dict = field(default_factory=dict)
     outputs: dict = field(default_factory=dict)
-    error: Optional[_triton_bindings.TritonError] = None
+    error: Optional[TritonError] = None
     classification_label: Optional[str] = None
     final: bool = False
 
     @staticmethod
     def _from_TRITONSERVER_InferenceResponse(
         model: Model,
-        server: _triton_bindings.TRITONSERVER_Server,
-        request: _triton_bindings.TRITONSERVER_InferenceRequest,
+        server: TRITONSERVER_Server,
+        request: TRITONSERVER_InferenceRequest,
         response,
-        flags: _triton_bindings.TRITONSERVER_ResponseCompleteFlag,
+        flags: TRITONSERVER_ResponseCompleteFlag,
     ):
         values: dict = {
             "_server": server,
             "model": model,
             "request_id": request.id,
-            "final": flags == _triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL,
+            "final": flags == TRITONSERVER_ResponseCompleteFlag.FINAL,
         }
 
         try:
@@ -349,7 +354,7 @@ class InferenceResponse:
 
             try:
                 response.throw_if_response_error()
-            except _triton_bindings.TritonError as error:
+            except TritonError as error:
                 error.args += tuple(values.items())
                 values["error"] = error
 
@@ -373,7 +378,7 @@ class InferenceResponse:
                     memory_type_id,
                     memory_buffer,
                 ) = response.output(output_index)
-                tensor = _datautils.Tensor(data_type, shape, memory_buffer)
+                tensor = Tensor(data_type, shape, memory_buffer)
 
                 outputs[name] = tensor
             values["outputs"] = outputs
