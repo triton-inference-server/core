@@ -184,7 +184,7 @@ class Model:
                 "asyncio.Queue must be used for async response iterator"
             )
 
-        request = inference_request._create_TRITONSERVER_InferenceRequest()
+        request = inference_request._create_tritonserver_inference_request()
 
         response_iterator = AsyncResponseIterator(
             self,
@@ -282,7 +282,7 @@ class Model:
                 "queue.SimpleQueue must be used for response iterator"
             )
 
-        request = inference_request._create_TRITONSERVER_InferenceRequest()
+        request = inference_request._create_tritonserver_inference_request()
         response_iterator = ResponseIterator(
             self,
             self._server,
