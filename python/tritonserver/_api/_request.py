@@ -26,19 +26,23 @@
 
 """Class for sending inference requests to Triton Inference Server Models"""
 
+from __future__ import annotations
+
 import asyncio
 import queue
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional
 
-from _datautils import MemoryAllocator, Tensor
-from _dlpack import DLDeviceType as DLDeviceType
-from _model import Model
+from tritonserver._api._allocators import MemoryAllocator
+from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
+from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_InferenceRequest
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
+
+from . import _model
 
 DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
@@ -124,7 +128,7 @@ class InferenceRequest:
 
     """
 
-    model: Model
+    model: _model.Model
     _server: TRITONSERVER_Server
     request_id: Optional[str] = None
     flags: int = 0

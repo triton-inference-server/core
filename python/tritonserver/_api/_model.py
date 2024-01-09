@@ -29,10 +29,10 @@
 import asyncio
 import json
 import queue
-from typing import Annotated, Any, Optional, TypedDict
+from typing import Any, Optional
 
-import _datautils
-from _request import InferenceRequest
+from tritonserver._api._request import InferenceRequest
+from tritonserver._api._response import AsyncResponseIterator, ResponseIterator
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
@@ -41,6 +41,7 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
+from typing_extensions import Unpack
 
 
 class Model:

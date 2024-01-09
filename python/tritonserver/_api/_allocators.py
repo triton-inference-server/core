@@ -30,10 +30,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 
 import numpy
-from _datautils import DLPackObject
+from tritonserver._api._datautils import (
+    DeviceOrMemoryType,
+    DLPackObject,
+    parse_device_or_memory_type,
+)
+from tritonserver._c import TRITONSERVER_ResponseAllocator
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
     TRITONSERVER_BufferAttributes,
@@ -219,3 +224,100 @@ if cupy is not None:
             return MemoryBuffer.from_dlpack(ndarray)
 
     default_memory_allocators[MemoryType.GPU] = CupyAllocator()
+
+
+class ResponseAllocator:
+    def __init__(
+        self,
+        memory_allocator: Optional[MemoryAllocator] = None,
+        device_or_memory_type: Optional[DeviceOrMemoryType] = None,
+    ):
+        self._memory_allocator = memory_allocator
+        self._memory_type: Optional[MemoryType] = None
+        self._memory_type_id: int = 0
+        self._response_allocator = None
+        if device_or_memory_type is not None:
+            self._memory_type, self._memory_type_id = parse_device_or_memory_type(
+                device_or_memory_type
+            )
+
+    def allocate(
+        self,
+        _allocator,
+        tensor_name,
+        byte_size,
+        memory_type,
+        memory_type_id,
+        _user_object,
+    ):
+        if self._memory_type is not None:
+            memory_type = self._memory_type
+            memory_type_id = self._memory_type_id
+
+        memory_allocator = self._memory_allocator
+        if memory_allocator is None:
+            memory_allocator = default_memory_allocators[memory_type]
+
+        memory_buffer = memory_allocator.allocate(
+            byte_size, memory_type, memory_type_id, tensor_name
+        )
+
+        return (
+            memory_buffer.data_ptr,
+            memory_buffer,
+            memory_buffer.memory_type,
+            memory_buffer.memory_type_id,
+        )
+
+    def release(
+        self,
+        _allocator,
+        _buffer_,
+        _buffer_user_object,
+        _byte_size,
+        _memory_type,
+        _memory_type_id,
+    ):
+        pass
+
+    def start(self, _allocator, _user_object):
+        pass
+
+    def query_preferred_memory_type(
+        self,
+        _allocator,
+        _user_object,
+        _tensor_name,
+        _byte_size,
+        memory_type: MemoryType,
+        memory_type_id,
+    ):
+        if self._memory_type is not None:
+            memory_type = self._memory_type
+            memory_type_id = self._memory_type_id
+
+        return (memory_type, memory_type_id)
+
+    def set_buffer_attributes(
+        self,
+        _allocator,
+        _tensor_name,
+        buffer_attributes,
+        _user_object,
+        _buffer_user_object,
+    ):
+        if self._memory_type is not None:
+            buffer_attributes.memory_type = self._memory_type
+            buffer_attributes.memory_type_id = self._memory_type_id
+        return buffer_attributes
+
+    def create_TRITONSERVER_ResponseAllocator(self):
+        self._response_allocator = TRITONSERVER_ResponseAllocator(
+            self.allocate, self.release, self.start
+        )
+        self._response_allocator.set_query_function(self.query_preferred_memory_type)
+
+        self._response_allocator.set_buffer_attributes_function(
+            self.set_buffer_attributes
+        )
+        return self._response_allocator

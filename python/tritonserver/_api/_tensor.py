@@ -32,15 +32,20 @@ from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Sequence
 
 import numpy
-from _allocators import MemoryBuffer
-from _datautils import (
+from tritonserver._api._allocators import MemoryBuffer
+from tritonserver._api._datautils import (
     NUMPY_TO_TRITON_DTYPE,
     TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE,
     TRITON_TO_DLPACK_DTYPE,
     DLPackObject,
-    _parse_device_or_memory_type,
+    parse_device_or_memory_type,
 )
-from _dlpack import DLDevice, DLDeviceType, DLManagedTensor, c_str_dltensor
+from tritonserver._api._dlpack import (
+    DLDevice,
+    DLDeviceType,
+    DLManagedTensor,
+    c_str_dltensor,
+)
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
     TRITONSERVER_BufferAttributes,
@@ -360,7 +365,7 @@ class Tensor:
         Tensor
             The tensor moved to the specified device.
         """
-        memory_type, memory_type_id = _parse_device_or_memory_type(device)
+        memory_type, memory_type_id = parse_device_or_memory_type(device)
         if self.memory_type == memory_type and self.memory_type_id == memory_type_id:
             return self
         if self.memory_type == MemoryType.CPU_PINNED and memory_type == MemoryType.CPU:
