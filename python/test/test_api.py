@@ -95,4 +95,3 @@ class InferenceTests(unittest.TestCase):
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             self.assertEqual(fp16_input, fp16_output)
-        server.stop()
