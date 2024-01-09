@@ -34,8 +34,7 @@ import queue
 from dataclasses import asdict, dataclass, field
 from typing import Optional
 
-from _model import Model
-from _tensor import Tensor
+from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
     TritonError,
@@ -47,6 +46,8 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ResponseCompleteFlag,
     TRITONSERVER_Server,
 )
+
+from . import _model
 
 
 class AsyncResponseIterator:
@@ -61,7 +62,7 @@ class AsyncResponseIterator:
 
     def __init__(
         self,
-        _model: Model,
+        _model: _model.Model,
         _server: TRITONSERVER_Server,
         _request: TRITONSERVER_InferenceRequest,
         _user_queue: Optional[asyncio.Queue] = None,
