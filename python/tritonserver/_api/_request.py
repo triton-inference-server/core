@@ -144,7 +144,7 @@ class InferenceRequest:
     def _add_inputs(self, request):
         for name, value in self.inputs.items():
             if not isinstance(value, Tensor):
-                tensor = Tensor.from_object(value)
+                tensor = Tensor._from_object(value)
             else:
                 tensor = value
             if tensor.data_type == DataType.BYTES:

@@ -219,7 +219,46 @@ class Tensor:
         return Tensor._deserialize_bytes_array(numpy_ndarray).reshape(self.shape)
 
     @staticmethod
-    def from_object(obj: list[Any] | numpy.ndarray | Any) -> Tensor:
+    def from_bytes_array(bytes_array: list[str | bytes] | numpy.ndarray) -> Tensor:
+        """Create Triton BYTES Tensor from numpy array or list
+
+        Creates a Triton tensor of type BYTES from a list of strings,
+        bytes or a numpy array of type object_, bytes_, or str_. The
+        method allocates new host memory to store the serialized
+        tensor. For more details on the format of Triton BYTES Tensors
+        please see Triton Inference Server documentation.
+
+        Parameters
+        ----------
+        bytes_array : list[str | bytes] | numpy.ndarray
+            an array like object to convert
+
+        Returns
+        -------
+        Tensor
+
+        Raises
+        ------
+        InvalidArgumentError
+            If the given object can not be converted.
+
+        Examples
+        --------
+
+        tensor = Tensor.from_bytes_array(numpy.array(["hello"]))
+
+        tensor = Tensor.from_bytes_array(["hello"])
+
+        """
+        result = Tensor._from_object(bytes_array)
+        if result.data_type != DataType.BYTES:
+            raise InvalidArgumentError(
+                f"Unsupported conversion from {bytes_array} to Triton BYTES Tensor. Got {result.data_type}"
+            )
+        return result
+
+    @staticmethod
+    def _from_object(obj: list[Any] | numpy.ndarray | Any) -> Tensor:
         """Create a tensor from an object.
 
         Creates a tensor from an object using specific conversion
