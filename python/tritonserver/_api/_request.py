@@ -61,7 +61,7 @@ class InferenceRequest:
     model : Model
         Model instance associated with the inference request.
     _server : TRITONSERVER_Server
-        Underlying C binding server structure. Private.
+        Underlying C binding server object. Private.
     request_id : Optional[str], default None
         Unique identifier for the inference request.
     flags : int, default 0

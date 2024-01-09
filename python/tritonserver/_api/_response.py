@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import queue
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 from _model import Model
@@ -110,6 +110,22 @@ class AsyncResponseIterator:
         self._raise_on_error = _raise_on_error
 
     def __aiter__(self) -> AsyncResponseIterator:
+        """Return async iterator. For use with async for loops.
+
+        Returns
+        -------
+        AsyncResponseIterator
+
+        Examples
+        --------
+
+        responses = server.model("test").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+        async for response in responses:
+            print(nummpy.from_dlpack(response.outputs["fp16_output"]))
+
+
+        """
+
         return self
 
     async def __anext__(self):
@@ -245,6 +261,22 @@ class ResponseIterator:
         self._raise_on_error = _raise_on_error
 
     def __iter__(self) -> ResponseIterator:
+        """Return response iterator.
+
+        Returns
+        -------
+        ResponseIterator
+
+        Examples
+        --------
+
+        responses = server.model("test").infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+        for response in responses:
+           print(nummpy.from_dlpack(response.outputs["fp16_output"]))
+
+
+        """
+
         return self
 
     def __next__(self):
@@ -324,11 +356,42 @@ class ResponseIterator:
 
 @dataclass
 class InferenceResponse:
+    """Dataclass representing an inference response.
+
+    Inference response objects are returned from response iterators
+    which are in turn returned from model inference methods. They
+    contain output data, output parameters, any potential errors
+    reported and a flag to indicate if the response is the final one
+    for a request.
+
+    See c:func:`TRITONSERVER_InferenceResponse` for more details
+
+    Parameters
+    ----------
+    model : Model
+        Model instance associated with the response.
+    _server : TRITONSERVER_Server
+        Underlying C binding server object. Private.
+    request_id : Optional[str], default None
+        Unique identifier for the inference request (if provided)
+    parameters : dict[str, str | int | bool], default {}
+        Additional parameters associated with the response.
+    outputs : dict [str, Tensor], default {}
+        Output tensors for the inference.
+    error : Optional[TritonError], default None
+        Error (if any) that occurred in the processing of the request.
+    classification_label : Optional[str], default None
+        Classification label associated with the inference. Not currently supported.
+    final : bool, default False
+        Flag indicating if the response is final
+
+    """
+
     model: Model
     _server: TRITONSERVER_Server
     request_id: Optional[str] = None
-    parameters: dict = field(default_factory=dict)
-    outputs: dict = field(default_factory=dict)
+    parameters: dict[str, str | int | bool] = field(default_factory=dict)
+    outputs: dict[str, Tensor] = field(default_factory=dict)
     error: Optional[TritonError] = None
     classification_label: Optional[str] = None
     final: bool = False
@@ -341,31 +404,31 @@ class InferenceResponse:
         response,
         flags: TRITONSERVER_ResponseCompleteFlag,
     ):
-        values: dict = {
-            "_server": server,
-            "model": model,
-            "request_id": request.id,
-            "final": flags == TRITONSERVER_ResponseCompleteFlag.FINAL,
-        }
+        result = InferenceResponse(
+            model,
+            server,
+            request.id,
+            final=(flags == TRITONSERVER_ResponseCompleteFlag.FINAL),
+        )
 
         try:
             if response is None:
-                return InferenceResponse(**values)
+                return result
 
             try:
                 response.throw_if_response_error()
             except TritonError as error:
-                error.args += tuple(values.items())
-                values["error"] = error
+                error.args += tuple(asdict(result).items())
+                result.error = error
 
             name, version = response.model
-            values["model"] = Model(server, name, version)
-            values["request_id"] = response.id
+            result.model = Model(server, name, version)
+            result.request_id = response.id
             parameters = {}
             for parameter_index in range(response.parameter_count):
                 name, type_, value = response.parameter(parameter_index)
                 parameters[name] = value
-            values["parameters"] = parameters
+            result.parameters = parameters
             outputs = {}
             for output_index in range(response.output_count):
                 (
@@ -381,12 +444,12 @@ class InferenceResponse:
                 tensor = Tensor(data_type, shape, memory_buffer)
 
                 outputs[name] = tensor
-            values["outputs"] = outputs
+            result.outputs = outputs
         except Exception as e:
             error = InternalError(f"Unexpected error in creating response object: {e}")
-            error.args += tuple(values.items())
-            values["error"] = error
+            error.args += tuple(asdict(result).items())
+            result.error = error
 
         # values["classification_label"] = response.output_classification_label()
 
-        return InferenceResponse(**values)
+        return result
