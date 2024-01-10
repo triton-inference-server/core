@@ -1,5 +1,1 @@
 backend: "python"
-parameters: {
-key: "decoupled",
-value: {string_value:"True"}
-}
