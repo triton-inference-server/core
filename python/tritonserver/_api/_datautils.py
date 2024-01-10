@@ -242,8 +242,20 @@ def parse_device_or_memory_type(
 class DLPackObject:
     def __init__(self, value) -> None:
         try:
-            self._capsule = _dlpack.get_dlpack_capsule(value)
-            self._tensor = _dlpack.get_managed_tensor(self._capsule).dl_tensor
+            stream = None
+            device, device_id = value.__dlpack_device__()
+            if device == _dlpack.DLDeviceType.kDLCUDA:
+                if cupy is None:
+                    raise UnsupportedError(
+                        f"DLPack synchronization on device {device,device_id} not supported"
+                    )
+                with cupy.cuda.Device(device_id):
+                    stream = 1  # legacy default stream
+                    self._capsule = _dlpack.get_dlpack_capsule(value, stream)
+                    self._tensor = _dlpack.get_managed_tensor(self._capsule).dl_tensor
+            else:
+                self._capsule = _dlpack.get_dlpack_capsule(value)
+                self._tensor = _dlpack.get_managed_tensor(self._capsule).dl_tensor
         except Exception as e:
             raise InvalidArgumentError(
                 f"Object does not support DLPack protocol: {e}"
