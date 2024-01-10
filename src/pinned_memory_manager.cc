@@ -66,13 +66,14 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 
 std::unique_ptr<PinnedMemoryManager> PinnedMemoryManager::instance_;
 uint64_t PinnedMemoryManager::pinned_memory_byte_size_ = 0;
-uint64_t PinnedMemoryManager::used_pinned_memory_byte_size_ = 0;
-std::mutex PinnedMemoryManager::alloc_info_mtx_;
+std::vector<std::shared_ptr<PinnedMemoryManager::PinnedMemory>>
+    PinnedMemoryManager::allocated_pinned_memory_buffers_;
 
 PinnedMemoryManager::PinnedMemory::PinnedMemory(
     void* pinned_memory_buffer, uint64_t size)
     : pinned_memory_buffer_(pinned_memory_buffer)
 {
+  used_pinned_memory_byte_size_ = 0;
   if (pinned_memory_buffer_ != nullptr) {
     managed_pinned_memory_ = boost::interprocess::managed_external_buffer(
         boost::interprocess::create_only_t{}, pinned_memory_buffer_, size);
@@ -89,9 +90,37 @@ PinnedMemoryManager::PinnedMemory::~PinnedMemory()
 #endif  // TRITON_ENABLE_GPU
 }
 
+void*
+PinnedMemoryManager::PinnedMemory::Allocate(uint64_t size)
+{
+  void* ptr = managed_pinned_memory_.allocate(size, std::nothrow_t{});
+  used_pinned_memory_byte_size_ += size;
+  allocated_memory_info_.emplace(ptr, size);
+  return ptr;
+}
+
+void
+PinnedMemoryManager::PinnedMemory::Deallocate(void* ptr)
+{
+  managed_pinned_memory_.deallocate(ptr);
+  auto it = allocated_memory_info_.find(ptr);
+  if (it != allocated_memory_info_.end()) {
+    used_pinned_memory_byte_size_ -= it->second;
+    allocated_memory_info_.erase(it);
+  }
+}
+
+uint64_t
+PinnedMemoryManager::PinnedMemory::GetUsedPinnedMemorySizeInternal()
+{
+  std::lock_guard<std::mutex> lk(buffer_mtx_);
+  return used_pinned_memory_byte_size_;
+}
+
 PinnedMemoryManager::~PinnedMemoryManager()
 {
   // Clean up
+  allocated_pinned_memory_buffers_.clear();
   for (const auto& memory_info : memory_info_) {
     const auto& is_pinned = memory_info.second.first;
     if (!is_pinned) {
@@ -106,6 +135,7 @@ PinnedMemoryManager::AddPinnedMemoryBuffer(
     unsigned long node_mask)
 {
   pinned_memory_buffers_[node_mask] = pinned_memory_buffer;
+  allocated_pinned_memory_buffers_.push_back(pinned_memory_buffer);
 }
 
 Status
@@ -116,8 +146,7 @@ PinnedMemoryManager::AllocInternal(
   auto status = Status::Success;
   if (pinned_memory_buffer->pinned_memory_buffer_ != nullptr) {
     std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
-    *ptr = pinned_memory_buffer->managed_pinned_memory_.allocate(
-        size, std::nothrow_t{});
+    *ptr = pinned_memory_buffer->Allocate(size);
     *allocated_type = TRITONSERVER_MEMORY_CPU_PINNED;
     if (*ptr == nullptr) {
       status = Status(
@@ -155,13 +184,6 @@ PinnedMemoryManager::AllocInternal(
     if (status.IsOk()) {
       auto res = memory_info_.emplace(
           *ptr, std::make_pair(is_pinned, pinned_memory_buffer));
-
-      if (is_pinned) {
-        std::lock_guard<std::mutex> lk(alloc_info_mtx_);
-        used_pinned_memory_byte_size_ += size;
-        allocated_memory_info_.emplace(*ptr, size);
-      }
-
       if (!res.second) {
         status = Status(
             Status::Code::INTERNAL, "unexpected memory address collision, '" +
@@ -177,7 +199,7 @@ PinnedMemoryManager::AllocInternal(
   if ((!status.IsOk()) && (*ptr != nullptr)) {
     if (is_pinned) {
       std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
-      pinned_memory_buffer->managed_pinned_memory_.deallocate(*ptr);
+      pinned_memory_buffer->Deallocate(*ptr);
     } else {
       free(*ptr);
     }
@@ -201,15 +223,6 @@ PinnedMemoryManager::FreeInternal(void* ptr)
                      << "pinned memory deallocation: "
                      << "addr " << ptr;
       memory_info_.erase(it);
-
-      if (is_pinned) {
-        std::lock_guard<std::mutex> lk(alloc_info_mtx_);
-        auto ix = allocated_memory_info_.find(ptr);
-        if (ix != allocated_memory_info_.end()) {
-          used_pinned_memory_byte_size_ -= ix->second;
-          allocated_memory_info_.erase(ix);
-        }
-      }
     } else {
       return Status(
           Status::Code::INTERNAL, "unexpected memory address '" +
@@ -220,7 +233,7 @@ PinnedMemoryManager::FreeInternal(void* ptr)
 
   if (is_pinned) {
     std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
-    pinned_memory_buffer->managed_pinned_memory_.deallocate(ptr);
+    pinned_memory_buffer->Deallocate(ptr);
   } else {
     free(ptr);
   }
@@ -397,15 +410,20 @@ PinnedMemoryManager::Free(void* ptr)
 uint64_t
 PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
 {
-  std::lock_guard<std::mutex> lk(alloc_info_mtx_);
   return pinned_memory_byte_size_;
 }
 
 uint64_t
 PinnedMemoryManager::GetUsedPinnedMemoryByteSize()
 {
-  std::lock_guard<std::mutex> lk(alloc_info_mtx_);
-  return used_pinned_memory_byte_size_;
+  uint64_t used_pinned_memory_size = 0;
+  if (!allocated_pinned_memory_buffers_.empty()) {
+    for (const auto& it : allocated_pinned_memory_buffers_) {
+      used_pinned_memory_size += it->GetUsedPinnedMemorySizeInternal();
+    }
+  }
+
+  return used_pinned_memory_size;
 }
 
 }}  // namespace triton::core
