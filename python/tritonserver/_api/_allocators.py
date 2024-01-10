@@ -95,16 +95,7 @@ class MemoryBuffer:
 
         dlpack_object = DLPackObject(owner)
 
-        if not dlpack_object.contiguous:
-            raise InvalidArgumentError("Only contiguous memory is supported")
-
-        return MemoryBuffer(
-            int(dlpack_object.data_ptr),
-            dlpack_object.memory_type,
-            dlpack_object.memory_type_id,
-            dlpack_object.byte_size,
-            owner,
-        )
+        return MemoryBuffer._from_dlpack_object(owner, dlpack_object)
 
     @staticmethod
     def _from_dlpack_object(owner: Any, dlpack_object: DLPackObject) -> MemoryBuffer:
@@ -124,6 +115,7 @@ class MemoryBuffer:
         buffer_attributes.memory_type = self.memory_type
         buffer_attributes.memory_type_id = self.memory_type_id
         buffer_attributes.byte_size = self.size
+        # TODO: Support allocation / use of cuda shared memory
         #        buffer_attributes.cuda_ipc_handle = None
         return buffer_attributes
 
