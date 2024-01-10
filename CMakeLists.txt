@@ -266,7 +266,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(TRITON_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
   endif()
 
-  set(TRITON_DEPENDS googletest protobuf)
+  set(TRITON_DEPENDS googletest protobuf re2)
   if(${TRITON_ENABLE_GCS})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} google-cloud-cpp)
   endif() # TRITON_ENABLE_GCS
@@ -305,6 +305,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DgRPC_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/grpc/lib/cmake/grpc
       -Dc-ares_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/c-ares/${LIB_DIR}/cmake/c-ares
       -Dabsl_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/absl/${LIB_DIR}/cmake/absl
+      -Dre2_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/re2/${LIB_DIR}/cmake/re2
       -Dnlohmann_json_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/nlohmann_json/${LIB_DIR}/cmake/nlohmann_json
       -Dprometheus-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/prometheus-cpp/${LIB_DIR}/cmake/prometheus-cpp
       -Dgoogle_cloud_cpp_storage_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/google-cloud-cpp/${LIB_DIR}/cmake/google_cloud_cpp_storage
