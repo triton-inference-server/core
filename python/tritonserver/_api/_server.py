@@ -707,10 +707,6 @@ class Server:
         -------
         Server
 
-        Examples
-        --------
-
-        Todo
         """
 
         self._server.poll_model_repository()
@@ -1000,9 +996,6 @@ class Server:
         str
             string containing metrics in specified format
 
-        Examples
-        --------
-        Todo
         """
 
         return self._server.metrics().formatted(metric_format)
@@ -1051,10 +1044,6 @@ class Metric(TRITONSERVER_Metric):
     family. For more details see c:func:`TRITONSERVER_Metric`
     documentation.
 
-    Examples
-    --------
-    Todo
-
     """
 
     def __init__(self, family: MetricFamily, labels: Optional[dict[str, str]] = None):
@@ -1068,11 +1057,6 @@ class Metric(TRITONSERVER_Metric):
         labels : Optional[dict[str, str]]
             Additional labels for the metric (returned in reporting to
             distinguish multiple metrics within a family)
-
-        Examples
-        --------
-
-        Todo
 
         """
 

@@ -91,12 +91,6 @@ class AsyncResponseIterator:
         loop : Optional[asyncio.AbstractEventLoop]
             asyncio loop object
 
-
-        Examples
-        --------
-
-        Todo
-
         """
 
         if loop is None:
@@ -143,9 +137,6 @@ class AsyncResponseIterator:
             Indicates all responses for a request have been received.
             Final responses may or may not include outputs and must be
             checked.
-        Examples
-        --------
-        Todo
 
         """
 
@@ -244,11 +235,6 @@ class ResponseIterator:
         raise_on_error : bool
             if True response errors will be raised as exceptions.
 
-        Examples
-        --------
-
-        Todo
-
         """
 
         self._queue = queue.SimpleQueue()
@@ -289,9 +275,6 @@ class ResponseIterator:
             Indicates all responses for a request have been received.
             Final responses may or may not include outputs and must be
             checked.
-        Examples
-        --------
-        Todo
 
         """
 
