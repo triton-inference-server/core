@@ -113,14 +113,15 @@ class Options:
 
     Parameters
     ----------
-    server_id : str, default 'triton'
-        Textural ID for the server.
-        See :c:func:`TRITONSERVER_ServerOptionsSetServerId`
 
     model_repository : str | list[str], default []
         Model repository path(s).
         At least one path is required.
         See :c:func:`TRITONSERVER_ServerOptionsSetModelRepositoryPath`
+
+    server_id : str, default 'triton'
+        Textural ID for the server.
+        See :c:func:`TRITONSERVER_ServerOptionsSetServerId`
 
     model_control_mode : ModelControlMode, default ModelControlModel.NONE
         Model control mode.
@@ -265,8 +266,8 @@ class Options:
     Please refer to the Triton Inference Server documentation for more details on each option.
     """
 
-    server_id: str = "triton"
     model_repository: str | list[str] = field(default_factory=list[str])
+    server_id: str = "triton"
     model_control_mode: ModelControlMode = ModelControlMode.NONE
     startup_models: list[str] = field(default_factory=list[str])
     strict_model_config: bool = True
@@ -438,7 +439,7 @@ class ModelDictionary(dict):
 
     """
 
-    def __init__(self, server: TRITONSERVER_Server, models: list[Model]) -> None:
+    def __init__(self, server: Server, models: list[Model]) -> None:
         super().__init__()
         for model in models:
             self[(model.name, model.version)] = model
@@ -828,7 +829,7 @@ class Server:
 
         if isinstance(self._server, Server._UnstartedServer):
             raise InvalidArgumentError("Server not started")
-        return Model(self._server, model_name, model_version)
+        return Model(self, model_name, model_version)
 
     def models(self, exclude_not_ready: bool = False) -> ModelDictionary:
         """Returns a dictionary of known models in the model repository
@@ -867,7 +868,7 @@ class Server:
         if isinstance(self._server, Server._UnstartedServer):
             raise InvalidArgumentError("Server not started")
 
-        return ModelDictionary(self._server, self._model_index(exclude_not_ready))
+        return ModelDictionary(self, self._model_index(exclude_not_ready))
 
     def load(
         self,
@@ -967,7 +968,7 @@ class Server:
             raise InvalidArgumentError("Server not started")
 
         if isinstance(model, str):
-            model = Model(self._server, model)
+            model = Model(self, model)
 
         if unload_dependents:
             self._server.unload_model_and_dependents(model.name)
@@ -1035,7 +1036,7 @@ class Server:
             if "version" in model:
                 model["version"] = int(model["version"])
 
-        return [Model(self._server, **model) for model in models]
+        return [Model(self, **model) for model in models]
 
     _UNLOADED_STATES = [None, "UNAVAILABLE"]
 

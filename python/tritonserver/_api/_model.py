@@ -31,7 +31,7 @@ from __future__ import annotations
 import asyncio
 import json
 import queue
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from tritonserver._api._allocators import ResponseAllocator
 from tritonserver._api._request import InferenceRequest
@@ -46,6 +46,9 @@ from tritonserver._c.triton_bindings import (
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
 from typing_extensions import Unpack
 
+if TYPE_CHECKING:
+    from tritonserver._api._server import Server
+
 
 class Model:
     """Class for interacting with Triton Inference Server models
@@ -58,7 +61,7 @@ class Model:
 
     def __init__(
         self,
-        _server: TRITONSERVER_Server,
+        server: Server,
         name: str,
         version: int = -1,
         state: Optional[str] = None,
@@ -71,8 +74,8 @@ class Model:
 
         Parameters
         ----------
-        server : TRITONSERVER_Server
-            Underlying C binding server structure. Private.
+        server : Server
+            Server instance.
         name : str
             model name
         version : int
@@ -90,7 +93,9 @@ class Model:
 
         """
 
-        self._server = _server
+        self._server = server._server
+        if not isinstance(self._server, TRITONSERVER_Server):
+            raise InvalidArgumentError("Server not started")
         self.name = name
         self.version = version
         self.state = state
@@ -129,8 +134,9 @@ class Model:
         _serialized_inputs={})
 
         """
-
-        return InferenceRequest(model=self, _server=self._server, **kwargs)
+        if "model" in kwargs:
+            kwargs.pop("model")
+        return InferenceRequest(model=self, **kwargs)
 
     def async_infer(
         self,
@@ -176,9 +182,7 @@ class Model:
         """
 
         if inference_request is None:
-            inference_request = InferenceRequest(
-                model=self, _server=self._server, **kwargs
-            )
+            inference_request = InferenceRequest(model=self, **kwargs)
 
         if (inference_request.response_queue is not None) and (
             not isinstance(inference_request.response_queue, asyncio.Queue)

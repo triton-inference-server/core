@@ -32,9 +32,13 @@ import asyncio
 import inspect
 import queue
 from dataclasses import asdict, dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-import tritonserver._api._model as _model
+from tritonserver._api import _model
+
+if TYPE_CHECKING:
+    from tritonserver._api._model import Model
+
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
@@ -62,7 +66,6 @@ class AsyncResponseIterator:
     def __init__(
         self,
         model: _model.Model,
-        server: TRITONSERVER_Server,
         request: TRITONSERVER_InferenceRequest,
         user_queue: Optional[asyncio.Queue] = None,
         raise_on_error: bool = False,
@@ -77,8 +80,6 @@ class AsyncResponseIterator:
         ----------
         model : Model
             model associated with inference request
-        server : TRITONSERVER_Server
-            Underlying C binding server object. Private.
         request : TRITONSERVER_InferenceRequest
             Underlying C binding TRITONSERVER_InferenceRequest
             object. Private.
@@ -98,7 +99,6 @@ class AsyncResponseIterator:
 
         """
 
-        self._server = server
         if loop is None:
             loop = asyncio.get_running_loop()
         self._loop = loop
@@ -184,7 +184,7 @@ class AsyncResponseIterator:
                 raise InternalError("Response received after final response flag")
 
             response = InferenceResponse._from_tritonserver_inference_response(
-                self._model, self._server, self._request, response, flags
+                self._model, self._request, response, flags
             )
             asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
             if self._user_queue is not None:
@@ -221,8 +221,7 @@ class ResponseIterator:
 
     def __init__(
         self,
-        model: _model.Model,
-        server: TRITONSERVER_Server,
+        model: Model,
         request: TRITONSERVER_InferenceRequest,
         user_queue: Optional[queue.SimpleQueue] = None,
         raise_on_error: bool = False,
@@ -236,8 +235,6 @@ class ResponseIterator:
         ----------
         model : Model
             model associated with inference request
-        server : TRITONSERVER_Server
-            Underlying C binding server object. Private.
         request : TRITONSERVER_InferenceRequest
             Underlying C binding TRITONSERVER_InferenceRequest
             object. Private.
@@ -256,10 +253,9 @@ class ResponseIterator:
 
         self._queue = queue.SimpleQueue()
         self._user_queue = user_queue
-        self._server = server
         self._complete = False
         self._request = request
-        self._model = _model
+        self._model = model
         self._raise_on_error = raise_on_error
 
     def __iter__(self) -> ResponseIterator:
@@ -333,7 +329,7 @@ class ResponseIterator:
                 raise InternalError("Response received after final response flag")
 
             response = InferenceResponse._from_tritonserver_inference_response(
-                self._model, self._server, self._request, response, flags
+                self._model, self._request, response, flags
             )
             self._queue.put(response)
             if self._user_queue is not None:
@@ -374,8 +370,6 @@ class InferenceResponse:
     ----------
     model : Model
         Model instance associated with the response.
-    _server : TRITONSERVER_Server
-        Underlying C binding server object. Private.
     request_id : Optional[str], default None
         Unique identifier for the inference request (if provided)
     parameters : dict[str, str | int | bool], default {}
@@ -392,7 +386,6 @@ class InferenceResponse:
     """
 
     model: _model.Model
-    _server: TRITONSERVER_Server
     request_id: Optional[str] = None
     parameters: dict[str, str | int | bool] = field(default_factory=dict)
     outputs: dict[str, Tensor] = field(default_factory=dict)
@@ -403,14 +396,12 @@ class InferenceResponse:
     @staticmethod
     def _from_tritonserver_inference_response(
         model: _model.Model,
-        server: TRITONSERVER_Server,
         request: TRITONSERVER_InferenceRequest,
         response,
         flags: TRITONSERVER_ResponseCompleteFlag,
     ):
         result = InferenceResponse(
             model,
-            server,
             request.id,
             final=(flags == TRITONSERVER_ResponseCompleteFlag.FINAL),
         )
@@ -426,7 +417,8 @@ class InferenceResponse:
                 result.error = error
 
             name, version = response.model
-            result.model = _model.Model(server, name, version)
+            result.model.name = name
+            result.model.version = version
             result.request_id = response.id
             parameters = {}
             for parameter_index in range(response.parameter_count):
