@@ -169,7 +169,7 @@ class Model:
         Returns
         -------
         AsyncResponseIterator
-            async.io compatible iterator
+            asyncio compatible iterator
 
         Raises
         ------
