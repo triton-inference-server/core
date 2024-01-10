@@ -192,6 +192,10 @@ class Options:
         Number of threads used to load models concurrently.
         See :c:func:`TRITONSERVER_ServerOptionsSetModelLoadThreadCount`
 
+    model_load_retry_count : uint, default 0
+        Number of threads used to load models concurrently.
+        See :c:func:`TRITONSERVER_ServerOptionsSetModelLoadRetryCount`
+
     model_namespacing : bool, default False
         Enable or disable model namespacing.
         See :c:func:`TRITONSERVER_ServerOptionsSetModelNamespacing`
@@ -293,6 +297,7 @@ class Options:
     exit_timeout: uint = 30
     buffer_manager_thread_count: uint = 0
     model_load_thread_count: uint = 4
+    model_load_retry_count: uint = 0
     model_namespacing: bool = False
 
     log_file: Optional[str] = None
@@ -371,6 +376,7 @@ class Options:
         options.set_exit_timeout(self.exit_timeout)
         options.set_buffer_manager_thread_count(self.buffer_manager_thread_count)
         options.set_model_load_thread_count(self.model_load_thread_count)
+        options.set_model_load_retry_count(self.model_load_retry_count)
         options.set_model_namespacing(self.model_namespacing)
 
         if self.log_file:
