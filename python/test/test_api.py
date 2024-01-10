@@ -207,7 +207,15 @@ class InferenceTests(unittest.TestCase):
         self.assertTrue(server.ready())
 
         server.load(
-            "test", {"config": json.dumps({"backend": "python", "platform": "test"})}
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
         )
 
         fp16_input = numpy.random.rand(1, 100).astype(dtype=numpy.float16)
