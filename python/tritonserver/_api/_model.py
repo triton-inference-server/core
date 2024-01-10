@@ -176,9 +176,6 @@ class Model:
         InvalidArgumentError
             if any invalid arguments are provided
 
-        Examples
-        --------
-        Todo
         """
 
         if inference_request is None:
