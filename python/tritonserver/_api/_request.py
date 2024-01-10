@@ -33,6 +33,7 @@ import queue
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from tritonserver._api import _model
 from tritonserver._api._allocators import MemoryAllocator
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._tensor import Tensor
@@ -41,8 +42,6 @@ from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_InferenceRequest
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
-
-from . import _model
 
 DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
@@ -64,8 +63,6 @@ class InferenceRequest:
     ----------
     model : Model
         Model instance associated with the inference request.
-    _server : TRITONSERVER_Server
-        Underlying C binding server object. Private.
     request_id : Optional[str], default None
         Unique identifier for the inference request.
     flags : int, default 0
@@ -100,9 +97,6 @@ class InferenceRequest:
         addition to the response iterator. Must be queue.SimpleQueue
         for non async.io requests and asyncio.Queue for asyncio
         requests.
-    _serialized_inputs : Dict[str, Tensor], default {}
-        Dictionary of serialized input tensors. Used to ensure
-        lifetime of bytes array tensors.  Private.
 
     Examples
     --------
@@ -129,7 +123,6 @@ class InferenceRequest:
     """
 
     model: _model.Model
-    _server: TRITONSERVER_Server
     request_id: Optional[str] = None
     flags: int = 0
     correlation_id: Optional[int | str] = None
@@ -140,7 +133,11 @@ class InferenceRequest:
     output_memory_type: Optional[DeviceOrMemoryType] = None
     output_memory_allocator: Optional[MemoryAllocator] = None
     response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
-    _serialized_inputs: dict[str, Tensor] = field(default_factory=dict)
+    _serialized_inputs: dict[str, Tensor] = field(init=False, default_factory=dict)
+    _server: TRITONSERVER_Server = field(init=False)
+
+    def __post_init__(self):
+        self._server = self.model._server
 
     def _release_request(self, _request, _flags, _user_object):
         pass

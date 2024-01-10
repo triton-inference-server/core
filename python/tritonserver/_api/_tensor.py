@@ -150,6 +150,11 @@ class Tensor:
         #              f"DLPack stream synchronization on {stream} not currently supported"
         #         )
 
+        print(f"requested stream: {stream}")
+        print(f"current_stream: {cupy.cuda.get_current_stream()}")
+
+        print(f"default_stream: {cupy.cuda.Stream.null}")
+
         dl_managed_tensor = Tensor._create_managed_tensor()
         dl_managed_tensor.dl_tensor.data = self.data_ptr
         dl_managed_tensor.dl_tensor.device = DLDevice(

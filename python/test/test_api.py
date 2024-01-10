@@ -38,6 +38,33 @@ try:
 except ImportError:
     cupy = None
 
+server_options = tritonserver.Options(
+    server_id="TestServer",
+    model_repository="/workspace/test/test_api_models",
+    log_verbose=0,
+    exit_on_error=False,
+)
+
+
+class ModelTests(unittest.TestCase):
+    def test_create_request(self):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+
+        request = server.models()["test"].create_request()
+
+        request = tritonserver.InferenceRequest(server.model("test"))
+
+        request = tritonserver.InferenceRequest(server.model("test"), _server="foo")
+
+        pass
+
+
+class TensorTests(unittest.TestCase):
+    def test_cpu_to_gpu(self):
+        cpu_array = numpy.random.rand(1, 3, 100, 100).astype(numpy.float32)
+        cpu_tensor = tritonserver.Tensor.from_dlpack(cpu_array)
+        gpu_tensor = cpu_tensor.to_device("gpu")
+
 
 class ServerTests(unittest.TestCase):
     server_options = tritonserver.Options(
@@ -95,3 +122,11 @@ class InferenceTests(unittest.TestCase):
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             self.assertEqual(fp16_input, fp16_output)
+
+        for response in server.model("test").infer(
+            inputs={"fp16_input": fp16_input},
+            output_memory_type="gpu",
+            raise_on_error=True,
+        ):
+            fp16_output = cupy.from_dlpack(response.outputs["fp16_output"])
+            self.assertEqual(fp16_input[0][0], fp16_output[0][0])
