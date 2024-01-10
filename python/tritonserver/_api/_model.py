@@ -203,7 +203,7 @@ class Model:
         response_allocator = ResponseAllocator(
             inference_request.output_memory_allocator,
             inference_request.output_memory_type,
-        ).create_TRITONSERVER_ResponseAllocator()
+        ).create_tritonserver_response_allocator()
 
         request.set_response_callback(
             response_allocator, None, response_iterator._response_callback, None
@@ -296,7 +296,7 @@ class Model:
         response_allocator = ResponseAllocator(
             inference_request.output_memory_allocator,
             inference_request.output_memory_type,
-        ).create_TRITONSERVER_ResponseAllocator()
+        ).create_tritonserver_response_allocator()
 
         request.set_response_callback(
             response_allocator, None, response_iterator._response_callback, None
