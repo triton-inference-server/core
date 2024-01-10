@@ -299,7 +299,7 @@ class ResponseAllocator:
             buffer_attributes.memory_type_id = self._memory_type_id
         return buffer_attributes
 
-    def create_TRITONSERVER_ResponseAllocator(self):
+    def create_tritonserver_response_allocator(self):
         self._response_allocator = TRITONSERVER_ResponseAllocator(
             self.allocate, self.release, self.start
         )
