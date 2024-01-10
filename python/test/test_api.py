@@ -138,3 +138,12 @@ class InferenceTests(unittest.TestCase):
             text_output = response.outputs["string_output"].to_string_array()
             print(text_output)
             print(text_output[0][0] == "hello")
+
+        for response in server.model("test").infer(
+            inputs={"string_input": tritonserver.Tensor.from_string_array([["hello"]])},
+            output_memory_type="gpu",
+            raise_on_error=True,
+        ):
+            text_output = response.outputs["string_output"].to_string_array()
+            print(text_output)
+            print(text_output[0][0] == "hello")
