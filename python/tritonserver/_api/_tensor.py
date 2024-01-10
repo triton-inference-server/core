@@ -174,6 +174,11 @@ class Tensor:
         if cupy is None:
             raise unsupported
 
+        # NOTE: Technically this is not required by the protocol. It is the
+        #       responsibility of the caller(consumer) to ensure that
+        #       we are on the correct device. Added to ensure
+        #       the semantics are correct - but should be a no-op.
+        #       May be removed in the future.
         with cupy.cuda.Device(self.memory_type_id):
             current_stream = cupy.cuda.get_current_stream()
             curr_stream_ptr = current_stream.ptr
