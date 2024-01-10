@@ -163,7 +163,7 @@ class MemoryAllocator(ABC):
         size : int
             number of bytes requested
         memory_type : MemoryType
-                type of memory requested (CPU, GPU, etc.)
+            type of memory requested (CPU, GPU, etc.)
         memory_type_id : int
             memory type id requested (typically device id)
 
