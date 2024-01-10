@@ -5,6 +5,39 @@ import triton_python_backend_utils as pb_utils
 
 
 class TritonPythonModel:
+    @staticmethod
+    def auto_complete_config(auto_complete_model_config):
+        inputs = []
+        outputs = []
+        dims = [-1, -1]
+        optional = True
+        config = auto_complete_model_config.as_dict()
+
+        for data_type in pb_utils.TRITON_STRING_TO_NUMPY.keys():
+            type_name = data_type.split("_")[1].lower()
+            input_name = f"{type_name}_input"
+            output_name = f"{type_name}_output"
+            inputs.append(
+                {
+                    "name": input_name,
+                    "data_type": data_type,
+                    "dims": dims,
+                    "optional": optional,
+                }
+            )
+            outputs.append({"name": output_name, "data_type": data_type, "dims": dims})
+
+        for input_ in inputs:
+            auto_complete_model_config.add_input(input_)
+        for output in outputs:
+            auto_complete_model_config.add_output(output)
+
+        auto_complete_model_config.set_max_batch_size(0)
+        if config["platform"] == "decoupled":
+            auto_complete_model_config.set_model_transaction_policy({"decoupled": True})
+
+        return auto_complete_model_config
+
     def initialize(self, args):
         self._model_config = json.loads(args["model_config"])
         self._decoupled = self._model_config.get("model_transaction_policy", {}).get(

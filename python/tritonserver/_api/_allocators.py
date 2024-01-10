@@ -189,7 +189,7 @@ class MemoryAllocator(ABC):
         pass
 
 
-class NumpyAllocator(MemoryAllocator):
+class CPUAllocator(MemoryAllocator):
     def __init__(self):
         pass
 
@@ -200,11 +200,11 @@ class NumpyAllocator(MemoryAllocator):
         return MemoryBuffer.from_dlpack(ndarray)
 
 
-default_memory_allocators[MemoryType.CPU] = NumpyAllocator()
+default_memory_allocators[MemoryType.CPU] = CPUAllocator()
 
 if cupy is not None:
 
-    class CupyAllocator(MemoryAllocator):
+    class GPUAllocator(MemoryAllocator):
         def __init__(self):
             pass
 
@@ -219,7 +219,7 @@ if cupy is not None:
 
             return MemoryBuffer.from_dlpack(ndarray)
 
-    default_memory_allocators[MemoryType.GPU] = CupyAllocator()
+    default_memory_allocators[MemoryType.GPU] = GPUAllocator()
 
 
 class ResponseAllocator:
