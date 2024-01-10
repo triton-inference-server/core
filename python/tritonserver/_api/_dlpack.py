@@ -211,7 +211,7 @@ def triton_to_dlpack_dtype(dtype):
         _raise_error("DLPack currently doesn't suppose BYTES type")
     else:
         _raise_error(
-            "Can not covert unknown data type '{}' to DLPack data type".format(dtype)
+            "Can not convert unknown data type '{}' to DLPack data type".format(dtype)
         )
     return DLDataType(type_code, bits, 1)
 
