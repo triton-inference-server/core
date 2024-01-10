@@ -25,13 +25,13 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import asyncio
+import json
 import queue
 import time
 import unittest
 
 import numpy
 import pytest
-import torch
 import tritonserver
 
 try:
@@ -39,11 +39,18 @@ try:
 except ImportError:
     cupy = None
 
+try:
+    import torch
+except ImportError:
+    torch = None
+
 server_options = tritonserver.Options(
     server_id="TestServer",
     model_repository="/workspace/test/test_api_models",
     log_verbose=0,
-    exit_on_error=False,
+    exit_on_error=True,
+    strict_model_config=False,
+    model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
 )
 
 
@@ -55,8 +62,6 @@ class ModelTests(unittest.TestCase):
 
         request = tritonserver.InferenceRequest(server.model("test"))
 
-        pass
-
 
 class TensorTests(unittest.TestCase):
     def test_cpu_to_gpu(self):
@@ -64,7 +69,6 @@ class TensorTests(unittest.TestCase):
         cpu_tensor = tritonserver.Tensor.from_dlpack(cpu_array)
         gpu_tensor = cpu_tensor.to_device("gpu")
         cupy.from_dlpack(gpu_tensor)
-        torch.from_dlpack(gpu_tensor)
 
 
 class ServerTests(unittest.TestCase):
@@ -104,7 +108,11 @@ class InferenceTests(unittest.TestCase):
 
         self.assertTrue(server.ready())
 
-        fp16_input = numpy.array([[5]], dtype=numpy.float16)
+        server.load(
+            "test", {"config": json.dumps({"backend": "python", "platform": "test"})}
+        )
+
+        fp16_input = numpy.random.rand(1, 100).astype(dtype=numpy.float16)
 
         for response in server.model("test").infer(
             inputs={"fp16_input": fp16_input},
@@ -112,7 +120,7 @@ class InferenceTests(unittest.TestCase):
             raise_on_error=True,
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
-            self.assertEqual(fp16_input, fp16_output)
+            numpy.testing.assert_array_equal(fp16_input, fp16_output)
 
         for response in server.model("test").infer(
             inputs={"fp16_input": fp16_input},
@@ -121,3 +129,12 @@ class InferenceTests(unittest.TestCase):
         ):
             fp16_output = cupy.from_dlpack(response.outputs["fp16_output"])
             self.assertEqual(fp16_input[0][0], fp16_output[0][0])
+
+        for response in server.model("test").infer(
+            inputs={"string_input": [["hello"]]},
+            output_memory_type="gpu",
+            raise_on_error=True,
+        ):
+            text_output = response.outputs["string_output"].to_string_array()
+            print(text_output)
+            print(text_output[0][0] == "hello")

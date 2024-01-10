@@ -250,6 +250,27 @@ class Tensor:
             self.memory_type_id,
         )
 
+    def to_string_array(self) -> numpy.ndarray:
+        """Deserialize Triton BYTES Tensor into numpy array of strings.
+
+        If memory is not on the host the tensor data will be copied to
+        the host before deserialization. For more details on the
+        format of Triton BYTES Tensors please see Triton Inference
+        Server documentation.
+
+        Returns
+        -------
+        numpy.ndarray
+            A numpy array of objects representing the BYTES tensor.
+
+        Examples
+        --------
+
+        numpy_ndarray = response.outputs["text_output"].to_string_array()
+
+        """
+        return self.to_bytes_array().astype(str)
+
     def to_bytes_array(self) -> numpy.ndarray:
         """Deserialize Triton BYTES Tensor into numpy array.
 
@@ -287,7 +308,43 @@ class Tensor:
         return Tensor._deserialize_bytes_array(numpy_ndarray).reshape(self.shape)
 
     @staticmethod
-    def from_bytes_array(bytes_array: list[str | bytes] | numpy.ndarray) -> Tensor:
+    def from_string_array(string_array: list[str] | numpy.ndarray) -> Tensor:
+        """Create Triton BYTES Tensor from numpy array of strings or list of strings.
+
+        Creates a Triton tensor of type BYTES from a list of strings,
+        or numpy array of type str_. The
+        method allocates new host memory to store the serialized
+        tensor. For more details on the format of Triton BYTES Tensors
+        please see Triton Inference Server documentation.
+
+        Parameters
+        ----------
+        string_array : list[str] | numpy.ndarray
+            an array like object to convert
+
+        Returns
+        -------
+        Tensor
+
+        Raises
+        ------
+        InvalidArgumentError
+            If the given object can not be converted.
+
+        Examples
+        --------
+
+        tensor = Tensor.from_string_array(numpy.array(["hello"]))
+
+        tensor = Tensor.from_string_array(["hello"])
+
+        """
+        return Tensor.from_bytes_array(string_array)
+
+    @staticmethod
+    def from_bytes_array(
+        bytes_array: list[str] | list[bytes] | numpy.ndarray,
+    ) -> Tensor:
         """Create Triton BYTES Tensor from numpy array or list
 
         Creates a Triton tensor of type BYTES from a list of strings,
