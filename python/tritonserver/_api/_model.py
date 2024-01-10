@@ -256,7 +256,7 @@ class Model:
         responses = list(server.model("test_2").infer(inputs={"text_input":["hello"]}))
 
         >>> response = responses[0]
-        print(respponse)
+        print(response)
         InferenceResponse(model={'name': 'test_2', 'version': 1,
         'state': None},
         _server=<tritonserver._c.triton_bindings.TRITONSERVER_Server
