@@ -195,7 +195,6 @@ class Model:
 
         response_iterator = AsyncResponseIterator(
             self,
-            self._server,
             request,
             inference_request.response_queue,
             raise_on_error,
@@ -278,9 +277,7 @@ class Model:
         """
 
         if inference_request is None:
-            inference_request = InferenceRequest(
-                model=self, _server=self._server, **kwargs
-            )
+            inference_request = InferenceRequest(model=self, **kwargs)
 
         if (inference_request.response_queue is not None) and (
             not isinstance(inference_request.response_queue, queue.SimpleQueue)
@@ -292,7 +289,6 @@ class Model:
         request = inference_request._create_tritonserver_inference_request()
         response_iterator = ResponseIterator(
             self,
-            self._server,
             request,
             inference_request.response_queue,
             raise_on_error,

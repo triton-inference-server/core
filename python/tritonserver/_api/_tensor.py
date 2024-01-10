@@ -130,6 +130,72 @@ class Tensor:
 
         return self.memory_buffer.size
 
+    def _sync_on_requested_stream(self, requested_stream_ptr):
+        """Stream synchronization based on cupy implementation.
+
+        Record event on requested stream if different from current
+        stream.
+
+        See
+        `https://data-apis.org/array-api/latest/API_specification/generated/array_api.array.__dlpack__.html`
+        and
+        `https://github.com/cupy/cupy/blob/f9563bcd5c674623f80ce975b590f9c860b44ed6/cupy/_core/core.pyx#L281`.
+        for more details.
+
+        Parameters
+        ----------
+        requested_stream_ptr :
+            requested stream as defined by DLPack protocol
+
+        Raises
+        ------
+        unsupported
+            If synchronization can not be done
+
+        """
+
+        current_stream_ptr = None
+        current_stream = None
+
+        unsupported = UnsupportedError(
+            f"DLPack stream synchronization on memory type {self.memory_type} and stream {requested_stream_ptr} not supported"
+        )
+
+        if requested_stream_ptr is not None and not isinstance(
+            requested_stream_ptr, int
+        ):
+            raise unsupported
+
+        if self.memory_type != MemoryType.GPU:
+            if requested_stream_ptr not in (None, 0):
+                raise unsupported
+            return
+
+        if cupy is None:
+            raise unsupported
+
+        with cupy.cuda.Device(self.memory_type_id):
+            current_stream = cupy.cuda.get_current_stream()
+            curr_stream_ptr = current_stream.ptr
+
+            # Based on cupy documentation
+            # cupy.cuda.Stream.null.ptr is legacy default stream
+            # cupy.cuda.Stream.ptds.ptr is per thread default stream
+
+            if curr_stream_ptr == 0:
+                curr_stream_ptr = cupy.cuda.Stream.null.ptr
+
+            if requested_stream_ptr in (None, 0, 1):
+                requested_stream_ptr = cupy.cuda.Stream.null.ptr
+
+            if requested_stream_ptr in (2,):
+                requested_stream_ptr = cupy.cuda.Stream.ptds.ptr
+
+            if requested_stream_ptr >= 0 and curr_stream_ptr != requested_stream_ptr:
+                next_stream = cupy.cuda.ExternalStream(requested_stream_ptr)
+                event = current_stream.record()
+                next_stream.wait_event(event)
+
     def __dlpack__(self, *, stream=None):
         """Convert the tensor to a DLPack-compatible object.
 
@@ -143,17 +209,8 @@ class Tensor:
         Any
             A DLPack-compatible object representing the tensor.
         """
-        # TODO:  Handle the stream argument correctly
-        #
-        #        if not (stream is None or (isinstance(stream, int) and stream == 0)):
-        #           raise UnsupportedError(
-        #              f"DLPack stream synchronization on {stream} not currently supported"
-        #         )
 
-        print(f"requested stream: {stream}")
-        print(f"current_stream: {cupy.cuda.get_current_stream()}")
-
-        print(f"default_stream: {cupy.cuda.Stream.null}")
+        self._sync_on_requested_stream(stream)
 
         dl_managed_tensor = Tensor._create_managed_tensor()
         dl_managed_tensor.dl_tensor.data = self.data_ptr

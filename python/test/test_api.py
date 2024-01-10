@@ -31,6 +31,7 @@ import unittest
 
 import numpy
 import pytest
+import torch
 import tritonserver
 
 try:
@@ -54,8 +55,6 @@ class ModelTests(unittest.TestCase):
 
         request = tritonserver.InferenceRequest(server.model("test"))
 
-        request = tritonserver.InferenceRequest(server.model("test"), _server="foo")
-
         pass
 
 
@@ -64,6 +63,8 @@ class TensorTests(unittest.TestCase):
         cpu_array = numpy.random.rand(1, 3, 100, 100).astype(numpy.float32)
         cpu_tensor = tritonserver.Tensor.from_dlpack(cpu_array)
         gpu_tensor = cpu_tensor.to_device("gpu")
+        cupy.from_dlpack(gpu_tensor)
+        torch.from_dlpack(gpu_tensor)
 
 
 class ServerTests(unittest.TestCase):
@@ -98,18 +99,8 @@ class ServerTests(unittest.TestCase):
 
 
 class InferenceTests(unittest.TestCase):
-    server_options = tritonserver.Options(
-        server_id="TestServer",
-        model_repository="test_api_models",
-        log_verbose=1,
-        exit_on_error=False,
-        exit_timeout=5,
-    )
-
     def test_basic_inference(self):
-        server = tritonserver.Server(InferenceTests.server_options).start(
-            wait_until_ready=True
-        )
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
         self.assertTrue(server.ready())
 
