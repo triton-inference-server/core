@@ -95,7 +95,7 @@ class InferenceRequest:
         Queue for asynchronous handling of inference responses. If
         provided Inference responses will be added to the queue in
         addition to the response iterator. Must be queue.SimpleQueue
-        for non async.io requests and asyncio.Queue for asyncio
+        for non asyncio requests and asyncio.Queue for asyncio
         requests.
 
     Examples
