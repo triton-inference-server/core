@@ -358,7 +358,8 @@ TritonModel::GetBackendLibraryProperties(
   }
 
   // Both 'backend_libdir' and 'backend_libpath' are now pointing to the C++
-  // backend library, 'backend_libdir' needs adjustment for Python based backend.
+  // backend library, 'backend_libdir' needs adjustment for Python based
+  // backend.
   if (*is_python_based_backend) {
     if (python_based_backend_libdir.empty()) {
       python_based_backend_libdir = JoinPath({backend_dir, backend_name});
