@@ -141,7 +141,7 @@ class Model:
     def async_infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
-        raise_on_error: bool = False,
+        raise_on_error: bool = True,
         **kwargs: Unpack[InferenceRequest],
     ) -> AsyncResponseIterator:
         """Send an inference request to the model for execution
@@ -156,7 +156,7 @@ class Model:
             inference request object. If not provided inference
             request will be created using remaining keyword
             arguments.
-        raise_on_error : bool
+        raise_on_error : bool, default True
             if True iterator will raise an error on any response
             errors returned from the model. If False errors will be
             returned as part of the response object.
@@ -215,7 +215,7 @@ class Model:
     def infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
-        raise_on_error: bool = False,
+        raise_on_error: bool = True,
         **kwargs: Unpack[InferenceRequest],
     ) -> ResponseIterator:
         """Send an inference request to the model for execution
@@ -231,7 +231,7 @@ class Model:
             inference request object. If not provided inference
             request will be created using remaining keyword
             arguments.
-        raise_on_error : bool
+        raise_on_error : bool, default True
             if True iterator will raise an error on any response
             errors returned from the model. If False errors will be
             returned as part of the response object.
