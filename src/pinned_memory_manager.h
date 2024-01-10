@@ -108,7 +108,8 @@ class PinnedMemoryManager {
 
   static std::unique_ptr<PinnedMemoryManager> instance_;
   static uint64_t pinned_memory_byte_size_;
-  static std::vector<std::shared_ptr<PinnedMemory>> allocated_pinned_memory_buffers_;
+  static std::vector<std::shared_ptr<PinnedMemory>>
+      allocated_pinned_memory_buffers_;
 
   std::mutex info_mtx_;
   std::map<void*, std::pair<bool, PinnedMemory*>> memory_info_;
