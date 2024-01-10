@@ -208,7 +208,7 @@ def triton_to_dlpack_dtype(dtype):
         type_code = DLDataTypeCode.kDLBfloat
         bits = 16
     elif dtype == "BYTES":
-        _raise_error("DLPack currently doesn't suppose BYTES type")
+        _raise_error("DLPack currently doesn't support BYTES type")
     else:
         _raise_error(
             "Can not convert unknown data type '{}' to DLPack data type".format(dtype)
