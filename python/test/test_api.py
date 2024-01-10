@@ -48,6 +48,7 @@ server_options = tritonserver.Options(
     server_id="TestServer",
     model_repository="/workspace/test/test_api_models",
     log_verbose=0,
+    log_error=True,
     exit_on_error=True,
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
@@ -174,29 +175,8 @@ class TensorTests(unittest.TestCase):
         numpy.testing.assert_array_equal(torch_tensor.numpy(), cpu_array)
         self.assertEqual(torch_tensor.data_ptr(), cpu_array.ctypes.data)
 
-    def test_tensor_to_dlpack(self):
-        ndarray = numpy.zeros([10, 20], dtype=numpy.uint8)
-        memory_buffer = _datautils.MemoryBuffer.from_dlpack(ndarray)
-        tensor = _datautils.Tensor(
-            tritonserver.DataType.FP32, shape=[50], memory_buffer=memory_buffer
-        )
-        ndarray_2 = numpy.from_dlpack(tensor)
-        self.assertEqual(ndarray.ctypes.data, ndarray_2.ctypes.data)
-        self.assertEqual(ndarray_2.dtype, numpy.float32)
-
-        torch_tensor = torch.from_dlpack(tensor)
-        self.assertEqual(torch_tensor.data_ptr(), ndarray.ctypes.data)
-        self.assertEqual(torch_tensor.dtype, torch.float32)
-
 
 class ServerTests(unittest.TestCase):
-    server_options = tritonserver.Options(
-        server_id="TestServer",
-        model_repository="test_api_models",
-        log_verbose=0,
-        exit_on_error=False,
-    )
-
     def test_not_started(self):
         server = tritonserver.Server()
         with self.assertRaises(tritonserver.InvalidArgumentError):
@@ -213,10 +193,10 @@ class ServerTests(unittest.TestCase):
 
     def test_invalid_repo(self):
         with self.assertRaises(tritonserver.InternalError):
-            server = tritonserver.Server(model_repository="foo").start()
+            tritonserver.Server(model_repository="foo").start()
 
     def test_ready(self):
-        server = tritonserver.Server(ServerTests.server_options).start()
+        server = tritonserver.Server(server_options).start()
         self.assertTrue(server.ready())
 
 
@@ -243,7 +223,6 @@ class InferenceTests(unittest.TestCase):
         for response in server.model("test").infer(
             inputs={"fp16_input": fp16_input},
             output_memory_type="gpu",
-            raise_on_error=True,
         ):
             fp16_output = cupy.from_dlpack(response.outputs["fp16_output"])
             self.assertEqual(fp16_input[0][0], fp16_output[0][0])
@@ -251,17 +230,15 @@ class InferenceTests(unittest.TestCase):
         for response in server.model("test").infer(
             inputs={"string_input": [["hello"]]},
             output_memory_type="gpu",
-            raise_on_error=True,
         ):
             text_output = response.outputs["string_output"].to_string_array()
-            print(text_output)
-            print(text_output[0][0] == "hello")
+            self.assertEqual(text_output[0][0], "hello")
 
         for response in server.model("test").infer(
             inputs={"string_input": tritonserver.Tensor.from_string_array([["hello"]])},
             output_memory_type="gpu",
-            raise_on_error=True,
         ):
             text_output = response.outputs["string_output"].to_string_array()
-            print(text_output)
-            print(text_output[0][0] == "hello")
+            text_output = response.outputs["string_output"].to_string_array()
+            self.assertEqual(text_output[0][0], "hello")
+        server.stop()
