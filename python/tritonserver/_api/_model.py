@@ -147,7 +147,7 @@ class Model:
         """Send an inference request to the model for execution
 
         Sends an inference request to the model. Responses are
-        returned using an async.io compatible iterator. See
+        returned using an asyncio compatible iterator. See
         c:func:`TRITONSERVER_ServerInferAsync`
 
         Parameters
