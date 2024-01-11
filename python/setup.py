@@ -72,6 +72,10 @@ platform_package_data = [
     "_c/triton_bindings.pyi",
 ]
 
+gpu_extras = ["cupy-cuda12x"]
+test_extras = ["pytest"]
+all_extras = gpu_extras + test_extras
+
 setup(
     name="tritonserver",
     version=VERSION,
@@ -105,5 +109,5 @@ setup(
     cmdclass={"bdist_wheel": bdist_wheel},
     data_files=data_files,
     install_requires=["numpy"],
-    extras_require={"GPU": ["cupy-cuda12x"], "all": ["cupy-cuda12x"]},
+    extras_require={"GPU": gpu_extras, "test": test_extras, "all": all_extras},
 )
