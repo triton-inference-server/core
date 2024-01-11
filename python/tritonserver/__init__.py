@@ -24,9 +24,9 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Triton Inference Server Python API
+"""Triton Inference Server In-Process Python API
 
-The Triton Inference Server Python API enables developers to easily
+The Triton Inference Server In-Process Python API enables developers to easily
 embed a Triton inference server within their python
 application. Developers can load and interact with models, send
 inference requests, query metrics, etc. Everything available through

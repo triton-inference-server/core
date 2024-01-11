@@ -81,7 +81,7 @@ setup(
     version=VERSION,
     author="NVIDIA Inc.",
     author_email="sw-dl-triton@nvidia.com",
-    description="Triton Inference Server Python API",
+    description="Triton Inference Server In-Process Python API",
     license="BSD",
     url="https://developer.nvidia.com/nvidia-triton-inference-server",
     classifiers=[
