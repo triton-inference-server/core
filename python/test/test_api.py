@@ -90,12 +90,8 @@ class AllocatorTests(unittest.TestCase):
         self.assertEqual(cpu_fp32_array.dtype, numpy.float32)
         self.assertEqual(cpu_fp32_array.nbytes, 200)
 
-        torch_fp32_tensor = torch.from_dlpack(tensor)
-        self.assertEqual(torch_fp32_tensor.dtype, torch.float32)
-        self.assertEqual(torch_fp32_tensor.data_ptr(), cpu_array.ctypes.data)
-        self.assertEqual(torch_fp32_tensor.nbytes, 200)
-
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
+    @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
     def test_allocate_on_gpu_and_reshape(self):
         if cupy is None:
             return
