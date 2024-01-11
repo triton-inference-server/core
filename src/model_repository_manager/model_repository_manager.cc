@@ -416,7 +416,7 @@ ModelRepositoryManager::Create(
   std::unique_ptr<ModelRepositoryManager> local_manager(
       new ModelRepositoryManager(
           repository_paths, !strict_model_config, polling_enabled,
-          model_control_enabled, life_cycle_options.min_compute_capability_,
+          model_control_enabled, life_cycle_options.min_compute_capability,
           enable_model_namespacing, std::move(life_cycle)));
   *model_repository_manager = std::move(local_manager);
 
