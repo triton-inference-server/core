@@ -26,10 +26,10 @@
 
 import asyncio
 import json
+import os
 import queue
 import time
 import unittest
-import os
 
 import numpy
 import pytest
@@ -46,7 +46,9 @@ except ImportError:
     torch = None
 
 module_directory = os.path.split(os.path.abspath(__file__))[0]
-test_model_directory = os.path.abspath(os.path.join(module_directory,"test_api_models"))
+test_model_directory = os.path.abspath(
+    os.path.join(module_directory, "test_api_models")
+)
 
 server_options = tritonserver.Options(
     server_id="TestServer",
@@ -57,6 +59,7 @@ server_options = tritonserver.Options(
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
 )
+
 
 class ModelTests(unittest.TestCase):
     def test_create_request(self):
