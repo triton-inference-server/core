@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -195,25 +195,43 @@ class TritonModel : public Model {
   static Status SetBackendConfigDefaults(
       triton::common::BackendCmdlineConfig& config);
 
-  // Searches for backend_libname in provided search_paths.
-  // If found, stores backend directory in backend_libdir and
-  // backend path in backend_libpath.
-  static Status LocateBackendLibrary(
-      const std::vector<std::string> search_paths,
+  // Get the search paths to the backend shared library.
+  static std::vector<std::string> GetBackendLibrarySearchPaths(
+      const std::string& model_path, int64_t version,
+      const std::string& backend_dir, const std::string& backend_name);
+
+  // Get backend library directory and path, and search paths for the library
+  // and whether the backend is based on Python backend. The model configuration
+  // runtime field will be updated if left empty.
+  static Status GetBackendLibraryProperties(
+      const std::string& model_path, int64_t version,
+      const std::string& backend_dir, const std::string& backend_name,
+      inference::ModelConfig* model_config, bool* is_python_based_backend,
+      std::vector<std::string>* search_paths, std::string* backend_libdir,
+      std::string* backend_libpath);
+
+  // Get 'backend_libname', 'backend_libdir', 'backend_libpath' and
+  // 'is_python_based_backend' by searching for different possible backend
+  // library names on 'search_paths'. Searching for Python based backend
+  // runtime is limited to 'backend_dir'.
+  static Status GetBackendRuntimeLibraryName(
+      const std::string& backend_dir, const std::string& backend_name,
+      const std::vector<std::string>& search_paths,
+      std::string* backend_libname, std::string* backend_libdir,
+      std::string* backend_libpath, bool* is_python_based_backend);
+
+  // Search for 'backend_libname' on 'search_paths'. If found, the matching
+  // search path will be stored in 'backend_libdir' and the backend library path
+  // will be stored in 'backend_libpath'. If not found, 'backend_libpath' will
+  // be set to empty.
+  static Status FindBackendLibraryPath(
+      const std::vector<std::string>& search_paths,
       const std::string& backend_libname, std::string* backend_libdir,
       std::string* backend_libpath);
 
-  // For a given backend (`backend_name`), looks for backend directory and
-  // location for the shared library, used by the backend. Returns:
-  // `backend_libdir` returns directory, where shared library (.so) is stored,
-  // `backend_libpath` returns the full path to .so,
-  // `python_runtime_modeldir` is set to empty string for c++ backends and
-  // returns directory, where model.py is stored.
-  static Status ResolveBackendPaths(
-      const std::string& backend_name, const std::string& global_backend_dir,
-      const std::string& model_name, std::vector<std::string>& search_paths,
-      const std::string& backend_libname, std::string* backend_libdir,
-      std::string* backend_libpath, std::string* python_runtime_modeldir);
+  // Assemble the C++ runtime library name.
+  static std::string AssembleCPPRuntimeLibraryName(
+      const std::string& backend_name);
 
   // Clear library handles.
   void ClearHandles();

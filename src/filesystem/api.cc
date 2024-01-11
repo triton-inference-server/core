@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <boost/filesystem.hpp>
 #include <mutex>
 
 namespace triton { namespace core {
@@ -396,6 +397,20 @@ bool
 IsAbsolutePath(const std::string& path)
 {
   return !path.empty() && (path[0] == '/');
+}
+
+bool
+IsChildPathEscapingParentPath(
+    const std::string& child_path, const std::string& parent_path)
+{
+  // Can use std::filesystem over boost in C++17.
+  const std::string absolute_child_path =
+      boost::filesystem::weakly_canonical(child_path).string();
+  const std::string absolute_parent_path =
+      boost::filesystem::canonical(parent_path).string();
+  // Can use starts_with() over rfind() in C++20.
+  bool is_escape = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
+  return is_escape;
 }
 
 std::string

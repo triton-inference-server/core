@@ -1,4 +1,4 @@
-# Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -126,6 +126,7 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
       ${CNMEM_PATH}/include
+      ${Boost_INCLUDE_DIRS}
   )
 
   target_compile_definitions(
@@ -151,6 +152,7 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
+      Boost::filesystem
   )
 
   if (NOT WIN32)
@@ -417,6 +419,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${GTEST_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
 )
 
 target_link_libraries(
@@ -430,6 +433,7 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     protobuf::libprotobuf
+    Boost::filesystem
 )
 
 install(

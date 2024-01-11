@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -77,6 +77,14 @@ class LocalizedPath {
 /// \param path The path.
 /// \return true if absolute path, false if relative path.
 bool IsAbsolutePath(const std::string& path);
+
+/// Check if the child path escapes from its parent path.
+/// \param child_path The child path.
+/// \param parent_path The parent path. The path must exist.
+/// \return true if the child path escapes from its parent path, false if the
+/// child path is within its parent path.
+bool IsChildPathEscapingParentPath(
+    const std::string& child_path, const std::string& parent_path);
 
 /// Join path segments into a longer path
 /// \param segments The path segments.
