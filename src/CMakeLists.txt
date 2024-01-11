@@ -447,7 +447,7 @@ FOREACH(p ${TRITON_EXTRA_LIB_PATHS})
   )
 ENDFOREACH(p)
 
-find_package(re2 REQUIRED)
+find_library(RE2_LIBRARY NAMES re2)
 
 target_link_libraries(
   triton-core
@@ -461,7 +461,7 @@ target_link_libraries(
     triton-common-json               # from repo-common
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf
-    re2::re2
+    ${RE2_LIBRARY}
     Boost::filesystem
 )
 
