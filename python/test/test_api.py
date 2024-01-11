@@ -29,6 +29,7 @@ import json
 import queue
 import time
 import unittest
+import os
 
 import numpy
 import pytest
@@ -44,16 +45,18 @@ try:
 except ImportError:
     torch = None
 
+module_directory = os.path.split(os.path.abspath(__file__))[0]
+test_model_directory = os.path.abspath(os.path.join(module_directory,"test_api_models"))
+
 server_options = tritonserver.Options(
     server_id="TestServer",
-    model_repository="/workspace/test/test_api_models",
+    model_repository=test_model_directory,
     log_verbose=0,
     log_error=True,
     exit_on_error=True,
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
 )
-
 
 class ModelTests(unittest.TestCase):
     def test_create_request(self):

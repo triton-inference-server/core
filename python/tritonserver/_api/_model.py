@@ -44,7 +44,6 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
-from typing_extensions import Unpack
 
 if TYPE_CHECKING:
     from tritonserver._api._server import Server
