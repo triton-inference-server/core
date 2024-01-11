@@ -42,6 +42,7 @@
 #include "model.h"
 #include "model_config.pb.h"
 #include "model_config_utils.h"
+#include "model_repository_manager.h"
 #include "pinned_memory_manager.h"
 #include "repo_agent.h"
 #include "triton/common/async_work_queue.h"
@@ -107,7 +108,6 @@ InferenceServer::InferenceServer()
   pinned_memory_pool_size_ = 1 << 28;
   buffer_manager_thread_count_ = 0;
   model_load_thread_count_ = 4;
-  model_load_retry_count_ = 0;
   enable_model_namespacing_ = false;
 
 #ifdef TRITON_ENABLE_GPU
@@ -258,7 +258,7 @@ InferenceServer::Init()
       (model_control_mode_ == ModelControlMode::MODE_EXPLICIT);
   const ModelLifeCycleOptions life_cycle_options(
       min_supported_compute_capability_, backend_cmdline_config_map_,
-      host_policy_map_, model_load_thread_count_, model_load_retry_count_);
+      host_policy_map_, model_load_thread_count_);
   status = ModelRepositoryManager::Create(
       this, version_, model_repository_paths_, startup_models_,
       strict_model_config_, polling_enabled, model_control_enabled,

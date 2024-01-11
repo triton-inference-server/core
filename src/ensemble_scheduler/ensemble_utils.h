@@ -31,7 +31,7 @@
 #include <unordered_map>
 
 #include "model_config.pb.h"
-#include "model_repository_manager/model_repository_manager.h"
+#include "model_repository_manager.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 

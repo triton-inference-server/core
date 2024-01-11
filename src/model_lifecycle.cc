@@ -513,15 +513,7 @@ ModelLifeCycle::AsyncLoad(
     // Load model asynchronously via thread pool
     load_pool_->Enqueue([this, model_id, version, model_info, OnComplete,
                          load_tracker, is_config_provided]() {
-      for (size_t retry = 0; retry <= options_.load_retry; ++retry) {
-        model_info->state_ = ModelReadyState::LOADING;
-        CreateModel(model_id, version, model_info, is_config_provided);
-        // Model state will be changed to NOT loading if failed to load,
-        // so the model is loaded if state is LOADING.
-        if (model_info->state_ == ModelReadyState::LOADING) {
-          break;
-        }
-      }
+      CreateModel(model_id, version, model_info, is_config_provided);
       OnLoadComplete(
           model_id, version, model_info, false /* is_update */, OnComplete,
           load_tracker);
@@ -548,16 +540,15 @@ ModelLifeCycle::CreateModel(
   if (!model_config.backend().empty()) {
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
-        server_, model_info->model_path_, options_.backend_cmdline_config_map,
-        options_.host_policy_map, version, model_config, is_config_provided,
-        &model);
+        server_, model_info->model_path_, cmdline_config_map_, host_policy_map_,
+        version, model_config, is_config_provided, &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
           server_, model_info->model_path_, version, model_config,
-          is_config_provided, options_.min_compute_capability, &is);
+          is_config_provided, min_compute_capability_, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to
       // obtained from server because this may happen during server

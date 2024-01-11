@@ -140,8 +140,8 @@ set(
   metric_family.cc
   model.cc
   model_config_utils.cc
-  model_repository_manager/model_lifecycle.cc
-  model_repository_manager/model_repository_manager.cc
+  model_lifecycle.cc
+  model_repository_manager.cc
   numa_utils.cc
   payload.cc
   pinned_memory_manager.cc
@@ -187,8 +187,8 @@ set(
   metric_family.h
   model_config_utils.h
   model.h
-  model_repository_manager/model_lifecycle.h
-  model_repository_manager/model_repository_manager.h
+  model_lifecycle.h
+  model_repository_manager.h
   numa_utils.h
   payload.h
   pinned_memory_manager.h

@@ -45,23 +45,21 @@ struct ModelLifeCycleOptions {
       const double min_compute_capability,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const unsigned int model_load_thread_count, const size_t load_retry)
-      : min_compute_capability(min_compute_capability),
-        backend_cmdline_config_map(backend_cmdline_config_map),
-        host_policy_map(host_policy_map),
-        model_load_thread_count(model_load_thread_count), load_retry(load_retry)
+      const unsigned int model_load_thread_count)
+      : min_compute_capability_(min_compute_capability),
+        backend_cmdline_config_map_(backend_cmdline_config_map),
+        host_policy_map_(host_policy_map),
+        model_load_thread_count_(model_load_thread_count)
   {
   }
   // The minimum supported CUDA compute capability.
-  const double min_compute_capability;
+  const double min_compute_capability_;
   // The backend configuration settings specified on the command-line
-  const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map;
+  const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map_;
   // The host policy setting used when loading models.
-  const triton::common::HostPolicyCmdlineConfigMap& host_policy_map;
+  const triton::common::HostPolicyCmdlineConfigMap& host_policy_map_;
   // Number of the threads to use for concurrently loading models
-  const unsigned int model_load_thread_count;
-  // Number of retry on model loading before considering the load has failed.
-  const size_t load_retry{0};
+  const unsigned int model_load_thread_count_;
 };
 
 
@@ -285,10 +283,13 @@ class ModelLifeCycle {
   };
 
   ModelLifeCycle(InferenceServer* server, const ModelLifeCycleOptions& options)
-      : server_(server), options_(options)
+      : server_(server),
+        min_compute_capability_(options.min_compute_capability_),
+        cmdline_config_map_(options.backend_cmdline_config_map_),
+        host_policy_map_(options.host_policy_map_)
   {
     load_pool_.reset(new triton::common::ThreadPool(
-        std::max(1u, options_.model_load_thread_count)));
+        std::max(1u, options.model_load_thread_count_)));
   }
 
   // Create a new model, the 'model_id' can either be a new or existing model.
@@ -326,7 +327,9 @@ class ModelLifeCycle {
   std::map<uintptr_t, std::unique_ptr<ModelInfo>> background_models_;
 
   InferenceServer* server_;
-  const ModelLifeCycleOptions options_;
+  const double min_compute_capability_;
+  const triton::common::BackendCmdlineConfigMap cmdline_config_map_;
+  const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
 
   // Fixed-size thread pool to load models at specified concurrency
   std::unique_ptr<triton::common::ThreadPool> load_pool_;

@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 28
+#define TRITONSERVER_API_VERSION_MINOR 27
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1977,15 +1977,6 @@ TRITONSERVER_ServerOptionsSetBufferManagerThreadCount(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelLoadThreadCount(
     struct TRITONSERVER_ServerOptions* options, unsigned int thread_count);
-
-/// Set the number of retry to load a model in a server options.
-///
-/// \param options The server options object.
-/// \param retry_count The number of retry.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetModelLoadRetryCount(
-    struct TRITONSERVER_ServerOptions* options, unsigned int retry_count);
 
 /// Enable model namespacing to allow serving models with the same name if
 /// they are in different namespaces.

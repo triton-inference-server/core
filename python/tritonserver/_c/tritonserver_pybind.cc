@@ -1291,12 +1291,6 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
         triton_object_, thread_count));
   }
 
-  void SetModelLoadRetryCount(unsigned int retry_count)
-  {
-    ThrowIfError(TRITONSERVER_ServerOptionsSetModelLoadRetryCount(
-        triton_object_, retry_count));
-  }
-
   void SetModelNamespacing(bool enable_namespace)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetModelNamespacing(
@@ -2033,9 +2027,6 @@ PYBIND11_MODULE(triton_bindings, m)
       .def(
           "set_model_load_thread_count",
           &PyServerOptions::SetModelLoadThreadCount)
-      .def(
-          "set_model_load_retry_count",
-          &PyServerOptions::SetModelLoadRetryCount)
       .def("set_model_namespacing", &PyServerOptions::SetModelNamespacing)
       .def("set_log_file", &PyServerOptions::SetLogFile)
       .def("set_log_info", &PyServerOptions::SetLogInfo)
