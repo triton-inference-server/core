@@ -93,11 +93,13 @@ if __name__ == "__main__":
     print("=== Building in: {}".format(os.getcwd()))
     print("=== Using builddir: {}".format(FLAGS.whl_dir))
     print("Adding package files")
-
     mkdir(os.path.join(FLAGS.whl_dir, "tritonserver"))
     shutil.copy("tritonserver/__init__.py", os.path.join(FLAGS.whl_dir, "tritonserver"))
-
+    # Type checking marker file indicating support for type checkers.
+    # https://peps.python.org/pep-0561/
+    shutil.copy("tritonserver/py.typed", os.path.join(FLAGS.whl_dir, "tritonserver"))
     cpdir("tritonserver/_c", os.path.join(FLAGS.whl_dir, "tritonserver", "_c"))
+    cpdir("tritonserver/_api", os.path.join(FLAGS.whl_dir, "tritonserver", "_api"))
     PYBIND_LIB = os.path.basename(FLAGS.binding_path)
     shutil.copyfile(
         FLAGS.binding_path,

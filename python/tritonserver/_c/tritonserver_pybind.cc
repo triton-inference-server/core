@@ -977,7 +977,11 @@ class PyInferenceRequest
     auto managed_pt =
         std::make_shared<PyInferenceResponse>(response, true /* owned */);
     auto cr = reinterpret_cast<PyInferenceResponse::CallbackResource*>(userp);
-    cr->complete_fn(py::cast(managed_pt), flags, cr->user_object);
+    if (response == nullptr) {
+      cr->complete_fn(py::none(), flags, cr->user_object);
+    } else {
+      cr->complete_fn(py::cast(managed_pt), flags, cr->user_object);
+    }
     if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       delete cr->allocator_resource;
       delete cr;
@@ -1155,6 +1159,11 @@ class PyInferenceRequest
     ThrowIfError(TRITONSERVER_InferenceRequestSetBoolParameter(
         triton_object_, key.c_str(), value));
   }
+  void Cancel()
+  {
+    ThrowIfError(TRITONSERVER_InferenceRequestCancel(triton_object_));
+  }
+
 
  public:
   std::unique_ptr<CallbackResource> request_callback_resource_{nullptr};
@@ -1959,7 +1968,8 @@ PYBIND11_MODULE(triton_bindings, m)
           &PyInferenceRequest::RemoveAllRequestedOutputs)
       .def("set_string_parameter", &PyInferenceRequest::SetStringParameter)
       .def("set_int_parameter", &PyInferenceRequest::SetIntParameter)
-      .def("set_bool_parameter", &PyInferenceRequest::SetBoolParameter);
+      .def("set_bool_parameter", &PyInferenceRequest::SetBoolParameter)
+      .def("cancel", &PyInferenceRequest::Cancel);
 
   // TRITONSERVER_InferenceResponse
   py::enum_<TRITONSERVER_ResponseCompleteFlag>(
@@ -2064,7 +2074,6 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("stop", &PyServer::Stop)
       .def("register_model_repository", &PyServer::RegisterModelRepository)
       .def("unregister_model_repository", &PyServer::UnregisterModelRepository)
-      .def("poll_model_repository", &PyServer::PollModelRepository)
       .def("poll_model_repository", &PyServer::PollModelRepository)
       .def("is_live", &PyServer::IsLive)
       .def("is_ready", &PyServer::IsReady)

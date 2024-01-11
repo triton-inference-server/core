@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -23,55 +23,17 @@
 # OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-cmake_minimum_required(VERSION 3.18)
 
-add_subdirectory(tritonserver)
+"""Type information for Triton _c bindings."""
 
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION ${TRITON_VERSION})
-configure_file(../LICENSE LICENSE.txt COPYONLY)
-configure_file(setup.py setup.py @ONLY)
-file(COPY test/  DESTINATION ./test/.)
+# Note: this file was generated using mypy with an empty __init__.py
+# file in the tritonserver package directory to avoid any renaming /
+# aliasing done by the wrapper
+#
+# mypy 1.8.0 (compiled: yes)
+#
+# stubgen -p tritonserver._c
+#
+# Todo: add stub generation to build process
 
-set(WHEEL_DEPENDS
-      ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION
-      ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt
-      ${CMAKE_CURRENT_BINARY_DIR}/setup.py
-      ${CMAKE_CURRENT_BINARY_DIR}/tritonserver
-      python-bindings
-)
-
-set(wheel_stamp_file "stamp.whl")
-
-add_custom_command(
-  OUTPUT "${wheel_stamp_file}"
-  COMMAND python3
-  ARGS
-    "${CMAKE_CURRENT_SOURCE_DIR}/build_wheel.py"
-    --dest-dir "${CMAKE_CURRENT_BINARY_DIR}/generic"
-    --binding-path $<TARGET_FILE:python-bindings>
-  DEPENDS ${WHEEL_DEPENDS}
-)
-
-add_custom_target(
-  generic-server-wheel ALL
-  DEPENDS
-    "${wheel_stamp_file}"
-)
-
-
-# Wheel
-set(WHEEL_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/generic/wheel/dist/")
-install(
-  DIRECTORY
-  ${WHEEL_OUT_DIR}
-  DESTINATION "${CMAKE_INSTALL_PREFIX}/python"
-)
-
-
-# Tests
-set(TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/test")
-install(
-  DIRECTORY
-  ${TEST_DIR}
-  DESTINATION "${CMAKE_INSTALL_PREFIX}/python"
-)
+from .triton_bindings import *
