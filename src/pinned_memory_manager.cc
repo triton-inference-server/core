@@ -66,6 +66,7 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 
 std::unique_ptr<PinnedMemoryManager> PinnedMemoryManager::instance_;
 uint64_t PinnedMemoryManager::pinned_memory_byte_size_ = 0;
+static std::mutex PinnedMemoryManager::allocated_buffer_mtx_;
 std::vector<std::shared_ptr<PinnedMemoryManager::PinnedMemory>>
     PinnedMemoryManager::allocated_pinned_memory_buffers_;
 
@@ -93,6 +94,7 @@ PinnedMemoryManager::PinnedMemory::~PinnedMemory()
 void*
 PinnedMemoryManager::PinnedMemory::Allocate(uint64_t size)
 {
+  std::lock_guard<std::mutex> lk(buffer_mtx_);
   void* ptr = managed_pinned_memory_.allocate(size, std::nothrow_t{});
   used_pinned_memory_byte_size_ += size;
   allocated_memory_info_.emplace(ptr, size);
@@ -102,6 +104,7 @@ PinnedMemoryManager::PinnedMemory::Allocate(uint64_t size)
 void
 PinnedMemoryManager::PinnedMemory::Deallocate(void* ptr)
 {
+  std::lock_guard<std::mutex> lk(buffer_mtx_);
   managed_pinned_memory_.deallocate(ptr);
   auto it = allocated_memory_info_.find(ptr);
   if (it != allocated_memory_info_.end()) {
@@ -135,7 +138,10 @@ PinnedMemoryManager::AddPinnedMemoryBuffer(
     unsigned long node_mask)
 {
   pinned_memory_buffers_[node_mask] = pinned_memory_buffer;
-  allocated_pinned_memory_buffers_.push_back(pinned_memory_buffer);
+  {
+    std::lock_guard<std::mutex> lk(allocated_buffer_mtx_);
+    allocated_pinned_memory_buffers_.push_back(pinned_memory_buffer);
+  }
 }
 
 Status
@@ -145,7 +151,6 @@ PinnedMemoryManager::AllocInternal(
 {
   auto status = Status::Success;
   if (pinned_memory_buffer->pinned_memory_buffer_ != nullptr) {
-    std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
     *ptr = pinned_memory_buffer->Allocate(size);
     *allocated_type = TRITONSERVER_MEMORY_CPU_PINNED;
     if (*ptr == nullptr) {
@@ -198,7 +203,6 @@ PinnedMemoryManager::AllocInternal(
 
   if ((!status.IsOk()) && (*ptr != nullptr)) {
     if (is_pinned) {
-      std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
       pinned_memory_buffer->Deallocate(*ptr);
     } else {
       free(*ptr);
@@ -232,7 +236,6 @@ PinnedMemoryManager::FreeInternal(void* ptr)
   }
 
   if (is_pinned) {
-    std::lock_guard<std::mutex> lk(pinned_memory_buffer->buffer_mtx_);
     pinned_memory_buffer->Deallocate(ptr);
   } else {
     free(ptr);
@@ -416,6 +419,7 @@ PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
 uint64_t
 PinnedMemoryManager::GetUsedPinnedMemoryByteSize()
 {
+  std::lock_guard<std::mutex> lk(allocated_buffer_mtx_);
   uint64_t used_pinned_memory_size = 0;
   if (!allocated_pinned_memory_buffers_.empty()) {
     for (const auto& it : allocated_pinned_memory_buffers_) {
