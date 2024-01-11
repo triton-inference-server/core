@@ -66,7 +66,7 @@ ParseIntOption(const std::string& msg, const std::string& arg, int* value)
 
 std::unique_ptr<PinnedMemoryManager> PinnedMemoryManager::instance_;
 uint64_t PinnedMemoryManager::pinned_memory_byte_size_ = 0;
-static std::mutex PinnedMemoryManager::allocated_buffer_mtx_;
+std::mutex PinnedMemoryManager::allocated_buffer_mtx_;
 std::vector<std::shared_ptr<PinnedMemoryManager::PinnedMemory>>
     PinnedMemoryManager::allocated_pinned_memory_buffers_;
 
