@@ -33,6 +33,10 @@ project(tritoncore LANGUAGES C CXX)
 # TRITON_CORE_HEADERS_ONLY=OFF to also build libtritonserver.so.
 option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 
+#
+# Specifying min required C++ standard
+#
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
 
 #
 # Triton Server API
@@ -120,8 +124,8 @@ add_library(
 add_library(
   TritonCore::triton-core-serverstub ALIAS triton-core-serverstub
 )
+target_compile_features(triton-core-serverstub PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 
-target_compile_features(triton-core-serverstub PRIVATE cxx_std_11)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
@@ -337,6 +341,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DTRITON_ENABLE_AZURE_STORAGE:BOOL=${TRITON_ENABLE_AZURE_STORAGE}
       -DTRITON_ENABLE_S3:BOOL=${TRITON_ENABLE_S3}
       -DTRITON_ENABLE_ENSEMBLE:BOOL=${TRITON_ENABLE_ENSEMBLE}
+      -DTRITON_MIN_CXX_STANDARD:STRING=${TRITON_MIN_CXX_STANDARD}
       -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
       -DCMAKE_INSTALL_PREFIX:PATH=${TRITON_INSTALL_PREFIX}
       -DTRITON_VERSION:STRING=${TRITON_VERSION}
