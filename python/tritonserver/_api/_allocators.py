@@ -38,6 +38,7 @@ from tritonserver._api._datautils import (
     DLPackObject,
     parse_device_or_memory_type,
 )
+from tritonserver._api._logging import LogLevel, LogMessage
 from tritonserver._c import TRITONSERVER_ResponseAllocator
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
@@ -228,6 +229,14 @@ class ResponseAllocator:
             self._memory_type, self._memory_type_id = parse_device_or_memory_type(
                 device_or_memory_type
             )
+        if (
+            self._memory_type is not None
+            and self._memory_allocator is None
+            and self._memory_type not in default_memory_allocators
+        ):
+            raise InvalidArgumentError(
+                f"Memory type {self._memory_type} not supported by default_memory_allocators: {default_memory_allocators}"
+            )
 
     def allocate(
         self,
@@ -238,24 +247,38 @@ class ResponseAllocator:
         memory_type_id,
         _user_object,
     ):
-        if self._memory_type is not None:
-            memory_type = self._memory_type
-            memory_type_id = self._memory_type_id
+        try:
+            if self._memory_type is not None:
+                memory_type = self._memory_type
+                memory_type_id = self._memory_type_id
 
-        memory_allocator = self._memory_allocator
-        if memory_allocator is None:
-            memory_allocator = default_memory_allocators[memory_type]
+            memory_allocator = self._memory_allocator
+            if memory_allocator is None:
+                if memory_type in default_memory_allocators:
+                    memory_allocator = default_memory_allocators[memory_type]
+                else:
+                    LogMessage(
+                        LogLevel.WARN,
+                        f"Requested memory type {memory_type} is not supported, falling back to {MemoryType.CPU}",
+                    )
+                    memory_type = MemoryType.CPU
+                    memory_type_id = 0
+                    memory_allocator = default_memory_allocators[memory_type]
 
-        memory_buffer = memory_allocator.allocate(
-            byte_size, memory_type, memory_type_id
-        )
+            memory_buffer = memory_allocator.allocate(
+                byte_size, memory_type, memory_type_id
+            )
 
-        return (
-            memory_buffer.data_ptr,
-            memory_buffer,
-            memory_buffer.memory_type,
-            memory_buffer.memory_type_id,
-        )
+            return (
+                memory_buffer.data_ptr,
+                memory_buffer,
+                memory_buffer.memory_type,
+                memory_buffer.memory_type_id,
+            )
+        except Exception as e:
+            message = f"Catastrophic failure in allocator: {e}, returning NULL"
+            LogMessage(LogLevel.ERROR, message)
+            return (0, None, MemoryType.CPU, 0)
 
     def release(
         self,
