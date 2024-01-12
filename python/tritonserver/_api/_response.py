@@ -39,6 +39,7 @@ from tritonserver._api import _model
 if TYPE_CHECKING:
     from tritonserver._api._model import Model
 
+from tritonserver._api._logging import LogMessage
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
@@ -46,7 +47,6 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_InferenceRequest,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
-from tritonserver._c.triton_bindings import TRITONSERVER_LogMessage as LogMessage
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ResponseCompleteFlag,
     TRITONSERVER_Server,
@@ -186,17 +186,8 @@ class AsyncResponseIterator:
                 del self._request
                 self._request = None
         except Exception as e:
-            current_frame = inspect.currentframe()
-            if current_frame is not None:
-                line_number = current_frame.f_lineno
-            else:
-                line_number = -1
-            LogMessage(
-                LogLevel.ERROR,
-                __file__,
-                line_number,
-                str(e),
-            )
+            message = f"Catastrophic failure in response callback: {e}"
+            LogMessage(LogLevel.ERROR, message)
             # catastrophic failure
             raise e from None
 
@@ -321,18 +312,8 @@ class ResponseIterator:
                 del self._request
                 self._request = None
         except Exception as e:
-            current_frame = inspect.currentframe()
-            if current_frame is not None:
-                line_number = current_frame.f_lineno
-            else:
-                line_number = -1
-
-            LogMessage(
-                LogLevel.ERROR,
-                __file__,
-                line_number,
-                str(e),
-            )
+            message = f"Catastrophic failure in response callback: {e}"
+            LogMessage(LogLevel.ERROR, message)
             # catastrophic failure
             raise e from None
 
@@ -396,7 +377,7 @@ class InferenceResponse:
             try:
                 response.throw_if_response_error()
             except TritonError as error:
-                error.args += tuple(asdict(result).items())
+                error.args += (result,)
                 result.error = error
 
             name, version = response.model
@@ -426,7 +407,7 @@ class InferenceResponse:
             result.outputs = outputs
         except Exception as e:
             error = InternalError(f"Unexpected error in creating response object: {e}")
-            error.args += tuple(asdict(result).items())
+            error.args += (result,)
             result.error = error
 
         # TODO: support classification
