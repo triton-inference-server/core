@@ -41,6 +41,7 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
+from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
 from tritonserver._c.triton_bindings import TRITONSERVER_Metric
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFamily as MetricFamily
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFormat as MetricFormat
