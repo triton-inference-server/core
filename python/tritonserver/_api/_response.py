@@ -39,7 +39,7 @@ from tritonserver._api import _model
 if TYPE_CHECKING:
     from tritonserver._api._model import Model
 
-from tritonserver._api._server import LogMessage
+from tritonserver._api._logging import LogMessage
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,

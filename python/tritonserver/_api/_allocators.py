@@ -38,7 +38,7 @@ from tritonserver._api._datautils import (
     DLPackObject,
     parse_device_or_memory_type,
 )
-from tritonserver._api._server import LogLevel, LogMessage
+from tritonserver._api._logging import LogLevel, LogMessage
 from tritonserver._c import TRITONSERVER_ResponseAllocator
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
@@ -278,7 +278,6 @@ class ResponseAllocator:
         except Exception as e:
             message = f"Catastrophic failure in allocator: {e}, returning NULL"
             LogMessage(LogLevel.ERROR, message)
-
             return (0, None, MemoryType.CPU, 0)
 
     def release(

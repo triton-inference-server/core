@@ -44,7 +44,7 @@ from tritonserver._c.triton_bindings import (
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
-from tritonserver._c.triton_bindings import TRITONSERVER_LogMessage, TRITONSERVER_Metric
+from tritonserver._c.triton_bindings import TRITONSERVER_Metric
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFamily as MetricFamily
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFormat as MetricFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricKind as MetricKind
@@ -1071,32 +1071,3 @@ class Metric(TRITONSERVER_Metric):
             parameters = []
 
         TRITONSERVER_Metric.__init__(self, family, parameters)
-
-
-def LogMessage(level: LogLevel, message: str):
-    """Log Message using Triton Inference Server Logger
-
-    Parameters
-    ----------
-    level : LogLevel
-        log level one of LogLevel.WARN, LogLevel.ERROR, LogLeve.INFO
-    message : str
-        message
-
-    Examples
-    --------
-
-    LogMessage(LogLevel.ERROR,"I've got a bad feeling about this ...")
-
-    """
-
-    filename, line_number = "unknown", -1
-    try:
-        current_frame = inspect.stack()[-1]
-        filename, line_number = (
-            os.path.filename(current_frame.filename),
-            current_frame.lineno,
-        )
-    except Exception:
-        pass
-    TRITONSERVER_LogMessage(level, filename, line_number, message)
