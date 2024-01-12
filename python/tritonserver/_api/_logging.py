@@ -38,7 +38,7 @@ def LogMessage(level: LogLevel, message: str):
     Parameters
     ----------
     level : LogLevel
-        log level one of LogLevel.WARN, LogLevel.ERROR, LogLeve.INFO
+        log level one of LogLevel.WARN, LogLevel.ERROR, LogLevel.INFO
     message : str
         message
 
