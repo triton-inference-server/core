@@ -447,6 +447,9 @@ FOREACH(p ${TRITON_EXTRA_LIB_PATHS})
   )
 ENDFOREACH(p)
 
+# re2 requires Threads::Threads to be available in the
+# list of targets
+find_package(Threads)
 find_package(re2 REQUIRED)
 
 target_link_libraries(
