@@ -449,6 +449,8 @@ if(${TRITON_ENABLE_METRICS})
   add_executable(
     metrics_api_test
     metrics_api_test.cc
+    ${PINNED_MEMORY_MANAGER_SRCS}
+    ${PINNED_MEMORY_MANAGER_HDRS}
     ../metric_family.cc
     ../metric_family.h
     ../metrics.cc
@@ -494,6 +496,24 @@ if(${TRITON_ENABLE_METRICS})
       prometheus-cpp::core
       protobuf::libprotobuf
   )
+
+  if (TRITON_ENABLE_GPU)
+    target_link_libraries(
+      metrics_api_test
+      PRIVATE
+        ${CNMEM_LIBRARY}
+        CUDA::cudart
+    )
+  endif()
+
+  if (NOT WIN32)
+    target_link_libraries(
+      metrics_api_test
+      PRIVATE
+        dl
+        numa
+    )
+  endif()
 
   install(
     TARGETS metrics_api_test
