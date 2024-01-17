@@ -1414,7 +1414,11 @@ ModelRepositoryManager::InitializeModelInfo(
       // When override happens, set 'mtime_nsec_' to minimum value so that
       // the next load without override will trigger re-load to undo
       // the override while the local files may still be unchanged.
-      linfo->mtime_nsec_ = std::make_pair(0, 0);
+      auto time_since_epoch =
+          std::chrono::system_clock::now().time_since_epoch();
+      linfo->mtime_nsec_.first =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_epoch)
+              .count();
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();
