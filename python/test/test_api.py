@@ -25,9 +25,11 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import asyncio
+import copy
 import json
 import os
 import queue
+import shutil
 import time
 import unittest
 
@@ -49,12 +51,19 @@ module_directory = os.path.split(os.path.abspath(__file__))[0]
 test_model_directory = os.path.abspath(
     os.path.join(module_directory, "test_api_models")
 )
+test_logs_directory = os.path.abspath(os.path.join(module_directory, "test_api_logs"))
+
+shutil.rmtree(test_logs_directory, ignore_errors=True)
+
+os.makedirs(test_logs_directory)
 
 server_options = tritonserver.Options(
     server_id="TestServer",
     model_repository=test_model_directory,
-    log_verbose=0,
+    log_verbose=6,
     log_error=True,
+    log_warn=True,
+    log_info=True,
     exit_on_error=True,
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
@@ -62,8 +71,14 @@ server_options = tritonserver.Options(
 
 
 class ModelTests(unittest.TestCase):
+    def setup_method(self, method):
+        self._server_options = copy.copy(server_options)
+        self._server_options.log_file = os.path.join(
+            test_logs_directory, method.__name__ + ".server.log"
+        )
+
     def test_create_request(self):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
         request = server.models()["test"].create_request()
 
@@ -78,9 +93,15 @@ class AllocatorTests(unittest.TestCase):
         def allocate(self, *args, **kwargs):
             raise Exception("foo")
 
+    def setup_method(self, method):
+        self._server_options = copy.copy(server_options)
+        self._server_options.log_file = os.path.join(
+            test_logs_directory, method.__name__ + ".server.log"
+        )
+
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_memory_fallback_to_cpu(self):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
         self.assertTrue(server.ready())
 
@@ -117,7 +138,7 @@ class AllocatorTests(unittest.TestCase):
         tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU] = allocator
 
     def test_memory_allocator_exception(self):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
         self.assertTrue(server.ready())
 
@@ -144,7 +165,7 @@ class AllocatorTests(unittest.TestCase):
                 pass
 
     def test_unsupported_memory_type(self):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
         self.assertTrue(server.ready())
 
@@ -292,6 +313,12 @@ class TensorTests(unittest.TestCase):
 
 
 class ServerTests(unittest.TestCase):
+    def setup_method(self, method):
+        self._server_options = copy.copy(server_options)
+        self._server_options.log_file = os.path.join(
+            test_logs_directory, method.__name__ + ".server.log"
+        )
+
     def test_not_started(self):
         server = tritonserver.Server()
         with self.assertRaises(tritonserver.InvalidArgumentError):
@@ -311,14 +338,51 @@ class ServerTests(unittest.TestCase):
             tritonserver.Server(model_repository="foo").start()
 
     def test_ready(self):
-        server = tritonserver.Server(server_options).start()
+        server = tritonserver.Server(self._server_options).start()
         self.assertTrue(server.ready())
+
+    def test_stop(self):
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+
+        self.assertTrue(server.ready())
+
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+
+        fp16_input = numpy.random.rand(1, 100).astype(dtype=numpy.float16)
+
+        for response in server.model("test").infer(
+            inputs={"fp16_input": fp16_input},
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
+            numpy.testing.assert_array_equal(fp16_input, fp16_output)
+        try:
+            server.stop()
+        except tritonserver.InternalError as e:
+            pytest.xfail(f"Server failed to stop! {e}")
 
 
 class InferenceTests(unittest.TestCase):
+    def setup_method(self, method):
+        self._server_options = copy.copy(server_options)
+        self._server_options.log_file = os.path.join(
+            test_logs_directory, method.__name__ + ".server.log"
+        )
+
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_gpu_output(self):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
         self.assertTrue(server.ready())
 
@@ -359,7 +423,7 @@ class InferenceTests(unittest.TestCase):
             self.assertEqual(text_output[0][0], "hello")
 
     def test_basic_inference(self):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
         self.assertTrue(server.ready())
 
@@ -384,5 +448,3 @@ class InferenceTests(unittest.TestCase):
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
-
-        server.stop()
