@@ -28,8 +28,8 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
-#include <boost/filesystem.hpp>
 #include <deque>
+#include <filesystem>
 #include <future>
 #include <stdexcept>
 #include <thread>
@@ -84,7 +84,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
               agent_model->AcquireMutableLocation(
                   TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
           const std::string temp_dir =
-              boost::filesystem::canonical(temp_dir_cstr).string();
+              std::filesystem::canonical(temp_dir_cstr).string();
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
@@ -114,9 +114,8 @@ class LocalizeRepoAgent : public TritonRepoAgent {
 
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              // DLIS-5149: Can use std::filesystem over boost in C++17.
               const std::string file_path =
-                  boost::filesystem::weakly_canonical(
+                  std::filesystem::weakly_canonical(
                       JoinPath(
                           {temp_dir, file->Name().substr(file_prefix.size())}))
                       .string();

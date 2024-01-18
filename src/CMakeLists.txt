@@ -64,10 +64,7 @@ endif() # TRITON_ENABLE_GPU
 #
 # Minimum of 1.78 required for use of boost::span. This can eventually be
 # relaxed and replaced with std::span in C++20.
-#
-# boost::filesystem can be replaced with std::filesystem in C++17.
-#
-find_package(Boost 1.78 REQUIRED COMPONENTS filesystem)
+find_package(Boost 1.78 REQUIRED COMPONENTS)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -465,7 +462,6 @@ target_link_libraries(
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf
     re2::re2
-    Boost::filesystem
 )
 
 if (NOT WIN32)
