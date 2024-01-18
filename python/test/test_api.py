@@ -67,6 +67,7 @@ server_options = tritonserver.Options(
     exit_on_error=True,
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
+    exit_timeout=10,
 )
 
 
@@ -341,6 +342,11 @@ class ServerTests(unittest.TestCase):
         server = tritonserver.Server(self._server_options).start()
         self.assertTrue(server.ready())
 
+    @pytest.mark.xfail(
+        tritonserver.__version__ <= "2.42.0",
+        reason="stop test expected to fail - known issue with exit timeout",
+        raises=tritonserver.InternalError,
+    )
     def test_stop(self):
         server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
@@ -367,10 +373,8 @@ class ServerTests(unittest.TestCase):
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
-        try:
-            server.stop()
-        except tritonserver.InternalError as e:
-            pytest.xfail(f"Server failed to stop! {e}")
+
+        server.stop()
 
 
 class InferenceTests(unittest.TestCase):
