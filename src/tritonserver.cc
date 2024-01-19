@@ -2330,6 +2330,25 @@ TRITONSERVER_ServerNew(
     tc::Metrics::SetMetricsInterval(loptions->MetricsInterval());
     tc::Metrics::SetConfigMap(loptions->MetricsConfigMap());
   }
+
+#ifdef TRITON_ENABLE_METRICS_GPU
+  if (loptions->Metrics() && loptions->GpuMetrics()) {
+    tc::Metrics::EnableGPUMetrics();
+  }
+#endif  // TRITON_ENABLE_METRICS_GPU
+
+#ifdef TRITON_ENABLE_METRICS_CPU
+  if (loptions->Metrics() && loptions->CpuMetrics()) {
+    tc::Metrics::EnableCpuMetrics();
+  }
+#endif  // TRITON_ENABLE_METRICS_CPU
+
+  const bool poll_metrics = (loptions->GpuMetrics() || loptions->CpuMetrics());
+  if (loptions->Metrics() && poll_metrics) {
+    // Start thread to poll enabled metrics periodically
+    tc::Metrics::StartPollingThreadSingleton();
+  }
+
 #endif  // TRITON_ENABLE_METRICS
 
   lserver->SetId(loptions->ServerId());
@@ -2375,27 +2394,6 @@ TRITONSERVER_ServerNew(
 
   // Initialize server
   tc::Status status = lserver->Init();
-
-#ifdef TRITON_ENABLE_METRICS
-#ifdef TRITON_ENABLE_METRICS_GPU
-  if (loptions->Metrics() && loptions->GpuMetrics()) {
-    tc::Metrics::EnableGPUMetrics();
-  }
-#endif  // TRITON_ENABLE_METRICS_GPU
-
-#ifdef TRITON_ENABLE_METRICS_CPU
-  if (loptions->Metrics() && loptions->CpuMetrics()) {
-    tc::Metrics::EnableCpuMetrics();
-  }
-#endif  // TRITON_ENABLE_METRICS_CPU
-
-  const bool poll_metrics = (loptions->GpuMetrics() || loptions->CpuMetrics());
-  if (loptions->Metrics() && poll_metrics) {
-    // Start thread to poll enabled metrics periodically
-    tc::Metrics::StartPollingThreadSingleton();
-  }
-#endif  // TRITON_ENABLE_METRICS
-
 
   // Setup tritonserver options table
   std::vector<std::string> options_headers;
