@@ -526,6 +526,8 @@ class Server:
         if options is None:
             options = Options(**kwargs)
         self.options: Options = options
+        if self.options.model_repository is None:
+            raise InvalidArgumentError("Model repository must be specified.")
         self._server = Server._UnstartedServer()
 
     def start(

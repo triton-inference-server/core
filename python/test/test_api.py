@@ -24,11 +24,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import asyncio
 import json
 import os
-import queue
-import time
 import unittest
 
 import numpy
@@ -386,3 +383,7 @@ class InferenceTests(unittest.TestCase):
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
 
         server.stop()
+
+    def test_model_repository_not_specified(self):
+        with self.assertRaises(tritonserver.InvalidArgumentError):
+            tritonserver.Server(model_repository=None)
