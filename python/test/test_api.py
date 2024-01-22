@@ -376,6 +376,10 @@ class ServerTests(unittest.TestCase):
 
         server.stop()
 
+    def test_model_repository_not_specified(self):
+        with self.assertRaises(tritonserver.InvalidArgumentError):
+            tritonserver.Server(model_repository=None).start()
+
 
 class InferenceTests(unittest.TestCase):
     def setup_method(self, method):
@@ -452,7 +456,3 @@ class InferenceTests(unittest.TestCase):
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
-
-    def test_model_repository_not_specified(self):
-        with self.assertRaises(tritonserver.InvalidArgumentError):
-            tritonserver.Server(model_repository=None)
