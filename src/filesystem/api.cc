@@ -45,7 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <mutex>
 
 namespace triton { namespace core {
@@ -403,11 +403,10 @@ bool
 IsChildPathEscapingParentPath(
     const std::string& child_path, const std::string& parent_path)
 {
-  // Can use std::filesystem over boost in C++17.
   const std::string absolute_child_path =
-      boost::filesystem::weakly_canonical(child_path).string();
+      std::filesystem::weakly_canonical(child_path).string();
   const std::string absolute_parent_path =
-      boost::filesystem::canonical(parent_path).string();
+      std::filesystem::canonical(parent_path).string();
   // Can use starts_with() over rfind() in C++20.
   bool is_escape = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
   return is_escape;

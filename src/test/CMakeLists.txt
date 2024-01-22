@@ -152,7 +152,6 @@ if(${TRITON_ENABLE_GPU})
       protobuf::libprotobuf
       ${CNMEM_LIBRARY}
       CUDA::cudart
-      Boost::filesystem
   )
 
   if (NOT WIN32)
@@ -433,7 +432,6 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     protobuf::libprotobuf
-    Boost::filesystem
 )
 
 install(
