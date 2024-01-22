@@ -343,6 +343,8 @@ class Options:
 
         options.set_server_id(self.server_id)
 
+        if self.model_repository is None:
+            raise InvalidArgumentError("Model repository must be specified.")
         if not isinstance(self.model_repository, list):
             self.model_repository = [self.model_repository]
         for model_repository_path in self.model_repository:
@@ -526,8 +528,6 @@ class Server:
         if options is None:
             options = Options(**kwargs)
         self.options: Options = options
-        if self.options.model_repository is None:
-            raise InvalidArgumentError("Model repository must be specified.")
         self._server = Server._UnstartedServer()
 
     def start(
