@@ -420,7 +420,7 @@ TritonServerOptions::AddRateLimiterResource(
   }
   auto ritr = ditr->second.find(name);
   if (ritr == ditr->second.end()) {
-    ditr->second.emplace(name, count).first;
+    ditr->second.emplace(name, count);
   } else {
     // If already present then store the minimum of the two.
     if (ritr->second > count) {
