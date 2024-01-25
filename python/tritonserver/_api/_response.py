@@ -155,7 +155,7 @@ class AsyncResponseIterator:
         best effort basis and may not prevent execution of a request
         if it is already started or completed.
 
-        See c:func:`TRITONSERVER_ServerInferenceRequestCancel`
+        See :c:func:`TRITONSERVER_ServerInferenceRequestCancel`
 
         Examples
         --------
@@ -284,7 +284,7 @@ class ResponseIterator:
         best effort basis and may not prevent execution of a request
         if it is already started or completed.
 
-        See c:func:`TRITONSERVER_ServerInferenceRequestCancel`
+        See :c:func:`TRITONSERVER_ServerInferenceRequestCancel`
 
         Examples
         --------
@@ -328,7 +328,7 @@ class InferenceResponse:
     reported and a flag to indicate if the response is the final one
     for a request.
 
-    See c:func:`TRITONSERVER_InferenceResponse` for more details
+    See :c:func:`TRITONSERVER_InferenceResponse` for more details
 
     Parameters
     ----------

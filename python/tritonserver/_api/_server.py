@@ -126,11 +126,13 @@ class Options:
 
     model_control_mode : ModelControlMode, default ModelControlModel.NONE
         Model control mode.
-        ModelControlMode.NONE : All models in the repository are loaded on startup.
-        ModelControlMode.POLL : All models in the repository are loaded on startup.
-                                Model repository changes can be applied using `poll_model_repository`.
-        ModelControlMode.EXPLICIT : Models will not be loaded at startup and need to be explicitly loaded and unloaded
-                                    using model control APIs `load_model`, `unload_model`.
+
+        - ModelControlMode.NONE : All models in the repository are loaded on startup.
+        - ModelControlMode.POLL : All models in the repository are loaded on startup.
+                                  Model repository changes can be applied using `poll_model_repository`.
+        - ModelControlMode.EXPLICIT : Models will not be loaded at startup and need to be explicitly loaded and unloaded
+                                      using model control APIs `load_model`, `unload_model`.
+
         See :c:func:`TRITONSERVER_ServerOptionsSetModelControlMode`
 
     startup_models : list[str], default []
@@ -598,7 +600,7 @@ class Server:
     def stop(self) -> None:
         """Stop server and unload models
 
-        See c:func:`TRITONSERVER_ServerStop`
+        See :c:func:`TRITONSERVER_ServerStop`
 
         Returns
         -------
@@ -620,7 +622,7 @@ class Server:
 
         Only available when ModelControlMode is set to explicit
 
-        See c:func:`TRITONSERVER_ServerUnregisterModelRepository`
+        See :c:func:`TRITONSERVER_ServerUnregisterModelRepository`
 
         Parameters
         ----------
@@ -710,7 +712,7 @@ class Server:
 
         Only available if ModelControlMode.POLL is enabled.
 
-        See c:func:`TRITONSERVER_ServerPollModelRepository`
+        See :c:func:`TRITONSERVER_ServerPollModelRepository`
 
         Returns
         -------
@@ -726,7 +728,7 @@ class Server:
         Returns metadata for server including name, version and
         enabled extensions.
 
-        See :c:func`TRITONSERVER_ServerMetadata`
+        See :c:func:`TRITONSERVER_ServerMetadata()`
 
         Returns
         -------
@@ -751,7 +753,7 @@ class Server:
     def live(self) -> bool:
         """Returns true if the server is live.
 
-        See :c:func`TRITONSERVER_ServerIsLive()`
+        See :c:func:`TRITONSERVER_ServerIsLive()`
 
         Returns
         -------
@@ -772,7 +774,7 @@ class Server:
     def ready(self) -> bool:
         """Returns True if the server is ready
 
-        See c:func:`TRITONSERVER_ServerIsReady()`
+        See :c:func:`TRITONSERVER_ServerIsReady()`
 
         Returns
         -------
@@ -839,7 +841,7 @@ class Server:
     def models(self, exclude_not_ready: bool = False) -> ModelDictionary:
         """Returns a dictionary of known models in the model repository
 
-        See c:func:`TRTIONSERVER_ServerModelIndex()`
+        See :c:func:`TRTIONSERVER_ServerModelIndex()`
 
         Parameters
         ----------
@@ -885,7 +887,7 @@ class Server:
         Load a model from the repository and wait for it to be
         ready. Only available if ModelControlMode is EXPLICIT.
 
-        See c:func:`TRITONSERVER_ServerLoadModel`
+        See :c:func:`TRITONSERVER_ServerLoadModel`
 
         Parameters
         ----------
@@ -936,7 +938,7 @@ class Server:
 
         Unloads a model and its dependents (optional).
 
-        See c:func:`TRITONSERVER_ServerUnloadModel()`
+        See :c:func:`TRITONSERVER_ServerUnloadModel()`
 
         Parameters
         ----------
@@ -993,7 +995,7 @@ class Server:
     def metrics(self, metric_format: MetricFormat = MetricFormat.PROMETHEUS) -> str:
         """Return server and custom metrics
 
-        See c:func:`TRITONSERVER_ServerMetrics()`
+        See :c:func:`TRITONSERVER_ServerMetrics()`
 
         Parameters
         ----------
@@ -1050,7 +1052,7 @@ class Metric(TRITONSERVER_Metric):
     MetricFamily defines the type and name of the metric. When a
     metric is added to a family it can further add additional labels
     allowing for multiple metrics to be associated with the same
-    family. For more details see c:func:`TRITONSERVER_Metric`
+    family. For more details see :c:func:`TRITONSERVER_Metric`
     documentation.
 
     """

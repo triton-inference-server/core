@@ -31,7 +31,9 @@ from __future__ import annotations
 import asyncio
 import queue
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
+from typing import Optional
+from typing import Optional as Optional
 
 from tritonserver._api import _model
 from tritonserver._api._allocators import MemoryAllocator
@@ -57,7 +59,7 @@ class InferenceRequest:
     methods. They contain input parameters and input data as well as
     configuration for response output memory allocation.
 
-    See c:func:`TRITONSERVER_InferenceRequest` for more details
+    See :c:func:`TRITONSERVER_InferenceRequest` for more details
 
     Parameters
     ----------

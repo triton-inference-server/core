@@ -147,7 +147,7 @@ class Model:
 
         Sends an inference request to the model. Responses are
         returned using an asyncio compatible iterator. See
-        c:func:`TRITONSERVER_ServerInferAsync`
+        :c:func:`TRITONSERVER_ServerInferAsync()`
 
         Parameters
         ----------
@@ -218,7 +218,7 @@ class Model:
 
         Sends an inference request to the model. Responses are
         returned asynchronously using an iterator. See
-        c:func:`TRITONSERVER_ServerInferAsync`
+        :c:func:`TRITONSERVER_ServerInferAsync()`
 
 
         Parameters
@@ -304,7 +304,7 @@ class Model:
     def metadata(self) -> dict[str, Any]:
         """Returns medatadata about a model and its inputs and outputs
 
-        See c:func:`TRITONSERVER_ServerModelMetadata()`
+        See :c:func:`TRITONSERVER_ServerModelMetadata()`
 
         Returns
         -------
