@@ -146,6 +146,9 @@ class ModelRepositoryManager {
       return map_.find(key);
     }
 
+    // Return all keys on the map as a set.
+    std::set<ModelIdentifier> GetModelIdentifiers();
+
     // Write updated model info back to this object after model load/unload.
     void Writeback(
         const ModelInfoMap& updated_model_info,
