@@ -259,6 +259,14 @@ ModelLifeCycle::InflightStatus()
   return inflight_status;
 }
 
+size_t
+ModelLifeCycle::BackgroundModelsSize()
+{
+  LOG_VERBOSE(2) << "BackgroundModelsSize()";
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
+  return background_models_.size();
+}
+
 const ModelStateMap
 ModelLifeCycle::ModelStates()
 {

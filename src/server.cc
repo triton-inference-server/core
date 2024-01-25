@@ -341,6 +341,7 @@ InferenceServer::Stop(const bool force)
       }
     } else {
       const auto& live_models = model_repository_manager_->LiveModelStates();
+      size_t bg_models_size = model_repository_manager_->BackgroundModelsSize();
 
       LOG_INFO << "Timeout " << exit_timeout_iters << ": Found "
                << live_models.size() << " live models and "
@@ -355,7 +356,8 @@ InferenceServer::Stop(const bool force)
         }
       }
 
-      if ((live_models.size() == 0) && (inflight_request_counter_ == 0)) {
+      if ((live_models.size() == 0) && (bg_models_size == 0) &&
+          (inflight_request_counter_ == 0)) {
         return Status::Success;
       }
     }
