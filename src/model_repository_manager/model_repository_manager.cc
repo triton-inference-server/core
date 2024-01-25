@@ -957,15 +957,44 @@ ModelRepositoryManager::PollModels(
 Status
 ModelRepositoryManager::UnloadAllModels()
 {
-  Status status;
-  for (const auto& name_info : infos_) {
-    Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
-    if (!unload_status.IsOk()) {
-      status = Status(
-          unload_status.ErrorCode(),
-          "Failed to gracefully unload models: " + unload_status.Message());
+  std::unique_lock<std::mutex> lock(mu_);
+
+  // Get a set of all models, and make sure non of them are loading/unloading.
+  std::set<ModelIdentifier> all_models;
+  bool all_models_locked = false;
+  while (!all_models_locked) {
+    // Make a copy of the dependency graph.
+    std::unordered_map<std::string, std::set<ModelIdentifier>> global_map(
+        global_map_);
+    DependencyGraph dependency_graph(dependency_graph_, &global_map);
+    // Try to lock all models.
+    all_models = infos_.GetModelIdentifiers();
+    std::shared_ptr<std::condition_variable> retry_notify_cv;
+    auto conflict_model =
+        dependency_graph.LockNodes(all_models, &retry_notify_cv);
+    if (conflict_model) {
+      LOG_VERBOSE(2) << "Unload all models conflict '" << conflict_model->str()
+                     << "'";
+      // A model is loading/unloading. Wait for it to complete.
+      retry_notify_cv->wait(lock);
+      // There could be changes to other models as well. The dependency graph
+      // and models has to be reloaded.
+      continue;
+    }
+    all_models_locked = true;
+  }
+
+  // Unload all models.
+  for (const auto& model_id : all_models) {
+    Status status = model_life_cycle_->AsyncUnload(model_id);
+    if (!status.IsOk()) {
+      // The server is shutting down. There is nothing to do about the error but
+      // to move forward.
+      LOG_ERROR << "Unload all models failed on '" << model_id << "'; "
+                << status.Message();
     }
   }
+
   return Status::Success;
 }
 
@@ -2218,6 +2247,16 @@ ModelRepositoryManager::ModelInfoMap::operator=(const ModelInfoMap& rhs)
   ModelInfoMap tmp(rhs);
   Swap(tmp);
   return *this;
+}
+
+std::set<ModelIdentifier>
+ModelRepositoryManager::ModelInfoMap::GetModelIdentifiers()
+{
+  std::set<ModelIdentifier> model_ids;
+  for (const auto& pair : map_) {
+    model_ids.emplace(pair.first);
+  }
+  return model_ids;
 }
 
 void
