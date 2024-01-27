@@ -438,6 +438,9 @@ class ModelRepositoryManager {
   /// if it doesn't have in-flight inferences.
   const std::set<std::tuple<ModelIdentifier, int64_t, size_t>> InflightStatus();
 
+  /// \return the number of model(s) in the background.
+  size_t BackgroundModelsSize();
+
   /// \param strict_readiness If true, only models that have at least one
   /// ready version will be considered as live. Otherwise, the models that
   /// have loading / unloading versions will also be live.

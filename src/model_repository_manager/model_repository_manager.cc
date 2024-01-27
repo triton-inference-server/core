@@ -981,6 +981,12 @@ ModelRepositoryManager::InflightStatus()
   return model_life_cycle_->InflightStatus();
 }
 
+size_t
+ModelRepositoryManager::BackgroundModelsSize()
+{
+  return model_life_cycle_->BackgroundModelsSize();
+}
+
 const ModelStateMap
 ModelRepositoryManager::LiveModelStates(bool strict_readiness)
 {
