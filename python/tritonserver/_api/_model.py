@@ -174,6 +174,27 @@ class Model:
         InvalidArgumentError
             if any invalid arguments are provided
 
+        Examples
+        --------
+        >>> async def example():
+        ...     responses = server.model("identity").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+        ...     async for response in responses:
+        ...         print(response)
+        ...     print(numpy.from_dlpack(response.outputs["fp16_output"]))
+
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> asyncio.run(example())
+        InferenceResponse(model={'name': 'identity', 'version': 1,
+        'state': None}, request_id='', parameters={},
+        outputs={'fp16_output':
+        Tensor(data_type=<TRITONSERVER_DataType.FP16: 10>,
+        shape=array([1, 1]),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=2,
+        owner=array([ 0, 60], dtype=int8)))}, error=None,
+        classification_label=None, final=True)
+        [[1.]]
+
         """
 
         if inference_request is None:

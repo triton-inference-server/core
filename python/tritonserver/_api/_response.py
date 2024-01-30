@@ -63,9 +63,9 @@ class AsyncResponseIterator:
     --------
     >>> server = tritonserver.Server(model_repository="/workspace/models").start()
     >>> async def example():
-    ...          responses = server.model("identity").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
-    ...          async for response in responses:
-    ...              print(numpy.from_dlpack(response.outputs["fp16_output"]))
+    ...     responses = server.model("identity").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+    ...     async for response in responses:
+    ...         print(numpy.from_dlpack(response.outputs["fp16_output"]))
 
     >>> asyncio.run(example())
     [[1.]]
