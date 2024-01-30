@@ -146,9 +146,6 @@ class ModelRepositoryManager {
       return map_.find(key);
     }
 
-    // Return all keys on the map as a set.
-    std::set<ModelIdentifier> GetModelIdentifiers();
-
     // Write updated model info back to this object after model load/unload.
     void Writeback(
         const ModelInfoMap& updated_model_info,
@@ -424,8 +421,9 @@ class ModelRepositoryManager {
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents);
 
-  /// Unload all models. This function should be called before shutting down
-  /// the model repository manager.
+  /// Unload all models that are tracked by the model repository manager. New
+  /// models may be loaded while this function is unloading. This function
+  /// should be called before shutting down the model repository manager.
   /// \return error status.
   Status UnloadAllModels();
 
