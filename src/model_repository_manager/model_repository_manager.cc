@@ -957,27 +957,21 @@ ModelRepositoryManager::PollModels(
 Status
 ModelRepositoryManager::UnloadAllModels()
 {
-  bool polled, no_parallel_conflict;
-  do {
-    // Find all the models to be unloaded.
-    std::unordered_map<std::string, std::vector<const InferenceParameter*>>
-        models;
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      for (const auto& pair : infos_) {
-        // Only the model name is needed.
-        models[pair.first.name_];
-      }
+  // Find all the models to be unloaded.
+  std::unordered_map<std::string, std::vector<const InferenceParameter*>>
+      models;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (const auto& pair : infos_) {
+      // Only the model name is needed.
+      models[pair.first.name_];
     }
-    // Unload all models found. If 'no_parallel_conflict' is false, then at
-    // least one model was loading or unloading, which the function will be a
-    // no-op and block until the loading or unloading is completed.
-    RETURN_IF_ERROR(LoadUnloadModels(
-        models, ActionType::UNLOAD, true /* unload_dependents */, &polled,
-        &no_parallel_conflict));
-  } while (!no_parallel_conflict);
-
-  return Status::Success;
+  }
+  // Unload all models found.
+  bool polled;
+  return LoadUnloadModels(
+      models, ActionType::UNLOAD, true /* unload_dependents */, &polled,
+      nullptr /* no_parallel_conflict */);
 }
 
 Status

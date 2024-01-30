@@ -330,11 +330,11 @@ InferenceServer::Stop(const bool force)
       }
 
       if (inflight_status.size() == 0) {
-        unloading_model = true;
         status = model_repository_manager_->UnloadAllModels();
         if (!status.IsOk()) {
-          LOG_ERROR << status.Message();
+          LOG_WARNING << status.Message();
         } else {
+          unloading_model = true;
           LOG_INFO << "All models are stopped, unloading models";
           continue;
         }
