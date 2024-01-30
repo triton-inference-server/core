@@ -175,7 +175,7 @@ class MemoryAllocator(ABC):
 
         Examples
         --------
-        memory_buffer = allocator.allocate(100, MemoryType.CPU, 0)
+        >>> memory_buffer = allocator.allocate(100, MemoryType.CPU, 0)
 
         """
 

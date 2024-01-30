@@ -86,9 +86,9 @@ class Model:
 
         Examples
         --------
-        >>> server.model("test")
-        server.model("test")
-        {'name': 'test', 'version': -1, 'state': None}
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity")
+        {'name': 'identity', 'version': -1, 'state': None}
 
         """
 
@@ -120,17 +120,16 @@ class Model:
 
         Examples
         --------
-
-        >>> server.model("test").create_request()
-        server.model("test").create_request()
-        InferenceRequest(model={'name': 'test', 'version': -1,
-        'state': None},
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity").create_request()
+        InferenceRequest(model={'name': 'identity', 'version': -1,
+        'state': None}, request_id=None, flags=0, correlation_id=None,
+        priority=0, timeout=0, inputs={}, parameters={},
+        output_memory_type=None, output_memory_allocator=None,
+        response_queue=None, _serialized_inputs={},
         _server=<tritonserver._c.triton_bindings.TRITONSERVER_Server
-        object at 0x7f5827156bf0>, request_id=None, flags=0,
-        correlation_id=None, priority=0, timeout=0, inputs={},
-        parameters={}, output_memory_type=None,
-        output_memory_allocator=None, response_queue=None,
-        _serialized_inputs={})
+        object at
+        0x...>)
 
         """
         if "model" in kwargs:
@@ -248,27 +247,22 @@ class Model:
 
         Examples
         --------
-        >>> responses = server.model("test_2").infer(inputs={"text_input":["hello"]})
-        responses = list(server.model("test_2").infer(inputs={"text_input":["hello"]}))
-
-        >>> response = responses[0]
-        print(response)
-        InferenceResponse(model={'name': 'test_2', 'version': 1,
-        'state': None},
-        _server=<tritonserver._c.triton_bindings.TRITONSERVER_Server
-        object at 0x7f5827156bf0>, request_id='', parameters={},
-        outputs={'text_output':
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> model = server.model("identity")
+        >>> for response in model.infer(inputs={"string_input":[["hello"]]}):
+        ...    print(response)
+        InferenceResponse(model={'name': 'identity', 'version': 1,
+        'state': None}, request_id='', parameters={},
+        outputs={'string_output':
         Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
-        shape=array([1]),
-        memory_buffer=MemoryBuffer(data_ptr=140003384498080,
-        memory_type=<TRITONSERVER_MemoryType.CPU: 0>,
-        memory_type_id=0, size=9, owner=array([ 5, 0, 0, 0, 104, 101,
-        108, 108, 111], dtype=int8)))}, error=None,
-        classification_label=None, final=False)
-
-        >>> response.outputs["text_output"].to_bytes_array()
-        response.outputs["text_output"].to_bytes_array()
-        array([b'hello'], dtype=object)
+        shape=array([1, 1]),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
+        owner=array([ 5, 0, 0, 0, 104, 101, 108, 108, 111],
+        dtype=int8)))}, error=None, classification_label=None,
+        final=True)
+        >>> response.outputs["string_output"].to_bytes_array()
+        array([[b'hello']], dtype=object)
 
         """
 
@@ -313,13 +307,14 @@ class Model:
 
         Examples
         --------
-        server.model("test").metadata()
-        {'name': 'test', 'versions': ['1'], 'platform': 'python',
-        'inputs': [{'name': 'text_input', 'datatype': 'BYTES',
-        'shape': [-1]}, {'name': 'fp16_input', 'datatype': 'FP16',
-        'shape': [-1, 1]}], 'outputs': [{'name': 'text_output',
-        'datatype': 'BYTES', 'shape': [-1]}, {'name': 'fp16_output',
-        'datatype': 'FP16', 'shape': [-1, 1]}]}
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity").metadata()
+        {'name': 'identity', 'versions': ['1'], 'platform': 'python',
+        'inputs': [{'name': 'string_input', 'datatype': 'BYTES',
+        'shape': [-1, -1]}, {'name': 'fp16_input', 'datatype': 'FP16',
+        'shape': [-1, -1]}], 'outputs': [{'name': 'string_output',
+        'datatype': 'BYTES', 'shape': [-1, -1]}, {'name':
+        'fp16_output', 'datatype': 'FP16', 'shape': [-1, -1]}]}
 
         """
 
@@ -339,8 +334,8 @@ class Model:
 
         Examples
         --------
-        >>> server.model("test").ready()
-        server.model("test").ready()
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity").ready()
         True
 
         """
@@ -359,9 +354,9 @@ class Model:
 
         Examples
         --------
-        >>> server.model("resnet50_libtorch").batch_properties()
-        server.model("resnet50_libtorch").batch_properties()
-        <TRITONSERVER_ModelBatchFlag.FIRST_DIM: 2>
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity").batch_properties()
+        <TRITONSERVER_ModelBatchFlag.UNKNOWN: 1>
 
         """
 
@@ -381,8 +376,8 @@ class Model:
 
         Examples
         --------
-        >>> server.model("resnet50_libtorch").transaction_properties()
-        server.model("resnet50_libtorch").transaction_properties()
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity").transaction_properties()
         <TRITONSERVER_ModelTxnPropertyFlag.ONE_TO_ONE: 1>
 
         """
@@ -405,20 +400,21 @@ class Model:
 
         Examples
         --------
-        >>> server.model("test").statistics()
-        server.model("test").statistics()
-
-        {'model_stats': [{'name':
-        'test', 'version': '1', 'last_inference': 1704731597736,
-        'inference_count': 2, 'execution_count': 2, 'inference_stats':
-        {'success': {'count': 2, 'ns': 3079473}, 'fail': {'count': 0, 'ns':
-        0}, 'queue': {'count': 2, 'ns': 145165}, 'compute_input': {'count': 2,
-        'ns': 124645}, 'compute_infer': {'count': 2, 'ns': 2791809},
-        'compute_output': {'count': 2, 'ns': 10240}, 'cache_hit': {'count': 0,
-        'ns': 0}, 'cache_miss': {'count': 0, 'ns': 0}}, 'batch_stats':
-        [{'batch_size': 1, 'compute_input': {'count': 2, 'ns': 124645},
-        'compute_infer': {'count': 2, 'ns': 2791809}, 'compute_output':
-        {'count': 2, 'ns': 10240}}], 'memory_usage': []}]}
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> responses = list(server.model("identity").infer(inputs={"string_input":[["hello"]]}))
+        >>> server.model("identity").statistics()
+        {'model_stats': [{'name': 'identity', 'version': '1',
+        'last_inference': ..., 'inference_count': 1,
+        'execution_count': 1, 'inference_stats': {'success': {'count':
+        1, 'ns': ...}, 'fail': {'count': 0, 'ns': 0}, 'queue':
+        {'count': 1, 'ns': ...}, 'compute_input': {'count': 1, 'ns':
+        ...}, 'compute_infer': {'count': 1, 'ns': ...},
+        'compute_output': {'count': 1, 'ns': ...}, 'cache_hit':
+        {'count': 0, 'ns': 0}, 'cache_miss': {'count': 0, 'ns': 0}},
+        'batch_stats': [{'batch_size': 1, 'compute_input': {'count':
+        1, 'ns': ...}, 'compute_infer': {'count': 1, 'ns': ...},
+        'compute_output': {'count': 1, 'ns': ...}}],
+        'memory_usage': []}]}
 
         """
 
@@ -443,33 +439,31 @@ class Model:
 
         Examples
         --------
-
-        >>> server.model("test").config()
-        server.model("test").config()
-
-        {'name': 'test', 'platform':
-        '', 'backend': 'python', 'version_policy': {'latest':
-        {'num_versions': 1}}, 'max_batch_size': 0, 'input': [{'name':
-        'text_input', 'data_type': 'TYPE_STRING', 'format':
-        'FORMAT_NONE', 'dims': [-1], 'is_shape_tensor': False,
-        'allow_ragged_batch': False, 'optional': True}, {'name':
-        'fp16_input', 'data_type': 'TYPE_FP16', 'format':
-        'FORMAT_NONE', 'dims': [-1, 1], 'is_shape_tensor': False,
-        'allow_ragged_batch': False, 'optional': True}], 'output':
-        [{'name': 'text_output', 'data_type': 'TYPE_STRING', 'dims':
-        [-1], 'label_filename': '', 'is_shape_tensor': False},
-        {'name': 'fp16_output', 'data_type': 'TYPE_FP16', 'dims': [-1,
-        1], 'label_filename': '', 'is_shape_tensor': False}],
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity").config()
+        {'name': 'identity', 'platform': '', 'backend': 'python',
+        'runtime': '', 'version_policy': {'latest': {'num_versions':
+        1}}, 'max_batch_size': 0, 'input': [{'name': 'string_input',
+        'data_type': 'TYPE_STRING', 'format': 'FORMAT_NONE', 'dims':
+        [-1, -1], 'is_shape_tensor': False, 'allow_ragged_batch':
+        False, 'optional': True}, {'name': 'fp16_input', 'data_type':
+        'TYPE_FP16', 'format': 'FORMAT_NONE', 'dims': [-1, -1],
+        'is_shape_tensor': False, 'allow_ragged_batch': False,
+        'optional': True}], 'output': [{'name': 'string_output',
+        'data_type': 'TYPE_STRING', 'dims': [-1, -1],
+        'label_filename': '', 'is_shape_tensor': False}, {'name':
+        'fp16_output', 'data_type': 'TYPE_FP16', 'dims': [-1, -1],
+        'label_filename': '', 'is_shape_tensor': False}],
         'batch_input': [], 'batch_output': [], 'optimization':
         {'priority': 'PRIORITY_DEFAULT', 'input_pinned_memory':
         {'enable': True}, 'output_pinned_memory': {'enable': True},
         'gather_kernel_buffer_threshold': 0, 'eager_batching': False},
-        'instance_group': [{'name': 'test_2', 'kind': 'KIND_GPU',
+        'instance_group': [{'name': 'identity', 'kind': 'KIND_GPU',
         'count': 1, 'gpus': [0], 'secondary_devices': [], 'profile':
         [], 'passive': False, 'host_policy': ''}],
         'default_model_filename': 'model.py', 'cc_model_filenames':
-        {}, 'metric_tags': {}, 'parameters': {}, 'model_warmup': [],
-        'model_transaction_policy': {'decoupled': True}}
+        {}, 'metric_tags': {}, 'parameters': {}, 'model_warmup': []}
+
         """
 
         return json.loads(

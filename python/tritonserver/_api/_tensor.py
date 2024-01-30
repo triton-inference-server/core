@@ -24,6 +24,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+"""Class representing input and output tensors"""
+
 from __future__ import annotations
 
 import ctypes
@@ -76,6 +78,16 @@ class Tensor:
         Shape of the tensor.
     memory_buffer : MemoryBuffer
         Memory buffer containing the tensor data.
+
+    Examples
+    --------
+    >>> numpy_array = numpy.array([0, 1, 2, 3])
+    >>> tritonserver.Tensor.from_dlpack(numpy_array)
+    Tensor(data_type=<TRITONSERVER_DataType.INT64: 9>, shape=[4],
+    memory_buffer=MemoryBuffer(data_ptr=...,
+    memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=32,
+    owner=array([0, 1, 2, 3])))
+
     """
 
     data_type: DataType
@@ -149,7 +161,7 @@ class Tensor:
 
         Raises
         ------
-        unsupported
+        UnsupportedError
             If synchronization can not be done
 
         """
@@ -201,7 +213,7 @@ class Tensor:
                 event = current_stream.record()
                 next_stream.wait_event(event)
 
-    def __dlpack__(self, *, stream=None):
+    def __dlpack__(self, *, stream=None) -> Any:
         """Convert the tensor to a DLPack-compatible object.
 
         Parameters
@@ -213,6 +225,17 @@ class Tensor:
         -------
         Any
             A DLPack-compatible object representing the tensor.
+
+        Examples
+        --------
+        >>> numpy_array = numpy.array([0, 1, 2, 3])
+        >>> tensor = tritonserver.Tensor.from_dlpack(numpy_array)
+        >>> tensor.data_type = tritonserver.DataType.INT8
+        >>> tensor.shape = [tensor.size]
+        >>> numpy.from_dlpack(tensor)
+        array([0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0,
+               0, 0, 3, 0, 0, 0, 0, 0, 0, 0], dtype=int8)
+
         """
 
         self._sync_on_requested_stream(stream)
@@ -248,6 +271,12 @@ class Tensor:
         -------
         tuple[DLDeviceType, int]
             A tuple representing the DLPack device information (device type, device ID).
+
+        Examples
+        --------
+        >>> numpy_array = numpy.array([0, 1, 2, 3])
+        >>> tritonserver.Tensor.from_dlpack(numpy_array).__dlpack_device__()
+        (1, 0)
         """
 
         return (
@@ -270,9 +299,13 @@ class Tensor:
 
         Examples
         --------
-
-        numpy_ndarray = response.outputs["text_output"].to_string_array()
-
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> request = server.model("identity").create_request()
+        >>> request.inputs["string_input"] = [["hello"]]
+        >>> for response in server.model("identity").infer(request):
+        ...    numpy_ndarray = response.outputs["string_output"].to_string_array()
+        ...    print(numpy_ndarray)
+        [['hello']]
         """
         return self.to_bytes_array().astype(str)
 
@@ -291,8 +324,13 @@ class Tensor:
 
         Examples
         --------
-
-        numpy_ndarray = response.outputs["text_output"].to_bytes_array()
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> request = server.model("identity").create_request()
+        >>> request.inputs["string_input"] = [["hello"]]
+        >>> for response in server.model("identity").infer(request):
+        ...    numpy_ndarray = response.outputs["string_output"].to_bytes_array()
+        ...    print(numpy_ndarray)
+        [[b'hello']]
 
         """
         if self.data_type != DataType.BYTES:
@@ -339,9 +377,21 @@ class Tensor:
         Examples
         --------
 
-        tensor = Tensor.from_string_array(numpy.array(["hello"]))
+        >>> tritonserver.Tensor.from_string_array(numpy.array(["hello"]))
+        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        shape=(1,),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
+        owner=array([ 5, 0, 0, 0, 104, 101, 108, 108, 111],
+        dtype=int8)))
 
-        tensor = Tensor.from_string_array(["hello"])
+        >>> tritonserver.Tensor.from_string_array(["hello"])
+        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        shape=(1,),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
+        owner=array([ 5, 0, 0, 0, 104, 101, 108, 108, 111],
+        dtype=int8)))
 
         """
         return Tensor.from_bytes_array(string_array)
@@ -375,9 +425,21 @@ class Tensor:
         Examples
         --------
 
-        tensor = Tensor.from_bytes_array(numpy.array(["hello"]))
+        >>> tritonserver.Tensor.from_bytes_array(numpy.array([b"hello"]))
+        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        shape=(1,),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
+        owner=array([ 5, 0, 0, 0, 104, 101, 108, 108, 111],
+        dtype=int8)))
 
-        tensor = Tensor.from_bytes_array(["hello"])
+        >>> tritonserver.Tensor.from_bytes_array([b"hello"])
+        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        shape=(1,),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
+        owner=array([ 5, 0, 0, 0, 104, 101, 108, 108, 111],
+        dtype=int8)))
 
         """
         result = Tensor._from_object(bytes_array)
@@ -412,10 +474,13 @@ class Tensor:
         Examples
         --------
 
-        tensor = Tensor.from_object(numpy.array(["hello"]))
-
-        tensor = Tensor.from_object(["hello"])
-
+        >>> tritonserver.Tensor._from_object(numpy.array(["hello"]))
+        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        shape=(1,),
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
+        owner=array([ 5, 0, 0, 0, 104, 101, 108, 108, 111],
+        dtype=int8)))
 
         """
         if type(obj) in Tensor._from_converters:
@@ -444,9 +509,17 @@ class Tensor:
         Examples
         --------
 
-        tensor = Tensor.from_dlpack(numpy.array([0,1,2], dtype=numpy.float16))
+        >>> tritonserver.Tensor.from_dlpack(numpy.array([0,1,2], dtype=numpy.float16))
+        Tensor(data_type=<TRITONSERVER_DataType.FP16: 10>, shape=[3],
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=6,
+        owner=array([0., 1., 2.], dtype=float16)))
 
-        tensor = Tensor.from_dlpack(torch.zeros(100, dtype=torch.float16))
+        >>> tritonserver.Tensor.from_dlpack(cupy.array([0,1,2], dtype=cupy.float16))
+        Tensor(data_type=<TRITONSERVER_DataType.FP16: 10>, shape=[3],
+        memory_buffer=MemoryBuffer(data_ptr=...,
+        memory_type=<MemoryType.GPU: 2>, memory_type_id=0, size=6,
+        owner=array([0., 1., 2.], dtype=float16)))
 
         """
         dlpack_object = DLPackObject(obj)
@@ -468,9 +541,15 @@ class Tensor:
         Examples
         --------
 
-        tensor = Tensor.from_dlpack(torch.zeros(100, dtype=torch.float16).to("cuda"))
-
-        numpy_nd_array = numpy.array(tensor.to_host())
+        >>> tensor = Tensor.from_dlpack(cupy.zeros(100, dtype=cupy.float16))
+        >>> numpy.from_dlpack(tensor.to_host())
+        array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+           0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+           0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+           0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+           0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+           0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+          dtype=float16)
 
         """
         return self.to_device("cpu")
@@ -493,29 +572,20 @@ class Tensor:
         Examples
         --------
 
-        tensor_cpu = tritonserver.Tensor.from_dlpack(numpy.array([0,1,2], dtype=numpy.float16))
+        >>> tensor_cpu = tritonserver.Tensor.from_dlpack(numpy.array([0,1,2], dtype=numpy.float16))
 
         # Different ways to specify the device
 
-        tensor_gpu = tensor_cpu.to_device(MemoryType.GPU)
-
-        tensor_gpu = tensor_cpu.to_device((MemoryType.GPU,0))
-
-        tensor_gpu = tensor_cpu.to_device((DLDeviceType.kDLCUDA,0))
-
-        tensor_gpu = tensor_cpu.to_device("gpu")
-
-        tensor_gpu = tensor_cpu.to_device("gpu:0")
-
-        ndarray_gpu = cupy.from_dlpack(tensor_gpu)
-
-        ndarray_gpu[0] = ndarray_gpu.mean()
-
-        tensor_cpu = tensor_gpu.to_device("cpu")
-
-        ndarray_cpu = numpy.from_dlpack(tensor_cpu)
-
-        assert ndarray_cpu[0] == ndarray_gpu[0]
+        >>> tensor_gpu = tensor_cpu.to_device(MemoryType.GPU)
+        >>> tensor_gpu = tensor_cpu.to_device((MemoryType.GPU,0))
+        >>> tensor_gpu = tensor_cpu.to_device((DLDeviceType.kDLCUDA,0))
+        >>> tensor_gpu = tensor_cpu.to_device("gpu")
+        >>> tensor_gpu = tensor_cpu.to_device("gpu:0")
+        >>> ndarray_gpu = cupy.from_dlpack(tensor_gpu)
+        >>> ndarray_gpu[0] = ndarray_gpu.mean()
+        >>> tensor_cpu = tensor_gpu.to_device("cpu")
+        >>> ndarray_cpu = numpy.from_dlpack(tensor_cpu)
+        >>> assert ndarray_cpu[0] == ndarray_gpu[0]
 
         """
         memory_type, memory_type_id = parse_device_or_memory_type(device)

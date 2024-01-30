@@ -31,11 +31,11 @@ from __future__ import annotations
 import asyncio
 import queue
 from dataclasses import dataclass, field
-from typing import Any
-from typing import Optional
-from typing import Optional as Optional
+from typing import TYPE_CHECKING, Any, Optional
 
-from tritonserver._api import _model
+if TYPE_CHECKING:
+    from tritonserver._api._model import Model
+
 from tritonserver._api._allocators import MemoryAllocator
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._tensor import Tensor
@@ -105,26 +105,24 @@ class InferenceRequest:
 
     # Creating a request explicitly
 
-    >>> request = server.model("test").create_request()
-    request = server.model("test").create_request()
-    request.inputs["fp16_input"] = numpy.array([[1.0]]).astype(numpy.float16)
-    for response in server.model("test_2").infer(request):
-       print(numpy.from_dlpack(response.outputs["fp16_output"]))
+    >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+    >>> request = server.model("identity").create_request()
+    >>> request.inputs["fp16_input"] = numpy.array([[1.0]]).astype(numpy.float16)
+    >>> for response in server.model("identity").infer(request):
+    ...     print(numpy.from_dlpack(response.outputs["fp16_output"]))
     [[1.]]
 
     # Creating a request implicitly
 
-    for response in server.model("test_2").infer(
-        inputs={"fp16_input": numpy.array([[1.0]]).astype(numpy.float16)}
-    ):
-        print(numpy.from_dlpack(response.outputs["fp16_output"]))
-
+    >>> for response in server.model("identity").infer(
+    ...     inputs={"fp16_input": numpy.array([[1.0]]).astype(numpy.float16)}
+    ... ):
+    ...     print(numpy.from_dlpack(response.outputs["fp16_output"]))
     [[1.]]
-
 
     """
 
-    model: _model.Model
+    model: Model
     request_id: Optional[str] = None
     flags: int = 0
     correlation_id: Optional[int | str] = None

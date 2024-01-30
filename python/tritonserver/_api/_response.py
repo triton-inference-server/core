@@ -34,8 +34,6 @@ import queue
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Optional
 
-from tritonserver._api import _model
-
 if TYPE_CHECKING:
     from tritonserver._api._model import Model
 
@@ -65,7 +63,7 @@ class AsyncResponseIterator:
 
     def __init__(
         self,
-        model: _model.Model,
+        model: Model,
         request: TRITONSERVER_InferenceRequest,
         user_queue: Optional[asyncio.Queue] = None,
         raise_on_error: bool = False,
@@ -349,7 +347,7 @@ class InferenceResponse:
 
     """
 
-    model: _model.Model
+    model: Model
     request_id: Optional[str] = None
     parameters: dict[str, str | int | bool] = field(default_factory=dict)
     outputs: dict[str, Tensor] = field(default_factory=dict)
@@ -359,7 +357,7 @@ class InferenceResponse:
 
     @staticmethod
     def _from_tritonserver_inference_response(
-        model: _model.Model,
+        model: Model,
         request: TRITONSERVER_InferenceRequest,
         response,
         flags: TRITONSERVER_ResponseCompleteFlag,

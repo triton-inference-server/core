@@ -210,13 +210,17 @@ def parse_device_or_memory_type(
         if isinstance(device_or_memory_type[0], MemoryType):
             memory_type = device_or_memory_type[0]
             memory_type_id = device_or_memory_type[1]
-        elif isinstance(device_or_memory_type[0], _dlpack.DLDeviceType):
+        elif isinstance(device_or_memory_type[0], _dlpack.DLDeviceType) or isinstance(
+            device_or_memory_type[0], int
+        ):
             memory_type = DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE[
                 device_or_memory_type[0]
             ]
             memory_type_id = device_or_memory_type[1]
         else:
-            raise InvalidArgumentError(f"Invalid memory type {device_or_memory_type}")
+            raise InvalidArgumentError(
+                f"Invalid memory type {device_or_memory_type} {type(device_or_memory_type[0])}"
+            )
     elif isinstance(device_or_memory_type, MemoryType):
         memory_type = device_or_memory_type
         memory_type_id = 0

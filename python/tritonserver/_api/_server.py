@@ -35,7 +35,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Optional
 
-from tritonserver._api._model import Model
+from tritonserver._api._model import Model as Model
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
@@ -64,7 +64,7 @@ uint = Annotated[int, ctypes.c_uint]
 class RateLimiterResource:
     """Resource count for rate limiting.
 
-    The amount of a resource available.
+    The amount of a resource available for a specific device.
 
     See :c:func:`TRITONSERVER_ServerOptionsAddRateLimiterResource`
 
@@ -78,6 +78,7 @@ class RateLimiterResource:
 
     device : uint
         The id of the device
+
     """
 
     name: str
@@ -145,10 +146,12 @@ class Options:
 
     rate_limiter_mode : RateLimitMode, default RateLimitMode.OFF
         Rate limit mode.
-        RateLimitMode.EXEC_COUNT : Rate limiting prioritizes execution based on
-                                   the number of times each instance has run and if
-                                   resource constraints can be satisfied.
-        RateLimitMode.OFF : Rate limiting is disabled.
+
+        - RateLimitMode.EXEC_COUNT : Rate limiting prioritizes execution based on
+                                     the number of times each instance has run and if
+                                     resource constraints can be satisfied.
+        - RateLimitMode.OFF : Rate limiting is disabled.
+
         See :c:func:`TRITONSERVER_ServerOptionsSetRateLimiterMode`
 
     rate_limiter_resources : list[RateLimiterResource], default []
@@ -381,7 +384,7 @@ class Options:
         options.set_exit_timeout(self.exit_timeout)
         options.set_buffer_manager_thread_count(self.buffer_manager_thread_count)
         options.set_model_load_thread_count(self.model_load_thread_count)
-        options.set_model_load_retry_count(self.model_load_retry_count)
+        # options.set_model_load_retry_count(self.model_load_retry_count)
         options.set_model_namespacing(self.model_namespacing)
 
         if self.log_file:
@@ -426,38 +429,55 @@ class Options:
 class ModelDictionary(dict):
     """Model dictionary associating model name, version tuples to model objects
 
-    ModelDictionary objects returned from Server.models(). Not intendended
+    ModelDictionary objects returned from `Server.models()`. Not intended
     to be instantiated directly.
-
-    Parameters
-    ----------
-    dict : [str | tuple [str, int], Model]
-
-    Raises
-    ------
-    KeyError
-        Model not found
 
     Examples
     --------
+    >>> server = tritonserver.Server(model_repository="/workspace/models").start()
     >>> server.models()
-    server.models()
-    {('resnet50_libtorch', 1): {'name': 'resnet50_libtorch', 'version': 1, 'state': 'READY'}}
-
-    >>> server.models()['resnet50_libtorch']
-    server.models()['resnet50_libtorch']
-    {'name': 'resnet50_libtorch', 'version': -1, 'state': None}
+    {('identity', 1): {'name': 'identity', 'version': 1, 'state': 'READY'}}
+    >>> server.models()['identity']
+    {'name': 'identity', 'version': -1, 'state': None}
 
     """
 
     def __init__(self, server: Server, models: list[Model]) -> None:
+        """Initialize Model Dictionary
+
+        ModelDictionary objects are returned from
+        `Server.models()`. Not intended to be instantiated directly.
+
+        Parameters
+        ----------
+        server : Server
+            server instance
+        models : list[Model]
+            list of models
+
+        """
+
         super().__init__()
         for model in models:
             self[(model.name, model.version)] = model
         self._server = server
         self._model_names = [x[0] for x in self.keys()]
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str | tuple[str, int]):
+        """Return model object based on name or name and version
+
+        Parameters
+        ----------
+        key : str | tuple[str, int]
+            name or (name, version) tuple
+
+        Raises
+        ------
+        KeyError
+            Unknown Model
+
+        """
+
         if isinstance(key, tuple):
             try:
                 return dict.__getitem__(self, key)
@@ -485,10 +505,13 @@ class Server:
         """Initialize Triton Inference Server
 
         Initialize Triton Inference Server based on configuration
-        options. Options can be passed as an object or key, value pairs
-        that will be used to construct an object.
+        options. Options can be passed as an `Options`
+        object or keyname arguments that will be used to construct an
+        `Options` object.
 
-        Note: options will be validated on start().
+        Note
+        ----
+        `Options` are validated on `start` .
 
         Parameters
         ----------
@@ -496,34 +519,32 @@ class Server:
             Server configuration options.
 
         kwargs : Unpack[Options]
-            Keyname arguments passed to `Options` constructor. See
-            `Options` documentation for details.
+            Keyname arguments passed to :class:`Options` constructor. See
+            :class:`Options` documentation for details.
 
         Examples
         --------
         >>> server = tritonserver.Server(model_repository="/workspace/models")
-        server = tritonserver.Server(model_repository="/workspace/models")
-
-        >>> tritonserver.Options(model_repository="/workspace/models")
-        tritonserver.Options(model_repository="/workspace/models")
-
-        Options(server_id='triton', model_repository='/workspace/models',
-        model_control_mode=<TRITONSERVER_ModelControlMode.NONE: 0>,
-        startup_models=[], strict_model_config=True,
-        rate_limiter_mode=<TRITONSERVER_RateLimitMode.OFF: 0>,
-        rate_limiter_resources=[], pinned_memory_pool_size=268435456,
-        cuda_memory_pool_sizes={}, cache_config={},
-        cache_directory='/opt/tritonserver/caches',
-        min_supported_compute_capability=6.0, exit_on_error=True,
-        strict_readiness=True, exit_timeout=30, buffer_manager_thread_count=0,
-        model_load_thread_count=4, model_namespacing=False, log_file=None,
-        log_info=False, log_warn=False, log_error=False,
-        log_format=<TRITONSERVER_LogFormat.DEFAULT: 0>, log_verbose=False,
-        metrics=True, gpu_metrics=True, cpu_metrics=True,
-        metrics_interval=2000, backend_directory='/opt/tritonserver/backends',
-        repo_agent_directory='/opt/tritonserver/repoagents',
-        model_load_device_limits=[], backend_configuration={},
-        host_policies={}, metrics_configuration={})
+        >>> server.options
+            Options(model_repository='/workspace/models',
+            server_id='triton', model_control_mode=<ModelControlMode.NONE:
+            0>, startup_models=[], strict_model_config=True,
+            rate_limiter_mode=<RateLimitMode.OFF: 0>,
+            rate_limiter_resources=[], pinned_memory_pool_size=268435456,
+            cuda_memory_pool_sizes={}, cache_config={},
+            cache_directory='/opt/tritonserver/caches',
+            min_supported_compute_capability=6.0, exit_on_error=True,
+            strict_readiness=True, exit_timeout=30,
+            buffer_manager_thread_count=0, model_load_thread_count=4,
+            model_load_retry_count=0, model_namespacing=False,
+            log_file=None, log_info=False, log_warn=False,
+            log_error=False, log_format=<LogFormat.DEFAULT: 0>,
+            log_verbose=0, metrics=True, gpu_metrics=True,
+            cpu_metrics=True, metrics_interval=2000,
+            backend_directory='/opt/tritonserver/backends',
+            repo_agent_directory='/opt/tritonserver/repoagents',
+            model_load_device_limits=[], backend_configuration={},
+            host_policies={}, metrics_configuration={})
 
         """
 
@@ -573,11 +594,8 @@ class Server:
         Examples
         --------
         >>> server = tritonserver.Server(model_repository="/workspace/models")
-        server = tritonserver.Server(model_repository="/workspace/models")
-
         >>> server.start()
-        server.start()
-
+        <tritonserver._api._server.Server object at 0x...>
         """
 
         if not isinstance(self._server, Server._UnstartedServer):
@@ -604,13 +622,12 @@ class Server:
 
         Returns
         -------
-        Server
+        None
 
         Examples
         --------
-
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
         >>> server.stop()
-        server.stop()
 
         """
 
@@ -638,14 +655,10 @@ class Server:
         >>> options = tritonserver.Options()
         >>> options.model_control_mode=tritonserver.ModelControlMode.EXPLICIT
         >>> options.model_repository="/workspace/models"
-        >>> options.startup_models=["test"]
-        >>> server = tritonserver.Server(options)
-        >>> server.start()
+        >>> options.startup_models=["identity"]
+        >>> server = tritonserver.Server(options).start()
         >>> server.models()
-        {('resnet50_libtorch', -1): {'name': 'resnet50_libtorch',
-        'version': -1, 'state': None}, ('test', 1): {'name': 'test',
-        'version': 1, 'state': 'READY'}, ('test_2', -1): {'name':
-        'test_2', 'version': -1, 'state': None}}
+        {('identity', 1): {'name': 'identity', 'version': 1, 'state': 'READY'}}
         >>> server.unregister_model_repository("/workspace/models")
         >>> server.models()
         {}
@@ -677,24 +690,16 @@ class Server:
         >>> options = tritonserver.Options()
         >>> options.model_control_mode=tritonserver.ModelControlMode.EXPLICIT
         >>> options.model_repository="/workspace/models"
-        >>> options.startup_models=["test"]
-        >>> server = tritonserver.Server(options)
-        >>> server.start()
+        >>> options.startup_models=["identity"]
+        >>> server = tritonserver.Server(options).start()
         >>> server.models()
-        {('resnet50_libtorch', -1): {'name': 'resnet50_libtorch',
-        'version': -1, 'state': None}, ('test', 1): {'name': 'test',
-        'version': 1, 'state': 'READY'}, ('test_2', -1): {'name':
-        'test_2', 'version': -1, 'state': None}}
+        {('identity', 1): {'name': 'identity', 'version': 1, 'state': 'READY'}}
         >>> server.unregister_model_repository("/workspace/models")
         >>> server.models()
         {}
-
-        >>> server.register_model_repository("/workspace/models",{"test":"new_model"})
+        >>> server.register_model_repository("/workspace/models",{"identity":"new_model"})
         >>> server.models()
-        {('new_name', -1): {'name': 'new_name', 'version': -1,
-        'state': None}, ('resnet50_libtorch', -1): {'name':
-        'resnet50_libtorch', 'version': -1, 'state': None}, ('test_2',
-        -1): {'name': 'test_2', 'version': -1, 'state': None}}
+        {('new_model', -1): {'name': 'new_model', 'version': -1, 'state': None}}
 
         """
 
@@ -716,7 +721,7 @@ class Server:
 
         Returns
         -------
-        Server
+        None
 
         """
 
@@ -737,9 +742,10 @@ class Server:
 
         Examples
         --------
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+
         >>> server.metadata()
-        server.metadata()
-        {'name': 'triton', 'version': '2.41.0', 'extensions':
+        {'name': 'triton', 'version': '...', 'extensions':
         ['classification', 'sequence', 'model_repository',
         'model_repository(unload_dependents)', 'schedule_policy',
         'model_configuration', 'system_shared_memory',
@@ -763,8 +769,8 @@ class Server:
 
         Examples
         --------
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
         >>> server.live()
-        server.live()
         True
 
         """
@@ -783,8 +789,9 @@ class Server:
 
         Examples
         --------
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start(
+        ...                              wait_until_ready=True)
         >>> server.ready()
-        server.ready()
         True
 
         """
@@ -819,18 +826,16 @@ class Server:
 
         Examples
         --------
-
-        >>> server.model("test")
-        server.model("test")
-        {'name': 'test', 'version': -1, 'state': None}
-        >>> server.model("test").metadata()
-        server.model("test").metadata()
-        {'name': 'test', 'versions': ['1'], 'platform': 'python',
-        'inputs': [{'name': 'text_input', 'datatype': 'BYTES',
-        'shape': [-1]}, {'name': 'fp16_input', 'datatype': 'FP16',
-        'shape': [-1, 1]}], 'outputs': [{'name': 'text_output',
-        'datatype': 'BYTES', 'shape': [-1]}, {'name': 'fp16_output',
-        'datatype': 'FP16', 'shape': [-1, 1]}]}
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> server.model("identity")
+        {'name': 'identity', 'version': -1, 'state': None}
+        >>> server.model("identity").metadata()
+        {'name': 'identity', 'versions': ['1'], 'platform': 'python',
+        'inputs': [{'name': 'string_input', 'datatype': 'BYTES',
+        'shape': [-1, -1]}, {'name': 'fp16_input', 'datatype': 'FP16',
+        'shape': [-1, -1]}], 'outputs': [{'name': 'string_output',
+        'datatype': 'BYTES', 'shape': [-1, -1]}, {'name':
+        'fp16_output', 'datatype': 'FP16', 'shape': [-1, -1]}]}
 
         """
 
@@ -860,14 +865,12 @@ class Server:
 
         Examples
         --------
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
         >>> server.models()
-        server.models()
-        {('new_name', -1): {'name': 'new_name', 'version': -1, 'state': None},
-        ('resnet50_libtorch', -1): {'name': 'resnet50_libtorch', 'version':
-        -1, 'state': None}, ('test_2', -1): {'name': 'test_2', 'version': -1,
-        'state': None}}
+        {('identity', 1): {'name': 'identity', 'version': 1, 'state': 'READY'}}
+        >>> server = tritonserver.Server(model_repository="/workspace/models",
+        ...                              model_control_mode=tritonserver.ModelControlMode.EXPLICIT).start()
         >>> server.models(exclude_not_ready=True)
-        server.models(exclude_not_ready=True)
         {}
 
         """
@@ -903,16 +906,12 @@ class Server:
 
         Examples
         --------
-
-        >>> server.load("new_name")
-        server.load("new_name")
-        {'name': 'new_name', 'version': -1, 'state': None}
+        >>> server = tritonserver.Server(model_repository="/workspace/models",
+        ...                              model_control_mode=tritonserver.ModelControlMode.EXPLICIT).start()
+        >>> server.load("identity")
+        {'name': 'identity', 'version': -1, 'state': None}
         >>> server.models()
-        server.models()
-        {('new_name', 1): {'name': 'new_name', 'version': 1, 'state':
-        'READY'}, ('resnet50_libtorch', -1): {'name':
-        'resnet50_libtorch', 'version': -1, 'state': None}, ('test_2',
-        -1): {'name': 'test_2', 'version': -1, 'state': None}}
+        {('identity', 1): {'name': 'identity', 'version': 1, 'state': 'READY'}}
 
         """
 
@@ -961,14 +960,13 @@ class Server:
 
         Examples
         --------
-        >>> server.unload("new_name", wait_for_unloaded=True)
-        server.unload("new_name", wait_for_unloaded=True)
+        >>> server = tritonserver.Server(model_repository="/workspace/models",
+        ...                              model_control_mode=tritonserver.ModelControlMode.EXPLICIT).start()
+        >>> server.load("identity")
+        {'name': 'identity', 'version': -1, 'state': None}
+        >>> server.unload("identity", wait_until_unloaded=True)
         >>> server.models()
-        server.models()
-        {('new_name', 1): {'name': 'new_name', 'version': 1, 'state':
-        'UNAVAILABLE'}, ('resnet50_libtorch', -1): {'name':
-        'resnet50_libtorch', 'version': -1, 'state': None}, ('test_2',
-        -1): {'name': 'test_2', 'version': -1, 'state': None}}
+        {('identity', 1): {'name': 'identity', 'version': 1, 'state': 'UNAVAILABLE'}}
 
         """
         if isinstance(self._server, Server._UnstartedServer):
