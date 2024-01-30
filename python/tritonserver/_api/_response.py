@@ -59,6 +59,17 @@ class AsyncResponseIterator:
     allow users to process inference responses in the order they were
     received for a request.
 
+    Examples
+    --------
+    >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+    >>> async def example():
+    ...          responses = server.model("identity").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+    ...          async for response in responses:
+    ...              print(numpy.from_dlpack(response.outputs["fp16_output"]))
+
+    >>> asyncio.run(example())
+    [[1.]]
+
     """
 
     def __init__(
@@ -107,14 +118,6 @@ class AsyncResponseIterator:
         Returns
         -------
         AsyncResponseIterator
-
-        Examples
-        --------
-
-        responses = server.model("test").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
-        async for response in responses:
-            print(nummpy.from_dlpack(response.outputs["fp16_output"]))
-
 
         """
 
@@ -197,6 +200,14 @@ class ResponseIterator:
     allow users to process inference responses in the order they were
     received for a request.
 
+    Examples
+    --------
+    >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+    >>> responses = server.model("identity").infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+    >>> for response in responses:
+    ...     print(numpy.from_dlpack(response.outputs["fp16_output"]))
+    [[1.]]
+
     """
 
     def __init__(
@@ -240,14 +251,6 @@ class ResponseIterator:
         -------
         ResponseIterator
 
-        Examples
-        --------
-
-        responses = server.model("test").infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
-        for response in responses:
-           print(nummpy.from_dlpack(response.outputs["fp16_output"]))
-
-
         """
 
         return self
@@ -286,10 +289,9 @@ class ResponseIterator:
 
         Examples
         --------
-
-        responses = server.model("test").infer(inputs={"text_input":["hello"]})
-
-        responses.cancel()
+        >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+        >>> responses = server.model("identity").infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
+        >>> responses.cancel()
 
         """
         if self._request is not None:
@@ -320,11 +322,11 @@ class ResponseIterator:
 class InferenceResponse:
     """Dataclass representing an inference response.
 
-    Inference response objects are returned from response iterators
-    which are in turn returned from model inference methods. They
-    contain output data, output parameters, any potential errors
-    reported and a flag to indicate if the response is the final one
-    for a request.
+    Inference response objects are returned from `ResponseIterator`
+    and `AsyncResponseIterator` objects which are in turn returned
+    from `model.infer()` methods. They contain output data, output
+    parameters, any potential errors reported and a flag to indicate
+    if the response is the final one for a request.
 
     See :c:func:`TRITONSERVER_InferenceResponse` for more details
 
