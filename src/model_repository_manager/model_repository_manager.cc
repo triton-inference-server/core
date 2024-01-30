@@ -1832,11 +1832,13 @@ ModelRepositoryManager::DependencyGraph::RemoveNodes(
       }
 
       all_removed_nodes.emplace(model_id);
-      // Exclude removed node from affected nodes to skip some evaluations.
-      all_affected_nodes.erase(model_id);
     }
 
     curr_removal.swap(next_removal);
+  }
+  // Exclude removed nodes from affected nodes.
+  for (const auto& removed_node : all_removed_nodes) {
+    all_affected_nodes.erase(removed_node);
   }
   return {std::move(all_affected_nodes), std::move(all_removed_nodes)};
 }
