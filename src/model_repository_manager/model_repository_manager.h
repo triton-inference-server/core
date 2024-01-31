@@ -421,8 +421,11 @@ class ModelRepositoryManager {
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents);
 
-  /// Unload all models. This function should be called before shutting down
-  /// the model repository manager.
+  /// Unload all models that are tracked by the model repository manager. If a
+  /// model is loading or unloading when this function is called, or a model
+  /// failed to unload, an error is returned. New models may be loaded while
+  /// this function is unloading models. This function should be called before
+  /// shutting down the model repository manager.
   /// \return error status.
   Status UnloadAllModels();
 
