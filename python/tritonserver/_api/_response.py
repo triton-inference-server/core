@@ -37,15 +37,13 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from tritonserver._api._model import Model
 
+from tritonserver._api._logging import LogLevel as LogLevel
 from tritonserver._api._logging import LogMessage
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
     TritonError,
     TRITONSERVER_InferenceRequest,
-)
-from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
-from tritonserver._c.triton_bindings import (
     TRITONSERVER_ResponseCompleteFlag,
     TRITONSERVER_Server,
 )

@@ -35,15 +35,17 @@ import time
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Optional
 
+from tritonserver._api._logging import LogFormat as LogFormat
+from tritonserver._api._logging import LogLevel as LogLevel
 from tritonserver._api._model import Model as Model
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
 )
-from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
-from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
-from tritonserver._c.triton_bindings import TRITONSERVER_Metric
-from tritonserver._c.triton_bindings import TRITONSERVER_MetricFamily as MetricFamily
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_Metric,
+    TRITONSERVER_MetricFamily,
+)
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFormat as MetricFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricKind as MetricKind
 from tritonserver._c.triton_bindings import (
@@ -743,7 +745,6 @@ class Server:
         Examples
         --------
         >>> server = tritonserver.Server(model_repository="/workspace/models").start()
-
         >>> server.metadata()
         {'name': 'triton', 'version': '...', 'extensions':
         ['classification', 'sequence', 'model_repository',
@@ -1043,6 +1044,34 @@ class Server:
     _UNLOADED_STATES = [None, "UNAVAILABLE"]
 
 
+class MetricFamily(TRITONSERVER_MetricFamily):
+    """Class representing a metric family
+
+    MetricFamily objects define the type, name and description of the
+    metric. When a metric is added to a family it can further add
+    additional labels allowing for multiple metrics to be associated
+    with the same family. For more details see
+    :c:func:`TRITONSERVER_Metric` documentation.
+
+    """
+
+    def __init__(self, kind: MetricKind, name: str, description: str) -> None:
+        """Initialize Metric Family
+
+        Parameters
+        ----------
+        kind : MetricKind
+            metric kind
+        name : str
+            metric name
+        description : str
+            metric description
+
+        """
+
+        TRITONSERVER_MetricFamily.__init__(self, kind, name, description)
+
+
 class Metric(TRITONSERVER_Metric):
     """Class for adding a custom metric to Triton inference server metrics reporting
 
@@ -1053,9 +1082,29 @@ class Metric(TRITONSERVER_Metric):
     family. For more details see :c:func:`TRITONSERVER_Metric`
     documentation.
 
+    Examples
+    --------
+    >>> test_metric = tritonserver.Metric(tritonserver.MetricFamily(tritonserver.MetricKind.COUNTER,
+    ...                                                            "test",
+    ...                                                            "test_counter"))
+    >>> server = tritonserver.Server(model_repository="/workspace/models").start()
+    >>> starting_metrics = server.metrics()
+    >>> for metric in starting_metrics.split('\\n'):
+    ...    if metric.startswith("test"):
+    ...       print(metric)
+    test 0
+    >>> test_metric.increment(5)
+    >>> incremented_metrics = server.metrics()
+    >>> for metric in incremented_metrics.split('\\n'):
+    ...    if metric.startswith("test"):
+    ...       print(metric)
+    test 5
+
     """
 
-    def __init__(self, family: MetricFamily, labels: Optional[dict[str, str]] = None):
+    def __init__(
+        self, family: MetricFamily, labels: Optional[dict[str, str]] = None
+    ) -> None:
         """Initialize Metric object
 
         Parameters

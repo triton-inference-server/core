@@ -28,6 +28,7 @@
 import inspect
 import os
 
+from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
 from tritonserver._c.triton_bindings import TRITONSERVER_LogMessage
 
@@ -44,8 +45,7 @@ def LogMessage(level: LogLevel, message: str):
 
     Examples
     --------
-
-    LogMessage(LogLevel.ERROR,"I've got a bad feeling about this ...")
+    >>> tritonserver.LogMessage(LogLevel.INFO,"I've got a bad feeling about this ...")
 
     """
 

@@ -83,7 +83,7 @@ class Tensor:
     --------
     >>> numpy_array = numpy.array([0, 1, 2, 3])
     >>> tritonserver.Tensor.from_dlpack(numpy_array)
-    Tensor(data_type=<TRITONSERVER_DataType.INT64: 9>, shape=[4],
+    Tensor(data_type=<DataType.INT64: 9>, shape=[4],
     memory_buffer=MemoryBuffer(data_ptr=...,
     memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=32,
     owner=array([0, 1, 2, 3])))
@@ -378,7 +378,7 @@ class Tensor:
         --------
 
         >>> tritonserver.Tensor.from_string_array(numpy.array(["hello"]))
-        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        Tensor(data_type=<DataType.BYTES: 13>,
         shape=(1,),
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
@@ -386,7 +386,7 @@ class Tensor:
         dtype=int8)))
 
         >>> tritonserver.Tensor.from_string_array(["hello"])
-        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        Tensor(data_type=<DataType.BYTES: 13>,
         shape=(1,),
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
@@ -426,7 +426,7 @@ class Tensor:
         --------
 
         >>> tritonserver.Tensor.from_bytes_array(numpy.array([b"hello"]))
-        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        Tensor(data_type=<DataType.BYTES: 13>,
         shape=(1,),
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
@@ -434,7 +434,7 @@ class Tensor:
         dtype=int8)))
 
         >>> tritonserver.Tensor.from_bytes_array([b"hello"])
-        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        Tensor(data_type=<DataType.BYTES: 13>,
         shape=(1,),
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
@@ -475,7 +475,7 @@ class Tensor:
         --------
 
         >>> tritonserver.Tensor._from_object(numpy.array(["hello"]))
-        Tensor(data_type=<TRITONSERVER_DataType.BYTES: 13>,
+        Tensor(data_type=<DataType.BYTES: 13>,
         shape=(1,),
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=9,
@@ -510,13 +510,13 @@ class Tensor:
         --------
 
         >>> tritonserver.Tensor.from_dlpack(numpy.array([0,1,2], dtype=numpy.float16))
-        Tensor(data_type=<TRITONSERVER_DataType.FP16: 10>, shape=[3],
+        Tensor(data_type=<DataType.FP16: 10>, shape=[3],
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.CPU: 0>, memory_type_id=0, size=6,
         owner=array([0., 1., 2.], dtype=float16)))
 
         >>> tritonserver.Tensor.from_dlpack(cupy.array([0,1,2], dtype=cupy.float16))
-        Tensor(data_type=<TRITONSERVER_DataType.FP16: 10>, shape=[3],
+        Tensor(data_type=<DataType.FP16: 10>, shape=[3],
         memory_buffer=MemoryBuffer(data_ptr=...,
         memory_type=<MemoryType.GPU: 2>, memory_type_id=0, size=6,
         owner=array([0., 1., 2.], dtype=float16)))
