@@ -94,7 +94,7 @@ struct TRITONBACKEND_Batcher;
 ///   }
 ///
 #define TRITONBACKEND_API_VERSION_MAJOR 1
-#define TRITONBACKEND_API_VERSION_MINOR 17
+#define TRITONBACKEND_API_VERSION_MINOR 18
 
 /// Get the TRITONBACKEND API version supported by Triton. This value
 /// can be compared against the TRITONBACKEND_API_VERSION_MAJOR and
@@ -724,6 +724,16 @@ TRITONBACKEND_ResponseSetIntParameter(
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value);
+
+/// Set a double parameter in the response.
+///
+/// \param response The response.
+/// \param name The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ResponseSetDoubleParameter(
+    TRITONBACKEND_Response* response, const char* name, const double value);
 
 /// Create an output tensor in the response. The lifetime of the
 /// returned output tensor object matches that of the response and so

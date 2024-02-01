@@ -258,6 +258,7 @@ class InferenceResponse {
   Status AddParameter(const char* name, const char* value);
   Status AddParameter(const char* name, const int64_t value);
   Status AddParameter(const char* name, const bool value);
+  Status AddParameter(const char* name, const double value);
 
   // The response outputs.
   const std::deque<Output>& Outputs() const { return outputs_; }
