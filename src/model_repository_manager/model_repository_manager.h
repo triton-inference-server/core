@@ -421,8 +421,11 @@ class ModelRepositoryManager {
           std::string, std::vector<const InferenceParameter*>>& models,
       const ActionType type, const bool unload_dependents);
 
-  /// Unload all models. This function should be called before shutting down
-  /// the model repository manager.
+  /// Unload all models that are tracked by the model repository manager. If a
+  /// model is loading or unloading when this function is called, or a model
+  /// failed to unload, an error is returned. New models may be loaded while
+  /// this function is unloading models. This function should be called before
+  /// shutting down the model repository manager.
   /// \return error status.
   Status UnloadAllModels();
 
@@ -437,6 +440,9 @@ class ModelRepositoryManager {
   /// in-flight inference count>. Note that a model version will not be included
   /// if it doesn't have in-flight inferences.
   const std::set<std::tuple<ModelIdentifier, int64_t, size_t>> InflightStatus();
+
+  /// \return the number of model(s) in the background.
+  size_t BackgroundModelsSize();
 
   /// \param strict_readiness If true, only models that have at least one
   /// ready version will be considered as live. Otherwise, the models that

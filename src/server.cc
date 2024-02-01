@@ -330,21 +330,22 @@ InferenceServer::Stop(const bool force)
       }
 
       if (inflight_status.size() == 0) {
-        unloading_model = true;
         status = model_repository_manager_->UnloadAllModels();
         if (!status.IsOk()) {
-          LOG_ERROR << status.Message();
+          LOG_WARNING << status.Message();
         } else {
+          unloading_model = true;
           LOG_INFO << "All models are stopped, unloading models";
           continue;
         }
       }
     } else {
       const auto& live_models = model_repository_manager_->LiveModelStates();
+      size_t bg_models_size = model_repository_manager_->BackgroundModelsSize();
+      size_t num_models = live_models.size() + bg_models_size;
 
-      LOG_INFO << "Timeout " << exit_timeout_iters << ": Found "
-               << live_models.size() << " live models and "
-               << inflight_request_counter_
+      LOG_INFO << "Timeout " << exit_timeout_iters << ": Found " << num_models
+               << " live models and " << inflight_request_counter_
                << " in-flight non-inference requests";
       if (LOG_VERBOSE_IS_ON(1)) {
         for (const auto& m : live_models) {
@@ -355,7 +356,7 @@ InferenceServer::Stop(const bool force)
         }
       }
 
-      if ((live_models.size() == 0) && (inflight_request_counter_ == 0)) {
+      if ((num_models == 0) && (inflight_request_counter_ == 0)) {
         return Status::Success;
       }
     }

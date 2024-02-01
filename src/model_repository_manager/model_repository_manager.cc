@@ -957,16 +957,21 @@ ModelRepositoryManager::PollModels(
 Status
 ModelRepositoryManager::UnloadAllModels()
 {
-  Status status;
-  for (const auto& name_info : infos_) {
-    Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
-    if (!unload_status.IsOk()) {
-      status = Status(
-          unload_status.ErrorCode(),
-          "Failed to gracefully unload models: " + unload_status.Message());
+  // Find all the models to be unloaded.
+  std::unordered_map<std::string, std::vector<const InferenceParameter*>>
+      models;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (const auto& pair : infos_) {
+      // Only the model name is needed.
+      models[pair.first.name_];
     }
   }
-  return Status::Success;
+  // Unload all models found.
+  bool polled;
+  return LoadUnloadModels(
+      models, ActionType::UNLOAD, true /* unload_dependents */, &polled,
+      nullptr /* no_parallel_conflict */);
 }
 
 Status
@@ -979,6 +984,12 @@ const std::set<std::tuple<ModelIdentifier, int64_t, size_t>>
 ModelRepositoryManager::InflightStatus()
 {
   return model_life_cycle_->InflightStatus();
+}
+
+size_t
+ModelRepositoryManager::BackgroundModelsSize()
+{
+  return model_life_cycle_->BackgroundModelsSize();
 }
 
 const ModelStateMap
@@ -1815,11 +1826,13 @@ ModelRepositoryManager::DependencyGraph::RemoveNodes(
       }
 
       all_removed_nodes.emplace(model_id);
-      // Exclude removed node from affected nodes to skip some evaluations.
-      all_affected_nodes.erase(model_id);
     }
 
     curr_removal.swap(next_removal);
+  }
+  // Exclude removed nodes from affected nodes.
+  for (const auto& removed_node : all_removed_nodes) {
+    all_affected_nodes.erase(removed_node);
   }
   return {std::move(all_affected_nodes), std::move(all_removed_nodes)};
 }
