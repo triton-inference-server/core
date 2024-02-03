@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -948,6 +948,41 @@ TRITONBACKEND_ModelInstanceReportStatistics(
   tr->ReportStatistics(
       ti->MetricReporter(), success, exec_start_ns, compute_start_ns,
       compute_end_ns, exec_end_ns);
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance,
+    TRITONBACKEND_ResponseFactory* response_factory,
+    const uint64_t response_start, const uint64_t compute_output_start,
+    const uint64_t response_end, const uint32_t send_flags,
+    TRITONSERVER_Error* error)
+{
+#ifdef TRITON_ENABLE_STATS
+  TritonModelInstance* ti = reinterpret_cast<TritonModelInstance*>(instance);
+  std::shared_ptr<InferenceResponseFactory>* rf =
+      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(
+          response_factory);
+  std::string key = std::to_string((*rf)->ResponseStatsIndex());
+
+  if (error == nullptr) {
+    if (compute_output_start > 0) {
+      RETURN_TRITONSERVER_ERROR_IF_ERROR(
+          ti->Model()->MutableStatsAggregator()->UpdateResponseSuccess(
+              key, response_start, compute_output_start, response_end));
+    } else {
+      RETURN_TRITONSERVER_ERROR_IF_ERROR(
+          ti->Model()->MutableStatsAggregator()->UpdateResponseEmpty(
+              key, response_start, response_end));
+    }
+  } else {
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(
+        ti->Model()->MutableStatsAggregator()->UpdateResponseFail(
+            key, response_start, compute_output_start, response_end));
+  }
 #endif  // TRITON_ENABLE_STATS
 
   return nullptr;  // success

@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -208,6 +208,132 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
         "cache_miss_duration", cache_miss_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
+}
+
+Status
+InferenceStatsAggregator::UpdateResponseSuccess(
+    const std::string& key, const uint64_t response_start_ns,
+    const uint64_t compute_output_start_ns, const uint64_t response_end_ns)
+{
+  if (response_start_ns > compute_output_start_ns) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Response start cannot happen after compute output start");
+  }
+  if (compute_output_start_ns > response_end_ns) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Compute output start cannot happen after response end");
+  }
+  const uint64_t compute_infer_duration_ns =
+      compute_output_start_ns - response_start_ns;
+  const uint64_t compute_output_duration_ns =
+      response_end_ns - compute_output_start_ns;
+  const uint64_t total_duration_ns = response_end_ns - response_start_ns;
+
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+
+    auto it = response_stats_.find(key);
+    if (it == response_stats_.end()) {
+      it = response_stats_.emplace(key, InferResponseStats()).first;
+    }
+
+    it->second.compute_infer_count++;
+    it->second.compute_infer_duration_ns += compute_infer_duration_ns;
+    it->second.compute_output_count++;
+    it->second.compute_output_duration_ns += compute_output_duration_ns;
+    it->second.success_count++;
+    it->second.success_duration_ns += total_duration_ns;
+  }
+
+  return Status::Success;
+}
+
+Status
+InferenceStatsAggregator::UpdateResponseFail(
+    const std::string& key, const uint64_t response_start_ns,
+    const uint64_t compute_output_start_ns, const uint64_t response_end_ns)
+{
+  uint64_t compute_infer_duration_ns, compute_output_duration_ns,
+      total_duration_ns;
+  if (compute_output_start_ns > 0) {
+    // output tensors copied
+    if (response_start_ns > compute_output_start_ns) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Response start cannot happen after compute output start");
+    }
+    if (compute_output_start_ns > response_end_ns) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Compute output start cannot happen after response end");
+    }
+    compute_infer_duration_ns = compute_output_start_ns - response_start_ns;
+    compute_output_duration_ns = response_end_ns - compute_output_start_ns;
+    total_duration_ns = response_end_ns - response_start_ns;
+  } else {
+    // no output tensors copied
+    if (response_start_ns > response_end_ns) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Response start cannot happen after response end");
+    }
+    compute_infer_duration_ns = response_end_ns - response_start_ns;
+    compute_output_duration_ns = 0;
+    total_duration_ns = response_end_ns - response_start_ns;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+
+    auto it = response_stats_.find(key);
+    if (it == response_stats_.end()) {
+      it = response_stats_.emplace(key, InferResponseStats()).first;
+    }
+
+    it->second.compute_infer_count++;
+    it->second.compute_infer_duration_ns += compute_infer_duration_ns;
+    if (compute_output_duration_ns > 0) {
+      it->second.compute_output_count++;
+      it->second.compute_output_duration_ns += compute_output_duration_ns;
+    }
+    it->second.fail_count++;
+    it->second.fail_duration_ns += total_duration_ns;
+  }
+
+  return Status::Success;
+}
+
+Status
+InferenceStatsAggregator::UpdateResponseEmpty(
+    const std::string& key, const uint64_t response_start_ns,
+    const uint64_t response_end_ns)
+{
+  if (response_start_ns > response_end_ns) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Response start cannot happen after response end");
+  }
+  const uint64_t compute_infer_duration_ns =
+      response_end_ns - response_start_ns;
+  const uint64_t total_duration_ns = response_end_ns - response_start_ns;
+
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+
+    auto it = response_stats_.find(key);
+    if (it == response_stats_.end()) {
+      it = response_stats_.emplace(key, InferResponseStats()).first;
+    }
+
+    it->second.compute_infer_count++;
+    it->second.compute_infer_duration_ns += compute_infer_duration_ns;
+    it->second.empty_response_count++;
+    it->second.empty_response_duration_ns += total_duration_ns;
+  }
+
+  return Status::Success;
 }
 
 void

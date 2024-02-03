@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1355,6 +1355,51 @@ TRITONBACKEND_ModelInstanceReportStatistics(
     const bool success, const uint64_t exec_start_ns,
     const uint64_t compute_start_ns, const uint64_t compute_end_ns,
     const uint64_t exec_end_ns);
+
+/// Record statistics for a decoupled inference response.
+///
+/// All timestamps should be reported in nanonseconds and collected using
+/// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+///
+/// Call this function after calling TRITONBACKEND_ResponseSend, and pass the
+/// same send_flags and error object passed to the TRITONBACKEND_ResponseSend.
+///
+/// For consistency of measurement across different backends, the
+/// timestamps should be collected at the following points during
+/// TRITONBACKEND_ModelInstanceExecute.
+///
+///   TRITONBACKEND_ModelInstanceExecute()
+///     < start of this response >
+///     CAPTURE TIMESPACE (response_start)
+///     < generate this response >
+///     CAPTURE TIMESPACE (compute_output_start)
+///     < allocate output buffers and extract output tensors, including copying
+///       the tensors to/from GPU if necessary >
+///     CAPTURE TIMESPACE (response_end)
+///     < end of this response >
+///     return
+///
+/// \param instance The model instance.
+/// \param response_factory The response factory associated with the inference
+/// request.
+/// \param response_start Timestamp for the start of execution for this
+/// response.
+/// \param compute_output_start Timestamp for the start of extracting output
+/// tensors for this response. Set this to 0 for reporting empty response.
+/// \param response_end Timestamp for the end of extracting output tensors for
+/// this response.
+/// \param send_flags Flags associated with the response. \see
+/// TRITONBACKEND_ResponseSend \see
+/// \param error The TRITONSERVER_Error to send if the response is an error, or
+/// nullptr if the response is successful. \see TRITONBACKEND_ResponseSend \see
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceReportResponseStatistics(
+    TRITONBACKEND_ModelInstance* instance,
+    TRITONBACKEND_ResponseFactory* response_factory,
+    const uint64_t response_start, const uint64_t compute_output_start,
+    const uint64_t response_end, const uint32_t send_flags,
+    TRITONSERVER_Error* error);
 
 /// Record statistics for the execution of an entire batch of
 /// inference requests.

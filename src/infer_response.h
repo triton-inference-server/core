@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -61,6 +61,10 @@ class InferenceResponseFactory {
         alloc_userp_(alloc_userp), response_fn_(response_fn),
         response_userp_(response_userp), response_delegator_(delegator),
         is_cancelled_(false)
+#ifdef TRITON_ENABLE_STATS
+        ,
+        response_stats_index_(0)
+#endif  // TRITON_ENABLE_STATS
   {
   }
 
@@ -93,6 +97,11 @@ class InferenceResponseFactory {
   }
   void ReleaseTrace() { trace_ = nullptr; }
 #endif  // TRITON_ENABLE_TRACING
+
+#ifdef TRITON_ENABLE_STATS
+  // Return the current response statistics index and increment it.
+  uint64_t ResponseStatsIndex() { return response_stats_index_++; };
+#endif  // TRITON_ENABLE_STATS
 
  private:
   // The model associated with this factory. For normal
@@ -129,6 +138,11 @@ class InferenceResponseFactory {
   // Inference trace associated with this response.
   std::shared_ptr<InferenceTraceProxy> trace_;
 #endif  // TRITON_ENABLE_TRACING
+
+#ifdef TRITON_ENABLE_STATS
+  // Number of response statistics reported.
+  std::atomic<uint64_t> response_stats_index_;
+#endif  // TRITON_ENABLE_STATS
 };
 
 //
