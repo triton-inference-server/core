@@ -1809,6 +1809,18 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     struct TRITONSERVER_ServerOptions* options, bool strict);
 
+/// Set the model configuration prefix to load for a certain model.
+/// This function can be called multiple times to set different configuration
+/// files.
+///
+/// \param options The server options object.
+/// \param mode_name The name of the model to load on startup.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetConfigPrefix(
+    struct TRITONSERVER_ServerOptions* options, const char* model_name,
+    const char* config_prefix);
+
 /// Set the rate limit mode in a server options.
 ///
 ///   TRITONSERVER_RATE_LIMIT_EXEC_COUNT: The rate limiting prioritizes the

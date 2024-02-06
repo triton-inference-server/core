@@ -177,6 +177,18 @@ class InferenceServer {
   bool StrictModelConfigEnabled() const { return strict_model_config_; }
   void SetStrictModelConfigEnabled(bool e) { strict_model_config_ = e; }
 
+  // Get / set model configuration prefix map.
+  std::unordered_map<std::string, std::string> ModelConfigPrefixes() const
+  {
+    return model_config_prefixes_;
+  }
+
+  void SetModelConfigPrefixes(
+      const std::unordered_map<std::string, std::string>& p)
+  {
+    model_config_prefixes_ = p;
+  }
+
   // Get / set rate limiter mode.
   RateLimitMode RateLimiterMode() const { return rate_limit_mode_; }
   void SetRateLimiterMode(RateLimitMode m) { rate_limit_mode_ = m; }
@@ -333,6 +345,7 @@ class InferenceServer {
   ModelControlMode model_control_mode_;
   bool strict_model_config_;
   bool strict_readiness_;
+  std::unordered_map<std::string, std::string> model_config_prefixes_;
   uint32_t exit_timeout_secs_;
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;

@@ -212,6 +212,16 @@ class TritonServerOptions {
   const std::set<std::string>& StartupModels() const { return models_; }
   void SetStartupModel(const char* m) { models_.insert(m); }
 
+  std::unordered_map<std::string, std::string> ModelConfigPrefixes() const
+  {
+    return model_config_prefixes_;
+  }
+  void SetModelConfigPrefix(
+      const std::string& model_name, const std::string& prefix)
+  {
+    model_config_prefixes_[model_name] = prefix;
+  }
+
   bool ExitOnError() const { return exit_on_error_; }
   void SetExitOnError(bool b) { exit_on_error_ = b; }
 
@@ -346,6 +356,7 @@ class TritonServerOptions {
   std::set<std::string> repo_paths_;
   tc::ModelControlMode model_control_mode_;
   std::set<std::string> models_;
+  std::unordered_map<std::string, std::string> model_config_prefixes_{};
   bool exit_on_error_;
   bool strict_model_config_;
   bool strict_readiness_;
@@ -1176,6 +1187,17 @@ TRITONSERVER_ServerOptionsSetStartupModel(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   loptions->SetStartupModel(model_name);
+  return nullptr;  // Success
+}
+
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetConfigPrefix(
+    struct TRITONSERVER_ServerOptions* options, const char* model_name,
+    const char* config_prefix)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelConfigPrefix(model_name, config_prefix);
   return nullptr;  // Success
 }
 
@@ -2348,6 +2370,7 @@ TRITONSERVER_ServerNew(
   lserver->SetStartupModels(loptions->StartupModels());
   bool strict_model_config = loptions->StrictModelConfig();
   lserver->SetStrictModelConfigEnabled(strict_model_config);
+  lserver->SetModelConfigPrefixes(loptions->ModelConfigPrefixes());
   lserver->SetRateLimiterMode(loptions->RateLimiterMode());
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
@@ -2469,6 +2492,12 @@ TRITONSERVER_ServerNew(
   options_table.InsertRow(std::vector<std::string>{
       "strict_model_config",
       std::to_string(lserver->StrictModelConfigEnabled())});
+  for (const auto& [model_name, config_prefix] :
+       lserver->ModelConfigPrefixes()) {
+    options_table.InsertRow(std::vector<std::string>{
+        "model_configuration_prefix: " + model_name, config_prefix});
+  }
+
   std::string rate_limit = RateLimitModeToString(lserver->RateLimiterMode());
   options_table.InsertRow(std::vector<std::string>{"rate_limit", rate_limit});
   i = 0;

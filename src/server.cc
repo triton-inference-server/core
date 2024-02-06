@@ -262,7 +262,7 @@ InferenceServer::Init()
   status = ModelRepositoryManager::Create(
       this, version_, model_repository_paths_, startup_models_,
       strict_model_config_, polling_enabled, model_control_enabled,
-      life_cycle_options, enable_model_namespacing_,
+      model_config_prefixes_, life_cycle_options, enable_model_namespacing_,
       &model_repository_manager_);
   if (!status.IsOk()) {
     if (model_repository_manager_ == nullptr) {

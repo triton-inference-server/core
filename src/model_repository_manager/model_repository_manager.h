@@ -391,6 +391,8 @@ class ModelRepositoryManager {
   /// and the models in the model repository will not be loaded at startup.
   /// Otherwise, LoadUnloadModel() is not allowed and the models will be loaded.
   /// Cannot be set to true if polling_enabled is true.
+  /// \param model_config_prefixes Mapping of model name to model configuration
+  ///  prefix to use. If empty, then default to no prefix.
   /// \param life_cycle_options The options to configure ModelLifeCycle.
   /// \param model_repository_manager Return the model repository manager.
   /// \return The error status.
@@ -400,6 +402,7 @@ class ModelRepositoryManager {
       const std::set<std::string>& startup_models,
       const bool strict_model_config, const bool polling_enabled,
       const bool model_control_enabled,
+      const std::unordered_map<std::string, std::string>& model_config_prefixes,
       const ModelLifeCycleOptions& life_cycle_options,
       const bool enable_model_namespacing,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
@@ -570,12 +573,14 @@ class ModelRepositoryManager {
   /// \param model_id The identifier of the model.
   /// \param path The model path. Empty path means the model is provided via
   /// 'params'
+  /// \param model_config_path_with_prefix model configuration path to use
   /// \param params The model parameters provided for polling model.
   /// \param info Return the updated ModelInfo. 'nullptr' will be returned if
   /// existing ModelInfo for the model should be reused.
   /// \return The error status.
   Status InitializeModelInfo(
       const ModelIdentifier& model_id, const std::string& path,
+      const std::string& model_config_path_with_prefix,
       const std::vector<const InferenceParameter*>& params,
       std::unique_ptr<ModelInfo>* info);
 
@@ -612,6 +617,17 @@ class ModelRepositoryManager {
 
   bool ModelDirectoryOverride(
       const std::vector<const InferenceParameter*>& model_params);
+
+  // Prepend model configuration prefixes to the specified models
+  Status PreprocessModelConfigurationNames(
+      const std::unordered_map<std::string, std::string>&
+          model_config_prefixes);
+  const std::string GetModelConfigurationName(const std::string& model_name);
+
+  // Model prefix parameters
+  bool prefix_all_models_ = false;
+  std::unordered_map<std::string, std::string> model_configuration_name_map_;
+
 
   const bool autofill_;
   const bool polling_enabled_;
