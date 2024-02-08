@@ -966,7 +966,7 @@ TRITONBACKEND_ModelInstanceReportResponseStatistics(
   std::shared_ptr<InferenceResponseFactory>* rf =
       reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(
           response_factory);
-  std::string key = std::to_string((*rf)->ResponseStatsIndex());
+  std::string key = std::to_string((*rf)->GetAndIncrementResponseIndex());
 
   if (error == nullptr) {
     if (compute_output_start > 0) {

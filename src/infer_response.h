@@ -100,7 +100,7 @@ class InferenceResponseFactory {
 
 #ifdef TRITON_ENABLE_STATS
   // Return the current response statistics index and increment it.
-  uint64_t ResponseStatsIndex() { return response_stats_index_++; };
+  uint64_t GetAndIncrementResponseIndex() { return response_stats_index_++; };
 #endif  // TRITON_ENABLE_STATS
 
  private:
