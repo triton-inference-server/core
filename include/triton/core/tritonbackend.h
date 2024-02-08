@@ -761,8 +761,9 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseOutput(
 /// \param send_flags Flags associated with the response. \see
 /// TRITONSERVER_ResponseCompleteFlag. \see
 /// TRITONSERVER_InferenceResponseCompleteFn_t.
-/// \param error The TRITONSERVER_Error to send if the response is an
-/// error, or nullptr if the response is successful.
+/// \param error The TRITONSERVER_Error to send if the response is an error, or
+/// nullptr if the response is successful. The caller retains ownership to the
+/// error object and must free it with TRITONSERVER_ErrorDelete.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
@@ -1392,6 +1393,8 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 /// TRITONBACKEND_ResponseSend
 /// \param error The TRITONSERVER_Error to send if the response is an error, or
 /// nullptr if the response is successful. \see TRITONBACKEND_ResponseSend
+/// The caller retains ownership to the error object and must free it with
+/// TRITONSERVER_ErrorDelete.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportResponseStatistics(
