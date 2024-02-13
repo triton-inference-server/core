@@ -955,33 +955,33 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportResponseStatistics(
-    TRITONBACKEND_ModelInstance* instance,
-    TRITONBACKEND_ResponseFactory* response_factory,
-    const uint64_t response_start, const uint64_t compute_output_start,
-    const uint64_t response_end, const uint32_t send_flags,
-    TRITONSERVER_Error* error)
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics)
 {
 #ifdef TRITON_ENABLE_STATS
-  TritonModelInstance* ti = reinterpret_cast<TritonModelInstance*>(instance);
+  TRITONBACKEND_ModelInstanceResponseStatistics* rs = response_statistics;
+  TritonModelInstance* ti =
+      reinterpret_cast<TritonModelInstance*>(rs->model_instance);
   std::shared_ptr<InferenceResponseFactory>* rf =
       reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(
-          response_factory);
+          rs->response_factory);
   std::string key = std::to_string((*rf)->GetAndIncrementResponseIndex());
 
-  if (error == nullptr) {
-    if (compute_output_start > 0) {
+  if (rs->error == nullptr) {
+    if (rs->compute_output_start > 0) {
       RETURN_TRITONSERVER_ERROR_IF_ERROR(
           ti->Model()->MutableStatsAggregator()->UpdateResponseSuccess(
-              key, response_start, compute_output_start, response_end));
+              key, rs->response_start, rs->compute_output_start,
+              rs->response_end));
     } else {
       RETURN_TRITONSERVER_ERROR_IF_ERROR(
           ti->Model()->MutableStatsAggregator()->UpdateResponseEmpty(
-              key, response_start, response_end));
+              key, rs->response_start, rs->response_end));
     }
   } else {
     RETURN_TRITONSERVER_ERROR_IF_ERROR(
         ti->Model()->MutableStatsAggregator()->UpdateResponseFail(
-            key, response_start, compute_output_start, response_end));
+            key, rs->response_start, rs->compute_output_start,
+            rs->response_end));
   }
 #endif  // TRITON_ENABLE_STATS
 
