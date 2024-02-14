@@ -1337,16 +1337,16 @@ TRITONBACKEND_ModelInstanceReportMemoryUsage(
 /// TRITONBACKEND_ModelInstanceExecute.
 ///
 ///   TRITONBACKEND_ModelInstanceExecute()
-///     CAPTURE TIMESPACE (exec_start_ns)
+///     CAPTURE TIMESTAMP (exec_start_ns)
 ///     < process input tensors to prepare them for inference
 ///       execution, including copying the tensors to/from GPU if
 ///       necessary>
-///     CAPTURE TIMESPACE (compute_start_ns)
+///     CAPTURE TIMESTAMP (compute_start_ns)
 ///     < perform inference computations to produce outputs >
-///     CAPTURE TIMESPACE (compute_end_ns)
+///     CAPTURE TIMESTAMP (compute_end_ns)
 ///     < allocate output buffers and extract output tensors, including
 ///       copying the tensors to/from GPU if necessary>
-///     CAPTURE TIMESPACE (exec_end_ns)
+///     CAPTURE TIMESTAMP (exec_end_ns)
 ///     return
 ///
 /// Note that these statistics are associated with a valid
@@ -1385,12 +1385,12 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 ///
 ///   TRITONBACKEND_ModelInstanceExecute()
 ///     < start of this response >
-///     CAPTURE TIMESPACE (response_start)
+///     CAPTURE TIMESTAMP (response_start)
 ///     < generate this response >
-///     CAPTURE TIMESPACE (compute_output_start)
+///     CAPTURE TIMESTAMP (compute_output_start)
 ///     < allocate output buffers and extract output tensors, including copying
 ///       the tensors to/from GPU if necessary >
-///     CAPTURE TIMESPACE (response_end)
+///     CAPTURE TIMESTAMP (response_end)
 ///     < end of this response >
 ///     return
 ///
