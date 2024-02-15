@@ -1358,7 +1358,7 @@ TRITONBACKEND_ModelInstanceReportStatistics(
     const uint64_t compute_start_ns, const uint64_t compute_end_ns,
     const uint64_t exec_end_ns);
 
-/// Create a new decoupled inference response statistics object.
+/// Create a new inference response statistics object.
 ///
 /// \param response_statistics The new response statistics object to be created.
 /// \return a TRITONSERVER_Error indicating success or failure.
@@ -1366,7 +1366,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceResponseStatisticsNew(
     TRITONBACKEND_ModelInstanceResponseStatistics** response_statistics);
 
-/// Delete a decoupled inference response statistics object.
+/// Delete an inference response statistics object.
 ///
 /// The caller retains ownership to the objects set on the deleted response
 /// statistics object and must free them separately.
@@ -1377,7 +1377,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceResponseStatisticsDelete(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics);
 
-/// Set model instance to a decoupled inference response statistics object.
+/// Set model instance to an inference response statistics object.
 ///
 /// \param response_statistics The response statistics object.
 /// \param model_instance The model instance.
@@ -1387,7 +1387,7 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetModelInstance(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
     TRITONBACKEND_ModelInstance* model_instance);
 
-/// Set response factory to a decoupled inference response statistics object.
+/// Set response factory to an inference response statistics object.
 ///
 /// \param response_statistics The response statistics object.
 /// \param response_factory The response factory.
@@ -1397,7 +1397,7 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseFactory(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
     TRITONBACKEND_ResponseFactory* response_factory);
 
-/// Set response start time to a decoupled inference response statistics object.
+/// Set response start time to an inference response statistics object.
 ///
 /// All timestamps should be reported in nanonseconds and collected using
 /// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
@@ -1425,8 +1425,8 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseStart(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
     uint64_t response_start);
 
-/// Set compute output start time to a decoupled inference response statistics
-/// object. Set this to 0 for reporting an empty response.
+/// Set compute output start time to an inference response statistics object.
+/// Set this to 0 for reporting an empty response.
 ///
 /// All timestamps should be reported in nanonseconds and collected using
 /// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
@@ -1454,7 +1454,7 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetComputeOutputStart(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
     uint64_t compute_output_start);
 
-/// Set response end time to a decoupled inference response statistics object.
+/// Set response end time to an inference response statistics object.
 ///
 /// All timestamps should be reported in nanonseconds and collected using
 /// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
@@ -1482,7 +1482,7 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseEnd(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
     uint64_t response_end);
 
-/// Set error to a decoupled inference response statistics object.
+/// Set error to an inference response statistics object.
 ///
 /// Use the same error object passed to the TRITONBACKEND_ResponseSend. \see
 /// TRITONBACKEND_ResponseSend.
@@ -1495,7 +1495,7 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetError(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
     TRITONSERVER_Error* error);
 
-/// Record statistics for a decoupled inference response.
+/// Record statistics for an inference response.
 ///
 /// The caller retains ownership to the response statistics and must free it
 /// after this function returns.
