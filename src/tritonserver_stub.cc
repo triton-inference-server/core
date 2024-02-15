@@ -947,6 +947,38 @@ TRITONBACKEND_ModelInstanceReportStatistics()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetModelInstance()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseFactory()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseStart()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetComputeOutputStart()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseEnd()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetError()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsDelete()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceReportResponseStatistics()
 {
 }

@@ -795,6 +795,23 @@ TritonModelInstance::TritonBackendThread::BackendThread()
   LOG_VERBOSE(1) << "Stopping backend thread for " << name_ << "...";
 }
 
+// Opaque object for the response statistics C-API
+struct ModelInstanceResponseStatistics {
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics()
+      : model_instance(nullptr), response_factory(nullptr), response_start(0),
+        compute_output_start(0), response_end(0), error(nullptr)
+  {
+  }
+  TritonModelInstance* model_instance;
+  std::shared_ptr<InferenceResponseFactory>* response_factory;
+  uint64_t response_start;
+  uint64_t compute_output_start;
+  uint64_t response_end;
+  TRITONSERVER_Error* error;
+#endif  // TRITON_ENABLE_STATS
+};
+
 extern "C" {
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
@@ -954,34 +971,141 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsNew(
+    TRITONBACKEND_ModelInstanceResponseStatistics** response_statistics)
+{
+#ifdef TRITON_ENABLE_STATS
+  *response_statistics =
+      reinterpret_cast<TRITONBACKEND_ModelInstanceResponseStatistics*>(
+          new ModelInstanceResponseStatistics());
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsDelete(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics)
+{
+#ifdef TRITON_ENABLE_STATS
+  delete reinterpret_cast<ModelInstanceResponseStatistics*>(
+      response_statistics);
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetModelInstance(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    TRITONBACKEND_ModelInstance* model_instance)
+{
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+  rs->model_instance = reinterpret_cast<TritonModelInstance*>(model_instance);
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseFactory(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    TRITONBACKEND_ResponseFactory* response_factory)
+{
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+  rs->response_factory =
+      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(
+          response_factory);
+  ;
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseStart(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    uint64_t response_start)
+{
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+  rs->response_start = response_start;
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetComputeOutputStart(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    uint64_t compute_output_start)
+{
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+  rs->compute_output_start = compute_output_start;
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseEnd(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    uint64_t response_end)
+{
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+  rs->response_end = response_end;
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetError(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    TRITONSERVER_Error* error)
+{
+#ifdef TRITON_ENABLE_STATS
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+  rs->error = error;
+#endif  // TRITON_ENABLE_STATS
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportResponseStatistics(
     TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics)
 {
 #ifdef TRITON_ENABLE_STATS
-  TRITONBACKEND_ModelInstanceResponseStatistics* rs = response_statistics;
-  TritonModelInstance* ti =
-      reinterpret_cast<TritonModelInstance*>(rs->model_instance);
-  std::shared_ptr<InferenceResponseFactory>* rf =
-      reinterpret_cast<std::shared_ptr<InferenceResponseFactory>*>(
-          rs->response_factory);
-  std::string key = std::to_string((*rf)->GetAndIncrementResponseIndex());
+  ModelInstanceResponseStatistics* rs =
+      reinterpret_cast<ModelInstanceResponseStatistics*>(response_statistics);
+
+  InferenceStatsAggregator* sa =
+      rs->model_instance->Model()->MutableStatsAggregator();
+  std::string key =
+      std::to_string((*rs->response_factory)->GetAndIncrementResponseIndex());
 
   if (rs->error == nullptr) {
     if (rs->compute_output_start > 0) {
-      RETURN_TRITONSERVER_ERROR_IF_ERROR(
-          ti->Model()->MutableStatsAggregator()->UpdateResponseSuccess(
-              key, rs->response_start, rs->compute_output_start,
-              rs->response_end));
+      RETURN_TRITONSERVER_ERROR_IF_ERROR(sa->UpdateResponseSuccess(
+          key, rs->response_start, rs->compute_output_start, rs->response_end));
     } else {
       RETURN_TRITONSERVER_ERROR_IF_ERROR(
-          ti->Model()->MutableStatsAggregator()->UpdateResponseEmpty(
-              key, rs->response_start, rs->response_end));
+          sa->UpdateResponseEmpty(key, rs->response_start, rs->response_end));
     }
   } else {
-    RETURN_TRITONSERVER_ERROR_IF_ERROR(
-        ti->Model()->MutableStatsAggregator()->UpdateResponseFail(
-            key, rs->response_start, rs->compute_output_start,
-            rs->response_end));
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(sa->UpdateResponseFail(
+        key, rs->response_start, rs->compute_output_start, rs->response_end));
   }
 #endif  // TRITON_ENABLE_STATS
 

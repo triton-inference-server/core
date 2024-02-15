@@ -65,25 +65,9 @@ struct TRITONBACKEND_Response;
 struct TRITONBACKEND_Backend;
 struct TRITONBACKEND_Model;
 struct TRITONBACKEND_ModelInstance;
+struct TRITONBACKEND_ModelInstanceResponseStatistics;
 struct TRITONBACKEND_BackendAttribute;
 struct TRITONBACKEND_Batcher;
-
-struct TRITONBACKEND_ModelInstanceResponseStatistics {
-#ifdef TRITON_ENABLE_STATS
-  TRITONBACKEND_ModelInstanceResponseStatistics()
-      : model_instance(nullptr), response_factory(nullptr), response_start(0),
-        compute_output_start(0), response_end(0), send_flags(0), error(nullptr)
-  {
-  }
-  TRITONBACKEND_ModelInstance* model_instance;
-  TRITONBACKEND_ResponseFactory* response_factory;
-  uint64_t response_start;
-  uint64_t compute_output_start;
-  uint64_t response_end;
-  uint32_t send_flags;
-  TRITONSERVER_Error* error;
-#endif  // TRITON_ENABLE_STATS
-};
 
 ///
 /// TRITONBACKEND API Version
@@ -1374,7 +1358,46 @@ TRITONBACKEND_ModelInstanceReportStatistics(
     const uint64_t compute_start_ns, const uint64_t compute_end_ns,
     const uint64_t exec_end_ns);
 
-/// Record statistics for a decoupled inference response.
+/// Create a new decoupled inference response statistics object.
+///
+/// \param response_statistics The new response statistics object to be created.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsNew(
+    TRITONBACKEND_ModelInstanceResponseStatistics** response_statistics);
+
+/// Delete a decoupled inference response statistics object.
+///
+/// The caller retains ownership to the objects set on the deleted response
+/// statistics object and must free them separately.
+///
+/// \param response_statistics The response statistics object to be deleted.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsDelete(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics);
+
+/// Set model instance to a decoupled inference response statistics object.
+///
+/// \param response_statistics The response statistics object.
+/// \param model_instance The model instance.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetModelInstance(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    TRITONBACKEND_ModelInstance* model_instance);
+
+/// Set response factory to a decoupled inference response statistics object.
+///
+/// \param response_statistics The response statistics object.
+/// \param response_factory The response factory.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseFactory(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    TRITONBACKEND_ResponseFactory* response_factory);
+
+/// Set response start time to a decoupled inference response statistics object.
 ///
 /// All timestamps should be reported in nanonseconds and collected using
 /// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
@@ -1394,32 +1417,90 @@ TRITONBACKEND_ModelInstanceReportStatistics(
 ///     < end of this response >
 ///     return
 ///
-/// Create the statistics object after calling TRITONBACKEND_ResponseSend. Use
-/// the same send_flags and error object passed to the
+/// \param response_statistics The response statistics object.
+/// \param response_start The response start time.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseStart(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    uint64_t response_start);
+
+/// Set compute output start time to a decoupled inference response statistics
+/// object. Set this to 0 for reporting an empty response.
+///
+/// All timestamps should be reported in nanonseconds and collected using
+/// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+///
+/// For consistency of measurement across different backends, the timestamps
+/// should be collected at the following points during
+/// TRITONBACKEND_ModelInstanceExecute.
+///
+///   TRITONBACKEND_ModelInstanceExecute()
+///     < start of this response >
+///     CAPTURE TIMESTAMP (response_start)
+///     < generate this response >
+///     CAPTURE TIMESTAMP (compute_output_start)
+///     < allocate output buffers and extract output tensors, including copying
+///       the tensors to/from GPU if necessary >
+///     CAPTURE TIMESTAMP (response_end)
+///     < end of this response >
+///     return
+///
+/// \param response_statistics The response statistics object.
+/// \param compute_output_start The compute output start time.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetComputeOutputStart(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    uint64_t compute_output_start);
+
+/// Set response end time to a decoupled inference response statistics object.
+///
+/// All timestamps should be reported in nanonseconds and collected using
+/// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
+///
+/// For consistency of measurement across different backends, the timestamps
+/// should be collected at the following points during
+/// TRITONBACKEND_ModelInstanceExecute.
+///
+///   TRITONBACKEND_ModelInstanceExecute()
+///     < start of this response >
+///     CAPTURE TIMESTAMP (response_start)
+///     < generate this response >
+///     CAPTURE TIMESTAMP (compute_output_start)
+///     < allocate output buffers and extract output tensors, including copying
+///       the tensors to/from GPU if necessary >
+///     CAPTURE TIMESTAMP (response_end)
+///     < end of this response >
+///     return
+///
+/// \param response_statistics The response statistics object.
+/// \param response_end The response end time.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseEnd(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    uint64_t response_end);
+
+/// Set error to a decoupled inference response statistics object.
+///
+/// Use the same error object passed to the TRITONBACKEND_ResponseSend. \see
 /// TRITONBACKEND_ResponseSend.
 ///
-/// The statistics object is a struct consists of the following fields, subject
-/// to addition in the future.
+/// \param response_statistics The response statistics object.
+/// \param error The error object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceResponseStatisticsSetError(
+    TRITONBACKEND_ModelInstanceResponseStatistics* response_statistics,
+    TRITONSERVER_Error* error);
+
+/// Record statistics for a decoupled inference response.
 ///
-///   TRITONBACKEND_ModelInstance* model_instance;
-///     The model instance.
-///   TRITONBACKEND_ResponseFactory* response_factory;
-///     The response factory associated with the inference request.
-///   const uint64_t response_start;
-///     Timestamp for the start of execution for this response.
-///   const uint64_t compute_output_start;
-///     Timestamp for the start of extracting output tensors for this response.
-///     Set this to 0 for reporting empty response.
-///   const uint64_t response_end;
-///     Timestamp for the end of extracting output tensors for this response.
-///   const uint32_t send_flags;
-///     Flags associated with the response. \see TRITONBACKEND_ResponseSend
-///   TRITONSERVER_Error* error;
-///     The TRITONSERVER_Error to send if the response is an error, or nullptr
-///     if the response is successful. \see TRITONBACKEND_ResponseSend.
+/// The caller retains ownership to the response statistics and must free it
+/// after this function returns.
 ///
-/// \param response_statistics The statistics to be recorded. The caller retains
-/// ownership to the object and must free it after this function returns.
+/// \param response_statistics The statistics to be recorded.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ModelInstanceReportResponseStatistics(
