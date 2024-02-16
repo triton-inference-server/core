@@ -1426,7 +1426,9 @@ TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseStart(
     uint64_t response_start);
 
 /// Set compute output start time to an inference response statistics object.
-/// Set this to 0 for reporting an empty response.
+///
+/// Do NOT set this compute output start time (or set it to 0), if reporting an
+/// empty response.
 ///
 /// All timestamps should be reported in nanonseconds and collected using
 /// std::chrono::steady_clock::now().time_since_epoch() or the equivalent.
