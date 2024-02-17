@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -2897,6 +2897,8 @@ TRITONSERVER_ServerModelStatistics(
 
       // Add infer statistic
       const auto& infer_stats = model->StatsAggregator().ImmutableInferStats();
+      const auto& infer_response_stats =
+          model->StatsAggregator().ImmutableInferResponseStats();
       const auto& infer_batch_stats =
           model->StatsAggregator().ImmutableInferBatchStats();
 
@@ -2933,6 +2935,35 @@ TRITONSERVER_ServerModelStatistics(
           metadata, inference_stats, "cache_miss",
           infer_stats.cache_miss_count_, infer_stats.cache_miss_duration_ns_);
 
+      // Add response statistics
+      triton::common::TritonJson::Value response_stats(
+          metadata, triton::common::TritonJson::ValueType::OBJECT);
+      for (const auto& res_pair : infer_response_stats) {
+        triton::common::TritonJson::Value res_stat(
+            metadata, triton::common::TritonJson::ValueType::OBJECT);
+        SetDurationStat(
+            metadata, res_stat, "compute_infer",
+            res_pair.second.compute_infer_count,
+            res_pair.second.compute_infer_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "compute_output",
+            res_pair.second.compute_output_count,
+            res_pair.second.compute_output_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "success", res_pair.second.success_count,
+            res_pair.second.success_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "fail", res_pair.second.fail_count,
+            res_pair.second.fail_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "empty_response",
+            res_pair.second.empty_response_count,
+            res_pair.second.empty_response_duration_ns);
+        RETURN_IF_STATUS_ERROR(
+            response_stats.Add(res_pair.first.c_str(), std::move(res_stat)));
+      }
+
+      // Add batch statistics
       triton::common::TritonJson::Value batch_stats(
           metadata, triton::common::TritonJson::ValueType::ARRAY);
       for (const auto& batch : infer_batch_stats) {
@@ -2967,6 +2998,8 @@ TRITONSERVER_ServerModelStatistics(
 
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("inference_stats", std::move(inference_stats)));
+      RETURN_IF_STATUS_ERROR(
+          model_stat.Add("response_stats", std::move(response_stats)));
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("batch_stats", std::move(batch_stats)));
       RETURN_IF_STATUS_ERROR(
