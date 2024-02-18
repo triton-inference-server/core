@@ -87,6 +87,8 @@ class RateLimiterResource:
     count: uint
     device: uint
 
+    __module__ = "tritonserver"
+
 
 @dataclass(slots=True)
 class ModelLoadDeviceLimit:
@@ -109,6 +111,8 @@ class ModelLoadDeviceLimit:
     kind: InstanceGroupKind
     device: uint
     fraction: float
+
+    __module__ = "tritonserver"
 
 
 @dataclass(slots=True)
@@ -427,6 +431,8 @@ class Options:
 
         return options
 
+    __module__ = "tritonserver"
+
 
 class ModelDictionary(dict):
     """Model dictionary associating model name, version tuples to model objects
@@ -490,6 +496,8 @@ class ModelDictionary(dict):
                 return Model(self._server, name=key, version=-1)
             else:
                 raise KeyError(f"Unknown Model: {key}")
+
+    __module__ = "tritonserver"
 
 
 class Server:
@@ -1042,6 +1050,7 @@ class Server:
         return [Model(self, **model) for model in models]
 
     _UNLOADED_STATES = [None, "UNAVAILABLE"]
+    __module__ = "tritonserver"
 
 
 class MetricFamily(TRITONSERVER_MetricFamily):
@@ -1070,6 +1079,8 @@ class MetricFamily(TRITONSERVER_MetricFamily):
         """
 
         TRITONSERVER_MetricFamily.__init__(self, kind, name, description)
+
+    __module__ = "tritonserver"
 
 
 class Metric(TRITONSERVER_Metric):
@@ -1126,3 +1137,5 @@ class Metric(TRITONSERVER_Metric):
             parameters = []
 
         TRITONSERVER_Metric.__init__(self, family, parameters)
+
+    __module__ = "tritonserver"
