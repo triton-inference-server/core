@@ -336,6 +336,33 @@ InferenceStatsAggregator::UpdateResponseEmpty(
   return Status::Success;
 }
 
+Status
+InferenceStatsAggregator::UpdateResponseCancel(
+    const std::string& key, const uint64_t response_start_ns,
+    const uint64_t response_end_ns)
+{
+  if (response_start_ns > response_end_ns) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Response start cannot happen after response end");
+  }
+  const uint64_t total_duration_ns = response_end_ns - response_start_ns;
+
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+
+    auto it = response_stats_.find(key);
+    if (it == response_stats_.end()) {
+      it = response_stats_.emplace(key, InferResponseStats()).first;
+    }
+
+    it->second.cancel_count++;
+    it->second.cancel_duration_ns += total_duration_ns;
+  }
+
+  return Status::Success;
+}
+
 void
 InferenceStatsAggregator::UpdateInferBatchStats(
     MetricModelReporter* metric_reporter, const size_t batch_size,

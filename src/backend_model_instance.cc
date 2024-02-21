@@ -1103,6 +1103,10 @@ TRITONBACKEND_ModelInstanceReportResponseStatistics(
       RETURN_TRITONSERVER_ERROR_IF_ERROR(
           sa->UpdateResponseEmpty(key, rs->response_start, rs->response_end));
     }
+  } else if (
+      TRITONSERVER_ErrorCode(rs->error) == TRITONSERVER_ERROR_CANCELLED) {
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(
+        sa->UpdateResponseCancel(key, rs->response_start, rs->response_end));
   } else {
     RETURN_TRITONSERVER_ERROR_IF_ERROR(sa->UpdateResponseFail(
         key, rs->response_start, rs->compute_output_start, rs->response_end));
