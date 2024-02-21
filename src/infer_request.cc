@@ -1006,12 +1006,29 @@ InferenceRequest::Normalize()
     // If no input is marked as optional, then use exact match error message
     // for consistency / backward compatibility
     if ((size_t)model_config.input_size() == model_raw_->RequiredInputCount()) {
+      // Model config is master
+      // Original inputs is smaller
+      std::string missing_input_string = "[";
+      for (size_t i = 0; i < (size_t)model_config.input_size(); ++i) {
+        const inference::ModelInput& input = config.input(i);
+        if (original_inputs_.find(input.name()) == original_inputs_.end()) {
+          missing_input_string = missing_input_string + input.name() + ",";
+        }
+      }
+      missing_input_string = missing_input_string + "]";
+
+      std::string original_input_string = "[";
+      for(const auto& pair: original_inputs_) {
+        original_input_string = original_input_string + "," + pair.first; 
+      }
+      original_input_string = original_input_string + "]";
       return Status(
           Status::Code::INVALID_ARG,
           LogRequest() + "expected " +
               std::to_string(model_config.input_size()) + " inputs but got " +
               std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'");
+              ModelName() + "'." + "Got inputs " + original_input_string + 
+              ", but missing " + missing_input_string);
     } else {
       return Status(
           Status::Code::INVALID_ARG,
