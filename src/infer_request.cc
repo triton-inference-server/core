@@ -1010,7 +1010,7 @@ InferenceRequest::Normalize()
       // Original inputs is smaller
       std::string missing_input_string = "[";
       for (size_t i = 0; i < (size_t)model_config.input_size(); ++i) {
-        const inference::ModelInput& input = config.input(i);
+        const inference::ModelInput& input = model_config.input(i);
         if (original_inputs_.find(input.name()) == original_inputs_.end()) {
           missing_input_string = missing_input_string + input.name() + ",";
         }
