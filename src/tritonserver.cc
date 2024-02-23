@@ -2959,6 +2959,9 @@ TRITONSERVER_ServerModelStatistics(
             metadata, res_stat, "empty_response",
             res_pair.second.empty_response_count,
             res_pair.second.empty_response_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "cancel", res_pair.second.cancel_count,
+            res_pair.second.cancel_duration_ns);
         RETURN_IF_STATUS_ERROR(
             response_stats.Add(res_pair.first.c_str(), std::move(res_stat)));
       }
