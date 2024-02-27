@@ -1015,7 +1015,8 @@ InferenceRequest::Normalize()
       for (size_t i = 0; i < (size_t)model_config.input_size(); ++i) {
         const inference::ModelInput& input = model_config.input(i);
         if (original_inputs_.find(input.name()) == original_inputs_.end()) {
-          missing_input_string = missing_input_string + "'" + input.name() + "'" + ",";
+          missing_input_string =
+              missing_input_string + "'" + input.name() + "'" + ",";
           missing_input_cnt++;
         }
       }
@@ -1027,7 +1028,8 @@ InferenceRequest::Normalize()
       missing_input_string = missing_input_string + "]";
 
       for (const auto& pair : original_inputs_) {
-        original_input_string = original_input_string + "'" + pair.first + "'" + ",";
+        original_input_string =
+            original_input_string + "'" + pair.first + "'" + ",";
       }
       // Removes the extra ","
       // Can be handled in a a more elegant way by creating a vector first of
