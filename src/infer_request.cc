@@ -1015,12 +1015,20 @@ InferenceRequest::Normalize()
           missing_input_string = missing_input_string + input.name() + ",";
         }
       }
+      // Removes the extra ","
+      // Can be handled in a a more elegant way by creating a vector first of the inputs 
+      // and then the string this way saves memory and overhead of creating a vector.
+      missing_input_string.pop_back();
       missing_input_string = missing_input_string + "]";
 
       std::string original_input_string = "[";
       for(const auto& pair: original_inputs_) {
-        original_input_string = original_input_string + "," + pair.first; 
-      }
+        original_input_string = original_input_string + pair.first + ","; 
+      }      
+      // Removes the extra ","
+      // Can be handled in a a more elegant way by creating a vector first of the inputs 
+      // and then the string this way saves memory and overhead of creating a vector.
+      original_input_string.pop_back();
       original_input_string = original_input_string + "]";
       return Status(
           Status::Code::INVALID_ARG,
