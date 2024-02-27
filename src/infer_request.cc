@@ -1009,10 +1009,14 @@ InferenceRequest::Normalize()
       // Model config is master
       // Original inputs is smaller
       std::string missing_input_string = "[";
+      std::string original_input_string = "[";
+
+      int missing_input_cnt = 0;
       for (size_t i = 0; i < (size_t)model_config.input_size(); ++i) {
         const inference::ModelInput& input = model_config.input(i);
         if (original_inputs_.find(input.name()) == original_inputs_.end()) {
           missing_input_string = missing_input_string + input.name() + ",";
+          missing_input_cnt++;
         }
       }
       // Removes the extra ","
@@ -1021,7 +1025,6 @@ InferenceRequest::Normalize()
       missing_input_string.pop_back();
       missing_input_string = missing_input_string + "]";
 
-      std::string original_input_string = "[";
       for(const auto& pair: original_inputs_) {
         original_input_string = original_input_string + pair.first + ","; 
       }      
@@ -1030,6 +1033,12 @@ InferenceRequest::Normalize()
       // and then the string this way saves memory and overhead of creating a vector.
       original_input_string.pop_back();
       original_input_string = original_input_string + "]";
+      if(missing_input_cnt == 0) {
+        missing_input_string = "[]";
+      }
+      if(original_inputs_.size() == 0) {
+        original_input_string = "[]";
+      }
       return Status(
           Status::Code::INVALID_ARG,
           LogRequest() + "expected " +
