@@ -1020,23 +1020,25 @@ InferenceRequest::Normalize()
         }
       }
       // Removes the extra ","
-      // Can be handled in a a more elegant way by creating a vector first of the inputs 
-      // and then the string this way saves memory and overhead of creating a vector.
+      // Can be handled in a a more elegant way by creating a vector first of
+      // the inputs and then the string this way saves memory and overhead of
+      // creating a vector.
       missing_input_string.pop_back();
       missing_input_string = missing_input_string + "]";
 
-      for(const auto& pair: original_inputs_) {
-        original_input_string = original_input_string + pair.first + ","; 
-      }      
+      for (const auto& pair : original_inputs_) {
+        original_input_string = original_input_string + pair.first + ",";
+      }
       // Removes the extra ","
-      // Can be handled in a a more elegant way by creating a vector first of the inputs 
-      // and then the string this way saves memory and overhead of creating a vector.
+      // Can be handled in a a more elegant way by creating a vector first of
+      // the inputs and then the string this way saves memory and overhead of
+      // creating a vector.
       original_input_string.pop_back();
       original_input_string = original_input_string + "]";
-      if(missing_input_cnt == 0) {
+      if (missing_input_cnt == 0) {
         missing_input_string = "[]";
       }
-      if(original_inputs_.size() == 0) {
+      if (original_inputs_.size() == 0) {
         original_input_string = "[]";
       }
       return Status(
@@ -1044,7 +1046,7 @@ InferenceRequest::Normalize()
           LogRequest() + "expected " +
               std::to_string(model_config.input_size()) + " inputs but got " +
               std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'." + "Got inputs " + original_input_string + 
+              ModelName() + "'." + "Got inputs " + original_input_string +
               ", but missing " + missing_input_string);
     } else {
       return Status(
