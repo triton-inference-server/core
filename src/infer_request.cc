@@ -1031,14 +1031,16 @@ InferenceRequest::Normalize()
       original_input_string = "[]";
     }
     if ((size_t)model_config.input_size() == model_raw_->RequiredInputCount()) {
-      // This is response ONLY when there are no optional parameters in the model
+      // This is response ONLY when there are no optional parameters in the
+      // model
       return Status(
           Status::Code::INVALID_ARG,
           LogRequest() + "expected " +
               std::to_string(model_config.input_size()) + " inputs but got " +
               std::to_string(original_inputs_.size()) + " inputs for model '" +
               ModelName() + "'. Got inputs " + original_input_string +
-              ", but missing required inputs " + missing_required_input_string + ".");
+              ", but missing required inputs " + missing_required_input_string +
+              ".");
     } else {
       return Status(
           Status::Code::INVALID_ARG,
@@ -1046,8 +1048,9 @@ InferenceRequest::Normalize()
               std::to_string(model_raw_->RequiredInputCount()) + " and " +
               std::to_string(model_config.input_size()) + " but got " +
               std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'. Got inputs " + original_input_string + 
-              ", but missing required inputs " + missing_required_input_string + ".");
+              ModelName() + "'. Got inputs " + original_input_string +
+              ", but missing required inputs " + missing_required_input_string +
+              ".");
     }
   }
 
