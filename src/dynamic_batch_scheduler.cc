@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -65,6 +65,20 @@ FinishSkippedRequests(
       InferenceRequest::RespondIfError(request, response_status, true);
     }
   }
+}
+
+void
+FinishRejectedCancelledRequests(
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&&
+        rejected_requests,
+    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&&
+        cancelled_requests)
+{
+  const static Status rejected_status =
+      Status(Status::Code::UNAVAILABLE, "Request timeout expired");
+  const static Status cancelled_status = Status(Status::Code::CANCELLED);
+  FinishSkippedRequests(std::move(rejected_requests), rejected_status);
+  FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
 }
 
 DynamicBatchScheduler::DynamicBatchScheduler(
@@ -317,10 +331,6 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     }
   }
 
-  auto wait_for_slots = [this]() {
-    return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
-        model_, model_instance_, queue_.SupportPrefetching());
-  };
   const uint64_t default_wait_microseconds = 500 * 1000;
 
   while (!scheduler_thread_exit_.load()) {
@@ -359,18 +369,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           continue;
         }
 
-        {
-          // The wait_for_slots conditional can be blocking till the slots
-          // are available for execution. Need to explicitly release the
-          // outer lock to allow Enqueue threads above to make progress.
-          lock.unlock();
-          // Use slot lock to wait for the slot availability.
-          std::mutex slot_mu;
-          std::unique_lock<std::mutex> slot_lock(slot_mu);
-          cv_.wait(slot_lock, wait_for_slots);
-          // Recapture the outer most lock to keep making progress.
-          lock.lock();
-        }
+        WaitForPayloadSlotAvailable(&lock, default_wait_microseconds);
 
         {
           std::lock_guard<std::mutex> exec_lock(
@@ -444,15 +443,50 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     }
 
     // Finish rejected and cancelled requests if any
-    const static Status rejected_status =
-        Status(Status::Code::UNAVAILABLE, "Request timeout expired");
-    const static Status cancelled_status = Status(Status::Code::CANCELLED);
-    FinishSkippedRequests(std::move(rejected_requests), rejected_status);
-    FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
+    FinishRejectedCancelledRequests(
+        std::move(rejected_requests), std::move(cancelled_requests));
   }  // end runner loop
 
   LOG_VERBOSE(1) << "Stopping dynamic-batcher thread for " << model_name_
                  << "...";
+}
+
+void
+DynamicBatchScheduler::WaitForPayloadSlotAvailable(
+    std::unique_lock<std::mutex>* lock, uint64_t wait_microseconds)
+{
+  // The wait_for_slots conditional can be blocking till the slots are available
+  // for execution. Need to explicitly release the 'mu_' lock to allow the
+  // Enqueue threads above to make progress.
+  lock->unlock();
+
+  std::chrono::microseconds wait_timeout(wait_microseconds);
+  std::mutex slot_mu;
+  std::unique_lock<std::mutex> slot_lock(slot_mu);
+
+  cv_.wait(slot_lock, [this, &wait_timeout]() {
+    auto slot_available_future = std::async(std::launch::async, [this]() {
+      return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+          model_, model_instance_, queue_.SupportPrefetching());
+    });
+    while (slot_available_future.wait_for(wait_timeout) !=
+           std::future_status::ready) {
+      // Reject and release timed-out requests while waiting.
+      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
+          rejected_requests, cancelled_requests;
+      {
+        std::lock_guard<std::mutex> lock(mu_);
+        queue_.RejectTimeoutRequests();
+        queue_.ReleaseSkippedRequests(&rejected_requests, &cancelled_requests);
+      }
+      FinishRejectedCancelledRequests(
+          std::move(rejected_requests), std::move(cancelled_requests));
+    }
+    return slot_available_future.get();
+  });
+
+  // Recapture the lock.
+  lock->lock();
 }
 
 uint64_t
