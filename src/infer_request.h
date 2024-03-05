@@ -744,6 +744,9 @@ class InferenceRequest {
 
   Status Normalize();
 
+  // Helper for validating Inputs
+  Status ValidateRequestInputs();
+
   // Helpers for pending request metrics
   void IncrementPendingRequestCount();
   void DecrementPendingRequestCount();
