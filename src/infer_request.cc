@@ -1039,7 +1039,8 @@ InferenceRequest::Normalize()
               std::to_string(model_config.input_size()) + " inputs but got " +
               std::to_string(original_inputs_.size()) + " inputs for model '" +
               ModelName() + "'. Got input(s) " + original_input_string +
-              ", but missing required input(s) " + missing_required_input_string +
+              ", but missing required input(s) " +
+              missing_required_input_string +
               ". Please provide all required input(s).");
     } else {
       return Status(
@@ -1049,7 +1050,8 @@ InferenceRequest::Normalize()
               std::to_string(model_config.input_size()) + " but got " +
               std::to_string(original_inputs_.size()) + " inputs for model '" +
               ModelName() + "'. Got input(s) " + original_input_string +
-              ", but missing required input(s) " + missing_required_input_string +
+              ", but missing required input(s) " +
+              missing_required_input_string +
               ". Please provide all required input(s).");
     }
   }
