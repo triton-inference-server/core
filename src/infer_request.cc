@@ -1175,9 +1175,10 @@ InferenceRequest::Normalize()
 }
 
 Status
-InferenceRequest::ValidateRequestInputs(
-    const inference::ModelConfig& model_config)
+InferenceRequest::ValidateRequestInputs()
 {
+  
+  const inference::ModelConfig& model_config = model_raw_->Config();
   if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
       (original_inputs_.size() < model_raw_->RequiredInputCount())) {
     // If no input is marked as optional, then use exact match error message
