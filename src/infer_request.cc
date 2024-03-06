@@ -1232,6 +1232,7 @@ InferenceRequest::ValidateRequestInputs()
               ". Please provide all required input(s).");
     }
   }
+  return Status::Success;
 }
 
 #ifdef TRITON_ENABLE_STATS
