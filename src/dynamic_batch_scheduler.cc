@@ -461,28 +461,29 @@ DynamicBatchScheduler::WaitForPayloadSlotAvailable(
   lock->unlock();
 
   std::chrono::microseconds wait_timeout(wait_microseconds);
+  std::mutex slot_mu;
+  std::unique_lock<std::mutex> slot_lock(slot_mu);
 
-  auto slot_available_future = std::async(std::launch::async, [this]() {
-    return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
-        model_, model_instance_, queue_.SupportPrefetching());
-  });
-  while (slot_available_future.wait_for(wait_timeout) !=
-         std::future_status::ready) {
-    // Reject and release timed-out requests while waiting.
-    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
-        rejected_requests, cancelled_requests;
-    {
-      std::lock_guard<std::mutex> lock(mu_);
-      queue_.RejectTimeoutRequests();
-      queue_.ReleaseSkippedRequests(&rejected_requests, &cancelled_requests);
+  cv_.wait(slot_lock, [this, &wait_timeout]() {
+    auto slot_available_future = std::async(std::launch::async, [this]() {
+      return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+          model_, model_instance_, queue_.SupportPrefetching());
+    });
+    while (slot_available_future.wait_for(wait_timeout) !=
+           std::future_status::ready) {
+      // Reject and release timed-out requests while waiting.
+      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
+          rejected_requests, cancelled_requests;
+      {
+        std::lock_guard<std::mutex> lock(mu_);
+        queue_.RejectTimeoutRequests();
+        queue_.ReleaseSkippedRequests(&rejected_requests, &cancelled_requests);
+      }
+      FinishRejectedCancelledRequests(
+          std::move(rejected_requests), std::move(cancelled_requests));
     }
-    FinishRejectedCancelledRequests(
-        std::move(rejected_requests), std::move(cancelled_requests));
-  }
-  if (slot_available_future.get() != true) {
-    LOG_ERROR << "Should not print this! PayloadSlotAvailable returned without "
-                 "an available slot.";
-  }
+    return slot_available_future.get();
+  });
 
   // Recapture the lock.
   lock->lock();
