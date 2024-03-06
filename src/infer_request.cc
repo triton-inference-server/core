@@ -1001,7 +1001,7 @@ InferenceRequest::Normalize()
   }
   // Make sure that the request is providing the number of inputs
   // as is expected by the model.
-  RETURN_IF_ERROR(ValidateRequestInputs(model_config));
+  RETURN_IF_ERROR(ValidateRequestInputs());
   // Determine the batch size and shape of each input.
   if (model_config.max_batch_size() == 0) {
     // Model does not support Triton-style batching so set as
@@ -1177,7 +1177,7 @@ InferenceRequest::Normalize()
 Status
 InferenceRequest::ValidateRequestInputs()
 {
-  
+
   const inference::ModelConfig& model_config = model_raw_->Config();
   if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
       (original_inputs_.size() < model_raw_->RequiredInputCount())) {
