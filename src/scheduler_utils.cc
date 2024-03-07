@@ -249,7 +249,8 @@ PriorityQueue::PolicyQueue::RejectTimeoutRequests()
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now().time_since_epoch())
           .count();
-  for (size_t idx = 0; idx < queue_.size();) {
+  size_t idx = 0;
+  while (idx < queue_.size()) {
     if (timeout_timestamp_ns_[idx] != 0 &&
         now_nanoseconds > timeout_timestamp_ns_[idx]) {
       rejected_count++;
