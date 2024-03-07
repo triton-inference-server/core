@@ -241,7 +241,7 @@ size_t
 PriorityQueue::PolicyQueue::RejectTimeoutRequests()
 {
   if (timeout_action_ != inference::ModelQueuePolicy::REJECT) {
-    return false;
+    return 0;
   }
 
   size_t rejected_count = 0;
