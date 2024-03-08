@@ -44,6 +44,9 @@ except ImportError:
 
 try:
     import torch
+
+    if not torch.cuda.is_available():
+        torch = None
 except ImportError:
     torch = None
 
@@ -343,7 +346,7 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(server.ready())
 
     @pytest.mark.xfail(
-        tritonserver.__version__ <= "2.42.0",
+        tritonserver.__version__ <= "2.43.0",
         reason="Known issue on stop: Exit timeout expired. Exiting immediately",
         raises=tritonserver.InternalError,
     )
