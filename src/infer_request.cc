@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1001,28 +1001,7 @@ InferenceRequest::Normalize()
   }
   // Make sure that the request is providing the number of inputs
   // as is expected by the model.
-  if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
-      (original_inputs_.size() < model_raw_->RequiredInputCount())) {
-    // If no input is marked as optional, then use exact match error message
-    // for consistency / backward compatibility
-    if ((size_t)model_config.input_size() == model_raw_->RequiredInputCount()) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          LogRequest() + "expected " +
-              std::to_string(model_config.input_size()) + " inputs but got " +
-              std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'");
-    } else {
-      return Status(
-          Status::Code::INVALID_ARG,
-          LogRequest() + "expected number of inputs between " +
-              std::to_string(model_raw_->RequiredInputCount()) + " and " +
-              std::to_string(model_config.input_size()) + " but got " +
-              std::to_string(original_inputs_.size()) + " inputs for model '" +
-              ModelName() + "'");
-    }
-  }
-
+  RETURN_IF_ERROR(ValidateRequestInputs());
   // Determine the batch size and shape of each input.
   if (model_config.max_batch_size() == 0) {
     // Model does not support Triton-style batching so set as
@@ -1192,6 +1171,67 @@ InferenceRequest::Normalize()
     }
   }
 
+  return Status::Success;
+}
+
+Status
+InferenceRequest::ValidateRequestInputs()
+{
+  const inference::ModelConfig& model_config = model_raw_->Config();
+  if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
+      (original_inputs_.size() < model_raw_->RequiredInputCount())) {
+    // If no input is marked as optional, then use exact match error message
+    // for consistency / backward compatibility
+    std::string missing_required_input_string = "[";
+    std::string original_input_string = "[";
+
+    for (size_t i = 0; i < (size_t)model_config.input_size(); ++i) {
+      const inference::ModelInput& input = model_config.input(i);
+      if ((!input.optional()) &&
+          (original_inputs_.find(input.name()) == original_inputs_.end())) {
+        missing_required_input_string =
+            missing_required_input_string + "'" + input.name() + "'" + ",";
+      }
+    }
+    // Removes the extra ","
+    missing_required_input_string.pop_back();
+    missing_required_input_string = missing_required_input_string + "]";
+
+    for (const auto& pair : original_inputs_) {
+      original_input_string =
+          original_input_string + "'" + pair.first + "'" + ",";
+    }
+    // Removes the extra ","
+    original_input_string.pop_back();
+    original_input_string = original_input_string + "]";
+    if (original_inputs_.size() == 0) {
+      original_input_string = "[]";
+    }
+    if ((size_t)model_config.input_size() == model_raw_->RequiredInputCount()) {
+      // This is response ONLY when there are no optional parameters in the
+      // model
+      return Status(
+          Status::Code::INVALID_ARG,
+          LogRequest() + "expected " +
+              std::to_string(model_config.input_size()) + " inputs but got " +
+              std::to_string(original_inputs_.size()) + " inputs for model '" +
+              ModelName() + "'. Got input(s) " + original_input_string +
+              ", but missing required input(s) " +
+              missing_required_input_string +
+              ". Please provide all required input(s).");
+    } else {
+      return Status(
+          Status::Code::INVALID_ARG,
+          LogRequest() + "expected number of inputs between " +
+              std::to_string(model_raw_->RequiredInputCount()) + " and " +
+              std::to_string(model_config.input_size()) + " but got " +
+              std::to_string(original_inputs_.size()) + " inputs for model '" +
+              ModelName() + "'. Got input(s) " + original_input_string +
+              ", but missing required input(s) " +
+              missing_required_input_string +
+              ". Please provide all required input(s).");
+    }
+  }
   return Status::Success;
 }
 
