@@ -894,6 +894,27 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
     struct TRITONSERVER_InferenceTrace* trace,
     struct TRITONSERVER_InferenceTrace** child_trace);
 
+/// TODO: adjust
+///
+/// \param trace The trace.
+/// \param request_id Returns the version of the model associated
+/// with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
+
+
+/// TODO: adjust
+///
+/// \param trace The trace.
+/// \param request_id Returns the version of the model associated
+/// with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char** context);
+
 /// TRITONSERVER_InferenceRequest
 ///
 /// Object representing an inference request. The inference request
