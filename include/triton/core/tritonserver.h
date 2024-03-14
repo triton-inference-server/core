@@ -894,22 +894,20 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
     struct TRITONSERVER_InferenceTrace* trace,
     struct TRITONSERVER_InferenceTrace** child_trace);
 
-/// TODO: adjust
+/// Set TRITONSERVER_InferenceTrace context.
 ///
 /// \param trace The trace.
-/// \param request_id Returns the version of the model associated
-/// with the trace.
+/// \param trace_context A new trace context to associate with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(
     struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
 
 
-/// TODO: adjust
+/// Get TRITONSERVER_InferenceTrace context.
 ///
 /// \param trace The trace.
-/// \param request_id Returns the version of the model associated
-/// with the trace.
+/// \param context Returns the context associated with the trace.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceContext(
