@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 28
+#define TRITONSERVER_API_VERSION_MINOR 29
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -2238,6 +2238,16 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
     struct TRITONSERVER_Server* server);
+
+/// Set the exit timeout on the server object, and then stop the server object.
+/// A server can't be restarted once it is stopped.
+///
+/// \param server The inference server object.
+/// \param timeout The exit timeout, in seconds.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerStopWithTimeout(
+    struct TRITONSERVER_Server* server, unsigned int timeout);
 
 /// Register a new model repository. Not available in polling mode.
 ///
