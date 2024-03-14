@@ -93,6 +93,9 @@ class TritonRepoAgent {
   {
   }
   const std::string name_;
+  bool prefix_models_ = false;
+  bool prefix_all_models_ = false;
+  std::unordered_map<std::string, std::string> model_configuration_name_map_;
   void* state_;
 
   // dlopen / dlsym handles

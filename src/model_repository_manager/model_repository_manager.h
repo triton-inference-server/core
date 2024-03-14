@@ -625,6 +625,7 @@ class ModelRepositoryManager {
   const std::string GetModelConfigurationName(const std::string& model_name);
 
   // Model prefix parameters
+  bool prefix_models_ = false;
   bool prefix_all_models_ = false;
   std::unordered_map<std::string, std::string> model_configuration_name_map_;
 
