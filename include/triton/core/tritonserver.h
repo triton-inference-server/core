@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 28
+#define TRITONSERVER_API_VERSION_MINOR 29
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -893,6 +893,25 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSpawnChildTrace(
     struct TRITONSERVER_InferenceTrace* trace,
     struct TRITONSERVER_InferenceTrace** child_trace);
+
+/// Set TRITONSERVER_InferenceTrace context.
+///
+/// \param trace The trace.
+/// \param trace_context A new trace context to associate with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
+
+
+/// Get TRITONSERVER_InferenceTrace context.
+///
+/// \param trace The trace.
+/// \param trace_context Returns the context associated with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char** trace_context);
 
 /// TRITONSERVER_InferenceRequest
 ///
