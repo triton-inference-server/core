@@ -1100,11 +1100,11 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(
-    TRITONSERVER_InferenceTrace* trace, const char* context)
+    TRITONSERVER_InferenceTrace* trace, const char* trace_context)
 {
 #ifdef TRITON_ENABLE_TRACING
   tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  ltrace->SetContext(context);
+  ltrace->SetContext(trace_context);
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
@@ -1114,11 +1114,11 @@ TRITONSERVER_InferenceTraceSetContext(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceContext(
-    TRITONSERVER_InferenceTrace* trace, const char** context)
+    TRITONSERVER_InferenceTrace* trace, const char** trace_context)
 {
 #ifdef TRITON_ENABLE_TRACING
   tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  *context = ltrace->Context().c_str();
+  *trace_context = ltrace->Context().c_str();
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
