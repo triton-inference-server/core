@@ -2543,13 +2543,12 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerStopWithTimeout(
+TRITONSERVER_ServerSetExitTimeout(
     TRITONSERVER_Server* server, unsigned int timeout)
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   if (lserver != nullptr) {
     lserver->SetExitTimeoutSeconds(timeout);
-    RETURN_IF_STATUS_ERROR(lserver->Stop());
   }
   return nullptr;  // Success
 }

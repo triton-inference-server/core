@@ -551,7 +551,7 @@ TRITONSERVER_ServerStop()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_ServerStopWithTimeout()
+TRITONSERVER_ServerSetExitTimeout()
 {
 }
 TRITONAPI_DECLSPEC void

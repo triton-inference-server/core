@@ -2239,14 +2239,13 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
     struct TRITONSERVER_Server* server);
 
-/// Set the exit timeout on the server object, and then stop the server object.
-/// A server can't be restarted once it is stopped.
+/// Set the exit timeout on the server object.
 ///
 /// \param server The inference server object.
 /// \param timeout The exit timeout, in seconds.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
-TRITONSERVER_ServerStopWithTimeout(
+TRITONSERVER_ServerSetExitTimeout(
     struct TRITONSERVER_Server* server, unsigned int timeout);
 
 /// Register a new model repository. Not available in polling mode.
