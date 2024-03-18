@@ -190,6 +190,14 @@ TRITONSERVER_InferenceTraceSpawnChildTrace()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceSetContext()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceContext()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestNew()
 {
 }

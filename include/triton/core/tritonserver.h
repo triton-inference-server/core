@@ -894,6 +894,25 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
     struct TRITONSERVER_InferenceTrace* trace,
     struct TRITONSERVER_InferenceTrace** child_trace);
 
+/// Set TRITONSERVER_InferenceTrace context.
+///
+/// \param trace The trace.
+/// \param trace_context A new trace context to associate with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
+
+
+/// Get TRITONSERVER_InferenceTrace context.
+///
+/// \param trace The trace.
+/// \param trace_context Returns the context associated with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char** trace_context);
+
 /// TRITONSERVER_InferenceRequest
 ///
 /// Object representing an inference request. The inference request

@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2020-2024, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -51,7 +51,7 @@ class InferenceTrace {
       TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* userp)
       : level_(level), id_(next_id_++), parent_id_(parent_id),
         activity_fn_(activity_fn), tensor_activity_fn_(tensor_activity_fn),
-        release_fn_(release_fn), userp_(userp)
+        release_fn_(release_fn), userp_(userp), context_("")
   {
   }
 
@@ -63,10 +63,12 @@ class InferenceTrace {
   const std::string& ModelName() const { return model_name_; }
   int64_t ModelVersion() const { return model_version_; }
   const std::string& RequestId() const { return request_id_; }
+  const std::string& Context() const { return context_; }
 
   void SetModelName(const std::string& n) { model_name_ = n; }
   void SetModelVersion(int64_t v) { model_version_ = v; }
   void SetRequestId(const std::string& request_id) { request_id_ = request_id; }
+  void SetContext(const std::string& context) { context_ = context; }
 
   // Report trace activity.
   void Report(
@@ -125,6 +127,7 @@ class InferenceTrace {
   // Maintain next id statically so that trace id is unique even
   // across traces
   static std::atomic<uint64_t> next_id_;
+  std::string context_;
 };
 
 //
@@ -144,9 +147,11 @@ class InferenceTraceProxy {
   const std::string& ModelName() const { return trace_->ModelName(); }
   const std::string& RequestId() const { return trace_->RequestId(); }
   int64_t ModelVersion() const { return trace_->ModelVersion(); }
+  const std::string& Context() const { return trace_->Context(); }
   void SetModelName(const std::string& n) { trace_->SetModelName(n); }
   void SetRequestId(const std::string& n) { trace_->SetRequestId(n); }
   void SetModelVersion(int64_t v) { trace_->SetModelVersion(v); }
+  void SetContext(const std::string& context) { trace_->SetContext(context); }
 
   void Report(
       const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns)
