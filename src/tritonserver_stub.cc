@@ -559,6 +559,10 @@ TRITONSERVER_ServerStop()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerSetExitTimeout()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerPollModelRepository()
 {
 }

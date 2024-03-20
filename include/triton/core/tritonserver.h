@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 29
+#define TRITONSERVER_API_VERSION_MINOR 30
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -2257,6 +2257,17 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
     struct TRITONSERVER_Server* server);
+
+/// Set the exit timeout on the server object. This value overrides the value
+/// initially set through server options and provides a mechanism to update the
+/// exit timeout while the serving is running.
+///
+/// \param server The inference server object.
+/// \param timeout The exit timeout, in seconds.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerSetExitTimeout(
+    struct TRITONSERVER_Server* server, unsigned int timeout);
 
 /// Register a new model repository. Not available in polling mode.
 ///
