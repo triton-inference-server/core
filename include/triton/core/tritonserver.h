@@ -2258,7 +2258,9 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
     struct TRITONSERVER_Server* server);
 
-/// Set the exit timeout on the server object.
+/// Set the exit timeout on the server object. This value overrides the 
+/// value initially set through server options and provides a mechanism to 
+/// update the exit timeout while the serving is running.
 ///
 /// \param server The inference server object.
 /// \param timeout The exit timeout, in seconds.
