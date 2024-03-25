@@ -186,6 +186,7 @@ Status
 CreateAgentModelListWithLoadAction(
     const inference::ModelConfig& original_model_config,
     const std::string& original_model_path,
+    const std::string& model_config_path_with_prefix,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
   if (original_model_config.has_model_repository_agents()) {
@@ -218,7 +219,8 @@ CreateAgentModelListWithLoadAction(
       std::unique_ptr<TritonRepoAgentModel> agent_model;
       if (lagent_model_list->Size() != 0) {
         lagent_model_list->Back()->Location(&artifact_type, &location);
-        const auto config_path = JoinPath({location, kModelConfigPbTxt});
+        const auto config_path =
+            JoinPath({location, model_config_path_with_prefix});
         if (!ReadTextProto(config_path, &model_config).IsOk()) {
           model_config.Clear();
         }
@@ -286,7 +288,9 @@ GetModifiedTime(const std::string& path)
 // found at "[model_dir_path]/config.pbtxt". The time for "model files" includes
 // the time for 'model_dir_path'.
 std::pair<int64_t, int64_t>
-GetDetailedModifiedTime(const std::string& model_dir_path)
+GetDetailedModifiedTime(
+    const std::string& model_dir_path,
+    const std::string& model_config_path_with_prefix)
 {
   // Check if 'model_dir_path' is a directory.
   bool is_dir;
@@ -323,7 +327,7 @@ GetDetailedModifiedTime(const std::string& model_dir_path)
   // Get latest modification time for each files/folders, and place it at the
   // correct category.
   const std::string model_config_full_path(
-      JoinPath({model_dir_path, kModelConfigPbTxt}));
+      JoinPath({model_dir_path, model_config_path_with_prefix}));
   for (const auto& child : contents) {
     const auto full_path = JoinPath({model_dir_path, child});
     if (full_path == model_config_full_path) {
@@ -343,9 +347,12 @@ GetDetailedModifiedTime(const std::string& model_dir_path)
 // modified time.
 bool
 IsModified(
-    const std::string& model_dir_path, std::pair<int64_t, int64_t>* last_ns)
+    const std::string& model_dir_path,
+    const std::string& model_config_path_with_prefix,
+    std::pair<int64_t, int64_t>* last_ns)
 {
-  auto new_ns = GetDetailedModifiedTime(model_dir_path);
+  auto new_ns =
+      GetDetailedModifiedTime(model_dir_path, model_config_path_with_prefix);
   bool modified = std::max(new_ns.first, new_ns.second) >
                   std::max(last_ns->first, last_ns->second);
   last_ns->swap(new_ns);
@@ -386,6 +393,7 @@ ModelRepositoryManager::Create(
     const std::set<std::string>& repository_paths,
     const std::set<std::string>& startup_models, const bool strict_model_config,
     const bool polling_enabled, const bool model_control_enabled,
+    const std::unordered_map<std::string, std::string>& model_config_prefixes,
     const ModelLifeCycleOptions& life_cycle_options,
     const bool enable_model_namespacing,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
@@ -418,6 +426,9 @@ ModelRepositoryManager::Create(
           model_control_enabled, life_cycle_options.min_compute_capability,
           enable_model_namespacing, std::move(life_cycle)));
   *model_repository_manager = std::move(local_manager);
+  RETURN_IF_ERROR(
+      (*model_repository_manager)
+          ->PreprocessModelConfigurationNames(model_config_prefixes));
 
   // Support loading all models on startup in explicit model control mode with
   // special startup_model name "*". This does not imply support for pattern
@@ -549,7 +560,7 @@ ModelRepositoryManager::LoadModelByDependency(
   // encapsulate the interaction:
   // Each iteration:
   //  - Check dependency graph for nodes that are ready for lifecycle changes:
-  //      - load if all dependencies are satisfied and the node is 'heathy'
+  //      - load if all dependencies are satisfied and the node is 'healthy'
   //      - unload otherwise (should revisit this, logically will only happen in
   //        ensemble, the ensemble is requested to be re-loaded, at this point
   //        it is too late to revert model changes so the ensemble will not be
@@ -1298,13 +1309,15 @@ ModelRepositoryManager::Poll(
   // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
     std::unique_ptr<ModelInfo> model_info;
+    const auto& model_name = pair.first.name_;
     // Load with parameters will be appiled to all models with the same
     // name (namespace can be different), unless namespace is specified
     // in the future.
-    const auto& mit = models.find(pair.first.name_);
+    const auto& mit = models.find(model_name);
     static std::vector<const InferenceParameter*> empty_params;
+    const std::string model_config_name = GetModelConfigurationName(model_name);
     auto status = InitializeModelInfo(
-        pair.first, pair.second,
+        pair.first, pair.second, model_config_name,
         ((mit == models.end()) ? empty_params : mit->second), &model_info);
 
     const auto& iitr = infos_.Find(pair.first);
@@ -1355,8 +1368,40 @@ ModelRepositoryManager::ModelDirectoryOverride(
 }
 
 Status
+ModelRepositoryManager::PreprocessModelConfigurationNames(
+    const std::unordered_map<std::string, std::string>& model_config_prefixes)
+{
+  for (const auto& [model_name, config_prefix] : model_config_prefixes) {
+    if (model_configuration_name_map_.count(model_name) > 1) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Specifying multiple prefixes for: " + std::string(model_name));
+    }
+    model_configuration_name_map_[model_name] =
+        config_prefix + kModelConfigPbTxt;
+    if (model_name == "*") {
+      prefix_all_models_ = true;
+    }
+  }
+
+  return Status::Success;
+}
+
+const std::string
+ModelRepositoryManager::GetModelConfigurationName(const std::string& model_name)
+{
+  if (model_configuration_name_map_.count(model_name) > 1) {
+    return model_configuration_name_map_[model_name];
+  } else if (prefix_all_models_) {
+    return model_configuration_name_map_["*"];
+  }
+  return kModelConfigPbTxt;
+}
+
+Status
 ModelRepositoryManager::InitializeModelInfo(
     const ModelIdentifier& model_id, const std::string& path,
+    const std::string& model_config_path_with_prefix,
     const std::vector<const InferenceParameter*>& params,
     std::unique_ptr<ModelInfo>* info)
 {
@@ -1405,13 +1450,15 @@ ModelRepositoryManager::InitializeModelInfo(
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
     if (iitr == infos_.end()) {
-      linfo->mtime_nsec_ = GetDetailedModifiedTime(linfo->model_path_);
+      linfo->mtime_nsec_ = GetDetailedModifiedTime(
+          linfo->model_path_, model_config_path_with_prefix);
     } else {
       // Check the current timestamps to determine if model actually has been
       // modified
       linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
-      unmodified =
-          !IsModified(std::string(linfo->model_path_), &linfo->mtime_nsec_);
+      unmodified = !IsModified(
+          std::string(linfo->model_path_), model_config_path_with_prefix,
+          &linfo->mtime_nsec_);
     }
   }
 
@@ -1461,7 +1508,8 @@ ModelRepositoryManager::InitializeModelInfo(
   // this must be done before normalizing model config as agents might
   // redirect to use the model config at a different location
   if (!parsed_config) {
-    const auto config_path = JoinPath({linfo->model_path_, kModelConfigPbTxt});
+    const auto config_path =
+        JoinPath({linfo->model_path_, model_config_path_with_prefix});
     bool model_config_exists = false;
     RETURN_IF_ERROR(FileExists(config_path, &model_config_exists));
     // model config can be missing if auto fill is set
@@ -1474,7 +1522,8 @@ ModelRepositoryManager::InitializeModelInfo(
   }
   if (parsed_config) {
     RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
-        linfo->model_config_, linfo->model_path_, &linfo->agent_model_list_));
+        linfo->model_config_, linfo->model_path_, model_config_path_with_prefix,
+        &linfo->agent_model_list_));
     if (linfo->agent_model_list_ != nullptr) {
       // Get the latest repository path
       const char* location;
