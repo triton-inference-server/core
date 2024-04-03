@@ -1402,6 +1402,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
   std::unique_ptr<InferenceResponse> cached_response;
   if(info_->is_cache_enabled_) {
+    LOG_VERBOSE(1) << "Cache LookUp";
     CacheLookUp(request,cached_response);
   }
 
