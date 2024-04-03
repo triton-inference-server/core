@@ -1038,6 +1038,7 @@ EnsembleContext::ReshapeTensorDims(
 //Caching function
 void EnsembleContext::CacheEnsembleTopLevelRequest(std::unique_ptr<InferenceResponse>& response) 
 {
+  LOG_VERBOSE(1) << "Caching Top Level Request";
   const std::string key = request_tracker_->Request()->CacheKey();
   const bool is_key_set = request_tracker_->Request()->CacheKeyIsSet();
 
@@ -1056,6 +1057,7 @@ void EnsembleContext::CacheEnsembleTopLevelRequest(std::unique_ptr<InferenceResp
   #ifdef TRITON_ENABLE_STATS
   const uint64_t insert_start_ns = CaptureTimeNs();
   #endif
+  LOG_VERBOSE(1) << "Response: " << response.get();
   auto status = cache->Insert(response.get(), key);
   //LOG_VERBOSE(1) << response->ModelName() << " " << response->ActualModelVersion() << " " << response.;
   if (!status.IsOk()) 
@@ -1085,6 +1087,7 @@ void EnsembleContext::CacheEnsembleTopLevelRequest(std::unique_ptr<InferenceResp
 Status
 EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
 {
+  LOG_VERBOSE(1) << "Finish Ensemble";
   // Do nothing if the ensemble is finished
   if (request_tracker_ == nullptr) {
     return ensemble_status_;
@@ -1102,6 +1105,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                      ? TRITONSERVER_RESPONSE_COMPLETE_FINAL
                      : 0;
     if (response != nullptr) {
+      LOG_VERBOSE(1) << "Response Not null";
       //Cache the request if caching is enabled.
       if(info_->is_cache_enabled_) {
         CacheEnsembleTopLevelRequest(response);
