@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -108,15 +108,6 @@ class DynamicBatchScheduler : public Scheduler {
       std::unique_ptr<InferenceRequest>& request,
       std::unique_ptr<InferenceResponse>& cached_response);
   void FinalizeResponses();
-
-  // Block until a payload slot is available on the rate limiter. The 'lock'
-  // should be acquired when calling this function. The 'lock' will be released
-  // when waiting for payload slot and re-acquired before this function returns.
-  // For queued requests under policy REJECT, they will be rejected if timed-out
-  // while waiting for a slot. The timeout will be checked every
-  // 'wait_microseconds'. The 'wait_microseconds' should be non-zero.
-  void WaitForPayloadSlotAvailable(
-      std::unique_lock<std::mutex>* lock, uint64_t wait_microseconds);
 
   // Custom batching function calls
   // Returns whether custom batching is enabled.

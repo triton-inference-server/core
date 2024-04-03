@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+
+//check if ensemble is enabled.
 #ifdef TRITON_ENABLE_ENSEMBLE
 
 #include <memory>
@@ -48,6 +50,13 @@ using cudaStream_t = void*;
 
 class InferenceServer;
 
+//creating a struct ensembleinfo
+/*
+members of ensembleinfo struct
+1. stepinfo struct - it has two members model_id and model_version, input_to_tensor_ map and output_to_tensor_ map.
+2. ensemble_name 
+3. is_decoupled_ to check if it's decoupled or not.
+*/
 struct EnsembleInfo {
   struct StepInfo {
     StepInfo(const ModelIdentifier& model_id, const int64_t model_version)
@@ -55,6 +64,8 @@ struct EnsembleInfo {
     {
     }
 
+
+// ModelIdentifier is a custom datatype. 
     ModelIdentifier model_id_;
     int64_t model_version_;
     std::unordered_map<std::string, std::string> input_to_tensor_;
@@ -64,6 +75,18 @@ struct EnsembleInfo {
   std::string ensemble_name_;
 
   bool is_decoupled_;
+
+  bool is_cache_enabled_;
+
+  //std::string key = "";
+  //bool is_key_set = false;
+  
+  #ifdef TRITON_ENABLE_STATS
+    uint64_t ensemble_start_ns;
+    uint64_t ensemble_end_ns;
+  #endif
+
+
 
   // the ensemble output (re)shape expected by the ensemble
   std::unordered_map<std::string, triton::common::DimsList>
@@ -107,6 +130,9 @@ class EnsembleScheduler : public Scheduler {
       InferenceStatsAggregator* const stats_aggregator,
       InferenceServer* const server, const inference::ModelConfig& config);
 
+  void CacheLookUp(std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response);
+
   std::shared_ptr<MetricModelReporter> metric_reporter_;
   InferenceStatsAggregator* const stats_aggregator_;
   InferenceServer* const is_;
@@ -118,6 +144,9 @@ class EnsembleScheduler : public Scheduler {
   cudaStream_t stream_;
 
   std::atomic<size_t> inflight_count_;
+
+  
+ 
 };
 
 }}  // namespace triton::core

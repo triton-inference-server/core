@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -32,6 +32,42 @@
 #include "triton/common/logging.h"
 
 namespace triton { namespace core {
+
+uint64_t CaptureTimeNs()  
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+bool CacheLookUpUtil(std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response,
+    std::shared_ptr<TritonCache> cache)
+{
+  Status status;
+  std::unique_ptr<InferenceResponse> local_response;
+  request->ResponseFactory()->CreateResponse(&local_response);
+  std::string key = "";
+  if (!request->CacheKeyIsSet()) {
+    status = cache->Hash(*request, &key);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to hash request: " << status.Message();
+      return false;
+    }
+    request->SetCacheKey(key);
+  } else {
+    key = request->CacheKey();
+  }
+  {
+    request->CaptureCacheLookupStartNs();
+    status = cache->Lookup(local_response.get(), key);
+    request->CaptureCacheLookupEndNs();
+  }
+  if (status.IsOk() && (local_response != nullptr)) {
+    cached_response = std::move(local_response);
+    return true;
+  }
+  return false;
+}
 
 Status
 RequiredEqualInputs::Initialize(
@@ -237,33 +273,6 @@ PriorityQueue::PolicyQueue::ApplyPolicy(
   return ((idx - queue_.size()) < delayed_queue_.size());
 }
 
-size_t
-PriorityQueue::PolicyQueue::RejectTimeoutRequests()
-{
-  if (timeout_action_ != inference::ModelQueuePolicy::REJECT) {
-    return 0;
-  }
-
-  size_t rejected_count = 0;
-  uint64_t now_nanoseconds =
-      std::chrono::duration_cast<std::chrono::nanoseconds>(
-          std::chrono::steady_clock::now().time_since_epoch())
-          .count();
-  size_t idx = 0;
-  while (idx < queue_.size()) {
-    if (timeout_timestamp_ns_[idx] != 0 &&
-        now_nanoseconds > timeout_timestamp_ns_[idx]) {
-      rejected_count++;
-      rejected_queue_.emplace_back(std::move(queue_[idx]));
-      queue_.erase(queue_.begin() + idx);
-      timeout_timestamp_ns_.erase(timeout_timestamp_ns_.begin() + idx);
-    } else {
-      idx++;
-    }
-  }
-  return rejected_count;
-}
-
 void
 PriorityQueue::PolicyQueue::ReleaseRejectedQueue(
     std::deque<std::unique_ptr<InferenceRequest>>* requests)
@@ -383,18 +392,6 @@ PriorityQueue::Dequeue(std::unique_ptr<InferenceRequest>* request)
     }
   }
   return Status(Status::Code::UNAVAILABLE, "dequeue on empty queue");
-}
-
-void
-PriorityQueue::RejectTimeoutRequests()
-{
-  for (auto it = queues_.begin(); it != queues_.end(); it++) {
-    size_t rejected_count = it->second.RejectTimeoutRequests();
-    size_ -= rejected_count;
-    if (rejected_count > 0 && it->first == pending_cursor_.curr_it_->first) {
-      pending_cursor_.valid_ = false;
-    }
-  }
 }
 
 void

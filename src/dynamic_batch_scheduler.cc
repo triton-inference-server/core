@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -36,16 +36,10 @@
 #include "triton/common/logging.h"
 #include "triton/common/model_config.h"
 #include "triton/common/nvtx.h"
+#include "scheduler_utils.h"
 
 namespace triton { namespace core {
 
-uint64_t
-CaptureTimeNs()
-{
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
-      .count();
-}
 
 bool
 IsStaleState(Payload::State payload_state)
@@ -65,20 +59,6 @@ FinishSkippedRequests(
       InferenceRequest::RespondIfError(request, response_status, true);
     }
   }
-}
-
-void
-FinishRejectedCancelledRequests(
-    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&&
-        rejected_requests,
-    std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&&
-        cancelled_requests)
-{
-  const static Status rejected_status =
-      Status(Status::Code::UNAVAILABLE, "Request timeout expired");
-  const static Status cancelled_status = Status(Status::Code::CANCELLED);
-  FinishSkippedRequests(std::move(rejected_requests), rejected_status);
-  FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
 }
 
 DynamicBatchScheduler::DynamicBatchScheduler(
@@ -331,6 +311,10 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     }
   }
 
+  auto wait_for_slots = [this]() {
+    return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+        model_, model_instance_, queue_.SupportPrefetching());
+  };
   const uint64_t default_wait_microseconds = 500 * 1000;
 
   while (!scheduler_thread_exit_.load()) {
@@ -369,7 +353,18 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           continue;
         }
 
-        WaitForPayloadSlotAvailable(&lock, default_wait_microseconds);
+        {
+          // The wait_for_slots conditional can be blocking till the slots
+          // are available for execution. Need to explicitly release the
+          // outer lock to allow Enqueue threads above to make progress.
+          lock.unlock();
+          // Use slot lock to wait for the slot availability.
+          std::mutex slot_mu;
+          std::unique_lock<std::mutex> slot_lock(slot_mu);
+          cv_.wait(slot_lock, wait_for_slots);
+          // Recapture the outer most lock to keep making progress.
+          lock.lock();
+        }
 
         {
           std::lock_guard<std::mutex> exec_lock(
@@ -443,50 +438,15 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     }
 
     // Finish rejected and cancelled requests if any
-    FinishRejectedCancelledRequests(
-        std::move(rejected_requests), std::move(cancelled_requests));
+    const static Status rejected_status =
+        Status(Status::Code::UNAVAILABLE, "Request timeout expired");
+    const static Status cancelled_status = Status(Status::Code::CANCELLED);
+    FinishSkippedRequests(std::move(rejected_requests), rejected_status);
+    FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
   }  // end runner loop
 
   LOG_VERBOSE(1) << "Stopping dynamic-batcher thread for " << model_name_
                  << "...";
-}
-
-void
-DynamicBatchScheduler::WaitForPayloadSlotAvailable(
-    std::unique_lock<std::mutex>* lock, uint64_t wait_microseconds)
-{
-  // The wait_for_slots conditional can be blocking till the slots are available
-  // for execution. Need to explicitly release the 'mu_' lock to allow the
-  // Enqueue threads above to make progress.
-  lock->unlock();
-
-  const std::chrono::microseconds wait_timeout(wait_microseconds);
-  std::mutex slot_mu;
-  std::unique_lock<std::mutex> slot_lock(slot_mu);
-  bool slot_available = false;
-
-  while (!slot_available) {
-    slot_available = cv_.wait_for(slot_lock, wait_timeout, [this]() {
-      return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
-          model_, model_instance_, queue_.SupportPrefetching(),
-          true /* force_non_blocking */);
-    });
-    if (!slot_available) {
-      // Reject and release timeout requests from queue.
-      std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
-          rejected_requests, cancelled_requests;
-      {
-        std::lock_guard<std::mutex> lock(mu_);
-        queue_.RejectTimeoutRequests();
-        queue_.ReleaseSkippedRequests(&rejected_requests, &cancelled_requests);
-      }
-      FinishRejectedCancelledRequests(
-          std::move(rejected_requests), std::move(cancelled_requests));
-    }
-  }
-
-  // Recapture the lock.
-  lock->lock();
 }
 
 uint64_t
@@ -753,37 +713,14 @@ DynamicBatchScheduler::CacheLookUp(
     std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response)
 {
-  Status status;
   auto cache = model_->Server()->CacheManager()->Cache();
-  std::unique_ptr<InferenceResponse> local_response;
-  request->ResponseFactory()->CreateResponse(&local_response);
-  // Hash request into cache key
-  std::string key = "";
-  if (!request->CacheKeyIsSet()) {
-    status = cache->Hash(*request, &key);
-    if (!status.IsOk()) {
-      LOG_ERROR << "Failed to hash request: " << status.Message();
-      return;
-    }
-    request->SetCacheKey(key);
-  } else {
-    key = request->CacheKey();
-  }
-
-  // Lookup and capture timestamps
-  {
-    request->CaptureCacheLookupStartNs();
-    status = cache->Lookup(local_response.get(), key);
-    request->CaptureCacheLookupEndNs();
-  }
-
-  if (status.IsOk() && (local_response != nullptr)) {
-    cached_response = std::move(local_response);
-#ifdef TRITON_ENABLE_STATS
+  bool is_lookup_success = CacheLookUpUtil(request,cached_response,cache);
+if(is_lookup_success) {
+  #ifdef TRITON_ENABLE_STATS
     // Update model metrics/stats on cache hits
     // Backends will update metrics as normal on cache misses
     request->ReportStatisticsCacheHit(model_->MetricReporter().get());
-#endif  // TRITON_ENABLE_STATS
+  #endif  // TRITON_ENABLE_STATS
   }
 }
 
