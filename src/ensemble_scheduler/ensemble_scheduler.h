@@ -36,6 +36,8 @@
 #include "scheduler.h"
 #include "status.h"
 
+#include "scheduler_utils.h"
+
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU

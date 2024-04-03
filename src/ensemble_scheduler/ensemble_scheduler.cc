@@ -61,6 +61,15 @@ class RequestTracker {
 
   std::unique_ptr<InferenceRequest>& Request() { return request_; }
 
+  InferenceStatsAggregator* StatsAggregator()
+  {
+    return stats_aggregator_;
+  }
+
+  MetricModelReporter* MetricReporter() {
+    return metric_reporter_;
+  }
+
   InferenceStatsAggregator& ContextStatsAggregator()
   {
     return context_stats_aggregator_;
