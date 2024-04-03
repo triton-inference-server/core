@@ -1491,7 +1491,7 @@ EnsembleScheduler::EnsembleScheduler(
 
   //field to check if response cache enabled in the ensemble model config.
   info_->is_cache_enabled_ = config.response_cache().enable() && is_->ResponseCacheEnabled();
-  if (info_->is_cache_enabled) {
+  if (info_->is_cache_enabled_) {
     LOG_VERBOSE(1) << "Top Level Ensemble Request Caching Enabled";
   }
 
