@@ -1318,6 +1318,19 @@ EnsembleScheduler::Create(
   return Status::Success;
 }
 
+void EnsembleScheduler::CacheLookUp(std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response) 
+    {
+      auto cache = is_->CacheManager()->Cache();
+      bool is_lookup_success = CacheLookUpUtil(request,cached_response,cache);
+    if(is_lookup_success){
+      #ifdef TRITON_ENABLE_STATS
+        request->ReportStatisticsCacheHit(metric_reporter_.get());
+      #endif  // TRITON_ENABLE_STATS
+    }
+    
+  }
+
 Status
 EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
@@ -1331,6 +1344,20 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   request->TraceInputTensors(
       TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT, "EnsembleScheduler Enqueue");
 #endif  // TRITON_ENABLE_TRACING
+
+ std::unique_ptr<InferenceResponse> cached_response;
+  if(info_->is_cache_enabled_) {
+    CacheLookUp(request,cached_response);
+  }
+
+  if(cached_response != nullptr) {
+    LOG_VERBOSE(1) << "Cache Hit: Top-level 'ensemble' request is found in cache";
+    InferenceResponse::Send(
+        std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
+    return Status::Success;
+
+  }
+  LOG_VERBOSE(1) << "Cache Miss: New inference request";
 
   // Add additional callback to keep track of in-flight count
   ++inflight_count_;
@@ -1347,6 +1374,9 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
+  #ifdef TRITON_ENABLE_STATS
+    info_->ensemble_start_ns = CaptureTimeNs();
+  #endif
   EnsembleContext::Proceed(context);
   return Status::Success;
 }
@@ -1384,6 +1414,9 @@ EnsembleScheduler::EnsembleScheduler(
 
   // This config field is filled internally for ensemble models
   info_->is_decoupled_ = config.model_transaction_policy().decoupled();
+
+   //field to check if response cache enabled in the ensemble model config.
+  info_->is_cache_enabled_ = config.response_cache().enable() && is_->ResponseCacheEnabled();
 
   for (const auto& input : config.input()) {
     info_->tensor_to_step_.emplace(input.name(), std::set<size_t>());

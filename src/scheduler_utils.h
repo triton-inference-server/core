@@ -32,6 +32,10 @@
 
 namespace triton { namespace core {
 
+uint64_t CaptureTimeNs();
+bool CacheLookUpUtil(std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response, std::shared_ptr<TritonCache> cache);
+
 struct RequiredEqualInputs {
  public:
   RequiredEqualInputs() : init_(false), has_optional_input_(false) {}
