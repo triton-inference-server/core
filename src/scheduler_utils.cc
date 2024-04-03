@@ -43,6 +43,7 @@ bool CacheLookUpUtil(std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response,
     std::shared_ptr<TritonCache> cache)
 {
+  LOG_VERBOSE(1) << "Cache LookUp Util";
   Status status;
   std::unique_ptr<InferenceResponse> local_response;
   request->ResponseFactory()->CreateResponse(&local_response);
