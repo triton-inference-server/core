@@ -35,7 +35,6 @@
 #include "model_config_utils.h"
 #include "scheduler.h"
 #include "status.h"
-
 #include "scheduler_utils.h"
 
 #ifdef TRITON_ENABLE_GPU
@@ -66,6 +65,13 @@ struct EnsembleInfo {
   std::string ensemble_name_;
 
   bool is_decoupled_;
+
+  bool is_cache_enabled_;
+
+  #ifdef TRITON_ENABLE_STATS
+    uint64_t ensemble_start_ns;
+    uint64_t ensemble_end_ns;
+  #endif
 
   bool is_cache_enabled_;
 
@@ -105,6 +111,8 @@ class EnsembleScheduler : public Scheduler {
   // \see Scheduler::Enqueue()
   Status Enqueue(std::unique_ptr<InferenceRequest>& request) override;
 
+  
+
   // \see Scheduler::InflightInferenceCount()
   size_t InflightInferenceCount() override { return inflight_count_; }
 
@@ -116,6 +124,7 @@ class EnsembleScheduler : public Scheduler {
       InferenceStatsAggregator* const stats_aggregator,
       InferenceServer* const server, const inference::ModelConfig& config);
 
+  //cache lookup function
   void CacheLookUp(std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response);
 
