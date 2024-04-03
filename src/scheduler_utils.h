@@ -1,4 +1,4 @@
-// Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -29,11 +29,9 @@
 #include <unordered_map>
 
 #include "scheduler.h"
-#include "cache_manager.h"
 
 namespace triton { namespace core {
 
-uint64_t CaptureTimeNs();
 bool CacheLookUpUtil(std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response, std::shared_ptr<TritonCache> cache);
 
@@ -88,6 +86,11 @@ class PriorityQueue {
 
   // Dequeue the request at the front of the queue.
   Status Dequeue(std::unique_ptr<InferenceRequest>* request);
+
+  // Reject timed-out requests from 'queues_', if queue policy set to reject.
+  // The cursor will be marked as invalid, if a request from the queue pointed
+  // to by the cursor is rejected.
+  void RejectTimeoutRequests();
 
   // Retrieve the requests that are either rejected or cancelled.
   void ReleaseSkippedRequests(
@@ -207,6 +210,10 @@ class PriorityQueue {
     bool ApplyPolicy(
         size_t idx, size_t* rejected_count, size_t* rejected_batch_size,
         size_t* cancelled_count, size_t* cancelled_batch_size);
+
+    // Move timed-out requests from 'queue_' to 'rejected_queue_', if
+    // 'timeout_action_' is to reject. Return the number of requests rejected.
+    size_t RejectTimeoutRequests();
 
     // Return the rejected requests held by the queue.
     void ReleaseRejectedQueue(
