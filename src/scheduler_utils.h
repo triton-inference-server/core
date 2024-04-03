@@ -29,6 +29,7 @@
 #include <unordered_map>
 
 #include "scheduler.h"
+#include "cache_manager.h"
 
 namespace triton { namespace core {
 
