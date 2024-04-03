@@ -711,6 +711,11 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   auto sb_itr = sequence_to_batcherseqslot_map_.find(correlation_id);
   auto bl_itr = sequence_to_backlog_map_.find(correlation_id);
 
+  sequencer_->AddReleaseCallback(
+      irequest,
+      [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
+          -> Status { return sequencer_->RescheduleRequest(request, flags); });
+
   // If this request is not starting a new sequence its correlation ID
   // should already be known with a target in either a sequence slot
   // or in the backlog. If it doesn't then the sequence wasn't started
@@ -850,12 +855,6 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   LOG_VERBOSE(1) << "Enqueuing CORRID " << correlation_id << " into batcher "
                  << model_instance->Name() << ", sequence slot " << seq_slot
                  << ": " << irequest->ModelName();
-
-  sequencer_->AddReleaseCallback(
-      irequest,
-      [this](std::unique_ptr<InferenceRequest>& request, const uint32_t flags)
-          -> Status { return sequencer_->RescheduleRequest(request, flags); });
-
   batchers_[model_instance]->Enqueue(seq_slot, correlation_id, irequest);
   return Status::Success;
 }
