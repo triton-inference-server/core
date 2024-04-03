@@ -1426,21 +1426,6 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   }
   LOG_VERBOSE(1) << "Cache Miss: New inference request";
 
-
-  std::unique_ptr<InferenceResponse> cached_response;
-  if(info_->is_cache_enabled_) {
-    LOG_VERBOSE(1) << "Cache LookUp";
-    CacheLookUp(request,cached_response);
-  }
-
-  if(cached_response != nullptr) {
-    LOG_VERBOSE(1) << "Cache Hit: Top-level 'ensemble' request is found in cache";
-    InferenceResponse::Send(
-        std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
-    return Status::Success;
-
-  }
-  LOG_VERBOSE(1) << "Cache Miss: New inference request";
   // Add additional callback to keep track of in-flight count
   
   ++inflight_count_;
