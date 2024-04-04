@@ -1076,7 +1076,7 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
 #ifdef TRITON_ENABLE_STATS
   const uint64_t insert_end_ns = CaptureTimeNs();
 #endif
-  LOG_VERBOSE(1) << "Top-level Ensemble Request Insertion Succesful";
+  LOG_VERBOSE(1) << "Top-level Ensemble Request Insertion Succesfull";
 
 #ifdef TRITON_ENABLE_STATS
   uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
