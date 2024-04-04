@@ -33,13 +33,17 @@
 
 namespace triton { namespace core {
 
-uint64_t CaptureTimeNs()  
+uint64_t
+CaptureTimeNs()
 {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
 }
 
-bool CacheLookUpUtil(std::unique_ptr<InferenceRequest>& request,
+bool
+CacheLookUpUtil(
+    std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response,
     std::shared_ptr<TritonCache> cache)
 {

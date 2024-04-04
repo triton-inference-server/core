@@ -28,14 +28,16 @@
 #include <deque>
 #include <unordered_map>
 
-#include "scheduler.h"
 #include "cache_manager.h"
+#include "scheduler.h"
 
 namespace triton { namespace core {
 
 uint64_t CaptureTimeNs();
-bool CacheLookUpUtil(std::unique_ptr<InferenceRequest>& request,
-    std::unique_ptr<InferenceResponse>& cached_response, std::shared_ptr<TritonCache> cache);
+bool CacheLookUpUtil(
+    std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response,
+    std::shared_ptr<TritonCache> cache);
 
 struct RequiredEqualInputs {
  public:

@@ -61,14 +61,9 @@ class RequestTracker {
 
   std::unique_ptr<InferenceRequest>& Request() { return request_; }
 
-  InferenceStatsAggregator* StatsAggregator()
-  {
-    return stats_aggregator_;
-  }
+  InferenceStatsAggregator* StatsAggregator() { return stats_aggregator_; }
 
-  MetricModelReporter* MetricReporter() {
-    return metric_reporter_;
-  }
+  MetricModelReporter* MetricReporter() { return metric_reporter_; }
 
   InferenceStatsAggregator& ContextStatsAggregator()
   {
@@ -325,7 +320,8 @@ class EnsembleContext {
       const std::set<std::pair<std::string, IterationCount>>& updated_tensors,
       std::unique_ptr<InferenceResponse>* response);
 
-  void CacheEnsembleTopLevelRequest(std::unique_ptr<InferenceResponse>& response);
+  void CacheEnsembleTopLevelRequest(
+      std::unique_ptr<InferenceResponse>& response);
 
   InferenceServer* is_;
 
@@ -1044,52 +1040,56 @@ EnsembleContext::ReshapeTensorDims(
   return res;
 }
 
-//Caching function
-void EnsembleContext::CacheEnsembleTopLevelRequest(std::unique_ptr<InferenceResponse>& response) 
+// Caching function
+void
+EnsembleContext::CacheEnsembleTopLevelRequest(
+    std::unique_ptr<InferenceResponse>& response)
 {
   LOG_VERBOSE(1) << "Caching Top Level Request";
   const std::string key = request_tracker_->Request()->CacheKey();
   const bool is_key_set = request_tracker_->Request()->CacheKeyIsSet();
 
-  #ifdef TRITON_ENABLE_STATS
-    info_->ensemble_end_ns = CaptureTimeNs();
-    const uint64_t lookup_end_ns = request_tracker_->Request()->CacheLookupEndNs();
-    const uint64_t lookup_start_ns = request_tracker_->Request()->CacheLookupStartNs();
-  #endif
+#ifdef TRITON_ENABLE_STATS
+  info_->ensemble_end_ns = CaptureTimeNs();
+  const uint64_t lookup_end_ns =
+      request_tracker_->Request()->CacheLookupEndNs();
+  const uint64_t lookup_start_ns =
+      request_tracker_->Request()->CacheLookupStartNs();
+#endif
 
-  if(!is_key_set) 
-  {
+  if (!is_key_set) {
     LOG_ERROR << "Request cache key was not set correctly.";
   }
-  
+
   auto cache = is_->CacheManager()->Cache();
-  #ifdef TRITON_ENABLE_STATS
+#ifdef TRITON_ENABLE_STATS
   const uint64_t insert_start_ns = CaptureTimeNs();
-  #endif
+#endif
   LOG_VERBOSE(1) << "Response: " << response.get();
   auto status = cache->Insert(response.get(), key);
-  //LOG_VERBOSE(1) << response->ModelName() << " " << response->ActualModelVersion() << " " << response.;
-  if (!status.IsOk()) 
-  {
+  // LOG_VERBOSE(1) << response->ModelName() << " " <<
+  // response->ActualModelVersion() << " " << response.;
+  if (!status.IsOk()) {
     LOG_ERROR << "Failed to insert key [" << key
               << "] into response cache: " << status.Message();
   }
-  #ifdef TRITON_ENABLE_STATS
-    const uint64_t insert_end_ns = CaptureTimeNs();
-  #endif 
+#ifdef TRITON_ENABLE_STATS
+  const uint64_t insert_end_ns = CaptureTimeNs();
+#endif
   LOG_VERBOSE(1) << "Top-level Ensemble Request Insertion Succesful";
-  
-  #ifdef TRITON_ENABLE_STATS
-    uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
-    if(lookup_start_ns > lookup_end_ns) {
-      lookup_ns = 0;
-      LOG_ERROR << "Request lookup duration was not set correctly.";
-    }
-    uint64_t ensemble_ns = info_->ensemble_end_ns - info_->ensemble_start_ns;  
-    uint64_t insert_ns = insert_end_ns -insert_start_ns;
-    uint64_t cache_miss_ns = lookup_ns+ensemble_ns+insert_ns;
-    request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(request_tracker_->MetricReporter(), cache_miss_ns);
-  #endif  
+
+#ifdef TRITON_ENABLE_STATS
+  uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+  if (lookup_start_ns > lookup_end_ns) {
+    lookup_ns = 0;
+    LOG_ERROR << "Request lookup duration was not set correctly.";
+  }
+  uint64_t ensemble_ns = info_->ensemble_end_ns - info_->ensemble_start_ns;
+  uint64_t insert_ns = insert_end_ns - insert_start_ns;
+  uint64_t cache_miss_ns = lookup_ns + ensemble_ns + insert_ns;
+  request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(
+      request_tracker_->MetricReporter(), cache_miss_ns);
+#endif
 }
 
 
@@ -1115,8 +1115,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                      : 0;
     if (response != nullptr) {
       LOG_VERBOSE(1) << "Response Not null";
-      //Cache the request if caching is enabled.
-      if(info_->is_cache_enabled_) {
+      // Cache the request if caching is enabled.
+      if (info_->is_cache_enabled_) {
         CacheEnsembleTopLevelRequest(response);
       }
       InferenceResponse::Send(std::move(response), flags);
@@ -1384,19 +1384,21 @@ EnsembleScheduler::Create(
   return Status::Success;
 }
 
-void EnsembleScheduler::CacheLookUp(std::unique_ptr<InferenceRequest>& request,
-    std::unique_ptr<InferenceResponse>& cached_response) 
-    {
-      auto cache = is_->CacheManager()->Cache();
-      bool is_lookup_success = CacheLookUpUtil(request,cached_response,cache);
-    if(is_lookup_success){
-      #ifdef TRITON_ENABLE_STATS
-        request->ReportStatisticsCacheHit(metric_reporter_.get());
-      #endif  // TRITON_ENABLE_STATS
-    }
-    
-      //}
+void
+EnsembleScheduler::CacheLookUp(
+    std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response)
+{
+  auto cache = is_->CacheManager()->Cache();
+  bool is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
+  if (is_lookup_success) {
+#ifdef TRITON_ENABLE_STATS
+    request->ReportStatisticsCacheHit(metric_reporter_.get());
+#endif  // TRITON_ENABLE_STATS
   }
+
+  //}
+}
 
 Status
 EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
@@ -1411,23 +1413,23 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   request->TraceInputTensors(
       TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT, "EnsembleScheduler Enqueue");
 #endif  // TRITON_ENABLE_TRACING
-  
- std::unique_ptr<InferenceResponse> cached_response;
-  if(info_->is_cache_enabled_) {
-    CacheLookUp(request,cached_response);
+
+  std::unique_ptr<InferenceResponse> cached_response;
+  if (info_->is_cache_enabled_) {
+    CacheLookUp(request, cached_response);
   }
 
-  if(cached_response != nullptr) {
-    LOG_VERBOSE(1) << "Cache Hit: Top-level 'ensemble' request is found in cache";
+  if (cached_response != nullptr) {
+    LOG_VERBOSE(1)
+        << "Cache Hit: Top-level 'ensemble' request is found in cache";
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     return Status::Success;
-
   }
   LOG_VERBOSE(1) << "Cache Miss: New inference request";
 
   // Add additional callback to keep track of in-flight count
-  
+
   ++inflight_count_;
   request->AddInternalReleaseCallback(
       [this](
@@ -1442,12 +1444,12 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
-  #ifdef TRITON_ENABLE_STATS
-    info_->ensemble_start_ns = CaptureTimeNs();
-  #endif
-  #ifdef TRITON_ENABLE_STATS
-    info_->ensemble_start_ns = CaptureTimeNs();
-  #endif
+#ifdef TRITON_ENABLE_STATS
+  info_->ensemble_start_ns = CaptureTimeNs();
+#endif
+#ifdef TRITON_ENABLE_STATS
+  info_->ensemble_start_ns = CaptureTimeNs();
+#endif
   EnsembleContext::Proceed(context);
   return Status::Success;
 }
@@ -1486,11 +1488,13 @@ EnsembleScheduler::EnsembleScheduler(
   // This config field is filled internally for ensemble models
   info_->is_decoupled_ = config.model_transaction_policy().decoupled();
 
-   //field to check if response cache enabled in the ensemble model config.
-  info_->is_cache_enabled_ = config.response_cache().enable() && is_->ResponseCacheEnabled();
+  // field to check if response cache enabled in the ensemble model config.
+  info_->is_cache_enabled_ =
+      config.response_cache().enable() && is_->ResponseCacheEnabled();
 
-  //field to check if response cache enabled in the ensemble model config.
-  info_->is_cache_enabled_ = config.response_cache().enable() && is_->ResponseCacheEnabled();
+  // field to check if response cache enabled in the ensemble model config.
+  info_->is_cache_enabled_ =
+      config.response_cache().enable() && is_->ResponseCacheEnabled();
   if (info_->is_cache_enabled_) {
     LOG_VERBOSE(1) << "Top Level Ensemble Request Caching Enabled";
   }

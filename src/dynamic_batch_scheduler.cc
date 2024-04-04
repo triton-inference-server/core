@@ -746,14 +746,14 @@ DynamicBatchScheduler::CacheLookUp(
     std::unique_ptr<InferenceResponse>& cached_response)
 {
   auto cache = model_->Server()->CacheManager()->Cache();
-  bool is_lookup_success = CacheLookUpUtil(request,cached_response,cache);
-  if(is_lookup_success) {
-    #ifdef TRITON_ENABLE_STATS
+  bool is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
+  if (is_lookup_success) {
+#ifdef TRITON_ENABLE_STATS
     // Update model metrics/stats on cache hits
     // Backends will update metrics as normal on cache misses
-      request->ReportStatisticsCacheHit(model_->MetricReporter().get());
-    #endif  // TRITON_ENABLE_STATS
-    }
+    request->ReportStatisticsCacheHit(model_->MetricReporter().get());
+#endif  // TRITON_ENABLE_STATS
+  }
 }
 
 void
