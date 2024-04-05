@@ -1045,7 +1045,6 @@ void
 EnsembleContext::CacheEnsembleTopLevelRequest(
     std::unique_ptr<InferenceResponse>& response)
 {
-  LOG_VERBOSE(1) << "Caching Top Level Request";
   const std::string key = request_tracker_->Request()->CacheKey();
   const bool is_key_set = request_tracker_->Request()->CacheKeyIsSet();
 
@@ -1065,7 +1064,6 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
 #ifdef TRITON_ENABLE_STATS
   const uint64_t insert_start_ns = CaptureTimeNs();
 #endif
-  LOG_VERBOSE(1) << "Response: " << response.get();
   auto status = cache->Insert(response.get(), key);
   // LOG_VERBOSE(1) << response->ModelName() << " " <<
   // response->ActualModelVersion() << " " << response.;
@@ -1096,7 +1094,6 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
 Status
 EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
 {
-  LOG_VERBOSE(1) << "Finish Ensemble";
   // Do nothing if the ensemble is finished
   if (request_tracker_ == nullptr) {
     return ensemble_status_;
@@ -1114,7 +1111,6 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                      ? TRITONSERVER_RESPONSE_COMPLETE_FINAL
                      : 0;
     if (response != nullptr) {
-      LOG_VERBOSE(1) << "Response Not null";
       // Cache the request if caching is enabled.
       if (info_->is_cache_enabled_) {
         CacheEnsembleTopLevelRequest(response);
@@ -1487,10 +1483,6 @@ EnsembleScheduler::EnsembleScheduler(
 
   // This config field is filled internally for ensemble models
   info_->is_decoupled_ = config.model_transaction_policy().decoupled();
-
-  // field to check if response cache enabled in the ensemble model config.
-  info_->is_cache_enabled_ =
-      config.response_cache().enable() && is_->ResponseCacheEnabled();
 
   // field to check if response cache enabled in the ensemble model config.
   info_->is_cache_enabled_ =

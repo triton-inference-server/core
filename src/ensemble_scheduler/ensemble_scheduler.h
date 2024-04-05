@@ -116,7 +116,6 @@ class EnsembleScheduler : public Scheduler {
       InferenceStatsAggregator* const stats_aggregator,
       InferenceServer* const server, const inference::ModelConfig& config);
 
-  // cache lookup function
   void CacheLookUp(
       std::unique_ptr<InferenceRequest>& request,
       std::unique_ptr<InferenceResponse>& cached_response);
