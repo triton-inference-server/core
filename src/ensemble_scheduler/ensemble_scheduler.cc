@@ -1098,7 +1098,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
 {
   // Do nothing if the ensemble is finished
   if (request_tracker_ == nullptr) {
-    LOG_VERBOSE(1) << "Finish Ensemble"
+    LOG_VERBOSE(1) << "Finish Ensemble";
     return ensemble_status_;
   }
 
