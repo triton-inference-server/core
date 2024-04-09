@@ -241,7 +241,7 @@ class EnsembleContext {
   static void Proceed(
       const std::shared_ptr<EnsembleContext>& context,
       const std::unique_ptr<Step>& completed_step = nullptr);
-  RequestTracker* RequestTracker() const {return request_tracker_;}
+  RequestTracker* GetRequestTracker() const {return request_tracker_;}
 
  private:
   static TRITONSERVER_Error* ResponseAlloc(
@@ -1429,7 +1429,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
-      context->RequestTracker()->DecrementCounter();
+      context->GetRequestTracker()->DecrementCounter();
     EnsembleContext::Proceed(context);
     return Status::Success;
   }
