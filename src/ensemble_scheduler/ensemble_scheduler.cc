@@ -1422,7 +1422,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     LOG_VERBOSE(1) << "Response Complete";
-    request_tracker_->Request()->ResponseFactory()->SendFlags(
+    request->ResponseFactory()->SendFlags(
             TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     return Status::Success;
   }
