@@ -1428,7 +1428,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
-      context->inflight_counter_ = 0;
+      context->request_tracker_->DecrementCounter();
     EnsembleContext::Proceed(context);
     return Status::Success;
   }
