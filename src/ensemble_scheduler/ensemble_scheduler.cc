@@ -241,6 +241,7 @@ class EnsembleContext {
   static void Proceed(
       const std::shared_ptr<EnsembleContext>& context,
       const std::unique_ptr<Step>& completed_step = nullptr);
+  friend void EnsembleScheduler::Enqueue(EnsembleContext& context);
 
  private:
   static TRITONSERVER_Error* ResponseAlloc(
