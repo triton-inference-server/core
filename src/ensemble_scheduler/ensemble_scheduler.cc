@@ -769,6 +769,7 @@ EnsembleContext::Proceed(
     const std::shared_ptr<EnsembleContext>& context,
     const std::unique_ptr<Step>& completed_step)
 {
+  LOG_VERBOSE(1) << "Proceed";
   StepList ready_steps;
   Status status = context->PrepareSteps(completed_step, &ready_steps);
   if (status.IsOk()) {
@@ -1097,6 +1098,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
 {
   // Do nothing if the ensemble is finished
   if (request_tracker_ == nullptr) {
+    LOG_VERBOSE(1) << ensemble_status_;
     return ensemble_status_;
   }
 
@@ -1316,9 +1318,11 @@ void
 EnsembleContext::ScheduleSteps(
     const std::shared_ptr<EnsembleContext>& context, StepList&& steps)
 {
+  LOG_VERBOSE(1) << "Schedule Steps";
   for (auto& step : steps) {
     if (context->inflight_step_counter_ == 0) {
       context->ensemble_status_ = context->FinishEnsemble();
+      return;
     }
     step->ctx_ = context;
     bool should_schedule = false;
