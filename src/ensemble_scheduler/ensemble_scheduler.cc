@@ -1422,7 +1422,10 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     LOG_VERBOSE(1) << "Response Complete";
-    context.FinishEnsemble(std::move(cached_response));
+    std::shared_ptr<EnsembleContext> context(new EnsembleContext(
+      metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
+      stream_));
+    context->FinishEnsemble(std::move(cached_response));
     return Status::Success;
   }
   LOG_VERBOSE(1) << "Cache Miss: New inference request";
