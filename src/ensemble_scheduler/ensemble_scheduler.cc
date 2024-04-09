@@ -1418,6 +1418,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   if (cached_response != nullptr) {
     LOG_VERBOSE(1)
         << "Cache Hit: Top-level 'ensemble' request is found in cache";
+    LOG_VERBOSE(1) << "Inflight count: " << inflight_count_;
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     return Status::Success;
