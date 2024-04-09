@@ -2572,6 +2572,17 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
   return nullptr;  // Success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerSetExitTimeout(
+    TRITONSERVER_Server* server, unsigned int timeout)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  if (lserver != nullptr) {
+    lserver->SetExitTimeoutSeconds(timeout);
+  }
+  return nullptr;  // Success
+}
+
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerRegisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path,
