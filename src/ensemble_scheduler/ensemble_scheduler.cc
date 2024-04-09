@@ -768,6 +768,9 @@ EnsembleContext::Proceed(
     const std::shared_ptr<EnsembleContext>& context,
     const std::unique_ptr<Step>& completed_step)
 {
+  if(context->inflight_step_counter_ == 0) {
+    context->ensemble_status_ = context->FinishEnsemble();
+  }
   StepList ready_steps;
   Status status = context->PrepareSteps(completed_step, &ready_steps);
   if (status.IsOk()) {
@@ -1419,13 +1422,13 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     LOG_VERBOSE(1)
         << "Cache Hit: Top-level 'ensemble' request is found in cache";
     LOG_VERBOSE(1) << "Inflight count: " << inflight_count_;
+
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
-    LOG_VERBOSE(1) << "Response Complete";
     std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
-    context->FinishEnsemble(std::move(cached_response));
+    EnsembleContext::Proceed(context);
     return Status::Success;
   }
   LOG_VERBOSE(1) << "Cache Miss: New inference request";
