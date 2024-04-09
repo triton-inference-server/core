@@ -768,9 +768,6 @@ EnsembleContext::Proceed(
     const std::shared_ptr<EnsembleContext>& context,
     const std::unique_ptr<Step>& completed_step)
 {
-  if(context->inflight_step_counter_ == 0) {
-    context->ensemble_status_ = context->FinishEnsemble();
-  }
   StepList ready_steps;
   Status status = context->PrepareSteps(completed_step, &ready_steps);
   if (status.IsOk()) {
