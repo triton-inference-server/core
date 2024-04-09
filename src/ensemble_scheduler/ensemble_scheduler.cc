@@ -1316,6 +1316,9 @@ EnsembleContext::ScheduleSteps(
     const std::shared_ptr<EnsembleContext>& context, StepList&& steps)
 {
   for (auto& step : steps) {
+    if (context->inflight_step_counter_ == 0) {
+      context->ensemble_status_ = context->FinishEnsemble();
+    }
     step->ctx_ = context;
     bool should_schedule = false;
     // Must release lock before InferAsync to avoid deadlock, as the same thread
@@ -1362,9 +1365,9 @@ EnsembleContext::ScheduleSteps(
     context->request_tracker_->DecrementCounter();
     --context->inflight_step_counter_;
 
-    if (context->inflight_step_counter_ == 0) {
-      context->ensemble_status_ = context->FinishEnsemble();
-    }
+    // if (context->inflight_step_counter_ == 0) {
+    //   context->ensemble_status_ = context->FinishEnsemble();
+    // }
   }
 }
 
