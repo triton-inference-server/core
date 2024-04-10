@@ -188,6 +188,7 @@ const ModelStateMap
 ModelLifeCycle::LiveModelStates(bool strict_readiness)
 {
   LOG_VERBOSE(2) << "LiveModelStates()";
+  LOG_VERBOSE(1) << "LIVERModelStates()";
   std::lock_guard<std::mutex> map_lock(map_mtx_);
   ModelStateMap live_model_states;
   for (auto& model_version : map_) {
@@ -221,12 +222,14 @@ Status
 ModelLifeCycle::StopAllModels()
 {
   LOG_VERBOSE(2) << "StopAllModels()";
+  LOG_VERBOSE(1) << "Stopping Models";
   std::lock_guard<std::mutex> map_lock(map_mtx_);
   for (auto& model_version : map_) {
     for (auto& version_model : model_version.second) {
       if (version_model.second != nullptr) {
         std::lock_guard<std::mutex> lock(version_model.second->mtx_);
         if (version_model.second->model_ != nullptr) {
+          LOG_VERBOSE(1) << "Calling Model Stop: " << version_model.second->model_->Name();
           version_model.second->model_->Stop();
         }
       }
@@ -239,6 +242,7 @@ const std::set<std::tuple<ModelIdentifier, int64_t, size_t>>
 ModelLifeCycle::InflightStatus()
 {
   LOG_VERBOSE(2) << "InflightStatus()";
+  LOG_VERBOSE(1) << "Inflight Status";
   std::lock_guard<std::mutex> map_lock(map_mtx_);
   std::set<std::tuple<ModelIdentifier, int64_t, size_t>> inflight_status;
   for (auto& model_version : map_) {

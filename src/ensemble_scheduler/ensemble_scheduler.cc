@@ -1427,7 +1427,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
-    RETURN_IF_ERROR(request->SetState(InferenceRequest::State::RELEASED));
+    LOG_VERBOSE(1) << "Inflight Count: " << inflight_count_;
     return Status::Success;
   }
   LOG_VERBOSE(1) << "Cache Miss: New inference request";

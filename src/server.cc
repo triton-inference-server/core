@@ -328,8 +328,9 @@ InferenceServer::Stop(const bool force)
                  << "(version " << std::get<1>(inflight) << ") has "
                  << std::get<2>(inflight) << " in-flight inferences";
       }
-
+      LOG_VERBOSE(1) << "Inflight Status: " << inflight_status.size();
       if (inflight_status.size() == 0) {
+        
         status = model_repository_manager_->UnloadAllModels();
         if (!status.IsOk()) {
           LOG_WARNING << status.Message();
