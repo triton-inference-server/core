@@ -30,6 +30,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <magic_enum.hpp>
 
 #include "infer_parameter.h"
 #include "model.h"

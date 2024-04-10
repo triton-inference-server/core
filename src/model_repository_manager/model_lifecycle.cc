@@ -201,7 +201,7 @@ ModelLifeCycle::LiveModelStates(bool strict_readiness)
           version_model.second->state_ != ModelReadyState::READY) {
         continue;
       }
-      LOG_VERBOSE(1) << "Model Name: " << version_model.first << " Model state: " << version_model.second->state_;
+      LOG_VERBOSE(1) << "Model Name: " << version_model.first << " Model state: " << magic_enum::ModelReadyState(version_model.second->state_);
 
       // At least one version is live (ready / loading / unloading)
       if ((version_model.second->state_ != ModelReadyState::UNKNOWN) &&
