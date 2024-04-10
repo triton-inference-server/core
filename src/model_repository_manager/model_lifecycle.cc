@@ -177,6 +177,7 @@ ModelLifeCycle::Create(
     InferenceServer* server, const ModelLifeCycleOptions& options,
     std::unique_ptr<ModelLifeCycle>* life_cycle)
 {
+  LOG_VERBOSE(1) << "Model Create";
   std::unique_ptr<ModelLifeCycle> local_life_cycle(
       new ModelLifeCycle(server, options));
 
@@ -412,6 +413,7 @@ ModelLifeCycle::AsyncUnload(const ModelIdentifier& model_id)
     // Unload serving model, for model that is in LOADING state,
     // the updated timestamp will be recognized that there is newer update
     // on the model info and the load should be aborted
+    LOG_VERBOSE(1) << "Model Name: " << model_info->model_->Name() << " , Model State: " << ModelReadyStateString(model_info->state_);
     if (model_info->state_ == ModelReadyState::READY) {
       if (model_info->agent_model_list_ != nullptr) {
         // Only log the error because the model should be unloaded regardless
