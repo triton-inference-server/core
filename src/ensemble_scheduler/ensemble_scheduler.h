@@ -109,7 +109,7 @@ class EnsembleScheduler : public Scheduler {
   size_t InflightInferenceCount() override { return inflight_count_; }
 
   // \see Scheduler::Stop()
-  void Stop() override {}
+  void Stop() override {LOG_VERBOSE(1) << "Ensemble Scheduler Stop";}
 
  private:
   EnsembleScheduler(

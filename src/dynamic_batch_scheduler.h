@@ -86,7 +86,7 @@ class DynamicBatchScheduler : public Scheduler {
   }
 
   // \see Scheduler::Stop()
-  void Stop() override { stop_ = true; }
+  void Stop() override { LOG_VERBOSE(1) << "Dynamic Batch Scheduler Stop; stop_ = true; }
 
  private:
   DynamicBatchScheduler(

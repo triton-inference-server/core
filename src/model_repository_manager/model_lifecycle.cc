@@ -188,7 +188,7 @@ const ModelStateMap
 ModelLifeCycle::LiveModelStates(bool strict_readiness)
 {
   LOG_VERBOSE(2) << "LiveModelStates()";
-  LOG_VERBOSE(1) << "LIVERModelStates()";
+  LOG_VERBOSE(1) << "LIVEModelStates()";
   std::lock_guard<std::mutex> map_lock(map_mtx_);
   ModelStateMap live_model_states;
   for (auto& model_version : map_) {
