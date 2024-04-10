@@ -343,6 +343,7 @@ InferenceServer::Stop(const bool force)
       const auto& live_models = model_repository_manager_->LiveModelStates();
       size_t bg_models_size = model_repository_manager_->BackgroundModelsSize();
       size_t num_models = live_models.size() + bg_models_size;
+      LOG_VERBOSE(1) << "Live Models: " << live_models.size() + "Background Models: " << bg_models_size;
 
       LOG_INFO << "Timeout " << exit_timeout_iters << ": Found " << num_models
                << " live models and " << inflight_request_counter_

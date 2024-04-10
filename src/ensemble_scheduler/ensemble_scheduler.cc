@@ -769,7 +769,6 @@ EnsembleContext::Proceed(
     const std::shared_ptr<EnsembleContext>& context,
     const std::unique_ptr<Step>& completed_step)
 {
-  LOG_VERBOSE(1) << "Proceed";
   StepList ready_steps;
   Status status = context->PrepareSteps(completed_step, &ready_steps);
   if (status.IsOk()) {
@@ -1098,7 +1097,6 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
 {
   // Do nothing if the ensemble is finished
   if (request_tracker_ == nullptr) {
-    LOG_VERBOSE(1) << "Finish Ensemble";
     return ensemble_status_;
   }
 
@@ -1318,7 +1316,6 @@ void
 EnsembleContext::ScheduleSteps(
     const std::shared_ptr<EnsembleContext>& context, StepList&& steps)
 {
-  LOG_VERBOSE(1) << "Schedule Steps";
   for (auto& step : steps) {
     if (context->inflight_step_counter_ == 0) {
       context->ensemble_status_ = context->FinishEnsemble();
@@ -1430,11 +1427,6 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
-    std::shared_ptr<EnsembleContext> context(new EnsembleContext(
-      metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
-      stream_));
-      context->GetRequestTracker()->DecrementCounter();
-    EnsembleContext::Proceed(context);
     return Status::Success;
   }
   LOG_VERBOSE(1) << "Cache Miss: New inference request";
