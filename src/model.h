@@ -226,7 +226,7 @@ class Model {
   }
 
   // Stop processing future requests unless they are considered as in-flight.
-  void Stop() { scheduler_->scheduler_->Stop(); }
+  void Stop() { scheduler_->Stop(); }
 
   uint64_t DefaultPriorityLevel() const { return default_priority_level_; }
 
