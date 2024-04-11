@@ -646,7 +646,7 @@ ModelLifeCycle::CreateModel(
   } else {
     LOG_ERROR << "failed to load '" << model_id << "' version " << version
               << ": " << status.AsString();
-    LOG_VERBOSE << "Model: " << model_info->model_->Name() << " Error: " << status.AsString();
+    LOG_VERBOSE(1) << "Model: " << model_info->model_->Name() << " Error: " << status.AsString();
     model_info->state_ = ModelReadyState::UNAVAILABLE;
     model_info->state_reason_ = status.AsString();
   }
