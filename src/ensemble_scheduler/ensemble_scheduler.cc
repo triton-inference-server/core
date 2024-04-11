@@ -59,7 +59,7 @@ class RequestTracker {
   {
   }
 
-  std::unique_ptr<InferenceRequest>& Request() { return request_; }
+  //std::unique_ptr<InferenceRequest>& Request() { return request_; }
 
   InferenceStatsAggregator* StatsAggregator() { return stats_aggregator_; }
 
@@ -1425,8 +1425,13 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
         << "Cache Hit: Top-level 'ensemble' request is found in cache";
     LOG_VERBOSE(1) << "Inflight count: " << inflight_count_;
 
+    // InferenceResponse::Send(
+    //     std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
+    //request->response_factory_->CreateResponse(&cached_response);
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
+    InferenceRequest::Release(
+        std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
     LOG_VERBOSE(1) << "Inflight Count: " << inflight_count_;
     return Status::Success;
   }
