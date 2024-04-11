@@ -59,7 +59,7 @@ class RequestTracker {
   {
   }
 
-  //std::unique_ptr<InferenceRequest>& Request() { return request_; }
+  std::unique_ptr<InferenceRequest>& Request() { return request_; }
 
   InferenceStatsAggregator* StatsAggregator() { return stats_aggregator_; }
 
