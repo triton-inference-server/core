@@ -415,6 +415,7 @@ ModelLifeCycle::AsyncUnload(const ModelIdentifier& model_id)
     // on the model info and the load should be aborted
     LOG_VERBOSE(1) << "Model Name: " << model_info->model_->Name() << " , Model State: " << ModelReadyStateString(model_info->state_);
     if (model_info->state_ == ModelReadyState::READY) {
+      LOG_VERBOSE(1) << "Model Name: " << model_info->model_->Name() << " , Model State: " << ModelReadyStateString(model_info->state_);
       if (model_info->agent_model_list_ != nullptr) {
         // Only log the error because the model should be unloaded regardless
         auto status = model_info->agent_model_list_->InvokeAgentModels(
@@ -631,6 +632,7 @@ ModelLifeCycle::CreateModel(
             std::lock_guard<std::mutex> lock(model_info->mtx_);
             model_info->state_ = ModelReadyState::UNAVAILABLE;
             model_info->state_reason_ = "unloaded";
+            LOG_VERBOSE(2) << model_info->model_->Name() << " " << model_info->state_reason_;
           }
 
           // Check if the model info is in background, if so, remove from the
@@ -644,6 +646,7 @@ ModelLifeCycle::CreateModel(
   } else {
     LOG_ERROR << "failed to load '" << model_id << "' version " << version
               << ": " << status.AsString();
+    LOG_VERBOSE << "Model: " << model_info->model_->Name() << " Error: " << status.AsString();
     model_info->state_ = ModelReadyState::UNAVAILABLE;
     model_info->state_reason_ = status.AsString();
   }
