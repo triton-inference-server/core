@@ -1062,11 +1062,11 @@ ModelRepositoryManager::RepositoryIndex(
   // Any loaded models which are
   // not present in the local model repository
   // are added to the index directly
-  
+
   for (const auto& mapping_it : global_map_) {
     for (const auto& model_id : mapping_it.second) {
       if (seen_models.count(model_id) == 0) {
-	seen_models.insert(model_id);
+        seen_models.insert(model_id);
       }
     }
   }
