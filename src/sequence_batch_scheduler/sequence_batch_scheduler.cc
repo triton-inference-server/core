@@ -884,6 +884,29 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 {
   std::unique_lock<std::mutex> lock(mu_);
 
+  // If we are releasing the slot for a cancelled sequence,
+  // we have to clean up the sequence
+  // otherwise the reaper will try to clean it up again.
+  if (!requests->empty() && requests->front()->IsCancelled()) {
+    // clean-up the cancelled sequences
+    // Normal sequences will already be
+    const InferenceRequest::SequenceId& old_correlation_id =
+        requests->front()->CorrelationId();
+    LOG_VERBOSE(1) << "Releasing canceled "
+                      "CORRID "
+                   << old_correlation_id;
+
+    if (sequence_to_batcherseqslot_map_.find(old_correlation_id) !=
+        sequence_to_batcherseqslot_map_.end()) {
+      sequence_to_batcherseqslot_map_.erase(old_correlation_id);
+    }
+    // remove this correlation ID from expiration checks
+    if (correlation_id_timestamps_.find(old_correlation_id) !=
+        correlation_id_timestamps_.end()) {
+      correlation_id_timestamps_.erase(old_correlation_id);
+    }
+  }
+
   // If there are any remaining requests on the releasing sequence slot, those
   // requests will be cancelled.
   MarkRequestsCancelled(requests);
@@ -1970,7 +1993,11 @@ OldestSequenceBatch::CompleteAndNext(const uint32_t seq_slot)
                          << model_instance_->Name() << ", slot " << seq_slot;
           release_seq_slot = true;
         } else if (irequest->IsCancelled()) {
-          LOG_VERBOSE(1) << "force-end cancelled sequence in batcher "
+          const InferenceRequest::SequenceId& correlation_id =
+              irequest->CorrelationId();
+          LOG_VERBOSE(1) << irequest->LogRequest()
+                         << "force-end cancelled sequence CORRID "
+                         << correlation_id << " in batcher "
                          << model_instance_->Name() << ", slot " << seq_slot;
           release_seq_slot = true;
           retain_queue_front = true;
