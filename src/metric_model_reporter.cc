@@ -308,6 +308,7 @@ MetricModelReporter::GetMetricLabels(
   //
   // FIXME: Currently this code effectively does nothing, as GPU metrics are
   // never enabled in InferenceServer::Init by the time this code is reached.
+  // This code could be uncommented if per-model-instance metrics are exposed.
   // if (device >= 0) {
   //   std::string uuid;
   //   if (Metrics::UUIDForCudaDevice(device, &uuid)) {
