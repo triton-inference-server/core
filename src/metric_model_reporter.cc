@@ -305,13 +305,16 @@ MetricModelReporter::GetMetricLabels(
 
   // 'device' can be < 0 to indicate that the GPU is not known. In
   // that case use a metric that doesn't have the gpu_uuid label.
-  if (device >= 0) {
-    std::string uuid;
-    if (Metrics::UUIDForCudaDevice(device, &uuid)) {
-      labels->insert(std::map<std::string, std::string>::value_type(
-          std::string(kMetricsLabelGpuUuid), uuid));
-    }
-  }
+  //
+  // FIXME: Currently this code effectively does nothing, as GPU metrics are
+  // never enabled in InferenceServer::Init by the time this code is reached.
+  // if (device >= 0) {
+  //   std::string uuid;
+  //   if (Metrics::UUIDForCudaDevice(device, &uuid)) {
+  //     labels->insert(std::map<std::string, std::string>::value_type(
+  //     std::string(kMetricsLabelGpuUuid), uuid));
+  //   }
+  // }
 }
 
 template <typename T, typename... Args>
