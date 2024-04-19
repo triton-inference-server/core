@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -37,19 +37,21 @@ namespace triton { namespace core {
 
 Status
 EnsembleModel::Create(
-    InferenceServer* server, const std::string& path, const int64_t version,
+    InferenceServer* server, const std::string& path,
+    const ModelIdentifier& model_id, const int64_t version,
     const inference::ModelConfig& model_config, const bool is_config_provided,
     const double min_compute_capability, std::unique_ptr<Model>* model)
 {
   // Create the ensemble model.
-  std::unique_ptr<EnsembleModel> local_model(
-      new EnsembleModel(min_compute_capability, path, version, model_config));
+  std::unique_ptr<EnsembleModel> local_model(new EnsembleModel(
+      min_compute_capability, path, model_id, version, model_config));
 
   RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
   std::unique_ptr<Scheduler> scheduler;
   RETURN_IF_ERROR(EnsembleScheduler::Create(
-      local_model->MutableStatsAggregator(), server, model_config, &scheduler));
+      local_model->MutableStatsAggregator(), server, local_model->ModelId(),
+      model_config, &scheduler));
   RETURN_IF_ERROR(local_model->SetScheduler(std::move(scheduler)));
 
   LOG_VERBOSE(1) << "ensemble model for " << local_model->Name() << std::endl;

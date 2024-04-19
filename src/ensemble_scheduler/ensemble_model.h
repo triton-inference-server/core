@@ -1,4 +1,4 @@
-// Copyright 2019-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -39,7 +39,8 @@ class EnsembleModel : public Model {
   EnsembleModel(EnsembleModel&&) = default;
 
   static Status Create(
-      InferenceServer* server, const std::string& path, const int64_t version,
+      InferenceServer* server, const std::string& path,
+      const ModelIdentifier& model_id, const int64_t version,
       const inference::ModelConfig& model_config, const bool is_config_provided,
       const double min_compute_capability, std::unique_ptr<Model>* model);
 
@@ -48,8 +49,9 @@ class EnsembleModel : public Model {
 
   explicit EnsembleModel(
       const double min_compute_capability, const std::string& model_dir,
-      const int64_t version, const inference::ModelConfig& config)
-      : Model(min_compute_capability, model_dir, version, config)
+      const ModelIdentifier& model_id, const int64_t version,
+      const inference::ModelConfig& config)
+      : Model(min_compute_capability, model_dir, model_id, version, config)
   {
   }
   friend std::ostream& operator<<(std::ostream&, const EnsembleModel&);
