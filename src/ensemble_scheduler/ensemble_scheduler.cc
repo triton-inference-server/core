@@ -1420,6 +1420,10 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
   // Add additional callback to keep track of in-flight count
 
+  #ifdef TRITON_ENABLE_STATS
+    info_->ensemble_start_ns_ = CaptureTimeNs();
+  #endif
+
   ++inflight_count_;
   request->AddInternalReleaseCallback(
       [this](
@@ -1434,9 +1438,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
-#ifdef TRITON_ENABLE_STATS
-  info_->ensemble_start_ns_ = CaptureTimeNs();
-#endif
+
   EnsembleContext::Proceed(context);
   return Status::Success;
 }
