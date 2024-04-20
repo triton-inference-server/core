@@ -1049,7 +1049,7 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
   const bool is_key_set = request_tracker_->Request()->CacheKeyIsSet();
 
 #ifdef TRITON_ENABLE_STATS
-  info_->ensemble_end_ns = CaptureTimeNs();
+  info_->ensemble_end_ns_ = CaptureTimeNs();
   const uint64_t lookup_end_ns =
       request_tracker_->Request()->CacheLookupEndNs();
   const uint64_t lookup_start_ns =
@@ -1065,24 +1065,19 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
   const uint64_t insert_start_ns = CaptureTimeNs();
 #endif
   auto status = cache->Insert(response.get(), key);
-  // LOG_VERBOSE(1) << response->ModelName() << " " <<
-  // response->ActualModelVersion() << " " << response.;
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to insert key [" << key
               << "] into response cache: " << status.Message();
   }
-#ifdef TRITON_ENABLE_STATS
-  const uint64_t insert_end_ns = CaptureTimeNs();
-#endif
-  LOG_VERBOSE(1) << "Top-level Ensemble Request Insertion Successful";
 
 #ifdef TRITON_ENABLE_STATS
+  const uint64_t insert_end_ns = CaptureTimeNs();
   uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
   if (lookup_start_ns > lookup_end_ns) {
     lookup_ns = 0;
     LOG_ERROR << "Request lookup duration was not set correctly.";
   }
-  uint64_t ensemble_ns = info_->ensemble_end_ns - info_->ensemble_start_ns;
+  uint64_t ensemble_ns = info_->ensemble_end_ns_ - info_->ensemble_start_ns_;
   uint64_t insert_ns = insert_end_ns - insert_start_ns;
   uint64_t cache_miss_ns = lookup_ns + ensemble_ns + insert_ns;
   request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(
@@ -1416,15 +1411,12 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   }
 
   if (cached_response != nullptr) {
-    LOG_VERBOSE(1)
-        << "Cache Hit: Top-level 'ensemble' request is found in cache";
     InferenceResponse::Send(
         std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
     InferenceRequest::Release(
         std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
     return Status::Success;
   }
-  LOG_VERBOSE(1) << "Cache Miss: New inference request";
 
   // Add additional callback to keep track of in-flight count
 
@@ -1443,7 +1435,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
 #ifdef TRITON_ENABLE_STATS
-  info_->ensemble_start_ns = CaptureTimeNs();
+  info_->ensemble_start_ns_ = CaptureTimeNs();
 #endif
   EnsembleContext::Proceed(context);
   return Status::Success;

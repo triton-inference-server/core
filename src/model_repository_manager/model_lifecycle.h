@@ -123,6 +123,7 @@ class TritonRepoAgentModelList {
     // Special handling for the current model lifecycle implementation,
     // the repo agent may be asked to perform UNLOAD action multiple times,
     // and the requests after the first should be ignored.
+    LOG_VERBOSE(2) << "Action Type: " << action_type;
     const bool first_unload =
         (action_type == TRITONREPOAGENT_ACTION_UNLOAD) &&
         (last_action_type_ != TRITONREPOAGENT_ACTION_UNLOAD);
@@ -134,6 +135,7 @@ class TritonRepoAgentModelList {
     switch (action_type) {
       case TRITONREPOAGENT_ACTION_LOAD:
       case TRITONREPOAGENT_ACTION_UNLOAD: {
+        LOG_VERBOSE(2) << agent_models_.size();
         for (size_t idx = 0; idx < agent_models_.size(); ++idx) {
           RETURN_IF_ERROR(agent_models_[idx]->InvokeAgent(action_type));
         }
