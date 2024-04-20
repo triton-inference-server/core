@@ -1420,9 +1420,9 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
   // Add additional callback to keep track of in-flight count
 
-  #ifdef TRITON_ENABLE_STATS
-    info_->ensemble_start_ns_ = CaptureTimeNs();
-  #endif
+#ifdef TRITON_ENABLE_STATS
+  info_->ensemble_start_ns_ = CaptureTimeNs();
+#endif
 
   ++inflight_count_;
   request->AddInternalReleaseCallback(
