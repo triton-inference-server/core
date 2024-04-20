@@ -1385,10 +1385,8 @@ EnsembleScheduler::CacheLookUp(
   if (is_lookup_success) {
 #ifdef TRITON_ENABLE_STATS
     request->ReportStatisticsCacheHit(metric_reporter_.get());
-#endif  // TRITON_ENABLE_STATS
+#endif
   }
-
-  //}
 }
 
 Status
@@ -1480,9 +1478,6 @@ EnsembleScheduler::EnsembleScheduler(
   // field to check if response cache enabled in the ensemble model config.
   info_->is_cache_enabled_ =
       config.response_cache().enable() && is_->ResponseCacheEnabled();
-  if (info_->is_cache_enabled_) {
-    LOG_VERBOSE(1) << "Top Level Ensemble Request Caching Enabled";
-  }
 
   for (const auto& input : config.input()) {
     info_->tensor_to_step_.emplace(input.name(), std::set<size_t>());
