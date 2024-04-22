@@ -1079,7 +1079,7 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
   }
   uint64_t ensemble_ns = info_->ensemble_end_ns_ - info_->ensemble_start_ns_;
   uint64_t insert_ns = insert_end_ns - insert_start_ns;
-  uint64_t cache_miss_ns = lookup_ns + ensemble_ns + insert_ns;
+  uint64_t cache_miss_ns = lookup_ns + insert_ns;
   request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(
       request_tracker_->MetricReporter(), cache_miss_ns);
 #endif
