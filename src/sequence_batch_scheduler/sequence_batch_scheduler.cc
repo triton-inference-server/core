@@ -203,19 +203,31 @@ SequenceBatchScheduler::Update(
       BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
       BatcherSequenceSlotCompare>
       new_ready_batcher_seq_slots;
+  std::vector<SlotID> new_ready_batcher_slot_ids;
+
   while (!ready_batcher_seq_slots_.empty()) {
     auto& ready_seq_slot = ready_batcher_seq_slots_.top();
+    auto slot_id = ready_seq_slot.seq_slot_;
+
     if (pending_removal_seq_slots_.find(ready_seq_slot.model_instance_) ==
         pending_removal_seq_slots_.end()) {
       // The ready slot is not being removed.
       new_ready_batcher_seq_slots.push(ready_seq_slot);
+      new_ready_batcher_slot_ids.push_back(slot_id);
     } else {
       // The ready slot is being removed, erase the slot.
       EraseBatcherSequenceSlot(ready_seq_slot);
     }
     ready_batcher_seq_slots_.pop();
+    auto iter = std::find(
+        ready_batcher_slot_ids_.begin(), ready_batcher_slot_ids_.end(),
+        slot_id);
+    if (iter != ready_batcher_slot_ids_.end()) {
+      ready_batcher_slot_ids_.erase(iter);
+    }
   }
   ready_batcher_seq_slots_.swap(new_ready_batcher_seq_slots);
+  ready_batcher_slot_ids_.swap(new_ready_batcher_slot_ids);
 
   return Status::Success;
 }
@@ -315,8 +327,21 @@ SequenceBatchScheduler::CreateBatchers(
       // All sequence slots in the batcher are initially ready for a
       // new sequence.
       for (size_t b = 0; b < seq_slot_cnt_; ++b) {
-        ready_batcher_seq_slots_.push(
-            SequenceBatchScheduler::BatcherSequenceSlot(instance.get(), b));
+        auto slot =
+            SequenceBatchScheduler::BatcherSequenceSlot(instance.get(), b);
+        auto slot_id = slot.seq_slot_;
+        auto iter = std::find(
+            ready_batcher_slot_ids_.begin(), ready_batcher_slot_ids_.end(),
+            slot_id);
+        if (iter != ready_batcher_slot_ids_.end()) {
+          LOG_ERROR << "Should not print this! Unexpected duplicate ready "
+                       "batch slot ID "
+                    << slot_id << " in init_state.";
+        }
+
+        ready_batcher_seq_slots_.push(slot);
+        ready_batcher_slot_ids_.push_back(slot_id);
+        // SequenceBatchScheduler::BatcherSequenceSlot(instance.get(), b));
       }
     }
   }
@@ -807,6 +832,15 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   else if (!ready_batcher_seq_slots_.empty()) {
     target = &sequence_to_batcherseqslot_map_[correlation_id];
     *target = ready_batcher_seq_slots_.top();
+
+    auto slot_id = (*target).seq_slot_;
+    auto iter = std::find(
+        ready_batcher_slot_ids_.begin(), ready_batcher_slot_ids_.end(),
+        slot_id);
+    if (iter != ready_batcher_slot_ids_.end()) {
+      ready_batcher_slot_ids_.erase(iter);
+    }
+
     ready_batcher_seq_slots_.pop();
   }
   // Last option is to assign this request to the backlog...
@@ -883,14 +917,64 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
 {
   std::unique_lock<std::mutex> lock(mu_);
 
-  // If there are any remaining requests on the releasing sequence slot, those
-  // requests will be cancelled.
+
+  LOG_VERBOSE(1) << "[DEBUG] START ReleaseSequenceSlot()";
+  // Clear sequence state for this slot
+  auto& batcher = batchers_[batcher_seq_slot.model_instance_];
+  auto& sequence_states = batcher->GetSequenceStates();
+  sequence_states[batcher_seq_slot.seq_slot_] = nullptr;
+
+  // const auto& irequest = requests->front();
+  // const InferenceRequest::SequenceId& correlation_id =
+  //       irequest->CorrelationId();
+
+  // LOG_INFO << "[DEBUG] "
+  //      << irequest->LogRequest() << "CORRID " << correlation_id
+  //          << " reusing batcher "
+  //          << batcher_seq_slot.model_instance_->Name() << ", slot "
+  //          << batcher_seq_slot.seq_slot_ << ": "
+  //          << irequest->ModelName();
+
+  // HennerM fixes
+  /*
+  {
+      // If we are releasing the slot for a cancelled sequence,
+      // we have to clean up the sequence
+      // otherwise the reaper will try to clean it up again.
+      if (!requests->empty() && requests->front()->IsCancelled()) {
+        // clean-up the cancelled sequences
+        // Normal sequences will already be
+        const InferenceRequest::SequenceId& old_correlation_id =
+            requests->front()->CorrelationId();
+        LOG_INFO << "[DEBUG] Releasing canceled "
+                          "CORRID "
+                       << old_correlation_id;
+
+        if (sequence_to_batcherseqslot_map_.find(old_correlation_id) !=
+            sequence_to_batcherseqslot_map_.end()) {
+          sequence_to_batcherseqslot_map_.erase(old_correlation_id);
+        }
+        // remove this correlation ID from expiration checks
+        if (correlation_id_timestamps_.find(old_correlation_id) !=
+            correlation_id_timestamps_.end()) {
+          correlation_id_timestamps_.erase(old_correlation_id);
+        }
+      }
+  }
+  */
+
+  // LOG_INFO << "[DEBUG] START Marking Requests Cancelled";
+  //  If there are any remaining requests on the releasing sequence slot, those
+  //  requests will be cancelled.
   MarkRequestsCancelled(requests);
+  // LOG_INFO << "[DEBUG] DONE Marking Requests Cancelled";
 
   // If the instance behind the slot is pending to be removed, do not add the
   // slot back to ready and erase it instead.
   if (EraseBatcherSequenceSlot(batcher_seq_slot)) {
     // The slot is erased.
+    LOG_INFO << "[DEBUG] EraseBatcherSequenceSlot RETURNING EARLY FROM "
+                "RELEASING SLOT";
     return InferenceRequest::SequenceId();
   }
 
@@ -947,6 +1031,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
                    << batcher_seq_slot.model_instance_->Name() << ", slot "
                    << batcher_seq_slot.seq_slot_ << ": "
                    << irequest->ModelName();
+    LOG_VERBOSE(1) << "[DEBUG] END ReleaseSequenceSlot()";
     return correlation_id;
   }
 
@@ -955,7 +1040,17 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
                  << batcher_seq_slot.model_instance_->Name() << ", slot "
                  << batcher_seq_slot.seq_slot_;
 
+  auto slot_id = batcher_seq_slot.seq_slot_;
+  auto iter = std::find(
+      ready_batcher_slot_ids_.begin(), ready_batcher_slot_ids_.end(), slot_id);
+  if (iter != ready_batcher_slot_ids_.end()) {
+    LOG_ERROR
+        << "Should not print this! Unexpected duplicate ready batch slot ID "
+        << slot_id << ".";
+  }
+
   ready_batcher_seq_slots_.push(batcher_seq_slot);
+  ready_batcher_slot_ids_.push_back(slot_id);
   return InferenceRequest::SequenceId();
 }
 
@@ -1375,10 +1470,14 @@ SequenceBatch::UpdateImplicitState(
 {
   // This should be executed only if the model has a states section.
   if (!base_->StateOutputConfigMap().empty()) {
+    LOG_INFO << "[DEBUG] UpdateImplicitState for model: "
+             << irequest->ModelName() << ", seq_slot: " << seq_slot;
     auto& sequence_states = sequence_states_[seq_slot];
 
     // Initialize the input state if the sequence is starting.
     if ((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_START) != 0) {
+      LOG_INFO << "[DEBUG] SEQ_START Resetting sequence_states for model: "
+               << irequest->ModelName() << ", seq_slot: " << seq_slot;
       sequence_states = nullptr;
     }
 

@@ -260,10 +260,13 @@ class SequenceBatchScheduler : public Scheduler {
   // sequence. Ordered from lowest sequence-slot-number to highest so
   // that all batchers grow at the same rate and attempt to remain as
   // small as possible.
+  // SearchableQueue<
   std::priority_queue<
       BatcherSequenceSlot, std::vector<BatcherSequenceSlot>,
       BatcherSequenceSlotCompare>
       ready_batcher_seq_slots_;
+  using SlotID = uint32_t;
+  std::vector<SlotID> ready_batcher_slot_ids_;
 
   // For each correlation ID the most recently seen timestamp, in
   // microseconds, for a request using that correlation ID.
@@ -316,6 +319,10 @@ class SequenceBatch {
       std::unique_ptr<InferenceRequest>& request) = 0;
 
   size_t SeqSlotCnt() { return seq_slot_cnt_; }
+  std::vector<std::shared_ptr<SequenceStates>>& GetSequenceStates()
+  {
+    return sequence_states_;
+  }
 
  protected:
   bool CreateCorrelationIDControl(const inference::ModelConfig& config);
