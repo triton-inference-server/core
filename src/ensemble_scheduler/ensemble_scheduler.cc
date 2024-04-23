@@ -1386,16 +1386,16 @@ EnsembleScheduler::CacheLookUp(
   if (is_lookup_success) {
 #ifdef TRITON_ENABLE_STATS
     const uint64_t lookup_end_ns =
-        request_tracker_->Request()->CacheLookupEndNs();
+        request->CacheLookupEndNs();
     const uint64_t lookup_start_ns =
-        request_tracker_->Request()->CacheLookupStartNs();
+        request->CacheLookupStartNs();
     uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
     if (lookup_start_ns > lookup_end_ns) {
       lookup_ns = 0;
       LOG_ERROR << "Request lookup duration was not set correctly.";
     }
     request_tracker_->StatsAggregator()->UpdateSuccessCacheHit(
-        request_tracker_->MetricReporter(), cache_miss_ns);
+        request_tracker_->MetricReporter(), lookup_ns);
     // request->ReportStatisticsCacheHit(metric_reporter_.get());
 
 #endif
