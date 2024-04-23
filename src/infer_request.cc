@@ -420,6 +420,14 @@ InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
   return status;
 }
 
+FailureReason stringToFailureReason(const std::string& error_type) {
+  if (error_type == "REJECTED") return FailureReason::REJECTED;
+  if (error_type == "CANCELED") return FailureReason::CANCELED;
+  if (error_type == "BACKEND") return FailureReason::BACKEND;
+  if (error_type == "TIMEOUT") return FailureReason::TIMEOUT;
+  return FailureReason::OTHER;
+}
+
 void
 InferenceRequest::RespondIfError(
     std::unique_ptr<InferenceRequest>& request, const Status& status,
@@ -441,6 +449,10 @@ InferenceRequest::RespondIfError(
       InferenceResponse::SendWithStatus(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
       (request->LogRequest() + "failed to send error response").c_str());
+
+  // Report error with type.
+  FailureReason reason = stringToFailureReason(status.Message());  // Convert error message to reason
+  request->ReportStatistics(request->model_raw_->MetricReporter().get(), false, 0, 0, 0, 0, reason);
 
   // If releasing the request then invoke the release callback which
   // gives ownership to the callback. So can't access 'request' after
@@ -1240,7 +1252,8 @@ void
 InferenceRequest::ReportStatistics(
     MetricModelReporter* metric_reporter, bool success,
     const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-    const uint64_t compute_output_start_ns, const uint64_t compute_end_ns)
+    const uint64_t compute_output_start_ns, const uint64_t compute_end_ns,
+    FailureReason reason)
 {
   if (!collect_stats_) {
     return;
@@ -1272,12 +1285,22 @@ InferenceRequest::ReportStatistics(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns);
+        metric_reporter, request_start_ns_, request_end_ns, reason);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
-          nullptr /* metric_reporter */, request_start_ns_, request_end_ns);
+          nullptr /* metric_reporter */, request_start_ns_, request_end_ns, reason);
     }
   }
+}
+
+void 
+InferenceRequest::ReportStatistics(
+  MetricModelReporter* metric_reporter, bool success,
+  const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
+  const uint64_t compute_output_start_ns, const uint64_t compute_end_ns) {
+  // Call the updated ReportStatistics with a default error_type
+  this->ReportStatistics(metric_reporter, success, compute_start_ns, compute_input_end_ns, 
+                         compute_output_start_ns, compute_end_ns, FailureReason::BACKEND);
 }
 
 void
@@ -1285,7 +1308,8 @@ InferenceRequest::ReportStatisticsWithDuration(
     MetricModelReporter* metric_reporter, bool success,
     const uint64_t compute_start_ns, const uint64_t compute_input_duration_ns,
     const uint64_t compute_infer_duration_ns,
-    const uint64_t compute_output_duration_ns)
+    const uint64_t compute_output_duration_ns,
+    FailureReason reason)
 {
   if (!collect_stats_) {
     return;
@@ -1308,10 +1332,10 @@ InferenceRequest::ReportStatisticsWithDuration(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns);
+        metric_reporter, request_start_ns_, request_end_ns, reason);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
-          nullptr /* metric_reporter */, request_start_ns_, request_end_ns);
+          nullptr /* metric_reporter */, request_start_ns_, request_end_ns, reason);
     }
   }
 }

@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "constants.h"
+#include "failure_reasons.h"
 #include "infer_response.h"
 #include "status.h"
 #include "tritonserver_apis.h"
@@ -136,7 +137,7 @@ class InferenceStatsAggregator {
   // Add durations to Infer stats for a failed inference request.
   void UpdateFailure(
       MetricModelReporter* metric_reporter, const uint64_t request_start_ns,
-      const uint64_t request_end_ns);
+      const uint64_t request_end_ns, FailureReason reason);
 
   // Add durations to infer stats for a successful inference request.
   void UpdateSuccess(

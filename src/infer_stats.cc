@@ -36,10 +36,22 @@ namespace triton { namespace core {
 
 #ifdef TRITON_ENABLE_STATS
 
+// This function converts FailureReason enum values to std::string
+std::string failureReasonToString(FailureReason reason) {
+  switch (reason) {
+    case FailureReason::REJECTED: return "REJECTED";
+    case FailureReason::CANCELED: return "CANCELED";
+    case FailureReason::BACKEND: return "BACKEND";
+    case FailureReason::TIMEOUT: return "TIMEOUT";
+    case FailureReason::OTHER: return "OTHER";
+    default: return "OTHER";
+  }
+}
+
 void
 InferenceStatsAggregator::UpdateFailure(
     MetricModelReporter* metric_reporter, const uint64_t request_start_ns,
-    const uint64_t request_end_ns)
+    const uint64_t request_end_ns, FailureReason reason)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -48,7 +60,8 @@ InferenceStatsAggregator::UpdateFailure(
 
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {
-    metric_reporter->IncrementCounter("inf_failure", 1);
+    std::string reason_str = failureReasonToString(reason);
+    metric_reporter->IncrementCounter("inf_failure_" + reason_str, 1);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
