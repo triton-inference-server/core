@@ -1385,7 +1385,19 @@ EnsembleScheduler::CacheLookUp(
   bool is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
   if (is_lookup_success) {
 #ifdef TRITON_ENABLE_STATS
-    request->ReportStatisticsCacheHit(metric_reporter_.get());
+    const uint64_t lookup_end_ns =
+        request_tracker_->Request()->CacheLookupEndNs();
+    const uint64_t lookup_start_ns =
+        request_tracker_->Request()->CacheLookupStartNs();
+    uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+    if (lookup_start_ns > lookup_end_ns) {
+      lookup_ns = 0;
+      LOG_ERROR << "Request lookup duration was not set correctly.";
+    }
+    request_tracker_->StatsAggregator()->UpdateSuccessCacheHit(
+        request_tracker_->MetricReporter(), cache_miss_ns);
+    // request->ReportStatisticsCacheHit(metric_reporter_.get());
+
 #endif
   }
 }
