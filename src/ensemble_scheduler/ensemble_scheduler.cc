@@ -1049,7 +1049,6 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
   const bool is_key_set = request_tracker_->Request()->CacheKeyIsSet();
 
 #ifdef TRITON_ENABLE_STATS
-  info_->ensemble_end_ns_ = CaptureTimeNs();
   const uint64_t lookup_end_ns =
       request_tracker_->Request()->CacheLookupEndNs();
   const uint64_t lookup_start_ns =
@@ -1077,7 +1076,6 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
     lookup_ns = 0;
     LOG_ERROR << "Request lookup duration was not set correctly.";
   }
-  uint64_t ensemble_ns = info_->ensemble_end_ns_ - info_->ensemble_start_ns_;
   uint64_t insert_ns = insert_end_ns - insert_start_ns;
   uint64_t cache_miss_ns = lookup_ns + insert_ns;
   request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(
@@ -1417,11 +1415,6 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   }
 
   // Add additional callback to keep track of in-flight count
-
-#ifdef TRITON_ENABLE_STATS
-  info_->ensemble_start_ns_ = CaptureTimeNs();
-#endif
-
   ++inflight_count_;
   request->AddInternalReleaseCallback(
       [this](
