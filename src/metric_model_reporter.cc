@@ -29,6 +29,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include "constants.h"
+#include "failure_reasons.h"
 #include "triton/common/logging.h"
 
 // Global config group has 'name' of empty string.
@@ -183,6 +184,14 @@ MetricModelReporter::~MetricModelReporter()
   }
 }
 
+std::map<FailureReason, std::string> failure_reasons_map = {
+    {FailureReason::REJECTED, "REJECTED"},
+    {FailureReason::CANCELED, "CANCELED"},
+    {FailureReason::BACKEND, "BACKEND"},
+    {FailureReason::TIMEOUT, "TIMEOUT"},
+    {FailureReason::OTHER, "OTHER"}
+};
+
 void
 MetricModelReporter::InitializeCounters(
     const std::map<std::string, std::string>& labels)
@@ -226,6 +235,14 @@ MetricModelReporter::InitializeCounters(
     if (family_ptr) {
       counters_[name] = CreateMetric<prometheus::Counter>(*family_ptr, labels);
     }
+  }
+
+  // Initialize failure metrics with reasons
+  for (const auto& reason_pair : failure_reasons_map) {
+    std::map<std::string, std::string> extended_labels = labels;
+    extended_labels["reason"] = reason_pair.second;
+    counters_["inf_failure_" + reason_pair.second] = CreateMetric<prometheus::Counter>(
+      Metrics::FamilyInferenceFailure(), extended_labels);
   }
 }
 
@@ -345,9 +362,9 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
     // No counter metric exists with this name
     return;
   }
-
+  
   auto counter = iter->second;
-  if (!counter) {
+  if (!counter){
     // Counter is uninitialized/nullptr
     return;
   }
