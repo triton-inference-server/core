@@ -1077,7 +1077,7 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
     lookup_ns = 0;
     LOG_ERROR << "Request lookup duration was not set correctly.";
   }
-  uint64_t ensemble_ns = info_->ensemble_end_ns_ - info_->ensemble_start_ns_;
+  //uint64_t ensemble_ns = info_->ensemble_end_ns_ - info_->ensemble_start_ns_;
   uint64_t insert_ns = insert_end_ns - insert_start_ns;
   uint64_t cache_miss_ns = lookup_ns + insert_ns;
   request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(

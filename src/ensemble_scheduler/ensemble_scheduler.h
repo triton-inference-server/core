@@ -68,10 +68,10 @@ struct EnsembleInfo {
 
   bool is_cache_enabled_;
 
-#ifdef TRITON_ENABLE_STATS
-  uint64_t ensemble_start_ns_;
-  uint64_t ensemble_end_ns_;
-#endif
+// #ifdef TRITON_ENABLE_STATS
+//   uint64_t ensemble_start_ns_;
+//   uint64_t ensemble_end_ns_;
+// #endif
 
   // the ensemble output (re)shape expected by the ensemble
   std::unordered_map<std::string, triton::common::DimsList>
