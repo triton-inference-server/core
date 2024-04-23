@@ -1413,6 +1413,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
         std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
     return Status::Success;
   }
+  LOG_VERBOSE(1) << "Cache Miss";
 
   // Add additional callback to keep track of in-flight count
   ++inflight_count_;
