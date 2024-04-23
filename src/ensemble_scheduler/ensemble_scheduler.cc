@@ -1373,8 +1373,9 @@ EnsembleScheduler::EnsembleScheduler(
   if (Metrics::Enabled()) {
     // Ensemble scheduler doesn't currently support response cache at top level.
     MetricModelReporter::Create(
-        model_id, 1, METRIC_REPORTER_ID_CPU, false /* response_cache_enabled */,
-        config.metric_tags(), &metric_reporter_);
+        model_id, 1 /* model_version */, METRIC_REPORTER_ID_CPU,
+        false /* response_cache_enabled */, config.metric_tags(),
+        &metric_reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
 
