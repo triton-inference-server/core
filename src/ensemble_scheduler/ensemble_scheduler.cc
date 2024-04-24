@@ -1383,7 +1383,7 @@ EnsembleScheduler::CacheLookUp(
     std::unique_ptr<InferenceResponse>& cached_response)
 {
   auto cache = is_->CacheManager()->Cache();
-  is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
+  bool is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
   if (is_lookup_success) {
 #ifdef TRITON_ENABLE_STATS
     const uint64_t lookup_end_ns = request->CacheLookupEndNs();
