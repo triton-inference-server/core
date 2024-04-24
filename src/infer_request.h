@@ -816,8 +816,8 @@ class InferenceRequest {
 
   // Cache lookup start/end timestamps. Cache manages its own stats even
   // when statistics are not being colleceted.
-  uint64_t cache_lookup_start_ns_ = 0;
-  uint64_t cache_lookup_end_ns_ = 0;
+  uint64_t cache_lookup_start_ns_;
+  uint64_t cache_lookup_end_ns_;
 
   // Cache insertion start/end timestamps. Cache manages its own stats even
   // when statistics are not being colleceted.
