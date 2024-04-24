@@ -1376,28 +1376,25 @@ EnsembleScheduler::Create(
   return Status::Success;
 }
 
-void
+
 EnsembleScheduler::CacheLookUp(
     std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response)
 {
   auto cache = is_->CacheManager()->Cache();
-  bool is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
+  is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
   if (is_lookup_success) {
 #ifdef TRITON_ENABLE_STATS
-    const uint64_t lookup_end_ns =
-        request->CacheLookupEndNs();
-    const uint64_t lookup_start_ns =
-        request->CacheLookupStartNs();
+    const uint64_t lookup_end_ns = request->CacheLookupEndNs();
+    const uint64_t lookup_start_ns = request->CacheLookupStartNs();
     uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
     if (lookup_start_ns > lookup_end_ns) {
       lookup_ns = 0;
       LOG_ERROR << "Request lookup duration was not set correctly.";
     }
-    request_tracker_->StatsAggregator()->UpdateSuccessCacheHit(
-        request_tracker_->MetricReporter(), lookup_ns);
-    // request->ReportStatisticsCacheHit(metric_reporter_.get());
-
+    LOG_VERBOSE(1) << "Lookup Time: " << lookup_ns;
+    LOG_VERBOSE(1) << "Metric Report time: " << metric_reporter_.get();
+    request->ReportStatisticsCacheHit(metric_reporter_.get());
 #endif
   }
 }
