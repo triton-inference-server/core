@@ -1377,6 +1377,7 @@ EnsembleScheduler::Create(
 }
 
 
+void
 EnsembleScheduler::CacheLookUp(
     std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response)
