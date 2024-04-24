@@ -1405,6 +1405,8 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
   // Queue timer starts at the beginning of the queueing and
   // scheduling process
+  LOG_VERBOSE(1) << "Cache Lookup start ns: " << request->CacheLookupStartNs();
+  LOG_VERBOSE(1) << "Cache Lookup end ns: " << request->CacheLookupEndNs();
   request->CaptureQueueStartNs();
   INFER_TRACE_ACTIVITY(
       request->TraceProxy(), TRITONSERVER_TRACE_QUEUE_START,
