@@ -1078,9 +1078,6 @@ EnsembleContext::CacheEnsembleTopLevelRequest(
   }
   uint64_t insert_ns = insert_end_ns - insert_start_ns;
   uint64_t cache_miss_ns = lookup_ns + insert_ns;
-  LOG_VERBOSE(1) << "Cache LookUp ns: " << lookup_ns;
-  LOG_VERBOSE(1) << "Cache Insert ns: " << insert_ns;
-  LOG_VERBOSE(1) << "Cache Miss ns: " << cache_miss_ns;
   request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(
       request_tracker_->MetricReporter(), cache_miss_ns);
 #endif
@@ -1396,8 +1393,6 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
   // Queue timer starts at the beginning of the queueing and
   // scheduling process
-  LOG_VERBOSE(1) << "Cache Lookup start ns: " << request->CacheLookupStartNs();
-  LOG_VERBOSE(1) << "Cache Lookup end ns: " << request->CacheLookupEndNs();
   request->CaptureQueueStartNs();
   INFER_TRACE_ACTIVITY(
       request->TraceProxy(), TRITONSERVER_TRACE_QUEUE_START,

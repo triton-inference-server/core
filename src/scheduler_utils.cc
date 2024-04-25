@@ -62,7 +62,6 @@ CacheLookUpUtil(
     key = request->CacheKey();
   }
   {
-    LOG_VERBOSE(1) << "Key: " << key;
     request->CaptureCacheLookupStartNs();
     status = cache->Lookup(local_response.get(), key);
     request->CaptureCacheLookupEndNs();
