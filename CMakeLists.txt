@@ -296,6 +296,8 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(TRITON_DEPENDS ${TRITON_DEPENDS} cnmem)
   endif() # TRITON_ENABLE_GPU
 
+  list(APPEND CMAKE_PREFIX_PATH "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/utf8_range/${LIB_DIR}/cmake/utf8_range")
+
   ExternalProject_Add(triton-core
     PREFIX triton-core
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
