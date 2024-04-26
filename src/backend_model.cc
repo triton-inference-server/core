@@ -61,8 +61,9 @@ TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const int64_t version, inference::ModelConfig model_config,
-    const bool is_config_provided, std::unique_ptr<TritonModel>* model)
+    const ModelIdentifier& model_id, const int64_t version,
+    inference::ModelConfig model_config, const bool is_config_provided,
+    std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -143,8 +144,8 @@ TritonModel::Create(
 
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
-      server, localized_model_dir, backend, min_compute_capability, version,
-      model_config, auto_complete_config, backend_cmdline_config_map,
+      server, localized_model_dir, backend, min_compute_capability, model_id,
+      version, model_config, auto_complete_config, backend_cmdline_config_map,
       host_policy_map));
 
   TritonModel* raw_local_model = local_model.get();
@@ -929,12 +930,14 @@ TritonModel::TritonModel(
     InferenceServer* server,
     const std::shared_ptr<LocalizedPath>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
-    const double min_compute_capability, const int64_t version,
-    const inference::ModelConfig& config, const bool auto_complete_config,
+    const double min_compute_capability, const ModelIdentifier& model_id,
+    const int64_t version, const inference::ModelConfig& config,
+    const bool auto_complete_config,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
     : Model(
-          min_compute_capability, localized_model_dir->Path(), version, config),
+          min_compute_capability, localized_model_dir->Path(), model_id,
+          version, config),
       server_(server), min_compute_capability_(min_compute_capability),
       auto_complete_config_(auto_complete_config),
       backend_cmdline_config_map_(backend_cmdline_config_map),
