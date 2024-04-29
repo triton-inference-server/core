@@ -1430,7 +1430,6 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
       stream_));
-
   EnsembleContext::Proceed(context);
   return Status::Success;
 }
