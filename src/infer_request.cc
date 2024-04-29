@@ -421,17 +421,22 @@ InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
 }
 
 FailureReason stringToFailureReason(const std::string& error_type) {
-  if (error_type == "REJECTED") return FailureReason::REJECTED;
-  if (error_type == "CANCELED") return FailureReason::CANCELED;
-  if (error_type == "BACKEND") return FailureReason::BACKEND;
-  if (error_type == "TIMEOUT") return FailureReason::TIMEOUT;
-  return FailureReason::OTHER;
+    if (error_type == "REJECTED") {
+        return FailureReason::REJECTED;
+    }
+    if (error_type == "CANCELED") {
+        return FailureReason::CANCELED;
+    }
+    if (error_type == "BACKEND") {
+        return FailureReason::BACKEND;
+    }
+    return FailureReason::OTHER;
 }
 
 void
 InferenceRequest::RespondIfError(
     std::unique_ptr<InferenceRequest>& request, const Status& status,
-    const bool release_request)
+    const bool release_request, FailureReason reason)
 {
   if (status.IsOk()) {
     return;
@@ -450,8 +455,6 @@ InferenceRequest::RespondIfError(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
       (request->LogRequest() + "failed to send error response").c_str());
 
-  // Report error with type.
-  FailureReason reason = stringToFailureReason(status.Message());  // Convert error message to reason
   request->ReportStatistics(request->model_raw_->MetricReporter().get(), false, 0, 0, 0, 0, reason);
 
   // If releasing the request then invoke the release callback which
@@ -460,20 +463,6 @@ InferenceRequest::RespondIfError(
   if (release_request) {
     InferenceRequest::Release(
         std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
-  }
-}
-
-void
-InferenceRequest::RespondIfError(
-    std::vector<std::unique_ptr<InferenceRequest>>& requests,
-    const Status& status, const bool release_requests)
-{
-  if (status.IsOk()) {
-    return;
-  }
-
-  for (auto& request : requests) {
-    RespondIfError(request, status, release_requests);
   }
 }
 
@@ -1299,7 +1288,7 @@ InferenceRequest::ReportStatistics(
   const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
   const uint64_t compute_output_start_ns, const uint64_t compute_end_ns) {
   // Call the updated ReportStatistics with a default error_type
-  this->ReportStatistics(metric_reporter, success, compute_start_ns, compute_input_end_ns, 
+  ReportStatistics(metric_reporter, success, compute_start_ns, compute_input_end_ns, 
                          compute_output_start_ns, compute_end_ns, FailureReason::BACKEND);
 }
 

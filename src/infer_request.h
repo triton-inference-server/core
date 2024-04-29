@@ -31,7 +31,6 @@
 #include <vector>
 
 #include "buffer_attributes.h"
-#include "failure_reasons.h"
 #include "infer_response.h"
 #include "infer_stats.h"
 #include "infer_trace.h"
@@ -591,7 +590,7 @@ class InferenceRequest {
   // 'release_request' is true 'request' is returned as nullptr.
   static void RespondIfError(
       std::unique_ptr<InferenceRequest>& request, const Status& status,
-      const bool release_request = false);
+      const bool release_request = false, FailureReason reason = FailureReason::OTHER);
 
   // Send an error response to a set of 'requests'. If 'status' is
   // Success then no responses are sent and the requests are not
@@ -604,7 +603,7 @@ class InferenceRequest {
   // returned with all nullptrs.
   static void RespondIfError(
       std::vector<std::unique_ptr<InferenceRequest>>& requests,
-      const Status& status, const bool release_requests = false);
+      const Status& status, const bool release_requests = false, FailureReason reason = FailureReason::OTHER);
 
   // Release the request. Call the release callback and transfer
   // ownership of the request to the callback. On return 'request' is

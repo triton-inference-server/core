@@ -29,7 +29,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include "constants.h"
-#include "failure_reasons.h"
+#include "infer_stats.h"
 #include "triton/common/logging.h"
 
 // Global config group has 'name' of empty string.
@@ -188,7 +188,6 @@ std::map<FailureReason, std::string> failure_reasons_map = {
     {FailureReason::REJECTED, "REJECTED"},
     {FailureReason::CANCELED, "CANCELED"},
     {FailureReason::BACKEND, "BACKEND"},
-    {FailureReason::TIMEOUT, "TIMEOUT"},
     {FailureReason::OTHER, "OTHER"}
 };
 
@@ -360,7 +359,7 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
   }
   
   auto counter = iter->second;
-  if (!counter){
+  if (!counter) {
     // Counter is uninitialized/nullptr
     return;
   }
