@@ -34,9 +34,8 @@
 namespace triton { namespace core {
 
 uint64_t CaptureTimeNs();
-// utility function to lookup if the request is already in cache. This function
-// will be called by the dynamic batch scheduler
-//  and ensemble scheduler if cache is enabled.
+// Utility function called by the scheduler to lookup if the request is in the
+// cache and get the response.
 bool CacheLookUpUtil(
     std::unique_ptr<InferenceRequest>& request,
     std::unique_ptr<InferenceResponse>& cached_response,

@@ -61,11 +61,9 @@ CacheLookUpUtil(
   } else {
     key = request->CacheKey();
   }
-  {
-    request->CaptureCacheLookupStartNs();
-    status = cache->Lookup(local_response.get(), key);
-    request->CaptureCacheLookupEndNs();
-  }
+  request->CaptureCacheLookupStartNs();
+  status = cache->Lookup(local_response.get(), key);
+  request->CaptureCacheLookupEndNs();
   if (status.IsOk() && (local_response != nullptr)) {
     cached_response = std::move(local_response);
     return true;
