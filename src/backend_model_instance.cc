@@ -36,6 +36,7 @@
 #include "backend_config.h"
 #include "backend_model.h"
 #include "cuda_utils.h"
+#include "infer_stats.h"
 #include "metrics.h"
 #include "model_config.pb.h"
 #include "numa_utils.h"
@@ -964,7 +965,7 @@ TRITONBACKEND_ModelInstanceReportStatistics(
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
   tr->ReportStatistics(
       ti->MetricReporter(), success, exec_start_ns, compute_start_ns,
-      compute_end_ns, exec_end_ns);
+      compute_end_ns, exec_end_ns, FailureReason::BACKEND);
 #endif  // TRITON_ENABLE_STATS
 
   return nullptr;  // success

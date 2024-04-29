@@ -33,12 +33,19 @@
 #include <vector>
 
 #include "constants.h"
-#include "failure_reasons.h"
 #include "infer_response.h"
 #include "status.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
+
+// Define the FailureReason enum within the triton::core namespace
+enum class FailureReason {
+    REJECTED,
+    CANCELED,
+    BACKEND,
+    OTHER
+};
 
 class MetricModelReporter;
 

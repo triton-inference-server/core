@@ -42,7 +42,6 @@ std::string failureReasonToString(FailureReason reason) {
     case FailureReason::REJECTED: return "REJECTED";
     case FailureReason::CANCELED: return "CANCELED";
     case FailureReason::BACKEND: return "BACKEND";
-    case FailureReason::TIMEOUT: return "TIMEOUT";
     case FailureReason::OTHER: return "OTHER";
     default: return "OTHER";
   }
