@@ -91,7 +91,7 @@ CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
       LOG_ERROR << status.Message();
     }
     // Respond the request as cancelled.
-    InferenceRequest::RespondIfError(req, cancelled_status, true);
+    InferenceRequest::RespondIfError(req, cancelled_status, true, FailureReason::CANCELED);
   }
 }
 
@@ -1173,7 +1173,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
           "timeout of the corresponding sequence has been expired");
       for (auto& backlog : expired_backlogs) {
         for (auto& req : *backlog->queue_) {
-          InferenceRequest::RespondIfError(req, rejected_status, true);
+          InferenceRequest::RespondIfError(req, rejected_status, true, FailureReason::REJECTED);
         }
       }
     }

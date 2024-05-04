@@ -1124,7 +1124,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                 "more "
                 "ensemble steps can be made");
         InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_);
+            request_tracker_->Request(), ensemble_status_, true, FailureReason::OTHER);
       } else {
         request_tracker_->Request()->ResponseFactory()->SendFlags(
             TRITONSERVER_RESPONSE_COMPLETE_FINAL);
@@ -1137,7 +1137,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
           ensemble_status_);
     } else {
       InferenceRequest::RespondIfError(
-          request_tracker_->Request(), ensemble_status_);
+          request_tracker_->Request(), ensemble_status_, true, FailureReason::OTHER);
     }
   }
 
