@@ -176,6 +176,7 @@ NUMPY_TO_TRITON_DTYPE: dict[type, DataType] = CustomKeyErrorDict(
     "Triton server data type",
     {
         bool: DataType.BOOL,
+        numpy.bool_: DataType.BOOL,
         numpy.int8: DataType.INT8,
         numpy.int16: DataType.INT16,
         numpy.int32: DataType.INT32,
@@ -199,6 +200,7 @@ TRITON_TO_NUMPY_DTYPE: dict[DataType, type] = CustomKeyErrorDict(
     {
         **{value: key for key, value in NUMPY_TO_TRITON_DTYPE.items()},
         **{DataType.BYTES: numpy.object_},
+        **{DataType.BOOL: numpy.bool_},
     },
 )
 

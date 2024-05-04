@@ -822,6 +822,9 @@ class PyInferenceResponse
       case TRITONSERVER_PARAMETER_BOOL:
         py_value = py::bool_(*reinterpret_cast<const bool*>(value));
         break;
+      case TRITONSERVER_PARAMETER_DOUBLE:
+        py_value = py::float_(*reinterpret_cast<const double*>(value));
+        break;
       default:
         throw UnsupportedError(
             std::string("Unexpected type '") +
@@ -1157,6 +1160,11 @@ class PyInferenceRequest
   void SetBoolParameter(const std::string& key, bool value)
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetBoolParameter(
+        triton_object_, key.c_str(), value));
+  }
+  void SetDoubleParameter(const std::string& key, double value)
+  {
+    ThrowIfError(TRITONSERVER_InferenceRequestSetDoubleParameter(
         triton_object_, key.c_str(), value));
   }
   void Cancel()
@@ -1975,6 +1983,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_string_parameter", &PyInferenceRequest::SetStringParameter)
       .def("set_int_parameter", &PyInferenceRequest::SetIntParameter)
       .def("set_bool_parameter", &PyInferenceRequest::SetBoolParameter)
+      .def("set_double_parameter", &PyInferenceRequest::SetDoubleParameter)
       .def("cancel", &PyInferenceRequest::Cancel);
 
   // TRITONSERVER_InferenceResponse

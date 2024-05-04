@@ -167,6 +167,10 @@ class InferenceRequest:
                 request.set_int_parameter(key, value)
             elif isinstance(value, bool):
                 request.set_bool_parameter(key, value)
+            elif isinstance(value, float):
+                request.set_double_parameter(key, value)
+            elif value is None:
+                pass
             else:
                 raise InvalidArgumentError(
                     f"Invalid parameter type {type(value)} for key {key}"
