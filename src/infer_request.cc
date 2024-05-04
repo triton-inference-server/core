@@ -455,7 +455,15 @@ InferenceRequest::RespondIfError(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
       (request->LogRequest() + "failed to send error response").c_str());
 
-  request->ReportStatistics(request->model_raw_->MetricReporter().get(), false, 0, 0, 0, 0, reason);
+  request->ReportStatistics(
+      request->model_raw_->MetricReporter().get(),
+      false, // success: Indicates the operation did not succeed
+      0, // compute_start_ns: Start time of the compute operation, 0 because there was an error before computation
+      0, // compute_input_end_ns: End time of input processing, 0 because there was an error before input processing
+      0, // compute_output_start_ns: Start time of output processing, 0 because there was an error before output processing
+      0, // compute_end_ns: End time of the compute operation, 0 because there was an error before computation ended
+      reason // reason: The specific reason for the failure
+  );
 
   // If releasing the request then invoke the release callback which
   // gives ownership to the callback. So can't access 'request' after
@@ -1280,16 +1288,6 @@ InferenceRequest::ReportStatistics(
           nullptr /* metric_reporter */, request_start_ns_, request_end_ns, reason);
     }
   }
-}
-
-void 
-InferenceRequest::ReportStatistics(
-  MetricModelReporter* metric_reporter, bool success,
-  const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-  const uint64_t compute_output_start_ns, const uint64_t compute_end_ns) {
-  // Call the updated ReportStatistics with a default error_type
-  ReportStatistics(metric_reporter, success, compute_start_ns, compute_input_end_ns, 
-                         compute_output_start_ns, compute_end_ns, FailureReason::BACKEND);
 }
 
 void
