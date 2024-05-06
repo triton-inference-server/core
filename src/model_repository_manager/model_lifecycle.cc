@@ -1,4 +1,4 @@
-// Copyright 2022-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -257,6 +257,14 @@ ModelLifeCycle::InflightStatus()
     }
   }
   return inflight_status;
+}
+
+size_t
+ModelLifeCycle::BackgroundModelsSize()
+{
+  LOG_VERBOSE(2) << "BackgroundModelsSize()";
+  std::lock_guard<std::mutex> map_lock(map_mtx_);
+  return background_models_.size();
 }
 
 const ModelStateMap
@@ -549,14 +557,14 @@ ModelLifeCycle::CreateModel(
     std::unique_ptr<TritonModel> model;
     status = TritonModel::Create(
         server_, model_info->model_path_, options_.backend_cmdline_config_map,
-        options_.host_policy_map, version, model_config, is_config_provided,
-        &model);
+        options_.host_policy_map, model_id, version, model_config,
+        is_config_provided, &model);
     is.reset(model.release());
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
-          server_, model_info->model_path_, version, model_config,
+          server_, model_info->model_path_, model_id, version, model_config,
           is_config_provided, options_.min_compute_capability, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to

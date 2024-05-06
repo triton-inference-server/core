@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -88,7 +88,8 @@ class EnsembleScheduler : public Scheduler {
   // to dispatch requests to models in ensemble internally.
   static Status Create(
       InferenceStatsAggregator* const stats_aggregator,
-      InferenceServer* const server, const inference::ModelConfig& config,
+      InferenceServer* const server, const ModelIdentifier& model_id,
+      const inference::ModelConfig& config,
       std::unique_ptr<Scheduler>* scheduler);
 
   ~EnsembleScheduler();
@@ -105,7 +106,8 @@ class EnsembleScheduler : public Scheduler {
  private:
   EnsembleScheduler(
       InferenceStatsAggregator* const stats_aggregator,
-      InferenceServer* const server, const inference::ModelConfig& config);
+      InferenceServer* const server, const ModelIdentifier& model_id,
+      const inference::ModelConfig& config);
 
   std::shared_ptr<MetricModelReporter> metric_reporter_;
   InferenceStatsAggregator* const stats_aggregator_;

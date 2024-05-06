@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1311,10 +1311,11 @@ EnsembleContext::ScheduleSteps(
 Status
 EnsembleScheduler::Create(
     InferenceStatsAggregator* const stats_aggregator,
-    InferenceServer* const server, const inference::ModelConfig& config,
-    std::unique_ptr<Scheduler>* scheduler)
+    InferenceServer* const server, const ModelIdentifier& model_id,
+    const inference::ModelConfig& config, std::unique_ptr<Scheduler>* scheduler)
 {
-  scheduler->reset(new EnsembleScheduler(stats_aggregator, server, config));
+  scheduler->reset(
+      new EnsembleScheduler(stats_aggregator, server, model_id, config));
   return Status::Success;
 }
 
@@ -1353,7 +1354,8 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
 EnsembleScheduler::EnsembleScheduler(
     InferenceStatsAggregator* const stats_aggregator,
-    InferenceServer* const server, const inference::ModelConfig& config)
+    InferenceServer* const server, const ModelIdentifier& model_id,
+    const inference::ModelConfig& config)
     : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr),
       inflight_count_(0)
 {
@@ -1371,7 +1373,7 @@ EnsembleScheduler::EnsembleScheduler(
   if (Metrics::Enabled()) {
     // Ensemble scheduler doesn't currently support response cache at top level.
     MetricModelReporter::Create(
-        config.name(), 1, METRIC_REPORTER_ID_CPU,
+        model_id, 1 /* model_version */, METRIC_REPORTER_ID_CPU,
         false /* response_cache_enabled */, config.metric_tags(),
         &metric_reporter_);
   }

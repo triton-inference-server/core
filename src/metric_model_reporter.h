@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -30,10 +30,15 @@
 
 #ifdef TRITON_ENABLE_METRICS
 #include "metrics.h"
+#include "model.h"
 #include "prometheus/registry.h"
 #endif  // TRITON_ENABLE_METRICS
 
 namespace triton { namespace core {
+
+#ifdef TRITON_ENABLE_METRICS
+struct ModelIdentifier;
+#endif  // TRITON_ENABLE_METRICS
 
 //
 // MetricReporterConfig
@@ -70,8 +75,9 @@ class MetricModelReporter {
  public:
 #ifdef TRITON_ENABLE_METRICS
   static Status Create(
-      const std::string& model_name, const int64_t model_version,
-      const int device, bool response_cache_enabled,
+      const triton::core::ModelIdentifier& model_id,
+      const int64_t model_version, const int device,
+      bool response_cache_enabled,
       const triton::common::MetricTagsMap& model_tags,
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
@@ -90,14 +96,14 @@ class MetricModelReporter {
 
  private:
   MetricModelReporter(
-      const std::string& model_name, const int64_t model_version,
+      const ModelIdentifier& model_id, const int64_t model_version,
       const int device, bool response_cache_enabled,
       const triton::common::MetricTagsMap& model_tags);
 
   static void GetMetricLabels(
-      std::map<std::string, std::string>* labels, const std::string& model_name,
-      const int64_t model_version, const int device,
-      const triton::common::MetricTagsMap& model_tags);
+      std::map<std::string, std::string>* labels,
+      const ModelIdentifier& model_id, const int64_t model_version,
+      const int device, const triton::common::MetricTagsMap& model_tags);
 
   template <typename T, typename... Args>
   T* CreateMetric(

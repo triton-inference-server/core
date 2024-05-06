@@ -221,6 +221,9 @@ class ModelLifeCycle {
   // that don't have in-flight inferences will not be included.
   const std::set<std::tuple<ModelIdentifier, int64_t, size_t>> InflightStatus();
 
+  // Return the number of model(s) in the background.
+  size_t BackgroundModelsSize();
+
  private:
   struct ModelInfo {
     ModelInfo(

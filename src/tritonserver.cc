@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1097,6 +1097,36 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 #endif  // TRITON_ENABLE_TRACING
 }
 
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetContext(
+    TRITONSERVER_InferenceTrace* trace, const char* trace_context)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  ltrace->SetContext(trace_context);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceContext(
+    TRITONSERVER_InferenceTrace* trace, const char** trace_context)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  *trace_context = ltrace->Context().c_str();
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
+
+
 //
 // TRITONSERVER_ServerOptions
 //
@@ -2036,6 +2066,16 @@ TRITONSERVER_InferenceRequestSetBoolParameter(
   return nullptr;  // success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetDoubleParameter(
+    TRITONSERVER_InferenceRequest* request, const char* name,
+    const double value)
+{
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddParameter(name, value));
+  return nullptr;  // success
+}
+
 //
 // TRITONSERVER_InferenceResponse
 //
@@ -2532,6 +2572,17 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
   return nullptr;  // Success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerSetExitTimeout(
+    TRITONSERVER_Server* server, unsigned int timeout)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  if (lserver != nullptr) {
+    lserver->SetExitTimeoutSeconds(timeout);
+  }
+  return nullptr;  // Success
+}
+
 TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerRegisterModelRepository(
     TRITONSERVER_Server* server, const char* repository_path,
@@ -2887,6 +2938,8 @@ TRITONSERVER_ServerModelStatistics(
 
       // Add infer statistic
       const auto& infer_stats = model->StatsAggregator().ImmutableInferStats();
+      const auto& infer_response_stats =
+          model->StatsAggregator().ImmutableInferResponseStats();
       const auto& infer_batch_stats =
           model->StatsAggregator().ImmutableInferBatchStats();
 
@@ -2923,6 +2976,38 @@ TRITONSERVER_ServerModelStatistics(
           metadata, inference_stats, "cache_miss",
           infer_stats.cache_miss_count_, infer_stats.cache_miss_duration_ns_);
 
+      // Add response statistics
+      triton::common::TritonJson::Value response_stats(
+          metadata, triton::common::TritonJson::ValueType::OBJECT);
+      for (const auto& res_pair : infer_response_stats) {
+        triton::common::TritonJson::Value res_stat(
+            metadata, triton::common::TritonJson::ValueType::OBJECT);
+        SetDurationStat(
+            metadata, res_stat, "compute_infer",
+            res_pair.second.compute_infer_count,
+            res_pair.second.compute_infer_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "compute_output",
+            res_pair.second.compute_output_count,
+            res_pair.second.compute_output_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "success", res_pair.second.success_count,
+            res_pair.second.success_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "fail", res_pair.second.fail_count,
+            res_pair.second.fail_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "empty_response",
+            res_pair.second.empty_response_count,
+            res_pair.second.empty_response_duration_ns);
+        SetDurationStat(
+            metadata, res_stat, "cancel", res_pair.second.cancel_count,
+            res_pair.second.cancel_duration_ns);
+        RETURN_IF_STATUS_ERROR(
+            response_stats.Add(res_pair.first.c_str(), std::move(res_stat)));
+      }
+
+      // Add batch statistics
       triton::common::TritonJson::Value batch_stats(
           metadata, triton::common::TritonJson::ValueType::ARRAY);
       for (const auto& batch : infer_batch_stats) {
@@ -2957,6 +3042,8 @@ TRITONSERVER_ServerModelStatistics(
 
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("inference_stats", std::move(inference_stats)));
+      RETURN_IF_STATUS_ERROR(
+          model_stat.Add("response_stats", std::move(response_stats)));
       RETURN_IF_STATUS_ERROR(
           model_stat.Add("batch_stats", std::move(batch_stats)));
       RETURN_IF_STATUS_ERROR(

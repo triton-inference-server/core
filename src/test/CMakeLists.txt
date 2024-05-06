@@ -1,4 +1,4 @@
-# Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -126,6 +126,7 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
       ${CNMEM_PATH}/include
+      ${Boost_INCLUDE_DIRS}
   )
 
   target_compile_definitions(
@@ -417,6 +418,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${GTEST_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
 )
 
 target_link_libraries(
@@ -445,6 +447,8 @@ if(${TRITON_ENABLE_METRICS})
   add_executable(
     metrics_api_test
     metrics_api_test.cc
+    ${PINNED_MEMORY_MANAGER_SRCS}
+    ${PINNED_MEMORY_MANAGER_HDRS}
     ../metric_family.cc
     ../metric_family.h
     ../metrics.cc
@@ -490,6 +494,24 @@ if(${TRITON_ENABLE_METRICS})
       prometheus-cpp::core
       protobuf::libprotobuf
   )
+
+  if (TRITON_ENABLE_GPU)
+    target_link_libraries(
+      metrics_api_test
+      PRIVATE
+        ${CNMEM_LIBRARY}
+        CUDA::cudart
+    )
+  endif()
+
+  if (NOT WIN32)
+    target_link_libraries(
+      metrics_api_test
+      PRIVATE
+        dl
+        numa
+    )
+  endif()
 
   install(
     TARGETS metrics_api_test

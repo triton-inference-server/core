@@ -42,7 +42,7 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-common
-  GIT_REPOSITORY https://github.com/triton-inference-server/common.git
+  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
   GIT_TAG ${TRITON_COMMON_REPO_TAG}
 )
 
@@ -64,10 +64,7 @@ endif() # TRITON_ENABLE_GPU
 #
 # Minimum of 1.78 required for use of boost::span. This can eventually be
 # relaxed and replaced with std::span in C++20.
-#
-# boost::filesystem can be replaced with std::filesystem in C++17.
-#
-find_package(Boost 1.78 REQUIRED COMPONENTS filesystem)
+find_package(Boost 1.78 REQUIRED COMPONENTS)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -246,7 +243,7 @@ add_library(
   TritonCore::triton-core ALIAS triton-core
 )
 
-target_compile_features(triton-core PRIVATE cxx_std_11)
+target_compile_features(triton-core PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
@@ -447,6 +444,9 @@ FOREACH(p ${TRITON_EXTRA_LIB_PATHS})
   )
 ENDFOREACH(p)
 
+# re2 requires Threads::Threads to be available in the
+# list of targets
+find_package(Threads)
 find_package(re2 REQUIRED)
 
 target_link_libraries(
@@ -462,7 +462,6 @@ target_link_libraries(
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf
     re2::re2
-    Boost::filesystem
 )
 
 if (NOT WIN32)

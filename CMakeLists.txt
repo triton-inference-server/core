@@ -33,6 +33,10 @@ project(tritoncore LANGUAGES C CXX)
 # TRITON_CORE_HEADERS_ONLY=OFF to also build libtritonserver.so.
 option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 
+#
+# Specifying min required C++ standard
+#
+set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
 
 #
 # Triton Server API
@@ -120,8 +124,8 @@ add_library(
 add_library(
   TritonCore::triton-core-serverstub ALIAS triton-core-serverstub
 )
+target_compile_features(triton-core-serverstub PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 
-target_compile_features(triton-core-serverstub PRIVATE cxx_std_11)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   message("Using MSVC as compiler, default target on Windows 10. "
 		  "If the target system is not Windows 10, please update _WIN32_WINNT "
@@ -178,6 +182,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   option(TRITON_ENABLE_AZURE_STORAGE "Include Azure Storage Filesystem support in server" OFF)
 
   # Repo tags
+  set(TRITON_REPO_ORGANIZATION "https://github.com/triton-inference-server" CACHE STRING "Git repository to pull from")
   set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
   set(TRITON_THIRD_PARTY_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/third_party repo")
 
@@ -208,7 +213,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   include(FetchContent)
   FetchContent_Declare(
     repo-third-party
-    GIT_REPOSITORY https://github.com/triton-inference-server/third_party.git
+    GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/third_party.git
     GIT_TAG ${TRITON_THIRD_PARTY_REPO_TAG}
   )
   FetchContent_MakeAvailable(repo-third-party)
@@ -321,6 +326,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-checksums_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-checksums/cmake
       -DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
+      -DTRITON_REPO_ORGANIZATION:STRING=${TRITON_REPO_ORGANIZATION}
       -DTRITON_COMMON_REPO_TAG:STRING=${TRITON_COMMON_REPO_TAG}
       -DTRITON_EXTRA_LIB_PATHS:PATH=${TRITON_EXTRA_LIB_PATHS}
       -DTRITON_ENABLE_NVTX:BOOL=${TRITON_ENABLE_NVTX}
@@ -337,6 +343,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DTRITON_ENABLE_AZURE_STORAGE:BOOL=${TRITON_ENABLE_AZURE_STORAGE}
       -DTRITON_ENABLE_S3:BOOL=${TRITON_ENABLE_S3}
       -DTRITON_ENABLE_ENSEMBLE:BOOL=${TRITON_ENABLE_ENSEMBLE}
+      -DTRITON_MIN_CXX_STANDARD:STRING=${TRITON_MIN_CXX_STANDARD}
       -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
       -DCMAKE_INSTALL_PREFIX:PATH=${TRITON_INSTALL_PREFIX}
       -DTRITON_VERSION:STRING=${TRITON_VERSION}

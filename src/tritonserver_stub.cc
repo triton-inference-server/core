@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -187,6 +187,14 @@ TRITONSERVER_InferenceTraceRequestId()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceSpawnChildTrace()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceSetContext()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceContext()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -551,6 +559,10 @@ TRITONSERVER_ServerStop()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerSetExitTimeout()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerPollModelRepository()
 {
 }
@@ -731,6 +743,10 @@ TRITONSERVER_InferenceRequestSetBoolParameter()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceRequestSetDoubleParameter()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceRequestSetIntParameter()
 {
 }
@@ -780,6 +796,10 @@ TRITONBACKEND_ResponseSetIntParameter()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ResponseSetBoolParameter()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ResponseSetDoubleParameter()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -936,6 +956,42 @@ TRITONBACKEND_ModelInstanceReportMemoryUsage()
 }
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_ModelInstanceReportStatistics()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsNew()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetModelInstance()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseFactory()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseStart()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetComputeOutputStart()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetResponseEnd()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsSetError()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceResponseStatisticsDelete()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ModelInstanceReportResponseStatistics()
 {
 }
 TRITONAPI_DECLSPEC void

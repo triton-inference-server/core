@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 28
+#define TRITONSERVER_API_VERSION_MINOR 30
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -182,6 +182,7 @@ typedef enum TRITONSERVER_parametertype_enum {
   TRITONSERVER_PARAMETER_STRING,
   TRITONSERVER_PARAMETER_INT,
   TRITONSERVER_PARAMETER_BOOL,
+  TRITONSERVER_PARAMETER_DOUBLE,
   TRITONSERVER_PARAMETER_BYTES
 } TRITONSERVER_ParameterType;
 
@@ -893,6 +894,25 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
     struct TRITONSERVER_InferenceTrace* trace,
     struct TRITONSERVER_InferenceTrace** child_trace);
 
+/// Set TRITONSERVER_InferenceTrace context.
+///
+/// \param trace The trace.
+/// \param trace_context A new trace context to associate with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceSetContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
+
+
+/// Get TRITONSERVER_InferenceTrace context.
+///
+/// \param trace The trace.
+/// \param trace_context Returns the context associated with the trace.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceContext(
+    struct TRITONSERVER_InferenceTrace* trace, const char** trace_context);
+
 /// TRITONSERVER_InferenceRequest
 ///
 /// Object representing an inference request. The inference request
@@ -1421,6 +1441,17 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceRequestSetBoolParameter(
     struct TRITONSERVER_InferenceRequest* request, const char* key,
     const bool value);
+
+/// Set a double parameter in the request.
+///
+/// \param request The request.
+/// \param key The name of the parameter.
+/// \param value The value of the parameter.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestSetDoubleParameter(
+    struct TRITONSERVER_InferenceRequest* request, const char* key,
+    const double value);
 
 /// TRITONSERVER_InferenceResponse
 ///
@@ -2226,6 +2257,17 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
     struct TRITONSERVER_Server* server);
+
+/// Set the exit timeout on the server object. This value overrides the value
+/// initially set through server options and provides a mechanism to update the
+/// exit timeout while the serving is running.
+///
+/// \param server The inference server object.
+/// \param timeout The exit timeout, in seconds.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerSetExitTimeout(
+    struct TRITONSERVER_Server* server, unsigned int timeout);
 
 /// Register a new model repository. Not available in polling mode.
 ///

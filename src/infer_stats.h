@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -78,6 +78,29 @@ class InferenceStatsAggregator {
     uint64_t cache_miss_duration_ns_;
   };
 
+  struct InferResponseStats {
+    InferResponseStats()
+        : compute_infer_count(0), compute_infer_duration_ns(0),
+          compute_output_count(0), compute_output_duration_ns(0),
+          success_count(0), success_duration_ns(0), fail_count(0),
+          fail_duration_ns(0), empty_response_count(0),
+          empty_response_duration_ns(0), cancel_count(0), cancel_duration_ns(0)
+    {
+    }
+    uint64_t compute_infer_count;
+    uint64_t compute_infer_duration_ns;
+    uint64_t compute_output_count;
+    uint64_t compute_output_duration_ns;
+    uint64_t success_count;
+    uint64_t success_duration_ns;
+    uint64_t fail_count;
+    uint64_t fail_duration_ns;
+    uint64_t empty_response_count;
+    uint64_t empty_response_duration_ns;
+    uint64_t cancel_count;
+    uint64_t cancel_duration_ns;
+  };
+
   struct InferBatchStats {
     InferBatchStats()
         : count_(0), compute_input_duration_ns_(0),
@@ -100,6 +123,11 @@ class InferenceStatsAggregator {
   uint64_t InferenceCount() const { return inference_count_; }
   uint64_t ExecutionCount() const { return execution_count_; }
   const InferStats& ImmutableInferStats() const { return infer_stats_; }
+  const std::map<std::string, InferResponseStats>& ImmutableInferResponseStats()
+      const
+  {
+    return response_stats_;
+  }
   const std::map<size_t, InferBatchStats>& ImmutableInferBatchStats() const
   {
     return batch_stats_;
@@ -140,6 +168,26 @@ class InferenceStatsAggregator {
       MetricModelReporter* metric_reporter,
       const uint64_t cache_miss_duration_ns);
 
+  // Add durations to response stats for a successful response.
+  Status UpdateResponseSuccess(
+      const std::string& key, const uint64_t response_start_ns,
+      const uint64_t compute_output_start_ns, const uint64_t response_end_ns);
+
+  // Add durations to response stats for a failed response.
+  Status UpdateResponseFail(
+      const std::string& key, const uint64_t response_start_ns,
+      const uint64_t compute_output_start_ns, const uint64_t response_end_ns);
+
+  // Add durations to response stats for an empty response.
+  Status UpdateResponseEmpty(
+      const std::string& key, const uint64_t response_start_ns,
+      const uint64_t response_end_ns);
+
+  // Add durations to response stats for a cancellation response.
+  Status UpdateResponseCancel(
+      const std::string& key, const uint64_t response_start_ns,
+      const uint64_t response_end_ns);
+
   // Add durations to batch infer stats for a batch execution.
   // 'success_request_count' is the number of success requests in the
   // batch that have infer_stats attached.
@@ -163,6 +211,7 @@ class InferenceStatsAggregator {
   uint64_t inference_count_;
   uint64_t execution_count_;
   InferStats infer_stats_;
+  std::map<std::string, InferResponseStats> response_stats_;
   std::map<size_t, InferBatchStats> batch_stats_;
 #endif  // TRITON_ENABLE_STATS
 };

@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -934,6 +934,25 @@ LocalizePythonBackendExecutionEnvironmentPath(
 }
 
 Status
+SetPythonBasedBackendExecutionEnvironment(
+    const std::string& backend_libdir, inference::ModelConfig* model_config)
+{
+  if (!model_config->parameters().contains("EXECUTION_ENV_PATH")) {
+    std::string env_name = "pb_exec_env_" + model_config->runtime() + ".tar.gz";
+    std::string env_path = JoinPath({backend_libdir, std::move(env_name)});
+    bool env_path_exist;
+    RETURN_IF_ERROR(FileExists(env_path, &env_path_exist));
+    if (env_path_exist) {
+      inference::ModelParameter model_param;
+      model_param.set_string_value(env_path);
+      (*model_config->mutable_parameters())["EXECUTION_ENV_PATH"] =
+          std::move(model_param);
+    }
+  }
+  return Status::Success;
+}
+
+Status
 SetDefaultInstanceCount(
     inference::ModelInstanceGroup* group, const std::string& backend)
 {
@@ -1106,7 +1125,7 @@ AutoCompleteBackendFields(
     return Status::Success;
   }
 
-  // PyTorch (TorchScript, LibTorch)
+  // PyTorch
   if (config->backend().empty()) {
     if ((config->platform() == kPyTorchLibTorchPlatform) ||
         (config->default_model_filename() == kPyTorchLibTorchFilename)) {
@@ -1127,9 +1146,11 @@ AutoCompleteBackendFields(
   }
   if (config->backend() == kPyTorchBackend) {
     if (config->platform().empty()) {
+      // do not introduce new platforms, new runtimes may ignore this field.
       config->set_platform(kPyTorchLibTorchPlatform);
     }
-    if (config->default_model_filename().empty()) {
+    if (config->runtime() != kPythonFilename &&
+        config->default_model_filename().empty()) {
       config->set_default_model_filename(kPyTorchLibTorchFilename);
     }
     return Status::Success;

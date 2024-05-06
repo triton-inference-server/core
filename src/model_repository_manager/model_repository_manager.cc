@@ -28,8 +28,8 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
-#include <boost/filesystem.hpp>
 #include <deque>
+#include <filesystem>
 #include <future>
 #include <stdexcept>
 #include <thread>
@@ -84,7 +84,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
               agent_model->AcquireMutableLocation(
                   TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
           const std::string temp_dir =
-              boost::filesystem::canonical(temp_dir_cstr).string();
+              std::filesystem::canonical(temp_dir_cstr).string();
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
@@ -114,9 +114,8 @@ class LocalizeRepoAgent : public TritonRepoAgent {
 
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              // DLIS-5149: Can use std::filesystem over boost in C++17.
               const std::string file_path =
-                  boost::filesystem::weakly_canonical(
+                  std::filesystem::weakly_canonical(
                       JoinPath(
                           {temp_dir, file->Name().substr(file_prefix.size())}))
                       .string();
@@ -958,16 +957,21 @@ ModelRepositoryManager::PollModels(
 Status
 ModelRepositoryManager::UnloadAllModels()
 {
-  Status status;
-  for (const auto& name_info : infos_) {
-    Status unload_status = model_life_cycle_->AsyncUnload(name_info.first);
-    if (!unload_status.IsOk()) {
-      status = Status(
-          unload_status.ErrorCode(),
-          "Failed to gracefully unload models: " + unload_status.Message());
+  // Find all the models to be unloaded.
+  std::unordered_map<std::string, std::vector<const InferenceParameter*>>
+      models;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    for (const auto& pair : infos_) {
+      // Only the model name is needed.
+      models[pair.first.name_];
     }
   }
-  return Status::Success;
+  // Unload all models found.
+  bool polled;
+  return LoadUnloadModels(
+      models, ActionType::UNLOAD, true /* unload_dependents */, &polled,
+      nullptr /* no_parallel_conflict */);
 }
 
 Status
@@ -980,6 +984,12 @@ const std::set<std::tuple<ModelIdentifier, int64_t, size_t>>
 ModelRepositoryManager::InflightStatus()
 {
   return model_life_cycle_->InflightStatus();
+}
+
+size_t
+ModelRepositoryManager::BackgroundModelsSize()
+{
+  return model_life_cycle_->BackgroundModelsSize();
 }
 
 const ModelStateMap
@@ -1414,7 +1424,11 @@ ModelRepositoryManager::InitializeModelInfo(
       // When override happens, set 'mtime_nsec_' to minimum value so that
       // the next load without override will trigger re-load to undo
       // the override while the local files may still be unchanged.
-      linfo->mtime_nsec_ = std::make_pair(0, 0);
+      auto time_since_epoch =
+          std::chrono::system_clock::now().time_since_epoch();
+      linfo->mtime_nsec_.first =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_epoch)
+              .count();
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();
@@ -1812,11 +1826,13 @@ ModelRepositoryManager::DependencyGraph::RemoveNodes(
       }
 
       all_removed_nodes.emplace(model_id);
-      // Exclude removed node from affected nodes to skip some evaluations.
-      all_affected_nodes.erase(model_id);
     }
 
     curr_removal.swap(next_removal);
+  }
+  // Exclude removed nodes from affected nodes.
+  for (const auto& removed_node : all_removed_nodes) {
+    all_affected_nodes.erase(removed_node);
   }
   return {std::move(all_affected_nodes), std::move(all_removed_nodes)};
 }
