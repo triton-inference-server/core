@@ -213,6 +213,7 @@ GetModelConfigFullPath(
 Status
 CreateAgentModelListWithLoadAction(
     const inference::ModelConfig& original_model_config,
+    const std::string& orignial_model_config_path,
     const std::string& original_model_path,
     const std::string& model_config_name,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
@@ -1388,6 +1389,33 @@ ModelRepositoryManager::ModelDirectoryOverride(
     }
   }
   return false;
+}
+
+const std::string
+ModelRepositoryManager::GetModelConfigFullPath(
+    const std::string& model_dir_path)
+{
+  // "--model-config-name" is set. Select custom config from
+  // "<model_dir_path>/configs" folder if config file exists.
+  if (!model_config_name_.empty()) {
+    bool custom_config_exists = false;
+    const std::string custom_config_path = JoinPath(
+        {model_dir_path, kModelConfigFolder,
+         model_config_name_ + kPbTxtExtension});
+
+    Status status = FileExists(custom_config_path, &custom_config_exists);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to get model configuration full path for '"
+                << model_dir_path << "': " << status.AsString();
+      return "";
+    }
+
+    if (custom_config_exists) {
+      return custom_config_path;
+    }
+  }
+  // "--model-config-name" is not set or custom config file does not exist.
+  return JoinPath({model_dir_path, kModelConfigPbTxt});
 }
 
 Status
