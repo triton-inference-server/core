@@ -1144,7 +1144,7 @@ InferenceRequest::Normalize()
       const int64_t expected_byte_size =
           triton::common::GetByteSize(data_type, input_dims);
       if ((byte_size > INT_MAX) ||
-          (std::static_cast<int64_t>(byte_size) != expected_byte_size)) {
+          (static_cast<int64_t>(byte_size) != expected_byte_size)) {
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() + "input byte size mismatch for input '" + pr.first +
