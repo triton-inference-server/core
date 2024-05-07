@@ -1134,6 +1134,22 @@ InferenceRequest::Normalize()
                 implicit_batch_note);
       }
     }
+    // Matching incoming request's shape and byte size to make sure the
+    // payload contains correct number of elements
+    {
+      const auto& byte_size = input.Data()->TotalByteSize();
+      const auto& data_type = input.DType();
+      const auto& input_dims = *shape;
+      const auto expected_byte_size =
+          triton::common::GetByteSize(data_type, input_dims);
+      if (byte_size != expected_byte_size) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            LogRequest() + "input byte size mismatch for input '" + pr.first +
+                "' for model '" + ModelName() + "'. Expected " + byte_size +
+                ", got " + expected_byte_size);
+      }
+    }
 
     // If there is a reshape for this input then adjust them to
     // match the reshape. As reshape may have variable-size
