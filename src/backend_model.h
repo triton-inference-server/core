@@ -61,8 +61,9 @@ class TritonModel : public Model {
       InferenceServer* server, const std::string& model_path,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-      const int64_t version, inference::ModelConfig model_config,
-      const bool is_config_provided, std::unique_ptr<TritonModel>* model);
+      const ModelIdentifier& model_id, const int64_t version,
+      inference::ModelConfig model_config, const bool is_config_provided,
+      std::unique_ptr<TritonModel>* model);
   ~TritonModel();
 
   // Return path to the localized model directory.
@@ -118,8 +119,9 @@ class TritonModel : public Model {
       InferenceServer* server,
       const std::shared_ptr<LocalizedPath>& localized_model_dir,
       const std::shared_ptr<TritonBackend>& backend,
-      const double min_compute_capability, const int64_t version,
-      const inference::ModelConfig& config, const bool auto_complete_config,
+      const double min_compute_capability, const ModelIdentifier& model_id,
+      const int64_t version, const inference::ModelConfig& config,
+      const bool auto_complete_config,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
       const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
 

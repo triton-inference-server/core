@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -103,7 +103,7 @@ MetricReporterConfig::ParseQuantiles(std::string options)
 //
 Status
 MetricModelReporter::Create(
-    const std::string& model_name, const int64_t model_version,
+    const ModelIdentifier& model_id, const int64_t model_version,
     const int device, bool response_cache_enabled,
     const triton::common::MetricTagsMap& model_tags,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
@@ -113,7 +113,7 @@ MetricModelReporter::Create(
       reporter_map;
 
   std::map<std::string, std::string> labels;
-  GetMetricLabels(&labels, model_name, model_version, device, model_tags);
+  GetMetricLabels(&labels, model_id, model_version, device, model_tags);
   auto hash_labels = Metrics::HashLabels(labels);
 
   std::lock_guard<std::mutex> lock(mtx);
@@ -133,18 +133,18 @@ MetricModelReporter::Create(
   }
 
   metric_model_reporter->reset(new MetricModelReporter(
-      model_name, model_version, device, response_cache_enabled, model_tags));
+      model_id, model_version, device, response_cache_enabled, model_tags));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
 
 MetricModelReporter::MetricModelReporter(
-    const std::string& model_name, const int64_t model_version,
+    const ModelIdentifier& model_id, const int64_t model_version,
     const int device, bool response_cache_enabled,
     const triton::common::MetricTagsMap& model_tags)
 {
   std::map<std::string, std::string> labels;
-  GetMetricLabels(&labels, model_name, model_version, device, model_tags);
+  GetMetricLabels(&labels, model_id, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
   config_.ParseConfig(response_cache_enabled);
@@ -290,12 +290,16 @@ MetricModelReporter::InitializeSummaries(
 
 void
 MetricModelReporter::GetMetricLabels(
-    std::map<std::string, std::string>* labels, const std::string& model_name,
+    std::map<std::string, std::string>* labels, const ModelIdentifier& model_id,
     const int64_t model_version, const int device,
     const triton::common::MetricTagsMap& model_tags)
 {
+  if (!model_id.NamespaceDisabled()) {
+    labels->insert(std::map<std::string, std::string>::value_type(
+        std::string(kMetricsLabelModelNamespace), model_id.namespace_));
+  }
   labels->insert(std::map<std::string, std::string>::value_type(
-      std::string(kMetricsLabelModelName), model_name));
+      std::string(kMetricsLabelModelName), model_id.name_));
   labels->insert(std::map<std::string, std::string>::value_type(
       std::string(kMetricsLabelModelVersion), std::to_string(model_version)));
   for (const auto& tag : model_tags) {
