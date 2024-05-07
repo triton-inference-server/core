@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <string>
 
 #include "constants.h"
 #include "model.h"
@@ -1137,17 +1138,19 @@ InferenceRequest::Normalize()
     // Matching incoming request's shape and byte size to make sure the
     // payload contains correct number of elements
     {
-      const auto& byte_size = input.Data()->TotalByteSize();
+      const size_t& byte_size = input.Data()->TotalByteSize();
       const auto& data_type = input.DType();
       const auto& input_dims = *shape;
-      const auto expected_byte_size =
+      const int64_t expected_byte_size =
           triton::common::GetByteSize(data_type, input_dims);
-      if (byte_size != expected_byte_size) {
+      if ((byte_size > INT_MAX) ||
+          (std::static_cast<int64_t>(byte_size) != expected_byte_size)) {
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() + "input byte size mismatch for input '" + pr.first +
-                "' for model '" + ModelName() + "'. Expected " + byte_size +
-                ", got " + expected_byte_size);
+                "' for model '" + ModelName() + "'. Expected " +
+                std::to_string(byte_size) + ", got " +
+                std::to_string(expected_byte_size));
       }
     }
 
