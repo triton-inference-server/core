@@ -618,9 +618,6 @@ class ModelRepositoryManager {
   bool ModelDirectoryOverride(
       const std::vector<const InferenceParameter*>& model_params);
 
-  /// Get the model config path to load for the model.
-  const std::string GetModelConfigFullPath(const std::string& model_dir_path);
-
   const bool autofill_;
   const std::string model_config_name_;
   const bool polling_enabled_;
