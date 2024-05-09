@@ -1185,7 +1185,7 @@ InferenceRequest::Normalize()
       if (data_type == inference::DataType::TYPE_STRING) {
         int64_t element_count = triton::common::GetElementCount(input_dims);
         expected_byte_size = 0;
-        for (size_t i = 0; i < element_count; ++i) {
+        for (int i = 0; i < element_count; ++i) {
           expected_byte_size += 4;  // FIXME: Actually add the byte size
         }
       } else {
