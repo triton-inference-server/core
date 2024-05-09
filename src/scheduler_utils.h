@@ -28,9 +28,18 @@
 #include <deque>
 #include <unordered_map>
 
+#include "cache_manager.h"
 #include "scheduler.h"
 
 namespace triton { namespace core {
+
+uint64_t CaptureTimeNs();
+// Utility function called by the scheduler to lookup if the request is in the
+// cache and get the response.
+bool CacheLookUpUtil(
+    std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response,
+    std::shared_ptr<TritonCache> cache);
 
 struct RequiredEqualInputs {
  public:
