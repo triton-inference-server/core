@@ -1135,24 +1135,6 @@ InferenceRequest::Normalize()
                 implicit_batch_note);
       }
     }
-    // Matching incoming request's shape and byte size to make sure the
-    // payload contains correct number of elements
-    {
-      const size_t& byte_size = input.Data()->TotalByteSize();
-      const auto& data_type = input.DType();
-      const auto& input_dims = *shape;
-      const int64_t expected_byte_size =
-          triton::common::GetByteSize(data_type, input_dims);
-      if ((byte_size > INT_MAX) ||
-          (static_cast<int64_t>(byte_size) != expected_byte_size)) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            LogRequest() + "input byte size mismatch for input '" + pr.first +
-                "' for model '" + ModelName() + "'. Expected " +
-                std::to_string(byte_size) + ", got " +
-                std::to_string(expected_byte_size));
-      }
-    }
 
     // If there is a reshape for this input then adjust them to
     // match the reshape. As reshape may have variable-size
@@ -1186,6 +1168,37 @@ InferenceRequest::Normalize()
       input.MutableShapeWithBatchDim()->push_back(batch_size_);
       for (int64_t d : *shape) {
         input.MutableShapeWithBatchDim()->push_back(d);
+      }
+    }
+    // Matching incoming request's shape and byte size to make sure the
+    // payload contains correct number of elements.
+    // Note: Since we're using normalized input.ShapeWithBatchDim() here,
+    // make sure that all the normalization is before the check.
+    {
+      const size_t& byte_size = input.Data()->TotalByteSize();
+      const auto& data_type = input.DType();
+      const auto& input_dims = input.ShapeWithBatchDim();
+      int64_t expected_byte_size = INT_MAX;
+      // Because Triton expects STRING type to be in special format
+      // (prepend 4 bytes to specify string length), so need to add all the
+      // first 4 bytes for each element to find expected byte size
+      if (data_type == inference::DataType::TYPE_STRING) {
+        int64_t element_count = triton::common::GetElementCount(input_dims);
+        expected_byte_size = 0;
+        for (size_t i = 0; i < element_count; ++i) {
+          expected_byte_size += 4;  // FIXME: Actually add the byte size
+        }
+      } else {
+        expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
+      }
+      if ((byte_size > INT_MAX) ||
+          (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            LogRequest() + "input byte size mismatch for input '" + pr.first +
+                "' for model '" + ModelName() + "'. Expected " +
+                std::to_string(expected_byte_size) + ", got " +
+                std::to_string(byte_size));
       }
     }
   }
