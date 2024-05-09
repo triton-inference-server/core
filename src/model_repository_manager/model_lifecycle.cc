@@ -92,8 +92,10 @@ VersionsToLoad(
   RETURN_IF_ERROR(GetDirectorySubdirs(model_path, &subdirs));
   std::set<int64_t, std::greater<int64_t>> existing_versions;
   for (const auto& subdir : subdirs) {
-    if (subdir == kWarmupDataFolder || subdir == kInitialStateFolder ||
-        subdir == kModelConfigFolder) {
+    static const std::vector skip_dirs{
+        kWarmupDataFolder, kInitialStateFolder, kModelConfigFolder};
+    if (std::find(skip_dirs.begin(), skip_dirs.end(), subdir) !=
+        skip_dirs.end()) {
       continue;
     }
     if ((subdir.length() > 1) && (subdir.front() == '0')) {

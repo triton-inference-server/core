@@ -182,11 +182,39 @@ class LocalizeRepoAgent : public TritonRepoAgent {
   }
 };
 
+/// Get the model config path to load for the model.
+const std::string
+GetModelConfigFullPath(
+    const std::string& model_dir_path, const std::string& custom_config_name)
+{
+  // "--model-config-name" is set. Select custom config from
+  // "<model_dir_path>/configs" folder if config file exists.
+  if (!custom_config_name.empty()) {
+    bool custom_config_exists = false;
+    const std::string custom_config_path = JoinPath(
+        {model_dir_path, kModelConfigFolder,
+         custom_config_name + kPbTxtExtension});
+
+    Status status = FileExists(custom_config_path, &custom_config_exists);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to get model configuration full path for '"
+                << model_dir_path << "': " << status.AsString();
+      return "";
+    }
+
+    if (custom_config_exists) {
+      return custom_config_path;
+    }
+  }
+  // "--model-config-name" is not set or custom config file does not exist.
+  return JoinPath({model_dir_path, kModelConfigPbTxt});
+}
+
 Status
 CreateAgentModelListWithLoadAction(
     const inference::ModelConfig& original_model_config,
-    const std::string& orignial_model_config_path,
     const std::string& original_model_path,
+    const std::string& model_config_name,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
   if (original_model_config.has_model_repository_agents()) {
@@ -219,7 +247,9 @@ CreateAgentModelListWithLoadAction(
       std::unique_ptr<TritonRepoAgentModel> agent_model;
       if (lagent_model_list->Size() != 0) {
         lagent_model_list->Back()->Location(&artifact_type, &location);
-        if (!ReadTextProto(orignial_model_config_path, &model_config).IsOk()) {
+        const auto config_path =
+            GetModelConfigFullPath(location, model_config_name);
+        if (!ReadTextProto(config_path, &model_config).IsOk()) {
           model_config.Clear();
         }
       }
@@ -1360,33 +1390,6 @@ ModelRepositoryManager::ModelDirectoryOverride(
   return false;
 }
 
-const std::string
-ModelRepositoryManager::GetModelConfigFullPath(
-    const std::string& model_dir_path)
-{
-  // "--model-config-name" is set. Select custom config from
-  // "<model_dir_path>/configs" folder if config file exists.
-  if (!model_config_name_.empty()) {
-    bool custom_config_exists = false;
-    const std::string custom_config_path = JoinPath(
-        {model_dir_path, kModelConfigFolder,
-         model_config_name_ + kPbTxtExtension});
-
-    Status status = FileExists(custom_config_path, &custom_config_exists);
-    if (!status.IsOk()) {
-      LOG_ERROR << "Failed to get model configuration full path for '"
-                << model_dir_path << "': " << status.AsString();
-      return "";
-    }
-
-    if (custom_config_exists) {
-      return custom_config_path;
-    }
-  }
-  // "--model-config-name" is not set or custom config file does not exist.
-  return JoinPath({model_dir_path, kModelConfigPbTxt});
-}
-
 Status
 ModelRepositoryManager::InitializeModelInfo(
     const ModelIdentifier& model_id, const std::string& path,
@@ -1438,7 +1441,8 @@ ModelRepositoryManager::InitializeModelInfo(
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
-    linfo->model_config_path_ = GetModelConfigFullPath(linfo->model_path_);
+    linfo->model_config_path_ =
+        GetModelConfigFullPath(linfo->model_path_, model_config_name_);
     // Model is not loaded.
     if (iitr == infos_.end()) {
       linfo->mtime_nsec_ = GetDetailedModifiedTime(
@@ -1511,7 +1515,7 @@ ModelRepositoryManager::InitializeModelInfo(
   }
   if (parsed_config) {
     RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
-        linfo->model_config_, linfo->model_config_path_, linfo->model_path_,
+        linfo->model_config_, linfo->model_path_, model_config_name_,
         &linfo->agent_model_list_));
     if (linfo->agent_model_list_ != nullptr) {
       // Get the latest repository path
