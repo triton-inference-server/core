@@ -630,8 +630,8 @@ InferenceServer::PrintBackendAndModelSummary()
     }
     backends_table.InsertRow(backend_record);
   }
-  std::string backends_table_string = backends_table.PrintTable();
-  LOG_INFO << backends_table_string;
+
+  LOG_TABLE_INFO(backends_table);
 
   // Models Summary
   auto model_states = model_repository_manager_->ModelStates();
@@ -673,8 +673,8 @@ InferenceServer::PrintBackendAndModelSummary()
       }
     }
   }
-  std::string models_table_string = models_table.PrintTable();
-  LOG_INFO << models_table_string;
+
+  LOG_TABLE_INFO(models_table);
 
   return Status::Success;
 }
