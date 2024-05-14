@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 30
+#define TRITONSERVER_API_VERSION_MINOR 31
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -289,6 +289,18 @@ TRITONSERVER_DECLSPEC bool TRITONSERVER_LogIsEnabled(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
     const char* msg);
+
+/// Log a JSON message at a given log level if that level is enabled.
+///
+/// \param level The log level.
+/// \param filename The file name of the location of the log message.
+/// \param line The line number of the log message.
+/// \param preamble message to be printed before JSON
+/// \param msg The JSON message.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogJsonMessage(
+    TRITONSERVER_LogLevel level, const char* filename, const int line,
+    const char* preamble, struct TRITONSERVER_Message* msg);
 
 /// TRITONSERVER_Error
 ///

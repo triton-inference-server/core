@@ -711,6 +711,40 @@ TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
   return false;
 }
 
+
+TRITONAPI_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_LogJsonMessage(
+    TRITONSERVER_LogLevel level, const char* filename, const int line,
+    const char* preamble, struct TRITONSERVER_Message* msg)
+{
+  tc::TritonServerMessage* lmessage =
+      reinterpret_cast<tc::TritonServerMessage*>(msg);
+  const char* base;
+  size_t byte_size;
+  lmessage->Serialize(&base, &byte_size);
+
+  switch (level) {
+    case TRITONSERVER_LOG_INFO:
+      LOG_JSON_INFO_FL(filename, line, preamble, base, byte_size);
+      return nullptr;
+    case TRITONSERVER_LOG_WARN:
+      LOG_JSON_WARNING_FL(filename, line, preamble, base, byte_size);
+      return nullptr;
+    case TRITONSERVER_LOG_ERROR:
+      LOG_JSON_ERROR_FL(filename, line, preamble, base, byte_size);
+      return nullptr;
+    case TRITONSERVER_LOG_VERBOSE:
+      LOG_JSON_VERBOSE_FL(1, filename, line, preamble, base, byte_size);
+      return nullptr;
+    default:
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          std::string("unknown logging level '" + std::to_string(level) + "'")
+              .c_str());
+  }
+}
+
+
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,

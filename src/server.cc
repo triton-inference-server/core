@@ -603,8 +603,7 @@ InferenceServer::PrintBackendAndModelSummary()
     repoagent_record.emplace_back(repoagent_pair.second);
     repoagents_table.InsertRow(repoagent_record);
   }
-  std::string repoagents_table_string = repoagents_table.PrintTable();
-  LOG_INFO << repoagents_table_string;
+  LOG_TABLE_INFO(repoagents_table);
 
   // Backends Summary
   std::vector<std::string> backend_headers;

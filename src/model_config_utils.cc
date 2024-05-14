@@ -37,6 +37,7 @@
 #include "cuda_utils.h"
 #include "filesystem/api.h"
 #include "triton/common/logging.h"
+#include "triton/common/table_printer.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
 #define TRITONJSON_STATUSRETURN(M) \
@@ -677,8 +678,8 @@ GetNormalizedModelConfig(
   // to auto-complete.
   RETURN_IF_ERROR(
       AutoCompleteBackendFields(model_name, std::string(path), config));
-  LOG_VERBOSE(1) << "Server side auto-completed config: "
-                 << config->DebugString();
+
+  LOG_PROTOBUF_VERBOSE(1, "Server side auto-completed config: ", (*config));
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
 
@@ -1899,10 +1900,11 @@ ValidateModelConfigInt64()
   std::set<std::string> int64_fields;
   RETURN_IF_ERROR(CollectInt64Fields(&config, "ModelConfig", &int64_fields));
 
-  LOG_VERBOSE(1) << "ModelConfig 64-bit fields:";
+  triton::common::TablePrinter table_printer({"ModelConfig 64-bit fields"});
   for (const auto& f : int64_fields) {
-    LOG_VERBOSE(1) << "\t" << f;
+    table_printer.InsertRow({f});
   }
+  LOG_TABLE_VERBOSE(1, table_printer);
 
   // We expect to find exactly the following fields. If we get an
   // error from this code ModelConfig has added or removed a 64-bit
