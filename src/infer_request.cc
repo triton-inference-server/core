@@ -1186,7 +1186,11 @@ InferenceRequest::Normalize()
         int64_t element_count = triton::common::GetElementCount(input_dims);
         expected_byte_size = 0;
         for (int i = 0; i < element_count; ++i) {
-          expected_byte_size += 4;  // FIXME: Actually add the byte size
+          BufferAttributes* buffer_attributes;
+          const char* content = input.Data()->BufferAt(i, &buffer_attributes);
+          const uint32_t str_len =
+              *(reinterpret_cast<const uint32_t*>(content));
+          expected_byte_size += sizeof(uint32_t) + str_len;
         }
       } else {
         expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
