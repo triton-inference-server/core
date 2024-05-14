@@ -1184,13 +1184,51 @@ InferenceRequest::Normalize()
       // first 4 bytes for each element to find expected byte size
       if (data_type == inference::DataType::TYPE_STRING) {
         int64_t element_count = triton::common::GetElementCount(input_dims);
+        int64_t element_idx = 0;
         expected_byte_size = 0;
-        for (int i = 0; i < element_count; ++i) {
+        for (size_t i = 0; i < input.Data()->BufferCount(); ++i) {
           BufferAttributes* buffer_attributes;
           const char* content = input.Data()->BufferAt(i, &buffer_attributes);
-          const uint32_t str_len =
-              *(reinterpret_cast<const uint32_t*>(content));
-          expected_byte_size += sizeof(uint32_t) + str_len;
+          size_t content_byte_size = input.Data()->TotalByteSize();
+
+          while (content_byte_size >= sizeof(uint32_t)) {
+            if (element_idx >= element_count) {
+              return Status(
+                  Status::Code::INVALID_ARG,
+                  LogRequest() + "unexpected number of string elements " +
+                      std::to_string(element_idx + 1) +
+                      " for inference input '" + pr.first + "', expecting " +
+                      std::to_string(element_count));
+            }
+
+            const uint32_t len = *(reinterpret_cast<const uint32_t*>(content));
+            content += sizeof(uint32_t);
+            content_byte_size -= sizeof(uint32_t);
+            expected_byte_size += sizeof(uint32_t);
+
+            if (content_byte_size < len) {
+              return Status(
+                  Status::Code::INVALID_ARG,
+                  LogRequest() +
+                      "incomplete string data for inference input '" +
+                      pr.first + "', expecting string of length " +
+                      std::to_string(len) + " but only " +
+                      std::to_string(content_byte_size) + " bytes available");
+            }
+
+            content += len;
+            content_byte_size -= len;
+            expected_byte_size += len;
+            element_idx++;
+          }
+        }
+
+        if (element_idx != element_count) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              LogRequest() + "expected " + std::to_string(element_count) +
+                  " strings for inference input '" + pr.first + "', got " +
+                  std::to_string(element_idx));
         }
       } else {
         expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
