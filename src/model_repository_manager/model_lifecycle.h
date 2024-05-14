@@ -123,10 +123,10 @@ class TritonRepoAgentModelList {
     // Special handling for the current model lifecycle implementation,
     // the repo agent may be asked to perform UNLOAD action multiple times,
     // and the requests after the first should be ignored.
-    const bool first_unload =
+    const bool duplicate_unload =
         (action_type == TRITONREPOAGENT_ACTION_UNLOAD) &&
-        (last_action_type_ != TRITONREPOAGENT_ACTION_UNLOAD);
-    if (!first_unload) {
+        (last_action_type_ == TRITONREPOAGENT_ACTION_UNLOAD);
+    if (duplicate_unload) {
       return Status::Success;
     }
 
