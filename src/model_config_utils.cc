@@ -37,7 +37,6 @@
 #include "cuda_utils.h"
 #include "filesystem/api.h"
 #include "triton/common/logging.h"
-#include "triton/common/table_printer.h"
 
 #define TRITONJSON_STATUSTYPE triton::core::Status
 #define TRITONJSON_STATUSRETURN(M) \
