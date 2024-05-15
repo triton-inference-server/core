@@ -1900,12 +1900,10 @@ ValidateModelConfigInt64()
   std::set<std::string> int64_fields;
   RETURN_IF_ERROR(CollectInt64Fields(&config, "ModelConfig", &int64_fields));
 
-  triton::common::TablePrinter table_printer({"ModelConfig 64-bit fields"});
+  LOG_VERBOSE(1) << "ModelConfig 64-bit fields:";
   for (const auto& f : int64_fields) {
-    table_printer.InsertRow({f});
+    LOG_VERBOSE(1) << "\t" << f;
   }
-  LOG_TABLE_VERBOSE(1, table_printer);
-
   // We expect to find exactly the following fields. If we get an
   // error from this code ModelConfig has added or removed a 64-bit
   // field and we need to adjust here and in ModelConfigToJson below.
