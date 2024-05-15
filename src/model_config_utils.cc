@@ -677,7 +677,6 @@ GetNormalizedModelConfig(
   // to auto-complete.
   RETURN_IF_ERROR(
       AutoCompleteBackendFields(model_name, std::string(path), config));
-
   LOG_PROTOBUF_VERBOSE(1, "Server side auto-completed config: ", (*config));
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
