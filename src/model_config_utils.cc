@@ -1903,6 +1903,7 @@ ValidateModelConfigInt64()
   for (const auto& f : int64_fields) {
     LOG_VERBOSE(1) << "\t" << f;
   }
+
   // We expect to find exactly the following fields. If we get an
   // error from this code ModelConfig has added or removed a 64-bit
   // field and we need to adjust here and in ModelConfigToJson below.
