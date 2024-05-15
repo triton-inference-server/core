@@ -713,9 +713,9 @@ TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
 
 
 TRITONAPI_DECLSPEC struct TRITONSERVER_Error*
-TRITONSERVER_LogJsonMessage(
+TRITONSERVER_LogServerMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
-    const char* preamble, struct TRITONSERVER_Message* msg)
+    const char* heading, struct TRITONSERVER_Message* msg)
 {
   tc::TritonServerMessage* lmessage =
       reinterpret_cast<tc::TritonServerMessage*>(msg);
@@ -725,16 +725,17 @@ TRITONSERVER_LogJsonMessage(
 
   switch (level) {
     case TRITONSERVER_LOG_INFO:
-      LOG_JSON_INFO_FL(filename, line, preamble, base, byte_size);
+      LOG_SERVER_MESSAGE_INFO_FL(filename, line, heading, base, byte_size);
       return nullptr;
     case TRITONSERVER_LOG_WARN:
-      LOG_JSON_WARNING_FL(filename, line, preamble, base, byte_size);
+      LOG_SERVER_MESSAGE_WARNING_FL(filename, line, heading, base, byte_size);
       return nullptr;
     case TRITONSERVER_LOG_ERROR:
-      LOG_JSON_ERROR_FL(filename, line, preamble, base, byte_size);
+      LOG_SERVER_MESSAGE_ERROR_FL(filename, line, heading, base, byte_size);
       return nullptr;
     case TRITONSERVER_LOG_VERBOSE:
-      LOG_JSON_VERBOSE_FL(1, filename, line, preamble, base, byte_size);
+      LOG_SERVER_MESSAGE_VERBOSE_FL(
+          1, filename, line, heading, base, byte_size);
       return nullptr;
     default:
       return TRITONSERVER_ErrorNew(

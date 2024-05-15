@@ -290,17 +290,18 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
     const char* msg);
 
-/// Log a JSON message at a given log level if that level is enabled.
+/// Log a TRITONSERVER_Message at a given log level if that level is enabled.
 ///
 /// \param level The log level.
 /// \param filename The file name of the location of the log message.
 /// \param line The line number of the log message.
-/// \param preamble message to be printed before JSON
-/// \param msg The JSON message.
+/// \param heading heading to be printed before TRITONSERVER_Message
+///        (for example:  "model configuration:")
+/// \param msg The TRITONSERVER_Message.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogJsonMessage(
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogServerMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
-    const char* preamble, struct TRITONSERVER_Message* msg);
+    const char* heading, struct TRITONSERVER_Message* msg);
 
 /// TRITONSERVER_Error
 ///
