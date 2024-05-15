@@ -264,17 +264,20 @@ PinnedMemoryManager::Create(const Options& options)
   if (options.host_policy_map_.empty()) {
     void* buffer = nullptr;
 #ifdef TRITON_ENABLE_GPU
-    auto err = cudaHostAlloc(
-        &buffer, options.pinned_memory_pool_byte_size_, cudaHostAllocPortable);
-    if (err != cudaSuccess) {
-      buffer = nullptr;
-      LOG_WARNING << "Unable to allocate pinned system memory, pinned memory "
-                     "pool will not be available: "
-                  << std::string(cudaGetErrorString(err));
-    } else if (options.pinned_memory_pool_byte_size_ != 0) {
-      LOG_INFO << "Pinned memory pool is created at '"
-               << PointerToString(buffer) << "' with size "
-               << options.pinned_memory_pool_byte_size_;
+    if (options.pinned_memory_pool_byte_size_ > 0) {
+      auto err = cudaHostAlloc(
+          &buffer, options.pinned_memory_pool_byte_size_,
+          cudaHostAllocPortable);
+      if (err != cudaSuccess) {
+        buffer = nullptr;
+        LOG_WARNING << "Unable to allocate pinned system memory, pinned memory "
+                       "pool will not be available: "
+                    << std::string(cudaGetErrorString(err));
+      } else if (options.pinned_memory_pool_byte_size_ != 0) {
+        LOG_INFO << "Pinned memory pool is created at '"
+                 << PointerToString(buffer) << "' with size "
+                 << options.pinned_memory_pool_byte_size_;
+      }
     } else {
       LOG_INFO << "Pinned memory pool disabled";
     }
