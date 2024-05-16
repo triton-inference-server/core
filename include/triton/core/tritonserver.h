@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 30
+#define TRITONSERVER_API_VERSION_MINOR 31
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -1827,6 +1827,16 @@ TRITONSERVER_ServerOptionsSetStartupModel(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     struct TRITONSERVER_ServerOptions* options, bool strict);
+
+/// Set the custom model configuration name to load for all models.
+/// Fall back to default config file if empty.
+///
+/// \param options The server options object.
+/// \param config_name The name of the config file to load for all models.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelConfigName(
+    struct TRITONSERVER_ServerOptions* options, const char* model_config_name);
 
 /// Set the rate limit mode in a server options.
 ///

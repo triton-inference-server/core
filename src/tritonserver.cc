@@ -212,6 +212,12 @@ class TritonServerOptions {
   const std::set<std::string>& StartupModels() const { return models_; }
   void SetStartupModel(const char* m) { models_.insert(m); }
 
+  const std::string& ModelConfigName() const { return model_config_name_; }
+  void SetModelConfigName(const std::string& name)
+  {
+    model_config_name_ = name;
+  }
+
   bool ExitOnError() const { return exit_on_error_; }
   void SetExitOnError(bool b) { exit_on_error_ = b; }
 
@@ -348,6 +354,7 @@ class TritonServerOptions {
   std::set<std::string> models_;
   bool exit_on_error_;
   bool strict_model_config_;
+  std::string model_config_name_;
   bool strict_readiness_;
   tc::RateLimitMode rate_limit_mode_;
   tc::RateLimiter::ResourceMap rate_limit_resource_map_;
@@ -378,12 +385,12 @@ class TritonServerOptions {
 TritonServerOptions::TritonServerOptions()
     : server_id_("triton"),
       model_control_mode_(tc::ModelControlMode::MODE_POLL),
-      exit_on_error_(true), strict_model_config_(true), strict_readiness_(true),
-      rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
-      gpu_metrics_(true), cpu_metrics_(true), metrics_interval_(2000),
-      exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
-      buffer_manager_thread_count_(0), model_load_thread_count_(4),
-      enable_model_namespacing_(false),
+      exit_on_error_(true), strict_model_config_(true), model_config_name_(""),
+      strict_readiness_(true), rate_limit_mode_(tc::RateLimitMode::RL_OFF),
+      metrics_(true), gpu_metrics_(true), cpu_metrics_(true),
+      metrics_interval_(2000), exit_timeout_(30),
+      pinned_memory_pool_size_(1 << 28), buffer_manager_thread_count_(0),
+      model_load_thread_count_(4), enable_model_namespacing_(false),
 #ifdef TRITON_ENABLE_GPU
       min_compute_capability_(TRITON_MIN_COMPUTE_CAPABILITY),
 #else
@@ -1206,6 +1213,16 @@ TRITONSERVER_ServerOptionsSetStartupModel(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   loptions->SetStartupModel(model_name);
+  return nullptr;  // Success
+}
+
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelConfigName(
+    struct TRITONSERVER_ServerOptions* options, const char* model_config_name)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelConfigName(model_config_name);
   return nullptr;  // Success
 }
 
@@ -2378,6 +2395,7 @@ TRITONSERVER_ServerNew(
   lserver->SetStartupModels(loptions->StartupModels());
   bool strict_model_config = loptions->StrictModelConfig();
   lserver->SetStrictModelConfigEnabled(strict_model_config);
+  lserver->SetModelConfigName(loptions->ModelConfigName());
   lserver->SetRateLimiterMode(loptions->RateLimiterMode());
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
@@ -2499,6 +2517,8 @@ TRITONSERVER_ServerNew(
   options_table.InsertRow(std::vector<std::string>{
       "strict_model_config",
       std::to_string(lserver->StrictModelConfigEnabled())});
+  options_table.InsertRow(std::vector<std::string>{
+      "model_config_name", lserver->ModelConfigName()});
   std::string rate_limit = RateLimitModeToString(lserver->RateLimiterMode());
   options_table.InsertRow(std::vector<std::string>{"rate_limit", rate_limit});
   i = 0;
