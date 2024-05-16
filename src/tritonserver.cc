@@ -711,7 +711,6 @@ TRITONSERVER_LogIsEnabled(TRITONSERVER_LogLevel level)
   return false;
 }
 
-
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
