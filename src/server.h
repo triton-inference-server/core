@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -177,6 +177,13 @@ class InferenceServer {
   bool StrictModelConfigEnabled() const { return strict_model_config_; }
   void SetStrictModelConfigEnabled(bool e) { strict_model_config_ = e; }
 
+  // Get / set custom model configuration file name.
+  std::string ModelConfigName() const { return model_config_name_; }
+  void SetModelConfigName(const std::string& name)
+  {
+    model_config_name_ = name;
+  }
+
   // Get / set rate limiter mode.
   RateLimitMode RateLimiterMode() const { return rate_limit_mode_; }
   void SetRateLimiterMode(RateLimitMode m) { rate_limit_mode_ = m; }
@@ -333,6 +340,7 @@ class InferenceServer {
   ModelControlMode model_control_mode_;
   bool strict_model_config_;
   bool strict_readiness_;
+  std::string model_config_name_;
   uint32_t exit_timeout_secs_;
   uint32_t buffer_manager_thread_count_;
   uint32_t model_load_thread_count_;
