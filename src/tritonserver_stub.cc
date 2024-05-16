@@ -82,10 +82,6 @@ TRITONSERVER_LogMessage()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONSERVER_LogServerMessage()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONSERVER_ErrorNew()
 {
 }
