@@ -1187,9 +1187,11 @@ InferenceRequest::Normalize()
         int64_t element_idx = 0;
         expected_byte_size = 0;
         for (size_t i = 0; i < input.Data()->BufferCount(); ++i) {
-          BufferAttributes* buffer_attributes;
-          const char* content = input.Data()->BufferAt(i, &buffer_attributes);
-          size_t content_byte_size = input.Data()->TotalByteSize();
+          size_t content_byte_size;
+          TRITONSERVER_MemoryType content_memory_type;
+          int64_t content_memory_id;
+          const char* content = input.Data()->BufferAt(
+              i, &content_byte_size, &content_memory_type, &content_memory_id);
 
           while (content_byte_size >= sizeof(uint32_t)) {
             if (element_idx >= element_count) {
