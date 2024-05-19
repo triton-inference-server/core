@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -182,10 +182,39 @@ class LocalizeRepoAgent : public TritonRepoAgent {
   }
 };
 
+/// Get the model config path to load for the model.
+const std::string
+GetModelConfigFullPath(
+    const std::string& model_dir_path, const std::string& custom_config_name)
+{
+  // "--model-config-name" is set. Select custom config from
+  // "<model_dir_path>/configs" folder if config file exists.
+  if (!custom_config_name.empty()) {
+    bool custom_config_exists = false;
+    const std::string custom_config_path = JoinPath(
+        {model_dir_path, kModelConfigFolder,
+         custom_config_name + kPbTxtExtension});
+
+    Status status = FileExists(custom_config_path, &custom_config_exists);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to get model configuration full path for '"
+                << model_dir_path << "': " << status.AsString();
+      return "";
+    }
+
+    if (custom_config_exists) {
+      return custom_config_path;
+    }
+  }
+  // "--model-config-name" is not set or custom config file does not exist.
+  return JoinPath({model_dir_path, kModelConfigPbTxt});
+}
+
 Status
 CreateAgentModelListWithLoadAction(
     const inference::ModelConfig& original_model_config,
     const std::string& original_model_path,
+    const std::string& model_config_name,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
   if (original_model_config.has_model_repository_agents()) {
@@ -218,7 +247,8 @@ CreateAgentModelListWithLoadAction(
       std::unique_ptr<TritonRepoAgentModel> agent_model;
       if (lagent_model_list->Size() != 0) {
         lagent_model_list->Back()->Location(&artifact_type, &location);
-        const auto config_path = JoinPath({location, kModelConfigPbTxt});
+        const auto config_path =
+            GetModelConfigFullPath(location, model_config_name);
         if (!ReadTextProto(config_path, &model_config).IsOk()) {
           model_config.Clear();
         }
@@ -283,10 +313,12 @@ GetModifiedTime(const std::string& path)
 }
 // Return the latest modification time in ns for '<config.pbtxt, model files>'
 // in a model directory path. The time for "config.pbtxt" will be 0 if not
-// found at "[model_dir_path]/config.pbtxt". The time for "model files" includes
-// the time for 'model_dir_path'.
+// found at "[model_dir_path]/config.pbtxt" or "[model_dir_path]/configs/
+// <custom-config-name>.pbtxt" if "--model-config-name" is set. The time for
+// "model files" includes the time for 'model_dir_path'.
 std::pair<int64_t, int64_t>
-GetDetailedModifiedTime(const std::string& model_dir_path)
+GetDetailedModifiedTime(
+    const std::string& model_dir_path, const std::string& model_config_path)
 {
   // Check if 'model_dir_path' is a directory.
   bool is_dir;
@@ -322,12 +354,10 @@ GetDetailedModifiedTime(const std::string& model_dir_path)
   }
   // Get latest modification time for each files/folders, and place it at the
   // correct category.
-  const std::string model_config_full_path(
-      JoinPath({model_dir_path, kModelConfigPbTxt}));
   for (const auto& child : contents) {
     const auto full_path = JoinPath({model_dir_path, child});
-    if (full_path == model_config_full_path) {
-      // config.pbtxt
+    if (full_path == model_config_path) {
+      // config.pbtxt or customized config file in configs folder
       mtime.first = GetModifiedTime(full_path);
     } else {
       // model files
@@ -343,9 +373,10 @@ GetDetailedModifiedTime(const std::string& model_dir_path)
 // modified time.
 bool
 IsModified(
-    const std::string& model_dir_path, std::pair<int64_t, int64_t>* last_ns)
+    const std::string& model_dir_path, const std::string& model_config_path,
+    std::pair<int64_t, int64_t>* last_ns)
 {
-  auto new_ns = GetDetailedModifiedTime(model_dir_path);
+  auto new_ns = GetDetailedModifiedTime(model_dir_path, model_config_path);
   bool modified = std::max(new_ns.first, new_ns.second) >
                   std::max(last_ns->first, last_ns->second);
   last_ns->swap(new_ns);
@@ -356,10 +387,12 @@ IsModified(
 
 ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
-    const bool polling_enabled, const bool model_control_enabled,
-    const double min_compute_capability, const bool enable_model_namespacing,
+    const std::string& model_config_name, const bool polling_enabled,
+    const bool model_control_enabled, const double min_compute_capability,
+    const bool enable_model_namespacing,
     std::unique_ptr<ModelLifeCycle> life_cycle)
-    : autofill_(autofill), polling_enabled_(polling_enabled),
+    : autofill_(autofill), model_config_name_(model_config_name),
+      polling_enabled_(polling_enabled),
       model_control_enabled_(model_control_enabled),
       min_compute_capability_(min_compute_capability),
       dependency_graph_(&global_map_),
@@ -385,7 +418,8 @@ ModelRepositoryManager::Create(
     InferenceServer* server, const std::string& server_version,
     const std::set<std::string>& repository_paths,
     const std::set<std::string>& startup_models, const bool strict_model_config,
-    const bool polling_enabled, const bool model_control_enabled,
+    const std::string& model_config_name, const bool polling_enabled,
+    const bool model_control_enabled,
     const ModelLifeCycleOptions& life_cycle_options,
     const bool enable_model_namespacing,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
@@ -414,9 +448,10 @@ ModelRepositoryManager::Create(
   // Not setting the smart pointer directly to simplify clean up
   std::unique_ptr<ModelRepositoryManager> local_manager(
       new ModelRepositoryManager(
-          repository_paths, !strict_model_config, polling_enabled,
-          model_control_enabled, life_cycle_options.min_compute_capability,
-          enable_model_namespacing, std::move(life_cycle)));
+          repository_paths, !strict_model_config, model_config_name,
+          polling_enabled, model_control_enabled,
+          life_cycle_options.min_compute_capability, enable_model_namespacing,
+          std::move(life_cycle)));
   *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
@@ -549,7 +584,7 @@ ModelRepositoryManager::LoadModelByDependency(
   // encapsulate the interaction:
   // Each iteration:
   //  - Check dependency graph for nodes that are ready for lifecycle changes:
-  //      - load if all dependencies are satisfied and the node is 'heathy'
+  //      - load if all dependencies are satisfied and the node is 'healthy'
   //      - unload otherwise (should revisit this, logically will only happen in
   //        ensemble, the ensemble is requested to be re-loaded, at this point
   //        it is too late to revert model changes so the ensemble will not be
@@ -1298,10 +1333,11 @@ ModelRepositoryManager::Poll(
   // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
     std::unique_ptr<ModelInfo> model_info;
+    const auto& model_name = pair.first.name_;
     // Load with parameters will be appiled to all models with the same
     // name (namespace can be different), unless namespace is specified
     // in the future.
-    const auto& mit = models.find(pair.first.name_);
+    const auto& mit = models.find(model_name);
     static std::vector<const InferenceParameter*> empty_params;
     auto status = InitializeModelInfo(
         pair.first, pair.second,
@@ -1401,17 +1437,22 @@ ModelRepositoryManager::InitializeModelInfo(
     // the override while the local files may still be unchanged.
     linfo->mtime_nsec_ = std::make_pair(0, 0);
     linfo->model_path_ = location;
+    linfo->model_config_path_ = JoinPath({location, kModelConfigPbTxt});
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
+    linfo->model_config_path_ =
+        GetModelConfigFullPath(linfo->model_path_, model_config_name_);
+    // Model is not loaded.
     if (iitr == infos_.end()) {
-      linfo->mtime_nsec_ = GetDetailedModifiedTime(linfo->model_path_);
+      linfo->mtime_nsec_ = GetDetailedModifiedTime(
+          linfo->model_path_, linfo->model_config_path_);
     } else {
       // Check the current timestamps to determine if model actually has been
       // modified
       linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
-      unmodified =
-          !IsModified(std::string(linfo->model_path_), &linfo->mtime_nsec_);
+      unmodified = !IsModified(
+          linfo->model_path_, linfo->model_config_path_, &linfo->mtime_nsec_);
     }
   }
 
@@ -1461,7 +1502,7 @@ ModelRepositoryManager::InitializeModelInfo(
   // this must be done before normalizing model config as agents might
   // redirect to use the model config at a different location
   if (!parsed_config) {
-    const auto config_path = JoinPath({linfo->model_path_, kModelConfigPbTxt});
+    const auto config_path = linfo->model_config_path_;
     bool model_config_exists = false;
     RETURN_IF_ERROR(FileExists(config_path, &model_config_exists));
     // model config can be missing if auto fill is set
@@ -1474,7 +1515,8 @@ ModelRepositoryManager::InitializeModelInfo(
   }
   if (parsed_config) {
     RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
-        linfo->model_config_, linfo->model_path_, &linfo->agent_model_list_));
+        linfo->model_config_, linfo->model_path_, model_config_name_,
+        &linfo->agent_model_list_));
     if (linfo->agent_model_list_ != nullptr) {
       // Get the latest repository path
       const char* location;

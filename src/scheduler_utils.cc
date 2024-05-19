@@ -33,6 +33,44 @@
 
 namespace triton { namespace core {
 
+uint64_t
+CaptureTimeNs()
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+bool
+CacheLookUpUtil(
+    std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response,
+    std::shared_ptr<TritonCache> cache)
+{
+  Status status;
+  std::unique_ptr<InferenceResponse> local_response;
+  request->ResponseFactory()->CreateResponse(&local_response);
+  std::string key = "";
+  if (!request->CacheKeyIsSet()) {
+    status = cache->Hash(*request, &key);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to hash request: " << status.Message();
+      return false;
+    }
+    request->SetCacheKey(key);
+  } else {
+    key = request->CacheKey();
+  }
+  request->CaptureCacheLookupStartNs();
+  status = cache->Lookup(local_response.get(), key);
+  request->CaptureCacheLookupEndNs();
+  if (status.IsOk() && (local_response != nullptr)) {
+    cached_response = std::move(local_response);
+    return true;
+  }
+  return false;
+}
+
 Status
 RequiredEqualInputs::Initialize(
     const std::unique_ptr<InferenceRequest>& request,

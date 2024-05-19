@@ -190,7 +190,7 @@ TritonModelInstance::TritonModelInstance(
         model_->ResponseCacheEnabled() &&
         model_->Server()->ResponseCacheEnabled();
     MetricModelReporter::Create(
-        model_->Name(), model_->Version(), id, response_cache_enabled,
+        model_->ModelId(), model_->Version(), id, response_cache_enabled,
         model_->Config().metric_tags(), &reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS

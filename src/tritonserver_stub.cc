@@ -378,6 +378,10 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetModelConfigName()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetRateLimiterMode()
 {
 }

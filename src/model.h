@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -64,10 +64,12 @@ struct ModelIdentifier {
     return ((namespace_ != rhs.namespace_) || (name_ != rhs.name_));
   }
 
+  bool NamespaceDisabled() const { return namespace_.empty(); }
+
   friend std::ostream& operator<<(std::ostream& os, const ModelIdentifier& rhs)
   {
     // Avoid log differences if namespace is disabled
-    if (rhs.namespace_.empty()) {
+    if (rhs.NamespaceDisabled()) {
       os << rhs.name_;
       return os;
     }
@@ -78,7 +80,7 @@ struct ModelIdentifier {
   std::string str() const
   {
     // Avoid log differences if namespace is disabled
-    if (namespace_.empty()) {
+    if (NamespaceDisabled()) {
       return name_;
     }
     return (namespace_ + "::" + name_);
@@ -119,16 +121,20 @@ class Model {
  public:
   explicit Model(
       const double min_compute_capability, const std::string& model_dir,
-      const int64_t version, const inference::ModelConfig& config)
+      const ModelIdentifier& model_id, const int64_t version,
+      const inference::ModelConfig& config)
       : config_(config), min_compute_capability_(min_compute_capability),
-        version_(version), required_input_count_(0), model_dir_(model_dir),
-        set_model_config_(false)
+        model_id_(model_id), version_(version), required_input_count_(0),
+        model_dir_(model_dir), set_model_config_(false)
   {
   }
   virtual ~Model() {}
 
   // Get the name of model being served.
   const std::string& Name() const { return config_.name(); }
+
+  // Get the identifier of model being served.
+  const ModelIdentifier& ModelId() const { return model_id_; }
 
   // Get the version of model being served.
   int64_t Version() const { return version_; }
@@ -261,6 +267,9 @@ class Model {
  private:
   // The minimum supported CUDA compute capability.
   const double min_compute_capability_;
+
+  // Identifier for the model.
+  ModelIdentifier model_id_;
 
   // Version of the model.
   int64_t version_;

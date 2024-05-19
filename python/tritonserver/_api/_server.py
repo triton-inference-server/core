@@ -137,7 +137,7 @@ class Options:
         List of models to load at startup. Only relevant with ModelControlMode.EXPLICIT.
         See :c:func:`TRITONSERVER_ServerOptionsSetStartupModel`
 
-    strict_model_config : bool, default True
+    strict_model_config : bool, default False
         Enable or disable strict model configuration.
         See :c:func:`TRITONSERVER_ServerOptionsSetStrictModelConfig`
 
@@ -275,7 +275,7 @@ class Options:
     server_id: str = "triton"
     model_control_mode: ModelControlMode = ModelControlMode.NONE
     startup_models: list[str] = field(default_factory=list[str])
-    strict_model_config: bool = True
+    strict_model_config: bool = False
 
     rate_limiter_mode: RateLimitMode = RateLimitMode.OFF
     rate_limiter_resources: list[RateLimiterResource] = field(
@@ -507,7 +507,7 @@ class Server:
 
         Options(server_id='triton', model_repository='/workspace/models',
         model_control_mode=<TRITONSERVER_ModelControlMode.NONE: 0>,
-        startup_models=[], strict_model_config=True,
+        startup_models=[], strict_model_config=False,
         rate_limiter_mode=<TRITONSERVER_RateLimitMode.OFF: 0>,
         rate_limiter_resources=[], pinned_memory_pool_size=268435456,
         cuda_memory_pool_sizes={}, cache_config={},

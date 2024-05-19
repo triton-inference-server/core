@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -34,6 +34,7 @@
 #include "model_config.pb.h"
 #include "model_config_utils.h"
 #include "scheduler.h"
+#include "scheduler_utils.h"
 #include "status.h"
 
 #ifdef TRITON_ENABLE_GPU
@@ -65,6 +66,8 @@ struct EnsembleInfo {
 
   bool is_decoupled_;
 
+  bool is_cache_enabled_;
+
   // the ensemble output (re)shape expected by the ensemble
   std::unordered_map<std::string, triton::common::DimsList>
       ensemble_output_shape_;
@@ -88,13 +91,15 @@ class EnsembleScheduler : public Scheduler {
   // to dispatch requests to models in ensemble internally.
   static Status Create(
       InferenceStatsAggregator* const stats_aggregator,
-      InferenceServer* const server, const inference::ModelConfig& config,
+      InferenceServer* const server, const ModelIdentifier& model_id,
+      const inference::ModelConfig& config,
       std::unique_ptr<Scheduler>* scheduler);
 
   ~EnsembleScheduler();
 
   // \see Scheduler::Enqueue()
   Status Enqueue(std::unique_ptr<InferenceRequest>& request) override;
+
 
   // \see Scheduler::InflightInferenceCount()
   size_t InflightInferenceCount() override { return inflight_count_; }
@@ -105,7 +110,12 @@ class EnsembleScheduler : public Scheduler {
  private:
   EnsembleScheduler(
       InferenceStatsAggregator* const stats_aggregator,
-      InferenceServer* const server, const inference::ModelConfig& config);
+      InferenceServer* const server, const ModelIdentifier& model_id,
+      const inference::ModelConfig& config);
+
+  void CacheLookUp(
+      std::unique_ptr<InferenceRequest>& request,
+      std::unique_ptr<InferenceResponse>& cached_response);
 
   std::shared_ptr<MetricModelReporter> metric_reporter_;
   InferenceStatsAggregator* const stats_aggregator_;
