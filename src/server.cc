@@ -603,8 +603,7 @@ InferenceServer::PrintBackendAndModelSummary()
     repoagent_record.emplace_back(repoagent_pair.second);
     repoagents_table.InsertRow(repoagent_record);
   }
-  std::string repoagents_table_string = repoagents_table.PrintTable();
-  LOG_INFO << repoagents_table_string;
+  LOG_TABLE_INFO(repoagents_table);
 
   // Backends Summary
   std::vector<std::string> backend_headers;
@@ -630,8 +629,8 @@ InferenceServer::PrintBackendAndModelSummary()
     }
     backends_table.InsertRow(backend_record);
   }
-  std::string backends_table_string = backends_table.PrintTable();
-  LOG_INFO << backends_table_string;
+
+  LOG_TABLE_INFO(backends_table);
 
   // Models Summary
   auto model_states = model_repository_manager_->ModelStates();
@@ -673,8 +672,8 @@ InferenceServer::PrintBackendAndModelSummary()
       }
     }
   }
-  std::string models_table_string = models_table.PrintTable();
-  LOG_INFO << models_table_string;
+
+  LOG_TABLE_INFO(models_table);
 
   return Status::Success;
 }

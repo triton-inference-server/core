@@ -2554,8 +2554,7 @@ TRITONSERVER_ServerNew(
   options_table.InsertRow(std::vector<std::string>{
       "cache_enabled", std::to_string(lserver->ResponseCacheEnabled())});
 
-  std::string options_table_string = options_table.PrintTable();
-  LOG_INFO << options_table_string;
+  LOG_TABLE_INFO(options_table);
 
   if (!status.IsOk()) {
     if (loptions->ExitOnError()) {
