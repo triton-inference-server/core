@@ -302,16 +302,19 @@ ValidateIOShape(
         Status::Code::INVALID_ARG, message_prefix + "must specify 'name'");
   }
 
-  std::string message_prefix_with_name = message_prefix + ::string(" '" + io.name() + "' ");
+  std::string message_prefix_with_name =
+      message_prefix + ::string(" '" + io.name() + "' ");
 
   if (io.data_type() == inference::DataType::TYPE_INVALID) {
     return Status(
-        Status::Code::INVALID_ARG, message_prefix_with_name + "must specify 'data_type'");
+        Status::Code::INVALID_ARG,
+        message_prefix_with_name + "must specify 'data_type'");
   }
 
   if (io.dims_size() == 0) {
     return Status(
-        Status::Code::INVALID_ARG, message_prefix_with_name + "must specify 'dims'");
+        Status::Code::INVALID_ARG,
+        message_prefix_with_name + "must specify 'dims'");
   }
 
   // If the configuration is non-batching, then no input or output
@@ -343,7 +346,8 @@ ValidateIOShape(
       if ((dim < 1) && (dim != triton::common::WILDCARD_DIM)) {
         return Status(
             Status::Code::INVALID_ARG,
-            message_prefix_with_name + "reshape dimensions must be integer >= 1, or " +
+            message_prefix_with_name +
+                "reshape dimensions must be integer >= 1, or " +
                 std::to_string(triton::common::WILDCARD_DIM) +
                 " to indicate a variable-size dimension");
       }
@@ -404,7 +408,8 @@ ValidateIOShape(
         if (dim_element_cnts[idx] != reshape_element_cnts[idx]) {
           return Status(
               Status::Code::INVALID_ARG,
-              message_prefix_with_name + "has different size for dims and reshape");
+              message_prefix_with_name +
+                  "has different size for dims and reshape");
         }
       }
     }
