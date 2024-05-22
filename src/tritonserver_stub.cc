@@ -443,6 +443,10 @@ TRITONSERVER_ServerOptionsSetModelNamespacing()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetPeerAccess()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetLogFile()
 {
 }

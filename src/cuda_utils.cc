@@ -83,39 +83,41 @@ GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total)
 }
 
 Status
-EnablePeerAccess(const double min_compute_capability)
+EnablePeerAccess(const double min_compute_capability, bool enable_peer_access)
 {
 #ifdef TRITON_ENABLE_GPU
   // If we can't enable peer access for one device pair, the best we can
   // do is skipping it...
-  std::set<int> supported_gpus;
-  bool all_enabled = false;
-  if (GetSupportedGPUs(&supported_gpus, min_compute_capability).IsOk()) {
-    all_enabled = true;
-    int can_access_peer = false;
-    for (const auto& host : supported_gpus) {
-      auto cuerr = cudaSetDevice(host);
+  if(enable_peer_access) {
+    std::set<int> supported_gpus;
+    bool all_enabled = false;
+    if (GetSupportedGPUs(&supported_gpus, min_compute_capability).IsOk()) {
+      all_enabled = true;
+      int can_access_peer = false;
+      for (const auto& host : supported_gpus) {
+        auto cuerr = cudaSetDevice(host);
 
-      if (cuerr == cudaSuccess) {
-        for (const auto& peer : supported_gpus) {
-          if (host == peer) {
-            continue;
+        if (cuerr == cudaSuccess) {
+          for (const auto& peer : supported_gpus) {
+            if (host == peer) {
+              continue;
+            }
+
+            cuerr = cudaDeviceCanAccessPeer(&can_access_peer, host, peer);
+            if ((cuerr == cudaSuccess) && (can_access_peer == 1)) {
+              cuerr = cudaDeviceEnablePeerAccess(peer, 0);
+            }
+
+            all_enabled &= ((cuerr == cudaSuccess) && (can_access_peer == 1));
           }
-
-          cuerr = cudaDeviceCanAccessPeer(&can_access_peer, host, peer);
-          if ((cuerr == cudaSuccess) && (can_access_peer == 1)) {
-            cuerr = cudaDeviceEnablePeerAccess(peer, 0);
-          }
-
-          all_enabled &= ((cuerr == cudaSuccess) && (can_access_peer == 1));
         }
       }
     }
-  }
-  if (!all_enabled) {
-    return Status(
-        Status::Code::UNSUPPORTED,
-        "failed to enable peer access for some device pairs");
+    if (!all_enabled) {
+      return Status(
+          Status::Code::UNSUPPORTED,
+          "failed to enable peer access for some device pairs");
+    }
   }
 #endif  // TRITON_ENABLE_GPU
   return Status::Success;

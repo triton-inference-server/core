@@ -284,9 +284,16 @@ class TritonServerOptions {
   void SetModelLoadRetryCount(unsigned int c) { model_load_retry_count_ = c; }
 
   bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
+  bool PeerAccessEnabled() { return enable_peer_access_; }
+  
   void SetModelNamespacingEnabled(const bool e)
   {
     enable_model_namespacing_ = e;
+  }
+
+  void SetPeerAccessEnabled(const bool e)
+  {
+    enable_peer_access_ = e;
   }
 
   bool Metrics() const { return metrics_; }
@@ -1410,6 +1417,16 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetPeerAccess(
+    TRITONSERVER_ServerOptions* options, bool enable_peeraccess)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetPeerAccessEnabled(enable_peeraccess);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file)
 {
@@ -2398,6 +2415,7 @@ TRITONSERVER_ServerNew(
   lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
   lserver->SetModelLoadRetryCount(loptions->ModelLoadRetryCount());
   lserver->SetModelNamespacingEnabled(loptions->ModelNamespacingEnabled());
+  lserver->SetPeerAccessEnabled(loptions->PeerAccessEnabled());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.
