@@ -244,7 +244,8 @@ InferenceServer::Init()
   }
 
 #endif  // TRITON_ENABLE_GPU
-  status = EnablePeerAccess(min_supported_compute_capability_, enable_peer_access_);
+  status =
+      EnablePeerAccess(min_supported_compute_capability_, enable_peer_access_);
   if (!status.IsOk()) {
     // failed to enable peer access is not critical, just inefficient.
     LOG_WARNING << status.Message();

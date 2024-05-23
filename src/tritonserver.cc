@@ -285,16 +285,13 @@ class TritonServerOptions {
 
   bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
   bool PeerAccessEnabled() { return enable_peer_access_; }
-  
+
   void SetModelNamespacingEnabled(const bool e)
   {
     enable_model_namespacing_ = e;
   }
 
-  void SetPeerAccessEnabled(const bool e)
-  {
-    enable_peer_access_ = e;
-  }
+  void SetPeerAccessEnabled(const bool e) { enable_peer_access_ = e; }
 
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
@@ -368,7 +365,7 @@ class TritonServerOptions {
   unsigned int model_load_thread_count_;
   unsigned int model_load_retry_count_;
   bool enable_model_namespacing_;
-  bool enable_peer_access_; 
+  bool enable_peer_access_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;

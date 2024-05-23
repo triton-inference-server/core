@@ -88,8 +88,7 @@ EnablePeerAccess(const double min_compute_capability, bool enable_peer_access)
 #ifdef TRITON_ENABLE_GPU
   // If we can't enable peer access for one device pair, the best we can
   // do is skipping it...
-  if(enable_peer_access) {
-    LOG_VERBOSE(1) << "enable_peer_access is TRUE";
+  if (enable_peer_access) {
     std::set<int> supported_gpus;
     bool all_enabled = false;
     if (GetSupportedGPUs(&supported_gpus, min_compute_capability).IsOk()) {
@@ -119,8 +118,6 @@ EnablePeerAccess(const double min_compute_capability, bool enable_peer_access)
           Status::Code::UNSUPPORTED,
           "failed to enable peer access for some device pairs");
     }
-  } else {
-    LOG_VERBOSE(1) << "enable_peer_access is FALSE";
   }
 #endif  // TRITON_ENABLE_GPU
   return Status::Success;
