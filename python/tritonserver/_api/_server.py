@@ -201,7 +201,7 @@ class Options:
         Enable or disable model namespacing.
         See :c:func:`TRITONSERVER_ServerOptionsSetModelNamespacing`
 
-    peer_access : bool, default False
+    enable_peer_access : bool, default True
         Enable or disable GPU peer access.
         See :c:func:`TRITONSERVER_ServerOptionsSetPeerAccess`
 
@@ -304,7 +304,7 @@ class Options:
     model_load_thread_count: uint = 4
     model_load_retry_count: uint = 0
     model_namespacing: bool = False
-    peer_access: bool = False
+    enable_peer_access: bool = True
     
     log_file: Optional[str] = None
     log_info: bool = False
@@ -386,7 +386,7 @@ class Options:
         options.set_model_load_thread_count(self.model_load_thread_count)
         options.set_model_load_retry_count(self.model_load_retry_count)
         options.set_model_namespacing(self.model_namespacing)
-        options.set_peer_access(self.peer_access)
+        options.set_peer_access(self.enable_peer_access)
 
         if self.log_file:
             options.set_log_file(self.log_file)
@@ -520,7 +520,7 @@ class Server:
         cache_directory='/opt/tritonserver/caches',
         min_supported_compute_capability=6.0, exit_on_error=True,
         strict_readiness=True, exit_timeout=30, buffer_manager_thread_count=0,
-        model_load_thread_count=4, model_namespacing=False, peer_access=False, log_file=None,
+        model_load_thread_count=4, model_namespacing=False, enable_peer_access=True, log_file=None,
         log_info=False, log_warn=False, log_error=False,
         log_format=<TRITONSERVER_LogFormat.DEFAULT: 0>, log_verbose=False,
         metrics=True, gpu_metrics=True, cpu_metrics=True,
