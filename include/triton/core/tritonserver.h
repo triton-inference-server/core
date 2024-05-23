@@ -2036,7 +2036,7 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetPeerAccess(
-    struct TRITONSERVER_ServerOptions* options, bool enable_peerAccess);
+    struct TRITONSERVER_ServerOptions* options, bool enable_peer_access);
 
 /// Provide a log output file.
 ///
