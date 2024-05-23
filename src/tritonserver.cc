@@ -1416,7 +1416,7 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetPeerAccess(
-    TRITONSERVER_ServerOptions* options, bool enable_peeraccess)
+    TRITONSERVER_ServerOptions* options, bool enable_peer_access)
 {
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
