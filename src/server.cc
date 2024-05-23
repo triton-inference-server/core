@@ -201,14 +201,16 @@ InferenceServer::Init()
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
-
-  PinnedMemoryManager::Options options(pinned_memory_pool_size_);
-  status = PinnedMemoryManager::Create(options);
-  if (!status.IsOk()) {
-    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-    return status;
+  if (pinned_memory_pool_size_ > 0) {
+    PinnedMemoryManager::Options options(pinned_memory_pool_size_);
+    status = PinnedMemoryManager::Create(options);
+    if (!status.IsOk()) {
+      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+      return status;
+    }
+  } else {
+    LOG_INFO << "Pinned memory pool disabled";
   }
-
 
 #ifdef TRITON_ENABLE_GPU
   // Set the default CUDA memory pool size for GPUs where it is not
@@ -244,13 +246,13 @@ InferenceServer::Init()
   }
 
 #endif  // TRITON_ENABLE_GPU
-  status =
-      EnablePeerAccess(min_supported_compute_capability_, enable_peer_access_);
-  if (!status.IsOk()) {
-    // failed to enable peer access is not critical, just inefficient.
-    LOG_WARNING << status.Message();
+  if (enable_peer_access_) {
+    status = EnablePeerAccess(min_supported_compute_capability_);
+    if (!status.IsOk()) {
+      // failed to enable peer access is not critical, just inefficient.
+      LOG_WARNING << status.Message();
+    }
   }
-
   // Create the model manager for the repository. Unless model control
   // is disabled, all models are eagerly loaded when the manager is created.
   bool polling_enabled = (model_control_mode_ == ModelControlMode::MODE_POLL);
