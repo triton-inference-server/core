@@ -1420,7 +1420,7 @@ TRITONSERVER_ServerOptionsSetPeerAccess(
 {
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
-  loptions->SetPeerAccessEnabled(enable_peeraccess);
+  loptions->SetPeerAccessEnabled(enable_peer_access);
   return nullptr;  // Success
 }
 
