@@ -83,7 +83,7 @@ GetDeviceMemoryInfo(const int device_id, size_t* free, size_t* total)
 }
 
 Status
-EnablePeerAccess(const double min_compute_capability, bool enable_peer_access)
+EnablePeerAccess(const double min_compute_capability)
 {
 #ifdef TRITON_ENABLE_GPU
   // If we can't enable peer access for one device pair, the best we can
