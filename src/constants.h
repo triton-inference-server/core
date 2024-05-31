@@ -71,6 +71,8 @@ constexpr char kAutoMixedPrecisionExecutionAccelerator[] =
     "auto_mixed_precision";
 
 constexpr char kModelConfigPbTxt[] = "config.pbtxt";
+constexpr char kPbTxtExtension[] = ".pbtxt";
+constexpr char kModelConfigFolder[] = "configs";
 
 constexpr char kMetricsLabelModelNamespace[] = "namespace";
 constexpr char kMetricsLabelModelName[] = "model";
