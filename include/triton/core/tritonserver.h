@@ -2062,7 +2062,7 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 /// underlying system doesn't support peer access.
 ///
 /// \param options The server options object.
-/// \param enable_peerAccess Whether to enable peer access or not.
+/// \param enable_peer_access Whether to enable peer access or not.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetEnablePeerAccess(
