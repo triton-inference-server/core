@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 30
+#define TRITONSERVER_API_VERSION_MINOR 31
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -259,13 +259,31 @@ typedef enum TRITONSERVER_loglevel_enum {
   TRITONSERVER_LOG_VERBOSE
 } TRITONSERVER_LogLevel;
 
+/// Logging Formats
 ///
-/// Format of logging.
+/// The TRITONSERVER API offers two logging formats. The formats have
+/// a common set of fields but differ in how the timestamp for a log
+/// entry is represented. Messages are serialized according to JSON
+/// encoding rules by default. This behavior can be disabled by
+/// setting the environment variable TRITON_SERVER_ESCAPE_LOG_MESSAGES
+/// to "0".
 ///
-/// TRITONSERVER_LOG_DEFAULT: the log severity (L) and timestamp will be
-/// logged as "LMMDD hh:mm:ss.ssssss".
 ///
-/// TRITONSERVER_LOG_ISO8601: the log format will be "YYYY-MM-DDThh:mm:ssZ L".
+/// 1. TRITONSERVER_LOG_DEFAULT
+///
+/// <level><month><day><hour>:<min>:<sec>.<usec> <pid> <file>:<line>] <msg>
+///
+/// Example:
+///
+/// I0520 20:03:25.829575 3355 model_lifecycle.cc:441] "AsyncLoad() 'simple'"
+///
+/// 2. TRITONSERVER_LOG_ISO8601
+///
+/// <year>-<month>-<day>T<hour>:<min>:<sec>Z <level> <pid> <file>:<line>] <msg>
+///
+/// Example:
+///
+/// 2024-05-20T20:03:26Z I 3415 model_lifecycle.cc:441] "AsyncLoad() 'simple'"
 ///
 typedef enum TRITONSERVER_logformat_enum {
   TRITONSERVER_LOG_DEFAULT,
@@ -1827,6 +1845,16 @@ TRITONSERVER_ServerOptionsSetStartupModel(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     struct TRITONSERVER_ServerOptions* options, bool strict);
+
+/// Set the custom model configuration name to load for all models.
+/// Fall back to default config file if empty.
+///
+/// \param options The server options object.
+/// \param config_name The name of the config file to load for all models.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelConfigName(
+    struct TRITONSERVER_ServerOptions* options, const char* model_config_name);
 
 /// Set the rate limit mode in a server options.
 ///
