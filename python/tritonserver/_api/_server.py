@@ -203,7 +203,7 @@ class Options:
 
     enable_peer_access : bool, default True
         Enable or disable GPU peer access.
-        See :c:func:`TRITONSERVER_ServerOptionsSetPeerAccess`
+        See :c:func:`TRITONSERVER_ServerOptionsSetEnablePeerAccess`
 
     log_file : Optional[str], default None
         Path to the log file. If None, logs are written to stdout.
@@ -386,7 +386,7 @@ class Options:
         options.set_model_load_thread_count(self.model_load_thread_count)
         options.set_model_load_retry_count(self.model_load_retry_count)
         options.set_model_namespacing(self.model_namespacing)
-        options.set_peer_access(self.enable_peer_access)
+        options.set_enable_peer_access(self.enable_peer_access)
 
         if self.log_file:
             options.set_log_file(self.log_file)

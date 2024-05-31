@@ -291,7 +291,7 @@ class TritonServerOptions {
     enable_model_namespacing_ = e;
   }
 
-  void SetPeerAccessEnabled(const bool e) { enable_peer_access_ = e; }
+  void SetEnablePeerAccess(const bool e) { enable_peer_access_ = e; }
 
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
@@ -1415,12 +1415,12 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetPeerAccess(
+TRITONSERVER_ServerOptionsSetEnablePeerAccess(
     TRITONSERVER_ServerOptions* options, bool enable_peer_access)
 {
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
-  loptions->SetPeerAccessEnabled(enable_peer_access);
+  loptions->SetEnablePeerAccess(enable_peer_access);
   return nullptr;  // Success
 }
 
@@ -2413,7 +2413,7 @@ TRITONSERVER_ServerNew(
   lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
   lserver->SetModelLoadRetryCount(loptions->ModelLoadRetryCount());
   lserver->SetModelNamespacingEnabled(loptions->ModelNamespacingEnabled());
-  lserver->SetPeerAccessEnabled(loptions->PeerAccessEnabled());
+  lserver->SetEnablePeerAccess(loptions->PeerAccessEnabled());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.

@@ -2035,7 +2035,7 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 /// \param enable_peerAccess Whether to enable peer access or not.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
-TRITONSERVER_ServerOptionsSetPeerAccess(
+TRITONSERVER_ServerOptionsSetEnablePeerAccess(
     struct TRITONSERVER_ServerOptions* options, bool enable_peer_access);
 
 /// Provide a log output file.

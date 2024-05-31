@@ -264,7 +264,7 @@ class InferenceServer {
     enable_model_namespacing_ = e;
   }
 
-  void SetPeerAccessEnabled(const bool e) { enable_peer_access_ = e; }
+  void SetEnablePeerAccess(const bool e) { enable_peer_access_ = e; }
 
   // Set a backend command-line configuration
   void SetBackendCmdlineConfig(
