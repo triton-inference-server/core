@@ -181,26 +181,30 @@ class BackendOutputDetailTest : public ::testing::Test {
             nullptr /* request_release_userp */),
         "setting request release callback");
 
-    std::vector<int64_t> input0_shape({16});
-    std::vector<int64_t> input1_shape({16});
+    std::vector<int64_t> input0_shape({1, 16});
+    std::vector<int64_t> input1_shape({1, 16});
+
+    const auto input0_byte_size = sizeof(input0_data_[0]) * input0_data_.size();
+    const auto input1_byte_size = sizeof(input1_data_[0]) * input1_data_.size();
+
     FAIL_TEST_IF_ERR(
         TRITONSERVER_InferenceRequestAddInput(
-            irequest_, "INPUT0", TRITONSERVER_TYPE_FP32, &input0_shape[0],
+            irequest_, "INPUT0", TRITONSERVER_TYPE_FP32, input0_shape.data(),
             input0_shape.size()),
         "setting input0 for the request");
     FAIL_TEST_IF_ERR(
         TRITONSERVER_InferenceRequestAppendInputData(
-            irequest_, "INPUT0", &input0_data_[0], input0_data_.size(),
+            irequest_, "INPUT0", input0_data_.data(), input0_byte_size,
             TRITONSERVER_MEMORY_CPU, 0),
         "assigning INPUT data");
     FAIL_TEST_IF_ERR(
         TRITONSERVER_InferenceRequestAddInput(
-            irequest_, "INPUT1", TRITONSERVER_TYPE_FP32, &input1_shape[0],
+            irequest_, "INPUT1", TRITONSERVER_TYPE_FP32, input1_shape.data(),
             input1_shape.size()),
         "setting input1 for the request");
     FAIL_TEST_IF_ERR(
         TRITONSERVER_InferenceRequestAppendInputData(
-            irequest_, "INPUT1", &input1_data_[0], input1_data_.size(),
+            irequest_, "INPUT1", input1_data_.data(), input1_byte_size,
             TRITONSERVER_MEMORY_CPU, 0),
         "assigning INPUT1 data");
   }
