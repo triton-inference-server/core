@@ -181,8 +181,8 @@ class BackendOutputDetailTest : public ::testing::Test {
             nullptr /* request_release_userp */),
         "setting request release callback");
 
-    std::vector<int64_t> input0_shape({1, 16});
-    std::vector<int64_t> input1_shape({1, 16});
+    std::vector<int64_t> input0_shape({16});
+    std::vector<int64_t> input1_shape({16});
 
     const auto input0_byte_size = sizeof(input0_data_[0]) * input0_data_.size();
     const auto input1_byte_size = sizeof(input1_data_[0]) * input1_data_.size();
