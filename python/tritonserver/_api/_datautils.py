@@ -113,7 +113,7 @@ DLPACK_TO_TRITON_DTYPE: dict[
     "DLPack data type",
     "Triton server data type",
     {
-        (_dlpack.DLDataTypeCode.kDLBool, 1): DataType.BOOL,
+        (_dlpack.DLDataTypeCode.kDLBool, 8): DataType.BOOL,
         (_dlpack.DLDataTypeCode.kDLInt, 8): DataType.INT8,
         (
             _dlpack.DLDataTypeCode.kDLInt,
