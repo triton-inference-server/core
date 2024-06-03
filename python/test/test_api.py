@@ -466,9 +466,7 @@ class InferenceTests(unittest.TestCase):
                 numpy.testing.assert_array_equal(input_, output_)
 
         # test normal bool
-        inputs = {
-            "bool_input": numpy.array([[True, False, False, True]]).astype(bool),
-        }
+        inputs = {"bool_input": [[True, False, False, True]]}
 
         for response in server.model("test").infer(
             inputs=inputs,
