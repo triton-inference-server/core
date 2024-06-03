@@ -271,6 +271,8 @@ class InferenceServer {
     enable_model_namespacing_ = e;
   }
 
+  void SetEnablePeerAccess(const bool e) { enable_peer_access_ = e; }
+
   // Set a backend command-line configuration
   void SetBackendCmdlineConfig(
       const triton::common::BackendCmdlineConfigMap& bc)
@@ -346,6 +348,7 @@ class InferenceServer {
   uint32_t model_load_thread_count_;
   uint32_t model_load_retry_count_;
   bool enable_model_namespacing_;
+  bool enable_peer_access_;
   uint64_t pinned_memory_pool_size_;
   bool response_cache_enabled_;
   CacheConfigMap cache_config_map_;

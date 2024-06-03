@@ -275,8 +275,6 @@ PinnedMemoryManager::Create(const Options& options)
       LOG_INFO << "Pinned memory pool is created at '"
                << PointerToString(buffer) << "' with size "
                << options.pinned_memory_pool_byte_size_;
-    } else {
-      LOG_INFO << "Pinned memory pool disabled";
     }
 #endif  // TRITON_ENABLE_GPU
     try {

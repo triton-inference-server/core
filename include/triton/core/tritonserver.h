@@ -2056,6 +2056,18 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelNamespacing(
     struct TRITONSERVER_ServerOptions* options, bool enable_namespace);
 
+/// Enable peer access to allow GPU device to directly access the memory of
+/// another GPU device. Note that even when this option is set to True, Triton
+/// will only try to enable peer access and might fail to enable it if the
+/// underlying system doesn't support peer access.
+///
+/// \param options The server options object.
+/// \param enable_peer_access Whether to enable peer access or not.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetEnablePeerAccess(
+    struct TRITONSERVER_ServerOptions* options, bool enable_peer_access);
+
 /// Provide a log output file.
 ///
 /// \param options The server options object.

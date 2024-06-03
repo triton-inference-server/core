@@ -1303,6 +1303,12 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
         triton_object_, enable_namespace));
   }
 
+  void SetEnablePeerAccess(bool enable_peer_access)
+  {
+    ThrowIfError(TRITONSERVER_ServerOptionsSetEnablePeerAccess(
+        triton_object_, enable_peer_access));
+  }
+
   void SetLogFile(const std::string& file)
   {
     ThrowIfError(
@@ -2037,6 +2043,7 @@ PYBIND11_MODULE(triton_bindings, m)
           "set_model_load_retry_count",
           &PyServerOptions::SetModelLoadRetryCount)
       .def("set_model_namespacing", &PyServerOptions::SetModelNamespacing)
+      .def("set_enable_peer_access", &PyServerOptions::SetEnablePeerAccess)
       .def("set_log_file", &PyServerOptions::SetLogFile)
       .def("set_log_info", &PyServerOptions::SetLogInfo)
       .def("set_log_warn", &PyServerOptions::SetLogWarn)

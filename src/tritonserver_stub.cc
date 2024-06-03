@@ -447,6 +447,10 @@ TRITONSERVER_ServerOptionsSetModelNamespacing()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetEnablePeerAccess()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetLogFile()
 {
 }

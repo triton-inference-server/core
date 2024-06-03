@@ -290,10 +290,14 @@ class TritonServerOptions {
   void SetModelLoadRetryCount(unsigned int c) { model_load_retry_count_ = c; }
 
   bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
+  bool PeerAccessEnabled() { return enable_peer_access_; }
+
   void SetModelNamespacingEnabled(const bool e)
   {
     enable_model_namespacing_ = e;
   }
+
+  void SetEnablePeerAccess(const bool e) { enable_peer_access_ = e; }
 
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
@@ -368,6 +372,7 @@ class TritonServerOptions {
   unsigned int model_load_thread_count_;
   unsigned int model_load_retry_count_;
   bool enable_model_namespacing_;
+  bool enable_peer_access_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
@@ -1427,6 +1432,16 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetEnablePeerAccess(
+    TRITONSERVER_ServerOptions* options, bool enable_peer_access)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetEnablePeerAccess(enable_peer_access);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogFile(
     TRITONSERVER_ServerOptions* options, const char* file)
 {
@@ -2416,6 +2431,7 @@ TRITONSERVER_ServerNew(
   lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
   lserver->SetModelLoadRetryCount(loptions->ModelLoadRetryCount());
   lserver->SetModelNamespacingEnabled(loptions->ModelNamespacingEnabled());
+  lserver->SetEnablePeerAccess(loptions->PeerAccessEnabled());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.
