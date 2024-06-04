@@ -35,6 +35,7 @@ from typing import Any, Optional
 
 from tritonserver._api import _model
 from tritonserver._api._allocators import MemoryAllocator
+from tritonserver._api._datautils import CustomKeyErrorDict
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import InvalidArgumentError
@@ -75,7 +76,7 @@ class InferenceRequest:
         Timeout for the inference request in microseconds.
     inputs : Dict[str, Union[Tensor, Any]], default {}
         Dictionary of input names and corresponding input tensors or data.
-    parameters : Dict[str, Union[str, int, bool]], default {}
+    parameters : Dict[str, Union[str, int, bool, float]], default {}
         Dictionary of parameters for the inference request.
     output_memory_type : Optional[DeviceOrMemoryType], default None
         output_memory_type : Optional[DeviceOrMemoryType], default
@@ -129,12 +130,23 @@ class InferenceRequest:
     priority: int = 0
     timeout: int = 0
     inputs: dict[str, Tensor | Any] = field(default_factory=dict)
-    parameters: dict[str, str | int | bool] = field(default_factory=dict)
+    parameters: dict[str, str | int | bool | float] = field(default_factory=dict)
     output_memory_type: Optional[DeviceOrMemoryType] = None
     output_memory_allocator: Optional[MemoryAllocator] = None
     response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
     _serialized_inputs: dict[str, Tensor] = field(init=False, default_factory=dict)
     _server: TRITONSERVER_Server = field(init=False)
+
+    _set_parameter_methods = CustomKeyErrorDict(
+        "Value",
+        "Request Parameter",
+        {
+            str: TRITONSERVER_InferenceRequest.set_string_parameter,
+            int: TRITONSERVER_InferenceRequest.set_int_parameter,
+            float: TRITONSERVER_InferenceRequest.set_double_parameter,
+            bool: TRITONSERVER_InferenceRequest.set_bool_parameter,
+        },
+    )
 
     def __post_init__(self):
         self._server = self.model._server
@@ -161,16 +173,7 @@ class InferenceRequest:
 
     def _set_parameters(self, request):
         for key, value in self.parameters.items():
-            if isinstance(value, str):
-                request.set_string_parameter(key, value)
-            elif isinstance(value, int):
-                request.set_int_parameter(key, value)
-            elif isinstance(value, bool):
-                request.set_bool_parameter(key, value)
-            else:
-                raise InvalidArgumentError(
-                    f"Invalid parameter type {type(value)} for key {key}"
-                )
+            InferenceRequest._set_parameter_methods[type(value)](request, key, value)
 
     def _create_tritonserver_inference_request(self):
         request = TRITONSERVER_InferenceRequest(
