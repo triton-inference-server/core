@@ -450,12 +450,93 @@ class InferenceTests(unittest.TestCase):
             },
         )
 
-        fp16_input = numpy.random.rand(1, 100).astype(dtype=numpy.float16)
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
 
         for response in server.model("test").infer(
+            inputs=inputs,
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            for name, input_ in inputs.items():
+                output_ = response.outputs[name.replace("input", "output")]
+                output_ = numpy.from_dlpack(output_)
+                numpy.testing.assert_array_equal(input_, output_)
+
+        # test normal bool
+        inputs = {"bool_input": [[True, False, False, True]]}
+
+        for response in server.model("test").infer(
+            inputs=inputs,
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            for name, input_ in inputs.items():
+                output_ = numpy.from_dlpack(
+                    response.outputs[name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_, output_)
+
+    def test_parameters(self):
+        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+
+        self.assertTrue(server.ready())
+
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+
+        fp16_input = numpy.random.rand(1, 100).astype(dtype=numpy.float16)
+
+        input_parameters = {
+            "int_parameter": 0,
+            "float_parameter": 0.5,
+            "bool_parameter": False,
+            "string_parameter": "test",
+        }
+        for response in server.model("test").infer(
             inputs={"fp16_input": fp16_input},
+            parameters=input_parameters,
             output_memory_type="cpu",
             raise_on_error=True,
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
+            output_parameters = json.loads(
+                response.outputs["output_parameters"].to_string_array()[0]
+            )
+            assert input_parameters == output_parameters
+
+        with self.assertRaises(tritonserver.InvalidArgumentError):
+            input_parameters = {
+                "invalid": {"test": 1},
+            }
+
+            server.model("test").infer(
+                inputs={"fp16_input": fp16_input},
+                parameters=input_parameters,
+                output_memory_type="cpu",
+                raise_on_error=True,
+            )
+
+        with self.assertRaises(tritonserver.InvalidArgumentError):
+            input_parameters = {
+                "invalid": None,
+            }
+
+            server.model("test").infer(
+                inputs={"fp16_input": fp16_input},
+                parameters=input_parameters,
+                output_memory_type="cpu",
+                raise_on_error=True,
+            )

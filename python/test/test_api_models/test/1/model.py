@@ -32,6 +32,9 @@ class TritonPythonModel:
             )
             outputs.append({"name": output_name, "data_type": data_type, "dims": dims})
 
+        outputs.append(
+            {"name": "output_parameters", "data_type": "TYPE_STRING", "dims": [1]}
+        )
         for input_ in inputs:
             auto_complete_model_config.add_input(input_)
         for output in outputs:
@@ -78,6 +81,7 @@ class TritonPythonModel:
         responses = []
         for request in requests:
             output_tensors = []
+            parameters = []
             for input_tensor in request.inputs():
                 input_value = input_tensor.as_numpy()
 
@@ -93,5 +97,14 @@ class TritonPythonModel:
                     )
                 output_tensors.append(output_tensor)
 
-            responses.append(pb_utils.InferenceResponse(output_tensors=output_tensors))
+            output_parameters = np.array([request.parameters()]).astype(np.object_)
+            output_tensors.append(
+                pb_utils.Tensor("output_parameters", output_parameters)
+            )
+
+            responses.append(
+                pb_utils.InferenceResponse(
+                    output_tensors=output_tensors,
+                )
+            )
         return responses
