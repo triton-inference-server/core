@@ -460,10 +460,10 @@ class InferenceTests(unittest.TestCase):
             output_memory_type="cpu",
             raise_on_error=True,
         ):
-            for name, input_ in inputs.items():
-                output_ = response.outputs[name.replace("input", "output")]
-                output_ = numpy.from_dlpack(output_)
-                numpy.testing.assert_array_equal(input_, output_)
+            for input_name, input_value in inputs.items():
+                output_value = response.outputs[input_name.replace("input", "output")]
+                output_value = numpy.from_dlpack(output_value)
+                numpy.testing.assert_array_equal(input_value, output_value)
 
         # test normal bool
         inputs = {"bool_input": [[True, False, False, True]]}
@@ -473,11 +473,11 @@ class InferenceTests(unittest.TestCase):
             output_memory_type="cpu",
             raise_on_error=True,
         ):
-            for name, input_ in inputs.items():
-                output_ = numpy.from_dlpack(
-                    response.outputs[name.replace("input", "output")]
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
                 )
-                numpy.testing.assert_array_equal(input_, output_)
+                numpy.testing.assert_array_equal(input_value, output_value)
 
     def test_parameters(self):
         server = tritonserver.Server(self._server_options).start(wait_until_ready=True)

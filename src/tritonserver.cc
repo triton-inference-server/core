@@ -633,6 +633,8 @@ TRITONSERVER_ParameterTypeString(TRITONSERVER_ParameterType paramtype)
       return "INT";
     case TRITONSERVER_PARAMETER_BOOL:
       return "BOOL";
+    case TRITONSERVER_PARAMETER_DOUBLE:
+      return "DOUBLE";
     case TRITONSERVER_PARAMETER_BYTES:
       return "BYTES";
     default:
@@ -655,6 +657,10 @@ TRITONSERVER_ParameterNew(
     case TRITONSERVER_PARAMETER_INT:
       lparam.reset(new tc::InferenceParameter(
           name, *reinterpret_cast<const int64_t*>(value)));
+      break;
+    case TRITONSERVER_PARAMETER_DOUBLE:
+      lparam.reset(new tc::InferenceParameter(
+          name, *reinterpret_cast<const double*>(value)));
       break;
     case TRITONSERVER_PARAMETER_BOOL:
       lparam.reset(new tc::InferenceParameter(
