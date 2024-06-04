@@ -1186,6 +1186,11 @@ InferenceRequest::Normalize()
       if (data_type == inference::DataType::TYPE_STRING) {
         RETURN_IF_ERROR(
             ValidateBytesInputs(input_id, input, &expected_byte_size));
+        // FIXME: -1 is used as a signal to skip total byte size validation for
+        // unhandled cases in ValidateBytesInputs.
+        if (expected_byte_size == -1) {
+          return Status::Success;
+        }
       } else {
         expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
       }
@@ -1294,13 +1299,15 @@ InferenceRequest::ValidateBytesInputs(
           &buffer_memory_id);
       *expected_byte_size += remaining_buffer_size;
 
-      // FIXME: Handle GPU buffers
+      // FIXME: Skip GPU buffers for now, return an expected_byte_size of -1 as
+      // a signal to skip validation.
       if (buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
-        LOG_WARNING << "Validation of GPU byte size buffers is not implemented "
-                       "yet, skipping to the next buffer.";
-        buffer = nullptr;
-        remaining_buffer_size = 0;
-        continue;
+        LOG_WARNING << LogRequest()
+                    << "Validation of GPU byte size buffers is not implemented "
+                       "yet, skipping validation for input: "
+                    << input_id;
+        *expected_byte_size = -1;
+        return Status::Success;
       }
     }
 
@@ -1349,8 +1356,6 @@ InferenceRequest::ValidateBytesInputs(
             std::to_string(buffer_idx));
   }
 
-  // FIXME: If the input contains GPU buffers that get skipped, the element
-  //        count will likely not match expectations.
   // Validate the number of processed elements exactly match expectations.
   if (element_idx != element_count) {
     return Status(
