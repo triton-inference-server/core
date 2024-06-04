@@ -1110,7 +1110,7 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
   } else {
     *child_trace = nullptr;
   }
-  return nullptr;
+  return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");

@@ -27,7 +27,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <iostream>
 #include <memory>
 #include <mutex>
 
@@ -79,7 +78,8 @@ class InferenceTrace {
       std::string activity_name = "")
   {
     if ((level_ & TRITONSERVER_TRACE_LEVEL_TIMESTAMPS) > 0) {
-      if (!activity_name.empty()) {
+      if (activity == TRITONSERVER_TRACE_CUSTOM_ACTIVITY &&
+          !activity_name.empty()) {
         RecordActivityName(timestamp_ns, activity_name);
       }
       activity_fn_(
