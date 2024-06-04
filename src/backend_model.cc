@@ -1343,22 +1343,6 @@ TRITONBACKEND_RequestOutputBufferProperties(
   return nullptr;  // success
 }
 
-
-TRITONBACKEND_DECLSPEC TRITONSERVER_Error*
-TRITONBACKEND_RequestTrace(
-    TRITONBACKEND_Request* request, TRITONSERVER_InferenceTrace** trace)
-{
-#ifdef TRITON_ENABLE_TRACING
-  InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
-  *trace =
-      reinterpret_cast<TRITONSERVER_InferenceTrace*>(tr->TraceProxy()->Trace());
-  return nullptr;
-#else
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "tracing is not supported");
-#endif  // TRITON_ENABLE_TRACING
-}
-
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_RequestRelease(
     TRITONBACKEND_Request* request, uint32_t release_flags)

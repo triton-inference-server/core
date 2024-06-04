@@ -1084,20 +1084,6 @@ TRITONSERVER_InferenceTraceRequestId(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
-TRITONSERVER_InferenceTraceName(
-    TRITONSERVER_InferenceTrace* trace, const char** trace_name)
-{
-#ifdef TRITON_ENABLE_TRACING
-  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  *trace_name = ltrace->TraceName().c_str();
-  return nullptr;  // Success
-#else
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
-#endif  // TRITON_ENABLE_TRACING
-}
-
-TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceModelVersion(
     TRITONSERVER_InferenceTrace* trace, int64_t* model_version)
 {
@@ -1131,19 +1117,20 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 #endif  // TRITON_ENABLE_TRACING
 }
 
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceReportActivity(
-    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp)
+    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
+    const char* activity_name)
 {
 #ifdef TRITON_ENABLE_TRACING
   tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  ltrace->Report(TRITONSERVER_TRACE_CUSTOM_ACTIVITY, timestamp);
+  ltrace->Report(TRITONSERVER_TRACE_CUSTOM_ACTIVITY, timestamp, activity_name);
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
 #endif  // TRITON_ENABLE_TRACING
 }
-
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(

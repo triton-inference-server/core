@@ -27,7 +27,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <iostream>
 #include <memory>
+#include <mutex>
 
 #include "constants.h"
 #include "status.h"
@@ -69,14 +71,17 @@ class InferenceTrace {
   void SetModelVersion(int64_t v) { model_version_ = v; }
   void SetRequestId(const std::string& request_id) { request_id_ = request_id; }
   void SetContext(const std::string& context) { context_ = context; }
-  void SetTraceName(const std::string& trace_name) { trace_name_ = trace_name; }
-  const std::string& TraceName() { return trace_name_; }
+  void RecordActivityName(uint64_t timestamp_ns, std::string activity_name);
 
   // Report trace activity.
   void Report(
-      const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns)
+      const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns,
+      std::string activity_name = "")
   {
     if ((level_ & TRITONSERVER_TRACE_LEVEL_TIMESTAMPS) > 0) {
+      if (!activity_name.empty()) {
+        RecordActivityName(timestamp_ns, activity_name);
+      }
       activity_fn_(
           reinterpret_cast<TRITONSERVER_InferenceTrace*>(this), activity,
           timestamp_ns, userp_);
@@ -84,13 +89,15 @@ class InferenceTrace {
   }
 
   // Report trace activity at the current time.
-  void ReportNow(const TRITONSERVER_InferenceTraceActivity activity)
+  void ReportNow(
+      const TRITONSERVER_InferenceTraceActivity activity,
+      std::string activity_name = "")
   {
     if ((level_ & TRITONSERVER_TRACE_LEVEL_TIMESTAMPS) > 0) {
-      Report(
-          activity, std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count());
+      auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                     std::chrono::steady_clock::now().time_since_epoch())
+                     .count();
+      Report(activity, now, activity_name);
     }
   }
 
@@ -125,12 +132,12 @@ class InferenceTrace {
   std::string model_name_;
   int64_t model_version_;
   std::string request_id_;
-  std::string trace_name_;
 
   // Maintain next id statically so that trace id is unique even
   // across traces
   static std::atomic<uint64_t> next_id_;
-  std::string context_;
+  std::string context_ = "";
+  std::mutex mu_;
 };
 
 //
@@ -147,16 +154,18 @@ class InferenceTraceProxy {
   InferenceTrace* Trace() { return trace_; }
   int64_t Id() const { return trace_->Id(); }
   int64_t ParentId() const { return trace_->ParentId(); }
-  const std::string& TraceName() { return trace_->TraceName(); }
   const std::string& ModelName() const { return trace_->ModelName(); }
   const std::string& RequestId() const { return trace_->RequestId(); }
   int64_t ModelVersion() const { return trace_->ModelVersion(); }
   const std::string& Context() const { return trace_->Context(); }
   void SetModelName(const std::string& n) { trace_->SetModelName(n); }
-  void SetTraceName(const std::string& n) { trace_->SetTraceName(n); }
   void SetRequestId(const std::string& n) { trace_->SetRequestId(n); }
   void SetModelVersion(int64_t v) { trace_->SetModelVersion(v); }
   void SetContext(const std::string& context) { trace_->SetContext(context); }
+  void RecordActivityName(uint64_t timestamp_ns, std::string activity_name)
+  {
+    trace_->RecordActivityName(timestamp_ns, activity_name);
+  }
 
   void Report(
       const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns)
@@ -179,8 +188,6 @@ class InferenceTraceProxy {
         activity, name, datatype, base, byte_size, shape, dim_count,
         memory_type, memory_type_id);
   }
-
-  InferenceTrace* Trace() { return trace_; }
 
   std::shared_ptr<InferenceTraceProxy> SpawnChildTrace();
 
