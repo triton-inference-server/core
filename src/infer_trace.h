@@ -137,7 +137,6 @@ class InferenceTrace {
   // across traces
   static std::atomic<uint64_t> next_id_;
   std::string context_ = "";
-  std::mutex mu_;
 };
 
 //
