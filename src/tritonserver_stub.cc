@@ -195,7 +195,6 @@ TRITONSERVER_InferenceTraceSetContext()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceContext()
-TRITONSERVER_InferenceTraceName()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -740,10 +739,6 @@ TRITONBACKEND_RequestOutputBufferProperties()
 {
 }
 TRITONAPI_DECLSPEC void
-TRITONBACKEND_RequestTrace()
-{
-}
-TRITONAPI_DECLSPEC void
 TRITONBACKEND_RequestRelease()
 {
 }
@@ -1119,6 +1114,7 @@ TRITONAPI_DECLSPEC void
 TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
 {
 }
+
 TRITONAPI_DECLSPEC void
 TRITONSERVER_InferenceTraceReportActivity()
 {
