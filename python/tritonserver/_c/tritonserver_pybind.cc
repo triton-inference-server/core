@@ -217,6 +217,14 @@ class PyParameter : public PyWrapper<struct TRITONSERVER_Parameter> {
   {
   }
 
+  PyParameter(const char* name, double val)
+      : PyWrapper(
+            TRITONSERVER_ParameterNew(
+                name, TRITONSERVER_PARAMETER_DOUBLE, &val),
+            true)
+  {
+  }
+
   PyParameter(const char* name, bool val)
       : PyWrapper(
             TRITONSERVER_ParameterNew(name, TRITONSERVER_PARAMETER_BOOL, &val),
@@ -1764,6 +1772,7 @@ PYBIND11_MODULE(triton_bindings, m)
   py::enum_<TRITONSERVER_ParameterType>(m, "TRITONSERVER_ParameterType")
       .value("STRING", TRITONSERVER_PARAMETER_STRING)
       .value("INT", TRITONSERVER_PARAMETER_INT)
+      .value("DOUBLE", TRITONSERVER_PARAMETER_DOUBLE)
       .value("BOOL", TRITONSERVER_PARAMETER_BOOL)
       .value("BYTES", TRITONSERVER_PARAMETER_BYTES);
   // helper functions
