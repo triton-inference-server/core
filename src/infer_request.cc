@@ -1180,6 +1180,7 @@ InferenceRequest::Normalize()
       const auto& data_type = input.DType();
       const auto& input_dims = input.ShapeWithBatchDim();
       int64_t expected_byte_size = INT_MAX;
+      bool skip_byte_size_check = false;
       // Because Triton expects STRING type to be in special format
       // (prepend 4 bytes to specify string length), so need to add all the
       // first 4 bytes for each element to find expected byte size
@@ -1188,14 +1189,15 @@ InferenceRequest::Normalize()
             ValidateBytesInputs(input_id, input, &expected_byte_size));
         // FIXME: -1 is used as a signal to skip total byte size validation for
         // unhandled cases in ValidateBytesInputs.
-        if (expected_byte_size == -1) {
-          return Status::Success;
-        }
+        skip_byte_size_check = (expected_byte_size == -1);
       } else {
         expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
       }
-      if ((byte_size > INT_MAX) ||
-          (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+
+      bool byte_size_valid =
+          (byte_size > INT_MAX) ||
+          (static_cast<int64_t>(byte_size) != expected_byte_size);
+      if (!skip_byte_size_check && byte_size_valid) {
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() + "input byte size mismatch for input '" + input_id +
@@ -1302,10 +1304,6 @@ InferenceRequest::ValidateBytesInputs(
       // FIXME: Skip GPU buffers for now, return an expected_byte_size of -1 as
       // a signal to skip validation.
       if (buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
-        LOG_WARNING << LogRequest()
-                    << "Validation of GPU byte size buffers is not implemented "
-                       "yet, skipping validation for input: "
-                    << input_id;
         *expected_byte_size = -1;
         return Status::Success;
       }
