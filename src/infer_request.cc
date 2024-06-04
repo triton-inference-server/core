@@ -1269,47 +1269,89 @@ InferenceRequest::ValidateBytesInputs(
     const std::string& input_id, const Input& input,
     int64_t* const expected_byte_size) const
 {
+  *expected_byte_size = 0;
   const auto& input_dims = input.ShapeWithBatchDim();
+
   int64_t element_count = triton::common::GetElementCount(input_dims);
   int64_t element_idx = 0;
-  *expected_byte_size = 0;
-  for (size_t i = 0; i < input.Data()->BufferCount(); ++i) {
-    size_t content_byte_size;
-    TRITONSERVER_MemoryType content_memory_type;
-    int64_t content_memory_id;
-    const char* content = input.Data()->BufferAt(
-        i, &content_byte_size, &content_memory_type, &content_memory_id);
+  size_t remaining_element_size = 0;
 
-    while (content_byte_size >= sizeof(uint32_t)) {
-      if (element_idx >= element_count) {
+  size_t buffer_idx = 0;
+  const size_t buffer_count = input.Data()->BufferCount();
+
+  const char* buffer = nullptr;
+  size_t remaining_buffer_size = 0;
+  TRITONSERVER_MemoryType buffer_memory_type;
+  int64_t buffer_memory_id;
+
+  // Validate elements until all buffers have been fully processed.
+  while (remaining_buffer_size || buffer_idx < buffer_count) {
+    // Get the next buffer if not currently processing one.
+    if (!remaining_buffer_size) {
+      // Reset remaining buffer size and pointers for next buffer.
+      buffer = input.Data()->BufferAt(
+          buffer_idx++, &remaining_buffer_size, &buffer_memory_type,
+          &buffer_memory_id);
+      *expected_byte_size += remaining_buffer_size;
+
+      // FIXME: Handle GPU buffers
+      if (buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
+        LOG_WARNING << "Validation of GPU byte size buffers is not implemented "
+                       "yet, skipping to the next buffer.";
+        buffer = nullptr;
+        remaining_buffer_size = 0;
+        continue;
+      }
+    }
+
+    constexpr size_t kElementSizeIndicator = sizeof(uint32_t);
+    // Get the next element if not currently processing one.
+    if (!remaining_element_size) {
+      // FIXME: Assume the string element's byte size indicator is not spread
+      // across buffer boundaries for simplicity.
+      if (remaining_buffer_size < kElementSizeIndicator) {
         return Status(
             Status::Code::INVALID_ARG,
-            LogRequest() + "unexpected number of string elements " +
-                std::to_string(element_idx + 1) + " for inference input '" +
-                input_id + "', expecting " + std::to_string(element_count));
+            LogRequest() +
+                "Element byte size indicator exceeds the end of the buffer.");
       }
 
-      const uint32_t len = *(reinterpret_cast<const uint32_t*>(content));
-      content += sizeof(uint32_t);
-      content_byte_size -= sizeof(uint32_t);
-      *expected_byte_size += sizeof(uint32_t);
-
-      if (content_byte_size < len) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            LogRequest() + "incomplete string data for inference input '" +
-                input_id + "', expecting string of length " +
-                std::to_string(len) + " but only " +
-                std::to_string(content_byte_size) + " bytes available");
-      }
-
-      content += len;
-      content_byte_size -= len;
-      *expected_byte_size += len;
+      // Start the next element and reset the remaining element size.
+      remaining_element_size = *(reinterpret_cast<const uint32_t*>(buffer));
       element_idx++;
+
+      // Advance pointer and remainder by the indicator size.
+      buffer += kElementSizeIndicator;
+      remaining_buffer_size -= kElementSizeIndicator;
+    }
+
+    // If the remaining buffer fits it: consume the rest of the element, proceed
+    // to the next element.
+    if (remaining_buffer_size >= remaining_element_size) {
+      buffer += remaining_element_size;
+      remaining_buffer_size -= remaining_element_size;
+      remaining_element_size = 0;
+    }
+    // Otherwise the remaining element is larger: consume the rest of the
+    // buffer, proceed to the next buffer.
+    else {
+      remaining_element_size -= remaining_buffer_size;
+      remaining_buffer_size = 0;
     }
   }
 
+  // Validate the number of processed buffers exactly match expectations.
+  if (buffer_idx != buffer_count) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        LogRequest() + "expected to process " + std::to_string(buffer_count) +
+            " buffers for inference input '" + input_id + "', only processed " +
+            std::to_string(buffer_idx));
+  }
+
+  // FIXME: If the input contains GPU buffers that get skipped, the element
+  //        count will likely not match expectations.
+  // Validate the number of processed elements exactly match expectations.
   if (element_idx != element_count) {
     return Status(
         Status::Code::INVALID_ARG,
