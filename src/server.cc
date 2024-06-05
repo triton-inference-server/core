@@ -201,15 +201,11 @@ InferenceServer::Init()
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
-  if (pinned_memory_pool_size_ > 0) {
-    PinnedMemoryManager::Options options(pinned_memory_pool_size_);
-    status = PinnedMemoryManager::Create(options);
-    if (!status.IsOk()) {
-      ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
-      return status;
-    }
-  } else {
-    LOG_INFO << "Pinned memory pool disabled";
+  PinnedMemoryManager::Options options(pinned_memory_pool_size_);
+  status = PinnedMemoryManager::Create(options);
+  if (!status.IsOk()) {
+    ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
+    return status;
   }
 
 #ifdef TRITON_ENABLE_GPU
