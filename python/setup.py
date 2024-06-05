@@ -108,6 +108,6 @@ setup(
     zip_safe=False,
     cmdclass={"bdist_wheel": bdist_wheel},
     data_files=data_files,
-    install_requires=["numpy"],
+    install_requires=["numpy<2"],
     extras_require={"GPU": gpu_extras, "test": test_extras, "all": all_extras},
 )
