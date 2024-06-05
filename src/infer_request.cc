@@ -1180,30 +1180,40 @@ InferenceRequest::Normalize()
       const auto& data_type = input.DType();
       const auto& input_dims = input.ShapeWithBatchDim();
       int64_t expected_byte_size = INT_MAX;
-      bool skip_byte_size_check = false;
-      // Because Triton expects STRING type to be in special format
-      // (prepend 4 bytes to specify string length), so need to add all the
-      // first 4 bytes for each element to find expected byte size
-      if (data_type == inference::DataType::TYPE_STRING) {
-        RETURN_IF_ERROR(
-            ValidateBytesInputs(input_id, input, &expected_byte_size));
-        // FIXME: -1 is used as a signal to skip total byte size validation for
-        // unhandled cases in ValidateBytesInputs.
-        skip_byte_size_check = (expected_byte_size == -1);
-      } else {
-        expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
-      }
 
-      bool byte_size_valid =
-          (byte_size > INT_MAX) ||
-          (static_cast<int64_t>(byte_size) != expected_byte_size);
-      if (!skip_byte_size_check && byte_size_valid) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            LogRequest() + "input byte size mismatch for input '" + input_id +
-                "' for model '" + ModelName() + "'. Expected " +
-                std::to_string(expected_byte_size) + ", got " +
-                std::to_string(byte_size));
+      // Skip byte size validation for TensorRT backend because it breaks
+      // shape-size assumption
+      bool skip_byte_size_check = false;
+      constexpr char trt_prefix[] = "tensorrt_";
+      const std::string& platform = model_raw_->Config().platform();
+      skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
+
+      if (!skip_byte_size_check) {
+        // Because Triton expects STRING type to be in special format
+        // (prepend 4 bytes to specify string length), so need to add all the
+        // first 4 bytes for each element to find expected byte size
+        if (data_type == inference::DataType::TYPE_STRING) {
+          RETURN_IF_ERROR(
+              ValidateBytesInputs(input_id, input, &expected_byte_size));
+          // FIXME: -1 is used as a signal to skip total byte size validation
+          // for unhandled cases in ValidateBytesInputs.
+          skip_byte_size_check |= (expected_byte_size == -1);
+        } else {
+          expected_byte_size =
+              triton::common::GetByteSize(data_type, input_dims);
+        }
+
+        bool byte_size_valid =
+            (byte_size > INT_MAX) ||
+            (static_cast<int64_t>(byte_size) != expected_byte_size);
+        if (!skip_byte_size_check && byte_size_valid) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              LogRequest() + "input byte size mismatch for input '" + input_id +
+                  "' for model '" + ModelName() + "'. Expected " +
+                  std::to_string(expected_byte_size) + ", got " +
+                  std::to_string(byte_size));
+        }
       }
     }
   }
@@ -1283,7 +1293,7 @@ InferenceRequest::ValidateBytesInputs(
   int64_t element_idx = 0;
   size_t remaining_element_size = 0;
 
-  size_t buffer_idx = 0;
+  size_t buffer_next_idx = 0;
   const size_t buffer_count = input.DataBufferCount();
 
   const char* buffer = nullptr;
@@ -1292,16 +1302,16 @@ InferenceRequest::ValidateBytesInputs(
   int64_t buffer_memory_id;
 
   // Validate elements until all buffers have been fully processed.
-  while (remaining_buffer_size || buffer_idx < buffer_count) {
+  while (remaining_buffer_size || buffer_next_idx < buffer_count) {
     // Get the next buffer if not currently processing one.
     if (!remaining_buffer_size) {
       // Reset remaining buffer size and pointers for next buffer.
       RETURN_IF_ERROR(input.DataBuffer(
-          buffer_idx++, (const void**)(&buffer), &remaining_buffer_size,
+          buffer_next_idx++, (const void**)(&buffer), &remaining_buffer_size,
           &buffer_memory_type, &buffer_memory_id));
       *expected_byte_size += remaining_buffer_size;
 
-      if (buffer_idx > buffer_count) {
+      if (buffer_next_idx > buffer_count) {
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() +
@@ -1353,12 +1363,12 @@ InferenceRequest::ValidateBytesInputs(
   }
 
   // Validate the number of processed buffers exactly match expectations.
-  if (buffer_idx != buffer_count) {
+  if (buffer_next_idx != buffer_count) {
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "expected " + std::to_string(buffer_count) +
             " buffers for inference input '" + input_id + "', got " +
-            std::to_string(buffer_idx));
+            std::to_string(buffer_next_idx));
   }
 
   // Validate the number of processed elements exactly match expectations.
