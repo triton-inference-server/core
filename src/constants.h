@@ -66,6 +66,7 @@ constexpr char kEnsemblePlatform[] = "ensemble";
 
 constexpr char kTensorRTExecutionAccelerator[] = "tensorrt";
 constexpr char kOpenVINOExecutionAccelerator[] = "openvino";
+constexpr char kCUDAExecutionAccelerator[] = "cuda";
 constexpr char kGPUIOExecutionAccelerator[] = "gpu_io";
 constexpr char kAutoMixedPrecisionExecutionAccelerator[] =
     "auto_mixed_precision";
