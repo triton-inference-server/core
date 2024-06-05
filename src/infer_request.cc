@@ -1284,7 +1284,7 @@ InferenceRequest::ValidateBytesInputs(
   size_t remaining_element_size = 0;
 
   size_t buffer_idx = 0;
-  const size_t buffer_count = input.Data()->BufferCount();
+  const size_t buffer_count = input.DataBufferCount();
 
   const char* buffer = nullptr;
   size_t remaining_buffer_size = 0;
@@ -1296,9 +1296,9 @@ InferenceRequest::ValidateBytesInputs(
     // Get the next buffer if not currently processing one.
     if (!remaining_buffer_size) {
       // Reset remaining buffer size and pointers for next buffer.
-      buffer = input.Data()->BufferAt(
-          buffer_idx++, &remaining_buffer_size, &buffer_memory_type,
-          &buffer_memory_id);
+      RETURN_IF_ERROR(input.DataBuffer(
+          buffer_idx++, (const void**)(&buffer), &remaining_buffer_size,
+          &buffer_memory_type, &buffer_memory_id));
       *expected_byte_size += remaining_buffer_size;
 
       // FIXME: Skip GPU buffers for now, return an expected_byte_size of -1 as
