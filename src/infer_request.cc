@@ -1301,6 +1301,13 @@ InferenceRequest::ValidateBytesInputs(
           &buffer_memory_type, &buffer_memory_id));
       *expected_byte_size += remaining_buffer_size;
 
+      if (buffer_idx > buffer_count) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            LogRequest() +
+                "element strings exceed the end of the last buffer.");
+      }
+
       // FIXME: Skip GPU buffers for now, return an expected_byte_size of -1 as
       // a signal to skip validation.
       if (buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
@@ -1318,7 +1325,7 @@ InferenceRequest::ValidateBytesInputs(
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() +
-                "Element byte size indicator exceeds the end of the buffer.");
+                "element byte size indicator exceeds the end of the buffer.");
       }
 
       // Start the next element and reset the remaining element size.
@@ -1349,8 +1356,8 @@ InferenceRequest::ValidateBytesInputs(
   if (buffer_idx != buffer_count) {
     return Status(
         Status::Code::INVALID_ARG,
-        LogRequest() + "expected to process " + std::to_string(buffer_count) +
-            " buffers for inference input '" + input_id + "', only processed " +
+        LogRequest() + "expected " + std::to_string(buffer_count) +
+            " buffers for inference input '" + input_id + "', got " +
             std::to_string(buffer_idx));
   }
 
@@ -1359,7 +1366,7 @@ InferenceRequest::ValidateBytesInputs(
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "expected " + std::to_string(element_count) +
-            " strings for inference input '" + input_id + "', got " +
+            " string elements for inference input '" + input_id + "', got " +
             std::to_string(element_idx));
   }
 
