@@ -1203,10 +1203,10 @@ InferenceRequest::Normalize()
               triton::common::GetByteSize(data_type, input_dims);
         }
 
-        bool byte_size_valid =
+        bool byte_size_invalid =
             (byte_size > INT_MAX) ||
             (static_cast<int64_t>(byte_size) != expected_byte_size);
-        if (!skip_byte_size_check && byte_size_valid) {
+        if (!skip_byte_size_check && byte_size_invalid) {
           return Status(
               Status::Code::INVALID_ARG,
               LogRequest() + "input byte size mismatch for input '" + input_id +
