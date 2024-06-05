@@ -1549,6 +1549,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetStringParameter(
     TRITONBACKEND_Response* response, const char* name, const char* value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1558,6 +1563,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1567,6 +1577,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1576,6 +1591,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetDoubleParameter(
     TRITONBACKEND_Response* response, const char* name, const double value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1587,6 +1607,11 @@ TRITONBACKEND_ResponseOutput(
     const char* name, const TRITONSERVER_DataType datatype,
     const int64_t* shape, const uint32_t dims_count)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   *output = nullptr;
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   std::vector<int64_t> lshape(shape, shape + dims_count);
@@ -1602,6 +1627,11 @@ TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
     TRITONSERVER_Error* error)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
 
   std::unique_ptr<InferenceResponse> utr(tr);
