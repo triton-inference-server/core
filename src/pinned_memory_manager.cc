@@ -356,26 +356,24 @@ PinnedMemoryManager::Create(const Options& options)
               "Failed to add Pinned Memory buffer with host policy: " +
                   std::string(ex.what()));
         }
+      } else {
+        LOG_INFO << "Pinned memory pool disabled";
       }
-    }
-    else
-    {
-      LOG_INFO << "Pinned memory pool disabled";
-    }
-    // If no pinned memory is allocated, add an empty entry where all allocation
-    // will be on normal system memory
-    if (instance_->pinned_memory_buffers_.empty()) {
-      try {
-        instance_->AddPinnedMemoryBuffer(
-            std::shared_ptr<PinnedMemory>(new PinnedMemory(
-                nullptr, options.pinned_memory_pool_byte_size_)),
-            0);
-      }
-      catch (const std::exception& ex) {
-        return Status(
-            Status::Code::INTERNAL,
-            "Failed to add empty Pinned Memory entry: " +
-                std::string(ex.what()));
+      // If no pinned memory is allocated, add an empty entry where all
+      // allocation will be on normal system memory
+      if (instance_->pinned_memory_buffers_.empty()) {
+        try {
+          instance_->AddPinnedMemoryBuffer(
+              std::shared_ptr<PinnedMemory>(new PinnedMemory(
+                  nullptr, options.pinned_memory_pool_byte_size_)),
+              0);
+        }
+        catch (const std::exception& ex) {
+          return Status(
+              Status::Code::INTERNAL,
+              "Failed to add empty Pinned Memory entry: " +
+                  std::string(ex.what()));
+        }
       }
     }
   }
