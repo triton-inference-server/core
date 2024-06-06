@@ -1181,23 +1181,26 @@ InferenceRequest::Normalize()
       const auto& input_dims = input.ShapeWithBatchDim();
       int64_t expected_byte_size = INT_MAX;
 
-      // Skip byte size validation for TensorRT backend because it breaks
-      // shape-size assumption
+      // FIXME: Skip byte size validation for TensorRT backend because it breaks
+      // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
+      // reformat_free tensors.
       bool skip_byte_size_check = false;
       constexpr char trt_prefix[] = "tensorrt_";
       const std::string& platform = model_raw_->Config().platform();
       skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
 
       if (!skip_byte_size_check) {
+        TRITONSERVER_MemoryType input_memory_type;
         // Because Triton expects STRING type to be in special format
         // (prepend 4 bytes to specify string length), so need to add all the
         // first 4 bytes for each element to find expected byte size
         if (data_type == inference::DataType::TYPE_STRING) {
-          RETURN_IF_ERROR(
-              ValidateBytesInputs(input_id, input, &expected_byte_size));
-          // FIXME: -1 is used as a signal to skip total byte size validation
-          // for unhandled cases in ValidateBytesInputs.
-          skip_byte_size_check |= (expected_byte_size == -1);
+          RETURN_IF_ERROR(ValidateBytesInputs(
+              input_id, input, &expected_byte_size, &input_memory_type));
+          // FIXME: Temporarily skips byte size checks for GPU tensors. See
+          // DLIS-6820.
+          skip_byte_size_check |=
+              (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
@@ -1284,13 +1287,14 @@ InferenceRequest::ValidateRequestInputs()
 Status
 InferenceRequest::ValidateBytesInputs(
     const std::string& input_id, const Input& input,
-    int64_t* const expected_byte_size) const
+    int64_t* const expected_byte_size,
+    TRITONSERVER_MemoryType* buffer_memory_type) const
 {
   *expected_byte_size = 0;
   const auto& input_dims = input.ShapeWithBatchDim();
 
   int64_t element_count = triton::common::GetElementCount(input_dims);
-  int64_t element_idx = 0;
+  int64_t element_checked = 0;
   size_t remaining_element_size = 0;
 
   size_t buffer_next_idx = 0;
@@ -1298,7 +1302,6 @@ InferenceRequest::ValidateBytesInputs(
 
   const char* buffer = nullptr;
   size_t remaining_buffer_size = 0;
-  TRITONSERVER_MemoryType buffer_memory_type;
   int64_t buffer_memory_id;
 
   // Validate elements until all buffers have been fully processed.
@@ -1308,20 +1311,12 @@ InferenceRequest::ValidateBytesInputs(
       // Reset remaining buffer size and pointers for next buffer.
       RETURN_IF_ERROR(input.DataBuffer(
           buffer_next_idx++, (const void**)(&buffer), &remaining_buffer_size,
-          &buffer_memory_type, &buffer_memory_id));
+          buffer_memory_type, &buffer_memory_id));
       *expected_byte_size += remaining_buffer_size;
-
-      if (buffer_next_idx > buffer_count) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            LogRequest() +
-                "element strings exceed the end of the last buffer.");
-      }
 
       // FIXME: Skip GPU buffers for now, return an expected_byte_size of -1 as
       // a signal to skip validation.
-      if (buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
-        *expected_byte_size = -1;
+      if (*buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
         return Status::Success;
       }
     }
@@ -1340,7 +1335,7 @@ InferenceRequest::ValidateBytesInputs(
 
       // Start the next element and reset the remaining element size.
       remaining_element_size = *(reinterpret_cast<const uint32_t*>(buffer));
-      element_idx++;
+      element_checked++;
 
       // Advance pointer and remainder by the indicator size.
       buffer += kElementSizeIndicator;
@@ -1372,12 +1367,12 @@ InferenceRequest::ValidateBytesInputs(
   }
 
   // Validate the number of processed elements exactly match expectations.
-  if (element_idx != element_count) {
+  if (element_checked != element_count) {
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "expected " + std::to_string(element_count) +
             " string elements for inference input '" + input_id + "', got " +
-            std::to_string(element_idx));
+            std::to_string(element_checked));
   }
 
   return Status::Success;
