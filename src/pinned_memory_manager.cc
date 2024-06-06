@@ -36,7 +36,8 @@
 #include <cuda_runtime_api.h>
 #endif  // TRITON_ENABLE_GPU
 
-namespace triton { namespace core {
+namespace triton {
+namespace core {
 
 namespace {
 
@@ -263,8 +264,8 @@ PinnedMemoryManager::Create(const Options& options)
   instance_.reset(new PinnedMemoryManager());
   if (options.host_policy_map_.empty()) {
     void* buffer = nullptr;
-#ifdef TRITON_ENABLE_GPU
     if (options.pinned_memory_pool_byte_size_ > 0) {
+#ifdef TRITON_ENABLE_GPU
       auto err = cudaHostAlloc(
           &buffer, options.pinned_memory_pool_byte_size_,
           cudaHostAllocPortable);
@@ -324,8 +325,8 @@ PinnedMemoryManager::Create(const Options& options)
         continue;
       }
       void* buffer = nullptr;
-#ifdef TRITON_ENABLE_GPU
       if (options.pinned_memory_pool_byte_size_ > 0) {
+#ifdef TRITON_ENABLE_GPU
         auto err = cudaHostAlloc(
             &buffer, options.pinned_memory_pool_byte_size_,
             cudaHostAllocPortable);
@@ -356,89 +357,84 @@ PinnedMemoryManager::Create(const Options& options)
               "Failed to add Pinned Memory buffer with host policy: " +
                   std::string(ex.what()));
         }
+      } else {
+        LOG_INFO << "Pinned memory pool disabled";
+      }
+      // If no pinned memory is allocated, add an empty entry where all
+      // allocation will be on normal system memory
+      if (instance_->pinned_memory_buffers_.empty()) {
+        try {
+          instance_->AddPinnedMemoryBuffer(
+              std::shared_ptr<PinnedMemory>(new PinnedMemory(
+                  nullptr, options.pinned_memory_pool_byte_size_)),
+              0);
+        }
+        catch (const std::exception& ex) {
+          return Status(
+              Status::Code::INTERNAL,
+              "Failed to add empty Pinned Memory entry: " +
+                  std::string(ex.what()));
+        }
       }
     }
-    else
-    {
-      LOG_INFO << "Pinned memory pool disabled";
-    }
-    // If no pinned memory is allocated, add an empty entry where all allocation
-    // will be on normal system memory
-    if (instance_->pinned_memory_buffers_.empty()) {
-      try {
-        instance_->AddPinnedMemoryBuffer(
-            std::shared_ptr<PinnedMemory>(new PinnedMemory(
-                nullptr, options.pinned_memory_pool_byte_size_)),
-            0);
-      }
-      catch (const std::exception& ex) {
-        return Status(
-            Status::Code::INTERNAL,
-            "Failed to add empty Pinned Memory entry: " +
-                std::string(ex.what()));
-      }
-    }
-  }
-  pinned_memory_byte_size_ = options.pinned_memory_pool_byte_size_;
-  return Status::Success;
-}
-
-Status
-PinnedMemoryManager::Alloc(
-    void** ptr, uint64_t size, TRITONSERVER_MemoryType* allocated_type,
-    bool allow_nonpinned_fallback)
-{
-  if (instance_ == nullptr) {
-    return Status(
-        Status::Code::UNAVAILABLE, "PinnedMemoryManager has not been created");
+    pinned_memory_byte_size_ = options.pinned_memory_pool_byte_size_;
+    return Status::Success;
   }
 
-  auto pinned_memory_buffer =
-      instance_->pinned_memory_buffers_.begin()->second.get();
-  if (instance_->pinned_memory_buffers_.size() > 1) {
-    unsigned long node_mask;
-    if (GetNumaMemoryPolicyNodeMask(&node_mask).IsOk()) {
-      auto it = instance_->pinned_memory_buffers_.find(node_mask);
-      if (it != instance_->pinned_memory_buffers_.end()) {
-        pinned_memory_buffer = it->second.get();
+  Status PinnedMemoryManager::Alloc(
+      void** ptr, uint64_t size, TRITONSERVER_MemoryType* allocated_type,
+      bool allow_nonpinned_fallback)
+  {
+    if (instance_ == nullptr) {
+      return Status(
+          Status::Code::UNAVAILABLE,
+          "PinnedMemoryManager has not been created");
+    }
+
+    auto pinned_memory_buffer =
+        instance_->pinned_memory_buffers_.begin()->second.get();
+    if (instance_->pinned_memory_buffers_.size() > 1) {
+      unsigned long node_mask;
+      if (GetNumaMemoryPolicyNodeMask(&node_mask).IsOk()) {
+        auto it = instance_->pinned_memory_buffers_.find(node_mask);
+        if (it != instance_->pinned_memory_buffers_.end()) {
+          pinned_memory_buffer = it->second.get();
+        }
       }
     }
+
+    return instance_->AllocInternal(
+        ptr, size, allocated_type, allow_nonpinned_fallback,
+        pinned_memory_buffer);
   }
 
-  return instance_->AllocInternal(
-      ptr, size, allocated_type, allow_nonpinned_fallback,
-      pinned_memory_buffer);
-}
-
-Status
-PinnedMemoryManager::Free(void* ptr)
-{
-  if (instance_ == nullptr) {
-    return Status(
-        Status::Code::UNAVAILABLE, "PinnedMemoryManager has not been created");
-  }
-
-  return instance_->FreeInternal(ptr);
-}
-
-uint64_t
-PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
-{
-  return pinned_memory_byte_size_;
-}
-
-uint64_t
-PinnedMemoryManager::GetUsedPinnedMemoryByteSize()
-{
-  std::lock_guard<std::mutex> lk(allocated_buffer_mtx_);
-  uint64_t used_pinned_memory_size = 0;
-  if (!allocated_pinned_memory_buffers_.empty()) {
-    for (const auto& it : allocated_pinned_memory_buffers_) {
-      used_pinned_memory_size += it->GetUsedPinnedMemorySizeInternal();
+  Status PinnedMemoryManager::Free(void* ptr)
+  {
+    if (instance_ == nullptr) {
+      return Status(
+          Status::Code::UNAVAILABLE,
+          "PinnedMemoryManager has not been created");
     }
+
+    return instance_->FreeInternal(ptr);
   }
 
-  return used_pinned_memory_size;
-}
+  uint64_t PinnedMemoryManager::GetTotalPinnedMemoryByteSize()
+  {
+    return pinned_memory_byte_size_;
+  }
 
-}}  // namespace triton::core
+  uint64_t PinnedMemoryManager::GetUsedPinnedMemoryByteSize()
+  {
+    std::lock_guard<std::mutex> lk(allocated_buffer_mtx_);
+    uint64_t used_pinned_memory_size = 0;
+    if (!allocated_pinned_memory_buffers_.empty()) {
+      for (const auto& it : allocated_pinned_memory_buffers_) {
+        used_pinned_memory_size += it->GetUsedPinnedMemorySizeInternal();
+      }
+    }
+
+    return used_pinned_memory_size;
+  }
+}
+}  // namespace triton::core
