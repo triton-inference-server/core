@@ -263,7 +263,7 @@ PinnedMemoryManager::Create(const Options& options)
   instance_.reset(new PinnedMemoryManager());
   if (options.host_policy_map_.empty()) {
     void* buffer = nullptr;
-    if (options.pinned_memory_pool_byte_size_ > 0) {
+    // if (options.pinned_memory_pool_byte_size_ > 0) {
 #ifdef TRITON_ENABLE_GPU
       auto err = cudaHostAlloc(
           &buffer, options.pinned_memory_pool_byte_size_,
@@ -290,9 +290,9 @@ PinnedMemoryManager::Create(const Options& options)
             Status::Code::INTERNAL,
             "Failed to add Pinned Memory buffer: " + std::string(ex.what()));
       }
-    } else {
-      LOG_INFO << "Pinned memory pool disabled";
-    }
+    // } else {
+    //   LOG_INFO << "Pinned memory pool disabled";
+    // }
 
   } else {
     // Create only one buffer / manager should be created for one node,
@@ -324,7 +324,7 @@ PinnedMemoryManager::Create(const Options& options)
         continue;
       }
       void* buffer = nullptr;
-      if (options.pinned_memory_pool_byte_size_ > 0) {
+//      if (options.pinned_memory_pool_byte_size_ > 0) {
 #ifdef TRITON_ENABLE_GPU
         auto err = cudaHostAlloc(
             &buffer, options.pinned_memory_pool_byte_size_,
@@ -356,9 +356,9 @@ PinnedMemoryManager::Create(const Options& options)
               "Failed to add Pinned Memory buffer with host policy: " +
                   std::string(ex.what()));
         }
-      } else {
-        LOG_INFO << "Pinned memory pool disabled";
-      }
+//      } else {
+//        LOG_INFO << "Pinned memory pool disabled";
+//      }
       // If no pinned memory is allocated, add an empty entry where all
       // allocation will be on normal system memory
       if (instance_->pinned_memory_buffers_.empty()) {
