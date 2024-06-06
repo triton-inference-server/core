@@ -263,8 +263,8 @@ PinnedMemoryManager::Create(const Options& options)
   instance_.reset(new PinnedMemoryManager());
   if (options.host_policy_map_.empty()) {
     void* buffer = nullptr;
-#ifdef TRITON_ENABLE_GPU
     if (options.pinned_memory_pool_byte_size_ > 0) {
+#ifdef TRITON_ENABLE_GPU
       auto err = cudaHostAlloc(
           &buffer, options.pinned_memory_pool_byte_size_,
           cudaHostAllocPortable);
@@ -324,8 +324,8 @@ PinnedMemoryManager::Create(const Options& options)
         continue;
       }
       void* buffer = nullptr;
-#ifdef TRITON_ENABLE_GPU
       if (options.pinned_memory_pool_byte_size_ > 0) {
+#ifdef TRITON_ENABLE_GPU
         auto err = cudaHostAlloc(
             &buffer, options.pinned_memory_pool_byte_size_,
             cudaHostAllocPortable);
