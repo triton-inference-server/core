@@ -176,6 +176,9 @@ InferenceResponse::AddOutput(
   if (model_ != nullptr) {
     const inference::ModelOutput* output_config;
     RETURN_IF_ERROR(model_->GetOutput(name, &output_config));
+    if(output_config == nullptr) {
+      LOG_VERBOSE(1) << "output_config NULL";
+    }
     if (output_config->has_reshape()) {
       const bool has_batch_dim = (model_->Config().max_batch_size() > 0);
       outputs_.back().Reshape(has_batch_dim, output_config);
