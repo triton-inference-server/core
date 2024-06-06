@@ -263,7 +263,7 @@ PinnedMemoryManager::Create(const Options& options)
   instance_.reset(new PinnedMemoryManager());
   if (options.host_policy_map_.empty()) {
     void* buffer = nullptr;
-    // if (options.pinned_memory_pool_byte_size_ > 0) {
+    if (options.pinned_memory_pool_byte_size_ > 0) {
 #ifdef TRITON_ENABLE_GPU
       auto err = cudaHostAlloc(
           &buffer, options.pinned_memory_pool_byte_size_,
@@ -279,21 +279,20 @@ PinnedMemoryManager::Create(const Options& options)
                  << options.pinned_memory_pool_byte_size_;
       }
 #endif  // TRITON_ENABLE_GPU
-      try {
-        instance_->AddPinnedMemoryBuffer(
-            std::shared_ptr<PinnedMemory>(new PinnedMemory(
-                buffer, options.pinned_memory_pool_byte_size_)),
-            0);
-      }
-      catch (const std::exception& ex) {
-        return Status(
-            Status::Code::INTERNAL,
-            "Failed to add Pinned Memory buffer: " + std::string(ex.what()));
-      }
-    // } else {
-    //   LOG_INFO << "Pinned memory pool disabled";
-    // }
-
+    } else {
+      LOG_INFO << "Pinned memory pool disabled";
+    }
+    try {
+      instance_->AddPinnedMemoryBuffer(
+          std::shared_ptr<PinnedMemory>(
+              new PinnedMemory(buffer, options.pinned_memory_pool_byte_size_)),
+          0);
+    }
+    catch (const std::exception& ex) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Failed to add Pinned Memory buffer: " + std::string(ex.what()));
+    }
   } else {
     // Create only one buffer / manager should be created for one node,
     // and all associated devices should request memory from the shared manager
@@ -324,7 +323,7 @@ PinnedMemoryManager::Create(const Options& options)
         continue;
       }
       void* buffer = nullptr;
-//      if (options.pinned_memory_pool_byte_size_ > 0) {
+      if (options.pinned_memory_pool_byte_size_ > 0) {
 #ifdef TRITON_ENABLE_GPU
         auto err = cudaHostAlloc(
             &buffer, options.pinned_memory_pool_byte_size_,
@@ -343,22 +342,22 @@ PinnedMemoryManager::Create(const Options& options)
           LOG_INFO << "Pinned memory pool disabled";
         }
 #endif  // TRITON_ENABLE_GPU
-        ResetNumaMemoryPolicy();
-        try {
-          instance_->AddPinnedMemoryBuffer(
-              std::shared_ptr<PinnedMemory>(new PinnedMemory(
-                  buffer, options.pinned_memory_pool_byte_size_)),
-              node_mask);
-        }
-        catch (const std::exception& ex) {
-          return Status(
-              Status::Code::INTERNAL,
-              "Failed to add Pinned Memory buffer with host policy: " +
-                  std::string(ex.what()));
-        }
-//      } else {
-//        LOG_INFO << "Pinned memory pool disabled";
-//      }
+      } else {
+        LOG_INFO << "Pinned memory pool disabled";
+      }
+      ResetNumaMemoryPolicy();
+      try {
+        instance_->AddPinnedMemoryBuffer(
+            std::shared_ptr<PinnedMemory>(new PinnedMemory(
+                buffer, options.pinned_memory_pool_byte_size_)),
+            node_mask);
+      }
+      catch (const std::exception& ex) {
+        return Status(
+            Status::Code::INTERNAL,
+            "Failed to add Pinned Memory buffer with host policy: " +
+                std::string(ex.what()));
+      }
       // If no pinned memory is allocated, add an empty entry where all
       // allocation will be on normal system memory
       if (instance_->pinned_memory_buffers_.empty()) {
