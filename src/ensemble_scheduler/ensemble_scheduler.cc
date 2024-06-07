@@ -648,7 +648,7 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
     uint32_t count;
     bool parameter_override = false;
     InferenceRequest::SequenceId correlation_id = step_ptr->correlation_id_;
-    uint32_t flags = step_ptr->flags_;
+    uint32_t flags = 0;
     RETURN_IF_TRITONSERVER_ERROR(
         TRITONSERVER_InferenceResponseParameterCount(response, &count));
     for (uint32_t idx = 0; idx < count; idx++) {
