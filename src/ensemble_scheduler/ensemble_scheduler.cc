@@ -649,10 +649,6 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
     bool parameter_override = false;
     InferenceRequest::SequenceId correlation_id = step_ptr->correlation_id_;
     uint32_t flags = 0;
-            LOG_VERBOSE(1) << "in ConsumeResponse "
-                          "step_ptr->flags_ '"
-                       << step_ptr->flags_;
-
     RETURN_IF_TRITONSERVER_ERROR(
         TRITONSERVER_InferenceResponseParameterCount(response, &count));
     for (uint32_t idx = 0; idx < count; idx++) {
@@ -667,7 +663,6 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
             correlation_id = InferenceRequest::SequenceId(
                 *reinterpret_cast<const uint64_t*>(vvalue));
             parameter_override = true;
-            LOG_VERBOSE(1) << "in ConsumeResponse Setting parameter_override PT 1";
             break;
           case TRITONSERVER_PARAMETER_STRING:
             correlation_id = InferenceRequest::SequenceId(
@@ -690,7 +685,6 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
         } else {
           if (*reinterpret_cast<const bool*>(vvalue)) {
             flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_START;
-            LOG_VERBOSE(1) << "in ConsumeResponse Setting parameter_override PT START";
           }
           parameter_override = true;
         }
@@ -703,7 +697,6 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
         } else {
           if (*reinterpret_cast<const bool*>(vvalue)) {
             flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_END;
-            LOG_VERBOSE(1) << "in ConsumeResponse Setting parameter_override PT END";
           }
           parameter_override = true;
         }
