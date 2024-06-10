@@ -563,7 +563,7 @@ EnsembleContext::ResponseAlloc(
             reinterpret_cast<uintptr_t>(*buffer), std::move(allocated_buffer));
       }
     }
-    LOG_VERBOSE(1) << "Internal response allocation New: " << tensor_name
+    LOG_VERBOSE(1) << "Internal response allocation: " << tensor_name
                    << ", size " << byte_size << ", addr " << *buffer
                    << ", memory type " << *allocated_memory_type << ", type id "
                    << *allocated_memory_type_id;
