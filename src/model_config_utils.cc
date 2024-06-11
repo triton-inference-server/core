@@ -303,7 +303,7 @@ ValidateIOShape(
   }
 
   std::string message_prefix_with_name =
-      message_prefix + std::string(" '" + io.name() + "' ");
+      message_prefix + std::string("'" + io.name() + "' ");
 
   if (io.data_type() == inference::DataType::TYPE_INVALID) {
     return Status(
