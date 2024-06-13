@@ -29,7 +29,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import queue
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Optional
@@ -182,9 +181,6 @@ class AsyncResponseIterator:
                 asyncio.run_coroutine_threadsafe(
                     self._user_queue.put(response), self._loop
                 )
-            if flags == TRITONSERVER_ResponseCompleteFlag.FINAL:
-                del self._request
-                self._request = None
         except Exception as e:
             message = f"Catastrophic failure in response callback: {e}"
             LogMessage(LogLevel.ERROR, message)
@@ -308,9 +304,6 @@ class ResponseIterator:
             self._queue.put(response)
             if self._user_queue is not None:
                 self._user_queue.put(response)
-            if flags == TRITONSERVER_ResponseCompleteFlag.FINAL:
-                del self._request
-                self._request = None
         except Exception as e:
             message = f"Catastrophic failure in response callback: {e}"
             LogMessage(LogLevel.ERROR, message)
