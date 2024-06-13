@@ -120,6 +120,7 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     auto p_it = payload_queues_.find(model);
     if (p_it != payload_queues_.end()) {
+      // TODO: Is holding the payload queue mutex needed?
       auto s_it = p_it->second->specific_queues_.find(triton_model_instance);
       if (s_it != p_it->second->specific_queues_.end()) {
         p_it->second->specific_queues_.erase(s_it);
@@ -176,7 +177,7 @@ RateLimiter::WaitForConsumer(
   if (model_instance == nullptr) {
     payload_queue->queue_->WaitForConsumer();
   } else {
-    payload_queue->specific_queues_[model_instance]->WaitForConsumer();
+    payload_queue->GetSpecificQueue(model_instance)->WaitForConsumer();
   }
 }
 
@@ -199,7 +200,7 @@ RateLimiter::WaitingConsumerCount(
   if (model_instance == nullptr) {
     return payload_queue->queue_->WaitingConsumerCount();
   } else {
-    return payload_queue->specific_queues_[model_instance]
+    return payload_queue->GetSpecificQueue(model_instance)
         ->WaitingConsumerCount();
   }
 }
@@ -257,7 +258,7 @@ RateLimiter::EnqueuePayload(
   // Update the pending consumer counts to prevent additional
   // requests from getting enqueued.
   if (pinstance != nullptr) {
-    payload_queue->specific_queues_[pinstance]->DecrementConsumerCount();
+    payload_queue->GetSpecificQueue(pinstance)->DecrementConsumerCount();
   }
   payload_queue->queue_->DecrementConsumerCount();
 
@@ -316,7 +317,7 @@ RateLimiter::DequeuePayload(
   // consumer.
   payload_queue->queue_->IncrementConsumerCount();
   for (const auto instance : instances) {
-    payload_queue->specific_queues_[instance]->IncrementConsumerCount();
+    payload_queue->GetSpecificQueue(instance)->IncrementConsumerCount();
   }
 
   std::vector<std::shared_ptr<Payload>> merged_payloads;
@@ -359,7 +360,7 @@ RateLimiter::DequeuePayload(
     // run with the payload. Hence, need to explicitly
     // decrement the consumer count for the instance
     // which got allocated.
-    payload_queue->specific_queues_[instances.front()]
+    payload_queue->GetSpecificQueue(instances.front())
         ->DecrementConsumerCount();
     instances.pop_front();
   } else {
@@ -380,7 +381,7 @@ RateLimiter::DequeuePayload(
   // and a single consumer thread, we are decrementing the
   // specific instance consumer count as an approximation.
   for (const auto instance : instances) {
-    payload_queue->specific_queues_[instance]->DecrementConsumerCount();
+    payload_queue->GetSpecificQueue(instance)->DecrementConsumerCount();
   }
 }
 
@@ -540,6 +541,7 @@ RateLimiter::SchedulePayload(
     TritonModelInstance* tmi, PayloadQueue* payload_queue,
     const std::shared_ptr<Payload>& payload)
 {
+  // Caller is expected to hold the payload_queue->mu_
   if (tmi == nullptr) {
     payload_queue->queue_->Enqueue(payload);
   } else {
