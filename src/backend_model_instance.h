@@ -174,7 +174,6 @@ class TritonModelInstance {
     std::deque<TritonModelInstance*> model_instances_;
 
     std::thread backend_thread_;
-    std::atomic<bool> backend_thread_exit_;
   };
 
   struct WarmupData {
