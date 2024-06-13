@@ -986,7 +986,7 @@ SequenceBatchScheduler::DelayScheduler(
   queue_request_cnts_[model_instance] = cnt;
 
   size_t seen = 0;
-  for (auto c : queue_request_cnts_) {
+  for (const auto& c : queue_request_cnts_) {
     seen += c.second;
   }
 
