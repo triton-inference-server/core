@@ -361,6 +361,12 @@ class RateLimiter {
     {
       queue_.reset(new InstanceQueue(max_batch_size, max_queue_delay_ns));
     }
+    // TODO: Can the InstanceQueue be deleted while the caller is accessing it?
+    InstanceQueue* GetSpecificQueue(const TritonModelInstance* instance_ptr)
+    {
+      std::lock_guard<std::mutex> lk(mu_);
+      return specific_queues_[instance_ptr].get();
+    }
     std::unique_ptr<InstanceQueue> queue_;
     std::map<const TritonModelInstance*, std::unique_ptr<InstanceQueue>>
         specific_queues_;
