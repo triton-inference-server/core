@@ -638,3 +638,43 @@ install(
   TARGETS request_cancellation_test
   RUNTIME DESTINATION bin
 )
+
+#
+# Unit test for Bytes Input Validation
+#
+add_executable(
+  bytes_input_validation_test
+  bytes_input_validation_test.cc
+)
+
+set_target_properties(
+  bytes_input_validation_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  bytes_input_validation_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  bytes_input_validation_test
+  PRIVATE
+    triton-common-error # from repo-common
+    triton-core
+    GTest::gtest
+    GTest::gtest_main
+    GTest::gmock
+)
+
+install(
+  TARGETS bytes_input_validation_test
+  RUNTIME DESTINATION bin
+)
