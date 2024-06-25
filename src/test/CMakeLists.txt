@@ -640,7 +640,7 @@ install(
 )
 
 #
-# Unit test for Input Shape Validation
+# Unit test for Input Byte Size Validation
 #
 add_executable(
   input_byte_size_test
