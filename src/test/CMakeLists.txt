@@ -638,3 +638,43 @@ install(
   TARGETS request_cancellation_test
   RUNTIME DESTINATION bin
 )
+
+#
+# Unit test for Input Shape Validation
+#
+add_executable(
+  input_byte_size_test
+  input_byte_size_test.cc
+)
+
+set_target_properties(
+  input_byte_size_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  input_byte_size_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  input_byte_size_test
+  PRIVATE
+    triton-common-error # from repo-common
+    triton-core
+    GTest::gtest
+    GTest::gtest_main
+    GTest::gmock
+)
+
+install(
+  TARGETS input_byte_size_test
+  RUNTIME DESTINATION bin
+)
