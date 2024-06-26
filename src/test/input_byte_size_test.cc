@@ -110,10 +110,9 @@ InferResponseComplete(
 {
   if (response != nullptr) {
     // Notify that the completion.
-    std::promise<TRITONSERVER_InferenceResponse*>* p =
+    auto p =
         reinterpret_cast<std::promise<TRITONSERVER_InferenceResponse*>*>(userp);
     p->set_value(response);
-    delete p;
   }
   TRITONSERVER_InferenceResponseDelete(response);
 }
@@ -267,13 +266,13 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
           TRITONSERVER_MEMORY_CPU, 0),
       "assigning INPUT data");
 
-  auto p = new std::promise<TRITONSERVER_InferenceResponse*>();
-  std::future<TRITONSERVER_InferenceResponse*> future = p->get_future();
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
 
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetResponseCallback(
           irequest_, allocator_, nullptr /* response_allocator_userp */,
-          InferResponseComplete, reinterpret_cast<void*>(p)),
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
       "setting response callback");
 
   FAIL_TEST_IF_ERR(
@@ -313,13 +312,13 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
           TRITONSERVER_MEMORY_CPU, 0),
       "assigning INPUT data");
 
-  auto p = new std::promise<TRITONSERVER_InferenceResponse*>();
-  std::future<TRITONSERVER_InferenceResponse*> future = p->get_future();
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
 
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetResponseCallback(
           irequest_, allocator_, nullptr /* response_allocator_userp */,
-          InferResponseComplete, reinterpret_cast<void*>(p)),
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
       "setting response callback");
 
   FAIL_TEST_IF_SUCCESS(
@@ -358,13 +357,13 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       input_data_string_, input_data_size,
       kElementSizeIndicator_ + input_element_size / 2, irequest_);
 
-  auto p = new std::promise<TRITONSERVER_InferenceResponse*>();
-  std::future<TRITONSERVER_InferenceResponse*> future = p->get_future();
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
 
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetResponseCallback(
           irequest_, allocator_, nullptr /* response_allocator_userp */,
-          InferResponseComplete, reinterpret_cast<void*>(p)),
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
       "setting response callback");
 
   FAIL_TEST_IF_ERR(
