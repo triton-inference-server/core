@@ -68,7 +68,7 @@ InferenceTrace::RecordActivityName(
     }
   }
   std::string key = std::to_string(timestamp_ns);
-  context_json.AddString(key.c_str(), &activity_name);
+  context_json.SetStringObject(key.c_str(), activity_name);
   triton::common::TritonJson::WriteBuffer buffer;
   context_json.Write(&buffer);
   context_ = buffer.Contents();
