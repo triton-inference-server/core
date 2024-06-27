@@ -1066,6 +1066,9 @@ InferenceRequest::Normalize()
 
   // Verify that each input shape is valid for the model, make
   // adjustments for reshapes and find the total tensor size.
+  std::cerr
+      << "******************* InferenceRequest::Normalize() *******************"
+      << std::endl;
   for (auto& pr : original_inputs_) {
     const inference::ModelInput* input_config;
     RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
@@ -1171,12 +1174,30 @@ InferenceRequest::Normalize()
         input.MutableShapeWithBatchDim()->push_back(d);
       }
     }
+
     // Matching incoming request's shape and byte size to make sure the
     // payload contains correct number of elements.
     // Note: Since we're using normalized input.ShapeWithBatchDim() here,
     // make sure that all the normalization is before the check.
     {
       const auto& data_type = input.DType();
+
+      triton::common::DimsList full_dims;
+      for (int i = 0; i < input_config->dims_size(); ++i) {
+        full_dims.Add(input_config->dims(i));
+      }
+
+      std::cerr << "\n----------------"
+                << "\n input_config->is_shape_tensor() - "
+                << input_config->is_shape_tensor()
+                << "\n input.IsShapeTensor() - " << input.IsShapeTensor()
+                << "\n input.ShapeWithBatchDim() - "
+                << triton::common::DimsListToString(input.ShapeWithBatchDim())
+                << "\n input.IsShapeTensor() - "
+                << triton::common::DimsListToString(input.OriginalShape())
+                << "\n input_config->dims() - "
+                << triton::common::DimsListToString(full_dims)
+                << "\n----------------" << std::endl;
 
       // FIXME: Skip byte size validation for TensorRT backend because it breaks
       // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
@@ -1217,6 +1238,9 @@ InferenceRequest::Normalize()
       }
     }
   }
+  std::cerr
+      << "*********************************************************************"
+      << std::endl;
   return Status::Success;
 }
 
