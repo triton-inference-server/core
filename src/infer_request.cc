@@ -1187,17 +1187,60 @@ InferenceRequest::Normalize()
         full_dims.Add(input_config->dims(i));
       }
 
-      std::cerr << "\n----------------"
+      std::cerr << "\n---------------- input.Name() - " << input.Name() << " ---------------------"
                 << "\n input_config->is_shape_tensor() - "
                 << input_config->is_shape_tensor()
                 << "\n input.IsShapeTensor() - " << input.IsShapeTensor()
                 << "\n input.ShapeWithBatchDim() - "
                 << triton::common::DimsListToString(input.ShapeWithBatchDim())
-                << "\n input.IsShapeTensor() - "
+                << "\n input.OriginalShape() - "
                 << triton::common::DimsListToString(input.OriginalShape())
                 << "\n input_config->dims() - "
                 << triton::common::DimsListToString(full_dims)
-                << "\n----------------" << std::endl;
+                << std::endl;
+
+
+        if (data_type != inference::DataType::TYPE_STRING) {
+          const auto& input_dims = input.ShapeWithBatchDim();
+          int64_t expected_byte_size = INT_MAX;
+          expected_byte_size =
+              triton::common::GetByteSize(data_type, input_dims);
+          const size_t& byte_size = input.Data()->TotalByteSize();
+          if ((byte_size > INT_MAX) ||
+              (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+            std::cerr << "=======  with input.ShapeWithBatchDim() =======\n" 
+                << (LogRequest() + "input byte size mismatch for input '" +
+                    input_id + "' for model '" + ModelName() + "'. Expected " +
+                    std::to_string(expected_byte_size) + ", got " +
+                    std::to_string(byte_size))  << "\n===============================" << std::endl;
+          } else {
+            std::cerr << "=======  with input.ShapeWithBatchDim() =======\n" 
+                << (LogRequest() + " Expected " + std::to_string(expected_byte_size) + ", got " +
+                    std::to_string(byte_size))  << "\n===============================" << std::endl;
+          }
+        }
+
+        if (data_type != inference::DataType::TYPE_STRING) {
+          const auto& input_dims = input.OriginalShape();
+          int64_t expected_byte_size = INT_MAX;
+          expected_byte_size =
+              triton::common::GetByteSize(data_type, input_dims);
+          const size_t& byte_size = input.Data()->TotalByteSize();
+          if ((byte_size > INT_MAX) ||
+              (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+            std::cerr << "=======  with input.OriginalShape() =======\n" 
+                << (LogRequest() + "input byte size mismatch for input '" +
+                    input_id + "' for model '" + ModelName() + "'. Expected " +
+                    std::to_string(expected_byte_size) + ", got " +
+                    std::to_string(byte_size))  << "\n===============================" << std::endl;
+          } else {
+            std::cerr << "=======  with input.OriginalShape() =======\n" 
+                << (LogRequest() + " Expected " + std::to_string(expected_byte_size) + ", got " +
+                    std::to_string(byte_size)) << "\n===============================" << std::endl;
+          }
+        }
+
+        std::cerr << "\n------------------------------------------------" << std::endl;
 
       // FIXME: Skip byte size validation for TensorRT backend because it breaks
       // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
