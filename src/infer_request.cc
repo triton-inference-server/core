@@ -1011,6 +1011,12 @@ InferenceRequest::Normalize()
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
+      // For a shape tensor, mark that the input is a shape tensor.
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
+      if (input_config->is_shape_tensor()) {
+        input.SetIsShapeTensor(true);
+      }
     }
   } else {
     // Model does support Triton-style batching so each input tensor
@@ -1177,14 +1183,7 @@ InferenceRequest::Normalize()
     // make sure that all the normalization is before the check.
     {
       const auto& data_type = input.DType();
-
-      // FIXME: Skip byte size validation for TensorRT backend because it breaks
-      // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
-      // reformat_free tensors.
       bool skip_byte_size_check = false;
-      constexpr char trt_prefix[] = "tensorrt_";
-      const std::string& platform = model_raw_->Config().platform();
-      skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
 
       if (!skip_byte_size_check) {
         TRITONSERVER_MemoryType input_memory_type;
@@ -1199,7 +1198,9 @@ InferenceRequest::Normalize()
           skip_byte_size_check |=
               (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
-          const auto& input_dims = input.ShapeWithBatchDim();
+          const std::vector<int64_t>& input_dims =
+              input.IsShapeTensor() ? input.OriginalShape()
+                                    : input.ShapeWithBatchDim();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
@@ -1217,6 +1218,9 @@ InferenceRequest::Normalize()
       }
     }
   }
+  std::cerr
+      << "*********************************************************************"
+      << std::endl;
   return Status::Success;
 }
 
