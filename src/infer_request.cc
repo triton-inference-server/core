@@ -1268,8 +1268,8 @@ InferenceRequest::Normalize()
               (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
           const std::vector<int64_t>& input_dims =
-              input_config->is_shape_tensor() ? input.ShapeWithBatchDim()
-                                    : input.OriginalShape();
+              input_config->is_shape_tensor() ? input.OriginalShape()
+                                    : input.ShapeWithBatchDim();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
