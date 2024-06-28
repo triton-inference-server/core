@@ -1067,8 +1067,9 @@ InferenceRequest::Normalize()
   // Verify that each input shape is valid for the model, make
   // adjustments for reshapes and find the total tensor size.
   std::cerr
-      << "******************* InferenceRequest::Normalize() *******************"
+      << "******************* InferenceRequest::Normalize() --- ModelName: " << ModelName() " *******************"
       << std::endl;
+
   for (auto& pr : original_inputs_) {
     const inference::ModelInput* input_config;
     RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
@@ -1188,8 +1189,7 @@ InferenceRequest::Normalize()
       }
 
       // ****************************** Debug *******************************
-      std::cerr << "\n---------------- ModelName: "<< ModelName() 
-                << " --- input.Name: " << input.Name() << " ---------------------"
+      std::cerr << "\n--------------------- input.Name: " << input.Name() << " ---------------------"
                 << "\n input_config->is_shape_tensor() - "
                 << input_config->is_shape_tensor()
                 << "\n input.IsShapeTensor() - " << input.IsShapeTensor()
@@ -1268,7 +1268,7 @@ InferenceRequest::Normalize()
               (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
           const std::vector<int64_t>& input_dims =
-              input.IsShapeTensor() ? input.ShapeWithBatchDim()
+              input_config->is_shape_tensor() ? input.ShapeWithBatchDim()
                                     : input.OriginalShape();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
