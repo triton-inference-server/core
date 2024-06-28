@@ -1326,7 +1326,6 @@ InferenceRequest::ValidateBytesInputs(
       }
 
       // Start the next element and reset the remaining element size.
-      // FIXME: buffer pointer can be invalid and cause segmentation fault.
       remaining_element_size = *(reinterpret_cast<const uint32_t*>(buffer));
       element_checked++;
 
