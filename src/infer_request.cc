@@ -1012,6 +1012,8 @@ InferenceRequest::Normalize()
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
       // For a shape tensor, mark that the input is a shape tensor.
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
         input.SetIsShapeTensor(true);
       }
@@ -1071,8 +1073,8 @@ InferenceRequest::Normalize()
   // Verify that each input shape is valid for the model, make
   // adjustments for reshapes and find the total tensor size.
   std::cerr
-      << "******************* InferenceRequest::Normalize() --- ModelName: " << ModelName() << " *******************"
-      << std::endl;
+      << "******************* InferenceRequest::Normalize() --- ModelName: "
+      << ModelName() << " *******************" << std::endl;
 
   for (auto& pr : original_inputs_) {
     const inference::ModelInput* input_config;
@@ -1193,7 +1195,8 @@ InferenceRequest::Normalize()
       }
 
       // ****************************** Debug *******************************
-      std::cerr << "\n--------------------- input.Name: " << input.Name() << " ---------------------"
+      std::cerr << "\n--------------------- input.Name: " << input.Name()
+                << " ---------------------"
                 << "\n input_config->is_shape_tensor() - "
                 << input_config->is_shape_tensor()
                 << "\n input.IsShapeTensor() - " << input.IsShapeTensor()
@@ -1202,8 +1205,7 @@ InferenceRequest::Normalize()
                 << "\n input.OriginalShape() - "
                 << triton::common::DimsListToString(input.OriginalShape())
                 << "\n input_config->dims() - "
-                << triton::common::DimsListToString(full_dims)
-                << std::endl;
+                << triton::common::DimsListToString(full_dims) << std::endl;
 
       if (data_type != inference::DataType::TYPE_STRING) {
         const auto& input_dims = input.ShapeWithBatchDim();
@@ -1247,16 +1249,17 @@ InferenceRequest::Normalize()
                     << "\n===============================" << std::endl;
         }
       }
-      std::cerr << "\n------------------------------------------------" << std::endl;
+      std::cerr << "\n------------------------------------------------"
+                << std::endl;
       // ***********************************************************************************
 
       // FIXME: Skip byte size validation for TensorRT backend because it breaks
       // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
       // reformat_free tensors.
       bool skip_byte_size_check = false;
-      //constexpr char trt_prefix[] = "tensorrt_";
-      //const std::string& platform = model_raw_->Config().platform();
-      //skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
+      // constexpr char trt_prefix[] = "tensorrt_";
+      // const std::string& platform = model_raw_->Config().platform();
+      // skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
 
       if (!skip_byte_size_check) {
         TRITONSERVER_MemoryType input_memory_type;
