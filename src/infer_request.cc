@@ -1067,7 +1067,7 @@ InferenceRequest::Normalize()
   // Verify that each input shape is valid for the model, make
   // adjustments for reshapes and find the total tensor size.
   std::cerr
-      << "******************* InferenceRequest::Normalize() --- ModelName: " << ModelName() " *******************"
+      << "******************* InferenceRequest::Normalize() --- ModelName: " << ModelName() << " *******************"
       << std::endl;
 
   for (auto& pr : original_inputs_) {
