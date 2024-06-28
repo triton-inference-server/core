@@ -54,26 +54,11 @@ namespace {
         << TRITONSERVER_ErrorMessage(err__.get());                            \
   } while (false)
 
-#define FAIL_TEST_IF_SUCCESS(X, MSG, ERR_MSG)                                 \
+#define FAIL_TEST_IF_SUCCESS(X, MSG, CONDITION)                               \
   do {                                                                        \
     std::shared_ptr<TRITONSERVER_Error> err__((X), TRITONSERVER_ErrorDelete); \
     ASSERT_FALSE((err__ == nullptr)) << "error: " << (MSG) << ": ";           \
-    ASSERT_THAT(                                                              \
-        TRITONSERVER_ErrorMessage(err__.get()),                               \
-        ::testing::HasSubstr((ERR_MSG)))                                      \
-        << "error: "                                                          \
-        << "Unexpected error message: "                                       \
-        << TRITONSERVER_ErrorCodeString(err__.get()) << " - "                 \
-        << TRITONSERVER_ErrorMessage(err__.get());                            \
-  } while (false)
-
-#define FAIL_TEST_IF_SUCCESS_OR_MATCH_ERR_MSG(X, MSG, ERR_MSG)                \
-  do {                                                                        \
-    std::shared_ptr<TRITONSERVER_Error> err__((X), TRITONSERVER_ErrorDelete); \
-    ASSERT_FALSE((err__ == nullptr)) << "error: " << (MSG) << ": ";           \
-    ASSERT_THAT(                                                              \
-        TRITONSERVER_ErrorMessage(err__.get()),                               \
-        Not(::testing::HasSubstr((ERR_MSG))))                                 \
+    ASSERT_THAT(TRITONSERVER_ErrorMessage(err__.get()), CONDITION)            \
         << "error: "                                                          \
         << "Unexpected error message: "                                       \
         << TRITONSERVER_ErrorCodeString(err__.get()) << " - "                 \
@@ -361,11 +346,12 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       "setting response callback");
 
   // Run inference
+  constexpr auto err_msg =
+      "input byte size mismatch for input 'INPUT0' for model 'pt_identity'. "
+      "Expected 32, got 40";
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference response",
-      "input byte size mismatch for input 'INPUT0' for model 'pt_identity'. "
-      "Expected 32, got 40");
+      "expect error with inference response", ::testing::HasSubstr(err_msg));
 }
 
 TEST_F(InputByteSizeTest, ValidStringInputByteSize)
@@ -458,10 +444,11 @@ TEST_F(InputByteSizeTest, StringElementsCountMismatch)
       irequest_);
 
   // Run inference
+  constexpr auto err_msg =
+      "expected 3 string elements for inference input 'INPUT0', got 2";
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference response",
-      "expected 3 string elements for inference input 'INPUT0', got 2");
+      "expect error with inference response", ::testing::HasSubstr(err_msg));
 }
 
 TEST_F(InputByteSizeTest, StringElementSizeMisalign)
@@ -492,10 +479,11 @@ TEST_F(InputByteSizeTest, StringElementSizeMisalign)
       irequest_);
 
   // Run inference
+  constexpr auto err_msg =
+      "element byte size indicator exceeds the end of the buffer";
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference response",
-      "element byte size indicator exceeds the end of the buffer");
+      "expect error with inference response", ::testing::HasSubstr(err_msg));
 }
 
 #ifdef TRITON_ENABLE_GPU
@@ -561,10 +549,14 @@ TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
 
   // Get the inference response
   TRITONSERVER_InferenceResponse* response = future.get();
-  FAIL_TEST_IF_SUCCESS_OR_MATCH_ERR_MSG(
+  constexpr auto err_msg =
+      "expected 3 string elements for inference input 'INPUT0', got 2";
+  // Currently byte_size check for string input is skipped at core level thus
+  // should not receive the above error message. See details in
+  // InferenceRequest::ValidateBytesInputs in infer_request.cc.
+  FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_InferenceResponseError(response),
-      "error with inference response",
-      "expected 3 string elements for inference input 'INPUT0', got 2");
+      "error with inference response", Not(::testing::HasSubstr(err_msg)));
   ASSERT_TRUE(response != nullptr) << "Expect successful inference";
 
   // Clean up CUDA resources
