@@ -58,7 +58,7 @@ namespace {
   do {                                                                        \
     std::shared_ptr<TRITONSERVER_Error> err__((X), TRITONSERVER_ErrorDelete); \
     ASSERT_FALSE((err__ == nullptr)) << "error: " << (MSG) << ": ";           \
-    ASSERT_THAT(TRITONSERVER_ErrorMessage(err__.get()), CONDITION)            \
+    ASSERT_THAT(TRITONSERVER_ErrorMessage(err__.get()), (CONDITION))          \
         << "error: "                                                          \
         << "Unexpected error message: "                                       \
         << TRITONSERVER_ErrorCodeString(err__.get()) << " - "                 \
