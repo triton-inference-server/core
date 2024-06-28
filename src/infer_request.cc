@@ -1187,8 +1187,9 @@ InferenceRequest::Normalize()
         full_dims.Add(input_config->dims(i));
       }
 
-      // ****************************** Debug *****************************************************
-      std::cerr << "\n---------------- input.Name() - " << input.Name() << " ---------------------"
+      // ****************************** Debug *******************************
+      std::cerr << "\n---------------- ModelName: "<< ModelName() 
+                << " --- input.Name: " << input.Name() << " ---------------------"
                 << "\n input_config->is_shape_tensor() - "
                 << input_config->is_shape_tensor()
                 << "\n input.IsShapeTensor() - " << input.IsShapeTensor()
