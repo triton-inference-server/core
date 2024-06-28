@@ -1187,6 +1187,7 @@ InferenceRequest::Normalize()
         full_dims.Add(input_config->dims(i));
       }
 
+      // ****************************** Debug *****************************************************
       std::cerr << "\n---------------- input.Name() - " << input.Name() << " ---------------------"
                 << "\n input_config->is_shape_tensor() - "
                 << input_config->is_shape_tensor()
@@ -1199,56 +1200,58 @@ InferenceRequest::Normalize()
                 << triton::common::DimsListToString(full_dims)
                 << std::endl;
 
-
-        if (data_type != inference::DataType::TYPE_STRING) {
-          const auto& input_dims = input.ShapeWithBatchDim();
-          int64_t expected_byte_size = INT_MAX;
-          expected_byte_size =
-              triton::common::GetByteSize(data_type, input_dims);
-          const size_t& byte_size = input.Data()->TotalByteSize();
-          if ((byte_size > INT_MAX) ||
-              (static_cast<int64_t>(byte_size) != expected_byte_size)) {
-            std::cerr << "=======  with input.ShapeWithBatchDim() =======\n" 
-                << (LogRequest() + "input byte size mismatch for input '" +
-                    input_id + "' for model '" + ModelName() + "'. Expected " +
-                    std::to_string(expected_byte_size) + ", got " +
-                    std::to_string(byte_size))  << "\n===============================" << std::endl;
-          } else {
-            std::cerr << "=======  with input.ShapeWithBatchDim() =======\n" 
-                << (LogRequest() + " Expected " + std::to_string(expected_byte_size) + ", got " +
-                    std::to_string(byte_size))  << "\n===============================" << std::endl;
-          }
+      if (data_type != inference::DataType::TYPE_STRING) {
+        const auto& input_dims = input.ShapeWithBatchDim();
+        int64_t expected_byte_size = INT_MAX;
+        expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
+        const size_t& byte_size = input.Data()->TotalByteSize();
+        if ((byte_size > INT_MAX) ||
+            (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+          std::cerr << "=======  with input.ShapeWithBatchDim() =======\n"
+                    << (LogRequest() + "input byte size mismatch for input '" +
+                        input_id + "' for model '" + ModelName() +
+                        "'. Expected " + std::to_string(expected_byte_size) +
+                        ", got " + std::to_string(byte_size))
+                    << "\n===============================" << std::endl;
+        } else {
+          std::cerr << "=======  with input.ShapeWithBatchDim() =======\n"
+                    << (LogRequest() + " Expected " +
+                        std::to_string(expected_byte_size) + ", got " +
+                        std::to_string(byte_size))
+                    << "\n===============================" << std::endl;
         }
-
-        if (data_type != inference::DataType::TYPE_STRING) {
-          const auto& input_dims = input.OriginalShape();
-          int64_t expected_byte_size = INT_MAX;
-          expected_byte_size =
-              triton::common::GetByteSize(data_type, input_dims);
-          const size_t& byte_size = input.Data()->TotalByteSize();
-          if ((byte_size > INT_MAX) ||
-              (static_cast<int64_t>(byte_size) != expected_byte_size)) {
-            std::cerr << "=======  with input.OriginalShape() =======\n" 
-                << (LogRequest() + "input byte size mismatch for input '" +
-                    input_id + "' for model '" + ModelName() + "'. Expected " +
-                    std::to_string(expected_byte_size) + ", got " +
-                    std::to_string(byte_size))  << "\n===============================" << std::endl;
-          } else {
-            std::cerr << "=======  with input.OriginalShape() =======\n" 
-                << (LogRequest() + " Expected " + std::to_string(expected_byte_size) + ", got " +
-                    std::to_string(byte_size)) << "\n===============================" << std::endl;
-          }
+      }
+      if (data_type != inference::DataType::TYPE_STRING) {
+        const auto& input_dims = input.OriginalShape();
+        int64_t expected_byte_size = INT_MAX;
+        expected_byte_size = triton::common::GetByteSize(data_type, input_dims);
+        const size_t& byte_size = input.Data()->TotalByteSize();
+        if ((byte_size > INT_MAX) ||
+            (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+          std::cerr << "=======  with input.OriginalShape() =======\n"
+                    << (LogRequest() + "input byte size mismatch for input '" +
+                        input_id + "' for model '" + ModelName() +
+                        "'. Expected " + std::to_string(expected_byte_size) +
+                        ", got " + std::to_string(byte_size))
+                    << "\n===============================" << std::endl;
+        } else {
+          std::cerr << "=======  with input.OriginalShape() =======\n"
+                    << (LogRequest() + " Expected " +
+                        std::to_string(expected_byte_size) + ", got " +
+                        std::to_string(byte_size))
+                    << "\n===============================" << std::endl;
         }
-
-        std::cerr << "\n------------------------------------------------" << std::endl;
+      }
+      std::cerr << "\n------------------------------------------------" << std::endl;
+      // ***********************************************************************************
 
       // FIXME: Skip byte size validation for TensorRT backend because it breaks
       // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
       // reformat_free tensors.
       bool skip_byte_size_check = false;
-      constexpr char trt_prefix[] = "tensorrt_";
-      const std::string& platform = model_raw_->Config().platform();
-      skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
+      //constexpr char trt_prefix[] = "tensorrt_";
+      //const std::string& platform = model_raw_->Config().platform();
+      //skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
 
       if (!skip_byte_size_check) {
         TRITONSERVER_MemoryType input_memory_type;
@@ -1263,7 +1266,9 @@ InferenceRequest::Normalize()
           skip_byte_size_check |=
               (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
-          const auto& input_dims = input.ShapeWithBatchDim();
+          const std::vector<int64_t>& input_dims =
+              input.IsShapeTensor() ? input.ShapeWithBatchDim()
+                                    : input.OriginalShape();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
