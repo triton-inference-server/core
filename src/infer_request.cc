@@ -1011,6 +1011,7 @@ InferenceRequest::Normalize()
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
+      // For a shape tensor, mark that the input is a shape tensor.
       if (input_config->is_shape_tensor()) {
         input.SetIsShapeTensor(true);
       }
