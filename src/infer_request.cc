@@ -1011,6 +1011,9 @@ InferenceRequest::Normalize()
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
+      if (input_config->is_shape_tensor()) {
+        input.SetIsShapeTensor(true);
+      }
     }
   } else {
     // Model does support Triton-style batching so each input tensor
@@ -1268,7 +1271,7 @@ InferenceRequest::Normalize()
               (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
           const std::vector<int64_t>& input_dims =
-              input_config->is_shape_tensor() ? input.OriginalShape()
+              input.IsShapeTensor() ? input.OriginalShape()
                                     : input.ShapeWithBatchDim();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
