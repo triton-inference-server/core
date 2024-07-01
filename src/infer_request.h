@@ -590,7 +590,8 @@ class InferenceRequest {
   // 'release_request' is true 'request' is returned as nullptr.
   static void RespondIfError(
       std::unique_ptr<InferenceRequest>& request, const Status& status,
-      const bool release_request = false, FailureReason reason = FailureReason::OTHER);
+      const bool release_request = false,
+      FailureReason reason = FailureReason::OTHER);
 
   // Send an error response to a set of 'requests'. If 'status' is
   // Success then no responses are sent and the requests are not
@@ -603,7 +604,8 @@ class InferenceRequest {
   // returned with all nullptrs.
   static void RespondIfError(
       std::vector<std::unique_ptr<InferenceRequest>>& requests,
-      const Status& status, const bool release_requests = false, FailureReason reason = FailureReason::OTHER);
+      const Status& status, const bool release_requests = false,
+      FailureReason reason = FailureReason::OTHER);
 
   // Release the request. Call the release callback and transfer
   // ownership of the request to the callback. On return 'request' is
@@ -674,10 +676,10 @@ class InferenceRequest {
       const uint64_t compute_output_start_ns, const uint64_t compute_end_ns,
       FailureReason reason);
 
-  void ReportStatistics(
-      MetricModelReporter* metric_reporter, bool success,
-      const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-      const uint64_t compute_output_start_ns, const uint64_t compute_end_ns);
+  // void ReportStatistics(
+  //     MetricModelReporter* metric_reporter, bool success,
+  //     const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
+  //     const uint64_t compute_output_start_ns, const uint64_t compute_end_ns);
 
   // Report the statistics to stats collectors associated with the request.
   // Duration and timestamps provide two granularities for stats collectors.
@@ -685,8 +687,7 @@ class InferenceRequest {
       MetricModelReporter* metric_reporter, bool success,
       const uint64_t compute_start_ns, const uint64_t compute_input_duration_ns,
       const uint64_t compute_infer_duration_ns,
-      const uint64_t compute_output_duration_ns,
-      FailureReason reason);
+      const uint64_t compute_output_duration_ns, FailureReason reason);
 
   // Report the statistics to stats collectors associated with the request on
   // response cache hits. Cache miss stats will be updated through model object

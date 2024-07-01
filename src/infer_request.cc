@@ -421,17 +421,19 @@ InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
   return status;
 }
 
-FailureReason stringToFailureReason(const std::string& error_type) {
-    if (error_type == "REJECTED") {
-        return FailureReason::REJECTED;
-    }
-    if (error_type == "CANCELED") {
-        return FailureReason::CANCELED;
-    }
-    if (error_type == "BACKEND") {
-        return FailureReason::BACKEND;
-    }
-    return FailureReason::OTHER;
+FailureReason
+stringToFailureReason(const std::string& error_type)
+{
+  if (error_type == "REJECTED") {
+    return FailureReason::REJECTED;
+  }
+  if (error_type == "CANCELED") {
+    return FailureReason::CANCELED;
+  }
+  if (error_type == "BACKEND") {
+    return FailureReason::BACKEND;
+  }
+  return FailureReason::OTHER;
 }
 
 void
@@ -457,13 +459,10 @@ InferenceRequest::RespondIfError(
       (request->LogRequest() + "failed to send error response").c_str());
 
   request->ReportStatistics(
-      request->model_raw_->MetricReporter().get(),
-      false, // success: Indicates the operation did not succeed
-      0, // compute_start_ns: Start time of the compute operation, 0 because there was an error before computation
-      0, // compute_input_end_ns: End time of input processing, 0 because there was an error before input processing
-      0, // compute_output_start_ns: Start time of output processing, 0 because there was an error before output processing
-      0, // compute_end_ns: End time of the compute operation, 0 because there was an error before computation ended
-      reason // reason: The specific reason for the failure
+      request->model_raw_->MetricReporter().get(), false /* success */,
+      0 /* compute_start_ns */, 0 /* compute_input_end_ns */,
+      0 /* compute_output_start_ns */, 0 /* compute_end_ns */,
+      reason  // reason: The specific reason for the failure
   );
 
   // If releasing the request then invoke the release callback which
@@ -1387,6 +1386,7 @@ InferenceRequest::ReportStatistics(
     const uint64_t compute_output_start_ns, const uint64_t compute_end_ns,
     FailureReason reason)
 {
+  std::cerr << "===== InferenceRequest::ReportStatistics =====\n";
   if (!collect_stats_) {
     return;
   }
@@ -1420,7 +1420,8 @@ InferenceRequest::ReportStatistics(
         metric_reporter, request_start_ns_, request_end_ns, reason);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
-          nullptr /* metric_reporter */, request_start_ns_, request_end_ns, reason);
+          nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
+          reason);
     }
   }
 }
@@ -1430,8 +1431,7 @@ InferenceRequest::ReportStatisticsWithDuration(
     MetricModelReporter* metric_reporter, bool success,
     const uint64_t compute_start_ns, const uint64_t compute_input_duration_ns,
     const uint64_t compute_infer_duration_ns,
-    const uint64_t compute_output_duration_ns,
-    FailureReason reason)
+    const uint64_t compute_output_duration_ns, FailureReason reason)
 {
   if (!collect_stats_) {
     return;
@@ -1457,7 +1457,8 @@ InferenceRequest::ReportStatisticsWithDuration(
         metric_reporter, request_start_ns_, request_end_ns, reason);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
-          nullptr /* metric_reporter */, request_start_ns_, request_end_ns, reason);
+          nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
+          reason);
     }
   }
 }

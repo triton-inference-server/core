@@ -87,7 +87,7 @@ class RequestTracker {
           metric_reporter_, status_.IsOk(), compute_start_ns_,
           infer_stats.compute_input_duration_ns_,
           infer_stats.compute_infer_duration_ns_,
-          infer_stats.compute_output_duration_ns_);
+          infer_stats.compute_output_duration_ns_, FailureReason::OTHER);
       if (status_.IsOk()) {
         stats_aggregator_->UpdateInferBatchStatsWithDuration(
             metric_reporter_, std::max(1U, request_->BatchSize()),
@@ -1124,7 +1124,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                 "more "
                 "ensemble steps can be made");
         InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_, true, FailureReason::OTHER);
+            request_tracker_->Request(), ensemble_status_, true,
+            FailureReason::OTHER);
       } else {
         request_tracker_->Request()->ResponseFactory()->SendFlags(
             TRITONSERVER_RESPONSE_COMPLETE_FINAL);
@@ -1137,7 +1138,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
           ensemble_status_);
     } else {
       InferenceRequest::RespondIfError(
-          request_tracker_->Request(), ensemble_status_, true, FailureReason::OTHER);
+          request_tracker_->Request(), ensemble_status_, true,
+          FailureReason::OTHER);
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -83,6 +83,7 @@ IsAnyRequestCancelled(std::deque<std::unique_ptr<InferenceRequest>>& requests)
 void
 CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
+  std::cerr << "===== CancelRequests =====\n";
   const static Status cancelled_status = Status(Status::Code::CANCELLED);
   for (auto& req : requests) {
     // Mark the request as cancelled before responding.
@@ -91,7 +92,8 @@ CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
       LOG_ERROR << status.Message();
     }
     // Respond the request as cancelled.
-    InferenceRequest::RespondIfError(req, cancelled_status, true, FailureReason::CANCELED);
+    InferenceRequest::RespondIfError(
+        req, cancelled_status, true, FailureReason::CANCELED);
   }
 }
 
@@ -1173,7 +1175,8 @@ SequenceBatchScheduler::ReaperThread(const int nice)
           "timeout of the corresponding sequence has been expired");
       for (auto& backlog : expired_backlogs) {
         for (auto& req : *backlog->queue_) {
-          InferenceRequest::RespondIfError(req, rejected_status, true, FailureReason::REJECTED);
+          InferenceRequest::RespondIfError(
+              req, rejected_status, true, FailureReason::REJECTED);
         }
       }
     }

@@ -102,6 +102,14 @@ MetricReporterConfig::ParseQuantiles(std::string options)
 //
 // MetricModelReporter
 //
+const std::map<FailureReason, std::string>
+    MetricModelReporter::failure_reasons_map = {
+        {FailureReason::SUCCESS, "SUCCESS"},
+        {FailureReason::REJECTED, "REJECTED"},
+        {FailureReason::CANCELED, "CANCELED"},
+        {FailureReason::BACKEND, "BACKEND"},
+        {FailureReason::OTHER, "OTHER"}};
+
 Status
 MetricModelReporter::Create(
     const ModelIdentifier& model_id, const int64_t model_version,
@@ -184,13 +192,6 @@ MetricModelReporter::~MetricModelReporter()
   }
 }
 
-std::map<FailureReason, std::string> failure_reasons_map = {
-    {FailureReason::REJECTED, "REJECTED"},
-    {FailureReason::CANCELED, "CANCELED"},
-    {FailureReason::BACKEND, "BACKEND"},
-    {FailureReason::OTHER, "OTHER"}
-};
-
 void
 MetricModelReporter::InitializeCounters(
     const std::map<std::string, std::string>& labels)
@@ -240,8 +241,9 @@ MetricModelReporter::InitializeCounters(
   for (const auto& reason_pair : failure_reasons_map) {
     std::map<std::string, std::string> extended_labels = labels;
     extended_labels["reason"] = reason_pair.second;
-    counters_["inf_failure_" + reason_pair.second] = CreateMetric<prometheus::Counter>(
-      Metrics::FamilyInferenceFailure(), extended_labels);
+    counters_["inf_failure_" + reason_pair.second] =
+        CreateMetric<prometheus::Counter>(
+            Metrics::FamilyInferenceFailure(), extended_labels);
   }
 }
 
@@ -361,7 +363,7 @@ MetricModelReporter::IncrementCounter(const std::string& name, double value)
     // No counter metric exists with this name
     return;
   }
-  
+
   auto counter = iter->second;
   if (!counter) {
     // Counter is uninitialized/nullptr
