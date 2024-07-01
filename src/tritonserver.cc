@@ -950,6 +950,8 @@ TRITONSERVER_InferenceTraceActivityString(
       return "TENSOR_BACKEND_INPUT";
     case TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT:
       return "TENSOR_BACKEND_OUTPUT";
+    case TRITONSERVER_TRACE_CUSTOM_ACTIVITY:
+      return "CUSTOM_ACTIVITY";
   }
 
   return "<unknown>";
@@ -1115,6 +1117,23 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 #endif  // TRITON_ENABLE_TRACING
 }
 
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceReportActivity(
+    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
+    const char* activity_name)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  if (trace != nullptr) {
+    ltrace->Report(
+        TRITONSERVER_TRACE_CUSTOM_ACTIVITY, timestamp, activity_name);
+  }
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(
