@@ -1124,7 +1124,10 @@ TRITONSERVER_InferenceTraceReportActivity(
 {
 #ifdef TRITON_ENABLE_TRACING
   tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
-  ltrace->Report(TRITONSERVER_TRACE_CUSTOM_ACTIVITY, timestamp, activity_name);
+  if (trace != nullptr) {
+    ltrace->Report(
+        TRITONSERVER_TRACE_CUSTOM_ACTIVITY, timestamp, activity_name);
+  }
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
