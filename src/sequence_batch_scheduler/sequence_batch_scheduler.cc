@@ -91,6 +91,7 @@ CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
     if (!status.IsOk()) {
       LOG_ERROR << status.Message();
     }
+    LOG_VERBOSE(1) << "CancelRequests metrics called \n";
     // Respond the request as cancelled.
     InferenceRequest::RespondIfError(
         req, cancelled_status, true, FailureReason::CANCELED);

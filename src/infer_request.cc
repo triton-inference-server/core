@@ -442,6 +442,8 @@ InferenceRequest::RespondIfError(
     const bool release_request, FailureReason reason)
 {
   if (status.IsOk()) {
+    std::string reason_str = failureReasonToString(reason);
+    LOG_VERBOSE(1) << "RespondIfError failed for :"<< reason_str << std::endl;
     return;
   }
 

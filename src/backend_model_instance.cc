@@ -686,7 +686,7 @@ TritonModelInstance::Execute(
     for (TRITONBACKEND_Request* tr : triton_requests) {
       std::unique_ptr<InferenceRequest> ur(
           reinterpret_cast<InferenceRequest*>(tr));
-      InferenceRequest::RespondIfError(ur, status, true /* release_requests */);
+      InferenceRequest::RespondIfError(ur, status, true /* release_requests */, FailureReason::OTHER);
     }
 
     TRITONSERVER_ErrorDelete(err);
