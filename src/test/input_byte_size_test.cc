@@ -359,7 +359,7 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "string_identity", -1 /* model_version */),
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -367,7 +367,7 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       "setting request release callback");
 
   // Define input shape
-  std::vector<int64_t> shape{3};
+  std::vector<int64_t> shape({1, 3});
   const size_t input_data_size = sizeof(input_data_string_);
   const size_t input_element_size = std::strlen(input_element_);
 
@@ -417,7 +417,7 @@ TEST_F(InputByteSizeTest, StringElementsCountMismatch)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "string_identity", -1 /* model_version */),
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -425,7 +425,7 @@ TEST_F(InputByteSizeTest, StringElementsCountMismatch)
       "setting request release callback");
 
   // Define input shape
-  std::vector<int64_t> shape{3};
+  std::vector<int64_t> shape({1, 3});
   const size_t input_data_size = sizeof(input_data_string_);
   const size_t input_element_size = std::strlen(input_element_);
 
@@ -456,7 +456,7 @@ TEST_F(InputByteSizeTest, StringElementSizeMisalign)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "string_identity", -1 /* model_version */),
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -464,7 +464,7 @@ TEST_F(InputByteSizeTest, StringElementSizeMisalign)
       "setting request release callback");
 
   // Define input shape
-  std::vector<int64_t> shape{1};
+  std::vector<int64_t> shape({1, 1});
   const size_t input_data_size = sizeof(input_data_string_);
 
   // Set input for the request
@@ -492,7 +492,7 @@ TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "string_identity", -1 /* model_version */),
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -500,7 +500,7 @@ TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
       "setting request release callback");
 
   // Define input shape
-  std::vector<int64_t> shape{3};
+  std::vector<int64_t> shape({1, 3});
   const size_t input_data_size = sizeof(input_data_string_);
   const size_t input_element_size = std::strlen(input_element_);
 
