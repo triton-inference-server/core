@@ -59,6 +59,7 @@ void
 InferenceTrace::RecordActivityName(
     uint64_t timestamp_ns, std::string activity_name)
 {
+  std::lock_guard<std::mutex> lock(mu_);
   triton::common::TritonJson::Value context_json(
       triton::common::TritonJson::ValueType::OBJECT);
   if (!context_.empty()) {
