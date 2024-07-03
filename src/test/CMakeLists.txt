@@ -638,3 +638,62 @@ install(
   TARGETS request_cancellation_test
   RUNTIME DESTINATION bin
 )
+
+#
+# Unit test for Input Byte Size Validation
+#
+add_executable(
+  input_byte_size_test
+  input_byte_size_test.cc
+  ../constants.h
+  ${CUDA_MEMORY_MANAGER_SRCS}
+  ${CUDA_MEMORY_MANAGER_HDRS}
+)
+
+set_target_properties(
+  input_byte_size_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  input_byte_size_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+    ${CNMEM_PATH}/include
+)
+
+target_compile_definitions(
+  input_byte_size_test
+  PRIVATE
+    TRITON_ENABLE_LOGGING=1
+    TRITON_ENABLE_GPU=1
+    TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
+)
+
+find_library(CNMEM_LIBRARY NAMES cnmem PATHS ${CNMEM_PATH}/lib)
+
+target_link_libraries(
+  input_byte_size_test
+  PRIVATE
+    triton-common-error        # from repo-common
+    triton-core
+    triton-common-logging      # from repo-common
+    proto-library              # from repo-common
+    GTest::gtest
+    GTest::gtest_main
+    GTest::gmock
+    protobuf::libprotobuf
+    ${CNMEM_LIBRARY}
+    CUDA::cudart
+)
+
+install(
+  TARGETS input_byte_size_test
+  RUNTIME DESTINATION bin
+)
