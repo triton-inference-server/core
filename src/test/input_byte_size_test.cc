@@ -54,15 +54,16 @@ namespace {
         << TRITONSERVER_ErrorMessage(err__.get());                            \
   } while (false)
 
-#define FAIL_TEST_IF_SUCCESS(X, MSG, CONDITION)                               \
-  do {                                                                        \
-    std::shared_ptr<TRITONSERVER_Error> err__((X), TRITONSERVER_ErrorDelete); \
-    ASSERT_FALSE((err__ == nullptr)) << "error: " << (MSG) << ": ";           \
-    ASSERT_THAT(TRITONSERVER_ErrorMessage(err__.get()), (CONDITION))          \
-        << "error: "                                                          \
-        << "Unexpected error message: "                                       \
-        << TRITONSERVER_ErrorCodeString(err__.get()) << " - "                 \
-        << TRITONSERVER_ErrorMessage(err__.get());                            \
+#define FAIL_TEST_IF_SUCCESS(X, MSG, ERR_MSG)                                  \
+  do {                                                                         \
+    std::shared_ptr<TRITONSERVER_Error> err__((X), TRITONSERVER_ErrorDelete);  \
+    ASSERT_FALSE((err__ == nullptr)) << "error: " << (MSG) << ": ";            \
+    ASSERT_THAT(                                                               \
+        TRITONSERVER_ErrorMessage(err__.get()), ::testing::HasSubstr(ERR_MSG)) \
+        << "error: "                                                           \
+        << "Unexpected error message: "                                        \
+        << TRITONSERVER_ErrorCodeString(err__.get()) << " - "                  \
+        << TRITONSERVER_ErrorMessage(err__.get());                             \
   } while (false)
 
 #ifdef TRITON_ENABLE_GPU
@@ -109,6 +110,7 @@ ResponseRelease(
     size_t byte_size, TRITONSERVER_MemoryType memory_type,
     int64_t memory_type_id)
 {
+  free(buffer);
   return nullptr;  // Success
 }
 
@@ -116,6 +118,9 @@ void
 InferRequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestDelete(request),
+      "deleting inference request");
 }
 
 void
@@ -128,7 +133,6 @@ InferResponseComplete(
         reinterpret_cast<std::promise<TRITONSERVER_InferenceResponse*>*>(userp);
     p->set_value(response);
   }
-  TRITONSERVER_InferenceResponseDelete(response);
 }
 
 void
@@ -236,9 +240,6 @@ class InputByteSizeTest : public ::testing::Test {
     FAIL_TEST_IF_ERR(
         TRITONSERVER_ResponseAllocatorDelete(allocator_),
         "deleting response allocator");
-    FAIL_TEST_IF_ERR(
-        TRITONSERVER_InferenceRequestDelete(irequest_),
-        "deleting inference request");
   }
 
   static TRITONSERVER_Server* server_;
@@ -247,6 +248,7 @@ class InputByteSizeTest : public ::testing::Test {
   static constexpr size_t kElementSizeIndicator_ = sizeof(uint32_t);
   static char input_data_string_[];
   TRITONSERVER_InferenceRequest* irequest_ = nullptr;
+  TRITONSERVER_InferenceResponse* response_ = nullptr;
   std::promise<TRITONSERVER_Error*> completed_;
 };
 
@@ -299,11 +301,13 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       "running inference");
 
   // Get the inference response
-  TRITONSERVER_InferenceResponse* response = future.get();
+  response_ = future.get();
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceResponseError(response),
-      "error with inference response");
-  ASSERT_TRUE(response != nullptr) << "Expect successful inference";
+      TRITONSERVER_InferenceResponseError(response_), "response status");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseDelete(response_),
+      "deleting inference response");
+  ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
 }
 
 TEST_F(InputByteSizeTest, InputByteSizeMismatch)
@@ -346,12 +350,16 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       "setting response callback");
 
   // Run inference
-  constexpr auto err_msg =
-      "input byte size mismatch for input 'INPUT0' for model 'pt_identity'. "
-      "Expected 32, got 40";
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference response", ::testing::HasSubstr(err_msg));
+      "expect error with inference request",
+      "input byte size mismatch for input 'INPUT0' for model 'pt_identity'. "
+      "Expected 32, got 40");
+
+  // Need to manually delete request, otherwise server will not shut down.
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestDelete(irequest_),
+      "deleting inference request");
 }
 
 TEST_F(InputByteSizeTest, ValidStringInputByteSize)
@@ -405,14 +413,16 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       "running inference");
 
   // Get the inference response
-  TRITONSERVER_InferenceResponse* response = future.get();
+  response_ = future.get();
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceResponseError(response),
-      "error with inference response");
-  ASSERT_TRUE(response != nullptr) << "Expect successful inference";
+      TRITONSERVER_InferenceResponseError(response_), "response status");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseDelete(response_),
+      "deleting inference response");
+  ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
 }
 
-TEST_F(InputByteSizeTest, StringElementsCountMismatch)
+TEST_F(InputByteSizeTest, StringCountMismatch)
 {
   // Create an inference request
   FAIL_TEST_IF_ERR(
@@ -424,7 +434,7 @@ TEST_F(InputByteSizeTest, StringElementsCountMismatch)
           irequest_, InferRequestComplete, nullptr /* request_release_userp */),
       "setting request release callback");
 
-  // Define input shape
+  // Shape is larger than actual string count
   std::vector<int64_t> shape({1, 3});
   const size_t input_data_size = sizeof(input_data_string_);
   const size_t input_element_size = std::strlen(input_element_);
@@ -444,14 +454,56 @@ TEST_F(InputByteSizeTest, StringElementsCountMismatch)
       irequest_);
 
   // Run inference
-  constexpr auto err_msg =
-      "expected 3 string elements for inference input 'INPUT0', got 2";
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference response", ::testing::HasSubstr(err_msg));
+      "expect error with inference request",
+      "expected 3 string elements for inference input 'INPUT0', got 2");
+
+  // Need to manually delete request, otherwise server will not shut down.
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestDelete(irequest_),
+      "deleting inference request");
+
+  // Create an inference request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
+      "creating inference request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetReleaseCallback(
+          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
+      "setting request release callback");
+
+  // Shape is smaller than actual string count
+  shape = {1, 1};
+
+  // Set input for the request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAddInput(
+          irequest_, "INPUT0", TRITONSERVER_TYPE_BYTES, shape.data(),
+          shape.size()),
+      "setting input for the request");
+  SplitBytesInput(
+      input_data_string_, input_data_size, kElementSizeIndicator_,
+      TRITONSERVER_MEMORY_CPU, irequest_);
+  SplitBytesInput(
+      input_data_string_, input_data_size,
+      kElementSizeIndicator_ + input_element_size, TRITONSERVER_MEMORY_CPU,
+      irequest_);
+
+  // Run inference
+  FAIL_TEST_IF_SUCCESS(
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
+      "expect error with inference request",
+      "expected 1 string elements for inference input 'INPUT0', got 2");
+
+  // Need to manually delete request, otherwise server will not shut down.
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestDelete(irequest_),
+      "deleting inference request");
 }
 
-TEST_F(InputByteSizeTest, StringElementSizeMisalign)
+TEST_F(InputByteSizeTest, StringSizeMisalign)
 {
   // Create an inference request
   FAIL_TEST_IF_ERR(
@@ -478,29 +530,31 @@ TEST_F(InputByteSizeTest, StringElementSizeMisalign)
       input_data_string_, input_data_size, 2, TRITONSERVER_MEMORY_CPU,
       irequest_);
 
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
+
+  // Set response callback
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetResponseCallback(
+          irequest_, allocator_, nullptr /* response_allocator_userp */,
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
+      "setting response callback");
+
   // Run inference
-  constexpr auto err_msg =
-      "element byte size indicator exceeds the end of the buffer";
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference response", ::testing::HasSubstr(err_msg));
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace
+      */), "expect error with inference request",
+      "element byte size indicator exceeds the end of the buffer");
+
+  // Need to manually delete request, otherwise server will not shut down.
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestDelete(irequest_),
+      "deleting inference request");
 }
 
 #ifdef TRITON_ENABLE_GPU
-TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
+TEST_F(InputByteSizeTest, StringCountMismatchGPU)
 {
-  // Create an inference request
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
-      "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
-
-  // Define input shape
-  std::vector<int64_t> shape({1, 3});
   const size_t input_data_size = sizeof(input_data_string_);
   const size_t input_element_size = std::strlen(input_element_);
 
@@ -515,6 +569,19 @@ TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
           (void*)d_input_data, input_data_string_, input_data_size,
           cudaMemcpyHostToDevice),
       "setting INPUT0 data in GPU memory");
+
+  // Create an inference request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
+      "creating inference request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetReleaseCallback(
+          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
+      "setting request release callback");
+
+  // Shape is larger than actual string count
+  std::vector<int64_t> shape({1, 3});
 
   // Set input for the request
   FAIL_TEST_IF_ERR(
@@ -532,14 +599,14 @@ TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
       kElementSizeIndicator_ + input_element_size, TRITONSERVER_MEMORY_GPU,
       irequest_);
 
-  std::promise<TRITONSERVER_InferenceResponse*> p;
-  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
+  std::promise<TRITONSERVER_InferenceResponse*> p1;
+  std::future<TRITONSERVER_InferenceResponse*> future1 = p1.get_future();
 
   // Set response callback
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetResponseCallback(
           irequest_, allocator_, nullptr /* response_allocator_userp */,
-          InferResponseComplete, reinterpret_cast<void*>(&p)),
+          InferResponseComplete, reinterpret_cast<void*>(&p1)),
       "setting response callback");
 
   // Run inference
@@ -547,21 +614,79 @@ TEST_F(InputByteSizeTest, SkipCUDASharedMemoryChecks)
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
       "running inference");
 
-  // Get the inference response
-  TRITONSERVER_InferenceResponse* response = future.get();
-  constexpr auto err_msg =
-      "expected 3 string elements for inference input 'INPUT0', got 2";
   // Currently byte_size check for string input is skipped at core level thus
   // should not receive the above error message. See details in
   // InferenceRequest::ValidateBytesInputs in infer_request.cc.
+  response_ = future1.get();
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_InferenceResponseError(response),
-      "error with inference response", Not(::testing::HasSubstr(err_msg)));
-  ASSERT_TRUE(response != nullptr) << "Expect successful inference";
+      TRITONSERVER_InferenceResponseError(response_), "response status",
+      "expected 3 strings for inference input 'INPUT0', got 2");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseDelete(response_),
+      "deleting inference response");
+  ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+
+  // Create an inference request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(
+          &irequest_, server_, "simple_identity", -1 /* model_version */),
+      "creating inference request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetReleaseCallback(
+          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
+      "setting request release callback");
+
+  // Shape is smaller than actual string count
+  shape = {1, 1};
+
+  // Set input for the request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAddInput(
+          irequest_, "INPUT0", TRITONSERVER_TYPE_BYTES, shape.data(),
+          shape.size()),
+      "setting input for the request");
+
+  // Assign input data using CUDA shared memory
+  SplitBytesInput(
+      d_input_data, input_data_size, kElementSizeIndicator_,
+      TRITONSERVER_MEMORY_GPU, irequest_);
+  SplitBytesInput(
+      d_input_data, input_data_size,
+      kElementSizeIndicator_ + input_element_size, TRITONSERVER_MEMORY_GPU,
+      irequest_);
+
+  std::promise<TRITONSERVER_InferenceResponse*> p2;
+  std::future<TRITONSERVER_InferenceResponse*> future2 = p2.get_future();
+
+  // Set response callback
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetResponseCallback(
+          irequest_, allocator_, nullptr /* response_allocator_userp */,
+          InferResponseComplete, reinterpret_cast<void*>(&p2)),
+      "setting response callback");
+
+  // Run inference
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
+      "running inference");
+
+  // Currently byte_size check for string input is skipped at core level thus
+  // should not receive the above error message. See details in
+  // InferenceRequest::ValidateBytesInputs in infer_request.cc.
+  response_ = future2.get();
+  FAIL_TEST_IF_SUCCESS(
+      TRITONSERVER_InferenceResponseError(response_), "response status",
+      "unexpected number of string elements 2 for inference input 'INPUT0', "
+      "expecting 1");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseDelete(response_),
+      "deleting inference response");
+  ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
 
   // Clean up CUDA resources
   FAIL_IF_CUDA_ERR(cudaFree(d_input_data), "releasing GPU memory");
 }
+
 #endif  // TRITON_ENABLE_GPU
 
 }  // namespace
