@@ -687,7 +687,7 @@ class InferenceRequest {
       MetricModelReporter* metric_reporter, bool success,
       const uint64_t compute_start_ns, const uint64_t compute_input_duration_ns,
       const uint64_t compute_infer_duration_ns,
-      const uint64_t compute_output_duration_ns, FailureReason reason);
+      const uint64_t compute_output_duration_ns);
 
   // Report the statistics to stats collectors associated with the request on
   // response cache hits. Cache miss stats will be updated through model object

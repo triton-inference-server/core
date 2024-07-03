@@ -436,14 +436,32 @@ stringToFailureReason(const std::string& error_type)
   return FailureReason::OTHER;
 }
 
+std::string
+failureReasonToString_dummy(FailureReason reason)
+{
+  switch (reason) {
+    case FailureReason::SUCCESS:
+      return "SUCCESS";
+    case FailureReason::REJECTED:
+      return "REJECTED";
+    case FailureReason::CANCELED:
+      return "CANCELED";
+    case FailureReason::BACKEND:
+      return "BACKEND";
+    case FailureReason::OTHER:
+      return "OTHER";
+    default:
+      return "OTHER";
+  }
+}
+
 void
 InferenceRequest::RespondIfError(
     std::unique_ptr<InferenceRequest>& request, const Status& status,
     const bool release_request, FailureReason reason)
 {
   if (status.IsOk()) {
-    std::string reason_str = failureReasonToString(reason);
-    LOG_VERBOSE(1) << "RespondIfError failed for :"<< reason_str << std::endl;
+    std::string reason_str = failureReasonToString_dummy(reason);
     return;
   }
 
@@ -1433,7 +1451,7 @@ InferenceRequest::ReportStatisticsWithDuration(
     MetricModelReporter* metric_reporter, bool success,
     const uint64_t compute_start_ns, const uint64_t compute_input_duration_ns,
     const uint64_t compute_infer_duration_ns,
-    const uint64_t compute_output_duration_ns, FailureReason reason)
+    const uint64_t compute_output_duration_ns)
 {
   if (!collect_stats_) {
     return;
@@ -1456,11 +1474,12 @@ InferenceRequest::ReportStatisticsWithDuration(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns, reason);
+        metric_reporter, request_start_ns_, request_end_ns,
+        FailureReason::OTHER);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
           nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
-          reason);
+          FailureReason::OTHER);
     }
   }
 }

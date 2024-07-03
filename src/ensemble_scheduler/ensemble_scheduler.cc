@@ -83,21 +83,23 @@ class RequestTracker {
     if (inflight_request_counter_ == 0) {
 #ifdef TRITON_ENABLE_STATS
       const auto& infer_stats = context_stats_aggregator_.ImmutableInferStats();
-      request_->ReportStatisticsWithDuration(
-          metric_reporter_, status_.IsOk(), compute_start_ns_,
-          infer_stats.compute_input_duration_ns_,
-          infer_stats.compute_infer_duration_ns_,
-          infer_stats.compute_output_duration_ns_, FailureReason::OTHER);
-      if (status_.IsOk()) {
-        stats_aggregator_->UpdateInferBatchStatsWithDuration(
-            metric_reporter_, std::max(1U, request_->BatchSize()),
+      if (request_ != nullptr) {
+        request_->ReportStatisticsWithDuration(
+            metric_reporter_, status_.IsOk(), compute_start_ns_,
             infer_stats.compute_input_duration_ns_,
             infer_stats.compute_infer_duration_ns_,
             infer_stats.compute_output_duration_ns_);
-      }
+        if (status_.IsOk()) {
+          stats_aggregator_->UpdateInferBatchStatsWithDuration(
+              metric_reporter_, std::max(1U, request_->BatchSize()),
+              infer_stats.compute_input_duration_ns_,
+              infer_stats.compute_infer_duration_ns_,
+              infer_stats.compute_output_duration_ns_);
+        }
 #endif
-      InferenceRequest::Release(
-          std::move(request_), TRITONSERVER_REQUEST_RELEASE_ALL);
+        InferenceRequest::Release(
+            std::move(request_), TRITONSERVER_REQUEST_RELEASE_ALL);
+      }
     }
     return (inflight_request_counter_ == 0);
   }
