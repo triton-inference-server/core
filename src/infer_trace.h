@@ -78,8 +78,7 @@ class InferenceTrace {
       std::string activity_name = "")
   {
     if ((level_ & TRITONSERVER_TRACE_LEVEL_TIMESTAMPS) > 0) {
-      if (activity == TRITONSERVER_TRACE_CUSTOM_ACTIVITY &&
-          !activity_name.empty()) {
+      if (activity == TRITONSERVER_TRACE_CUSTOM_ACTIVITY) {
         RecordActivityName(timestamp_ns, activity_name);
       }
       activity_fn_(
@@ -136,7 +135,7 @@ class InferenceTrace {
   // Maintain next id statically so that trace id is unique even
   // across traces
   static std::atomic<uint64_t> next_id_;
-  std::string context_ = "";
+  std::string context_;
   std::mutex mu_;
 };
 
