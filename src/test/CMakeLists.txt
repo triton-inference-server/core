@@ -650,23 +650,6 @@ if(${TRITON_ENABLE_GPU})
     ${CUDA_MEMORY_MANAGER_SRCS}
     ${CUDA_MEMORY_MANAGER_HDRS}
   )
-else()
-  add_executable(
-    input_byte_size_test
-    input_byte_size_test.cc
-  )
-endif() # TRITON_ENABLE_GPU
-
-set_target_properties(
-  input_byte_size_test
-  PROPERTIES
-    SKIP_BUILD_RPATH TRUE
-    BUILD_WITH_INSTALL_RPATH TRUE
-    INSTALL_RPATH_USE_LINK_PATH FALSE
-    INSTALL_RPATH ""
-)
-
-if(${TRITON_ENABLE_GPU})
   target_include_directories(
     input_byte_size_test
     PRIVATE
@@ -701,6 +684,10 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 else()
+  add_executable(
+    input_byte_size_test
+    input_byte_size_test.cc
+  )
   target_include_directories(
     input_byte_size_test
     PRIVATE
@@ -718,6 +705,15 @@ else()
       GTest::gmock
   )
 endif() # TRITON_ENABLE_GPU
+
+set_target_properties(
+  input_byte_size_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
 
 install(
   TARGETS input_byte_size_test
