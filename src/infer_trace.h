@@ -28,6 +28,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <mutex>
 
 #include "constants.h"
 #include "status.h"
@@ -69,12 +70,17 @@ class InferenceTrace {
   void SetModelVersion(int64_t v) { model_version_ = v; }
   void SetRequestId(const std::string& request_id) { request_id_ = request_id; }
   void SetContext(const std::string& context) { context_ = context; }
+  void RecordActivityName(uint64_t timestamp_ns, std::string activity_name);
 
   // Report trace activity.
   void Report(
-      const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns)
+      const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns,
+      std::string activity_name = "")
   {
     if ((level_ & TRITONSERVER_TRACE_LEVEL_TIMESTAMPS) > 0) {
+      if (activity == TRITONSERVER_TRACE_CUSTOM_ACTIVITY) {
+        RecordActivityName(timestamp_ns, activity_name);
+      }
       activity_fn_(
           reinterpret_cast<TRITONSERVER_InferenceTrace*>(this), activity,
           timestamp_ns, userp_);
@@ -82,13 +88,15 @@ class InferenceTrace {
   }
 
   // Report trace activity at the current time.
-  void ReportNow(const TRITONSERVER_InferenceTraceActivity activity)
+  void ReportNow(
+      const TRITONSERVER_InferenceTraceActivity activity,
+      std::string activity_name = "")
   {
     if ((level_ & TRITONSERVER_TRACE_LEVEL_TIMESTAMPS) > 0) {
-      Report(
-          activity, std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::steady_clock::now().time_since_epoch())
-                        .count());
+      auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                     std::chrono::steady_clock::now().time_since_epoch())
+                     .count();
+      Report(activity, now, activity_name);
     }
   }
 
@@ -128,6 +136,7 @@ class InferenceTrace {
   // across traces
   static std::atomic<uint64_t> next_id_;
   std::string context_;
+  std::mutex mu_;
 };
 
 //
@@ -152,6 +161,10 @@ class InferenceTraceProxy {
   void SetRequestId(const std::string& n) { trace_->SetRequestId(n); }
   void SetModelVersion(int64_t v) { trace_->SetModelVersion(v); }
   void SetContext(const std::string& context) { trace_->SetContext(context); }
+  void RecordActivityName(uint64_t timestamp_ns, std::string activity_name)
+  {
+    trace_->RecordActivityName(timestamp_ns, activity_name);
+  }
 
   void Report(
       const TRITONSERVER_InferenceTraceActivity activity, uint64_t timestamp_ns)

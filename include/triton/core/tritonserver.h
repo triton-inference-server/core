@@ -91,7 +91,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 32
+#define TRITONSERVER_API_VERSION_MINOR 33
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -732,7 +732,8 @@ typedef enum tritonserver_traceactivity_enum {
   TRITONSERVER_TRACE_REQUEST_END = 6,
   TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT = 7,
   TRITONSERVER_TRACE_TENSOR_BACKEND_INPUT = 8,
-  TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT = 9
+  TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT = 9,
+  TRITONSERVER_TRACE_CUSTOM_ACTIVITY = 10
 } TRITONSERVER_InferenceTraceActivity;
 
 /// Get the string representation of a trace activity. The returned
@@ -838,6 +839,18 @@ TRITONSERVER_InferenceTraceTensorNew(
     TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
+/// Report a trace activity. All the traces reported using this API will be
+/// using TRITONSERVER_TRACE_CUSTOM_ACTIVITY type.
+///
+/// \param trace The trace object.
+/// \param timestamp The timestamp associated with the trace activity.
+/// \param name The trace activity name.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceReportActivity(
+    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
+    const char* activity_name);
+
 /// Delete a trace object.
 ///
 /// \param trace The trace object.
@@ -920,7 +933,6 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(
     struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
-
 
 /// Get TRITONSERVER_InferenceTrace context.
 ///
