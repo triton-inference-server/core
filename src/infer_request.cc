@@ -436,32 +436,12 @@ stringToFailureReason(const std::string& error_type)
   return FailureReason::OTHER;
 }
 
-std::string
-failureReasonToString_dummy(FailureReason reason)
-{
-  switch (reason) {
-    case FailureReason::SUCCESS:
-      return "SUCCESS";
-    case FailureReason::REJECTED:
-      return "REJECTED";
-    case FailureReason::CANCELED:
-      return "CANCELED";
-    case FailureReason::BACKEND:
-      return "BACKEND";
-    case FailureReason::OTHER:
-      return "OTHER";
-    default:
-      return "OTHER";
-  }
-}
-
 void
 InferenceRequest::RespondIfError(
     std::unique_ptr<InferenceRequest>& request, const Status& status,
     const bool release_request, FailureReason reason)
 {
   if (status.IsOk()) {
-    std::string reason_str = failureReasonToString_dummy(reason);
     return;
   }
 
