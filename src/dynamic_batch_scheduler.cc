@@ -55,7 +55,8 @@ FinishSkippedRequests(
   for (auto& queue : requests) {
     for (auto& request : queue) {
       InferenceRequest::RespondIfError(
-          request, response_status, true, FailureReason::OTHER);
+          request, response_status, true /* release_requests */,
+          FailureReason::OTHER);
     }
   }
 }

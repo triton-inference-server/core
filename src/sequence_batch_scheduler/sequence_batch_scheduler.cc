@@ -93,7 +93,8 @@ CancelRequests(std::vector<std::unique_ptr<InferenceRequest>>&& requests)
     }
     // Respond the request as cancelled.
     InferenceRequest::RespondIfError(
-        req, cancelled_status, true, FailureReason::CANCELED);
+        req, cancelled_status, true /* release_requests */,
+        FailureReason::CANCELED);
   }
 }
 
@@ -1176,7 +1177,8 @@ SequenceBatchScheduler::ReaperThread(const int nice)
       for (auto& backlog : expired_backlogs) {
         for (auto& req : *backlog->queue_) {
           InferenceRequest::RespondIfError(
-              req, rejected_status, true, FailureReason::REJECTED);
+              req, rejected_status, true /* release_requests */,
+              FailureReason::REJECTED);
         }
       }
     }

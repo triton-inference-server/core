@@ -41,8 +41,6 @@ std::string
 failureReasonToString(FailureReason reason)
 {
   switch (reason) {
-    case FailureReason::SUCCESS:
-      return "SUCCESS";
     case FailureReason::REJECTED:
       return "REJECTED";
     case FailureReason::CANCELED:
@@ -69,9 +67,6 @@ InferenceStatsAggregator::UpdateFailure(
 #ifdef TRITON_ENABLE_METRICS
   if (metric_reporter != nullptr) {
     std::string reason_str = failureReasonToString(reason);
-    std::cerr
-        << "===== InferenceStatsAggregator::UpdateFailure - Failure Reason: "
-        << reason_str << std::endl;
     metric_reporter->IncrementCounter("inf_failure_" + reason_str, 1);
   }
 #endif  // TRITON_ENABLE_METRICS

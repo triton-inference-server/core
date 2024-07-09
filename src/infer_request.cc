@@ -458,10 +458,8 @@ InferenceRequest::RespondIfError(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
       (request->LogRequest() + "failed to send error response").c_str());
 
-  request->ReportStatistics(
-      request->model_raw_->MetricReporter().get(), false /* success */,
-      0 /* compute_start_ns */, 0 /* compute_input_end_ns */,
-      0 /* compute_output_start_ns */, 0 /* compute_end_ns */,
+  request->ReportErrorStatistics(
+      request->model_raw_->MetricReporter().get(),
       reason  // reason: The specific reason for the failure
   );
 
@@ -1379,14 +1377,27 @@ InferenceRequest::ValidateBytesInputs(
 }
 
 #ifdef TRITON_ENABLE_STATS
+
+void
+InferenceRequest::ReportErrorStatistics(
+    MetricModelReporter* metric_reporter, FailureReason reason)
+{
+  INFER_STATS_DECL_TIMESTAMP(request_end_ns);
+  model_raw_->MutableStatsAggregator()->UpdateFailure(
+      metric_reporter, request_start_ns_, request_end_ns, reason);
+  if (secondary_stats_aggregator_ != nullptr) {
+    secondary_stats_aggregator_->UpdateFailure(
+        nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
+        reason);
+  }
+}
+
 void
 InferenceRequest::ReportStatistics(
     MetricModelReporter* metric_reporter, bool success,
     const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-    const uint64_t compute_output_start_ns, const uint64_t compute_end_ns,
-    FailureReason reason)
+    const uint64_t compute_output_start_ns, const uint64_t compute_end_ns, )
 {
-  std::cerr << "===== InferenceRequest::ReportStatistics =====\n";
   if (!collect_stats_) {
     return;
   }
@@ -1863,5 +1874,4 @@ operator!=(
 {
   return !(lhs == rhs);
 }
-
 }}  // namespace triton::core

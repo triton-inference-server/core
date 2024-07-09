@@ -104,7 +104,6 @@ MetricReporterConfig::ParseQuantiles(std::string options)
 //
 const std::map<FailureReason, std::string>
     MetricModelReporter::failure_reasons_map = {
-        {FailureReason::SUCCESS, "SUCCESS"},
         {FailureReason::REJECTED, "REJECTED"},
         {FailureReason::CANCELED, "CANCELED"},
         {FailureReason::BACKEND, "BACKEND"},
@@ -198,7 +197,6 @@ MetricModelReporter::InitializeCounters(
 {
   // Always setup these counters, regardless of config
   counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
-  counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
   counter_families_["inf_exec_count"] =
       &Metrics::FamilyInferenceExecutionCount();

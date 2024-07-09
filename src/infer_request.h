@@ -673,13 +673,12 @@ class InferenceRequest {
   void ReportStatistics(
       MetricModelReporter* metric_reporter, bool success,
       const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-      const uint64_t compute_output_start_ns, const uint64_t compute_end_ns,
-      FailureReason reason);
+      const uint64_t compute_output_start_ns, const uint64_t compute_end_ns, );
 
-  // void ReportStatistics(
-  //     MetricModelReporter* metric_reporter, bool success,
-  //     const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-  //     const uint64_t compute_output_start_ns, const uint64_t compute_end_ns);
+  // Report the error statistics to stats collectors associated with the
+  // request. reason provided
+  void ReportErrorStatistics(
+      MetricModelReporter* metric_reporter, FailureReason reason);
 
   // Report the statistics to stats collectors associated with the request.
   // Duration and timestamps provide two granularities for stats collectors.

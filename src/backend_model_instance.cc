@@ -560,7 +560,7 @@ TritonModelInstance::PrepareRequestsOrRespond(
   if (!status.IsOk()) {
     for (auto& r : requests) {
       InferenceRequest::RespondIfError(
-          r, status, true /* release_requests */, FailureReason::BACKEND);
+          r, status, true /* release_requests */, FailureReason::OTHER);
     }
     // Log a single error for batch of requests for better visibility
     LOG_STATUS_ERROR(status, "Requests failed pre-execution checks");
@@ -688,7 +688,7 @@ TritonModelInstance::Execute(
       std::unique_ptr<InferenceRequest> ur(
           reinterpret_cast<InferenceRequest*>(tr));
       InferenceRequest::RespondIfError(
-          ur, status, true /* release_requests */, FailureReason::OTHER);
+          ur, status, true /* release_requests */, FailureReason::BACKEND);
     }
 
     TRITONSERVER_ErrorDelete(err);
@@ -967,7 +967,7 @@ TRITONBACKEND_ModelInstanceReportStatistics(
   InferenceRequest* tr = reinterpret_cast<InferenceRequest*>(request);
   tr->ReportStatistics(
       ti->MetricReporter(), success, exec_start_ns, compute_start_ns,
-      compute_end_ns, exec_end_ns, FailureReason::BACKEND);
+      compute_end_ns, exec_end_ns);
 #endif  // TRITON_ENABLE_STATS
 
   return nullptr;  // success
