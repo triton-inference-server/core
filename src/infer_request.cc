@@ -1428,7 +1428,8 @@ InferenceRequest::ReportStatistics(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns, FailureReason::BACKEND);
+        metric_reporter, request_start_ns_, request_end_ns,
+        FailureReason::BACKEND);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
           nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
