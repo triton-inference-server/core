@@ -1396,7 +1396,7 @@ void
 InferenceRequest::ReportStatistics(
     MetricModelReporter* metric_reporter, bool success,
     const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
-    const uint64_t compute_output_start_ns, const uint64_t compute_end_ns, )
+    const uint64_t compute_output_start_ns, const uint64_t compute_end_ns)
 {
   if (!collect_stats_) {
     return;
@@ -1428,11 +1428,11 @@ InferenceRequest::ReportStatistics(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns, reason);
+        metric_reporter, request_start_ns_, request_end_ns, FailureReason::BACKEND);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
           nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
-          reason);
+          FailureReason::BACKEND);
     }
   }
 }
