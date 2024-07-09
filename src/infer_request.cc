@@ -1465,10 +1465,12 @@ InferenceRequest::ReportStatisticsWithDuration(
           compute_output_duration_ns);
     }
   } else {
+    LOG_VERBOSE(1) << "OTHER metrics called PT 2\n";
     model_raw_->MutableStatsAggregator()->UpdateFailure(
         metric_reporter, request_start_ns_, request_end_ns,
         FailureReason::OTHER);
     if (secondary_stats_aggregator_ != nullptr) {
+      LOG_VERBOSE(1) << "OTHER metrics called PT 3\n";
       secondary_stats_aggregator_->UpdateFailure(
           nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
           FailureReason::OTHER);

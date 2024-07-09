@@ -1137,6 +1137,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                 "unexpected deadlock, at least one output is not set while no "
                 "more "
                 "ensemble steps can be made");
+        LOG_VERBOSE(1) << "OTHER metrics called PT 4\n";
         InferenceRequest::RespondIfError(
             request_tracker_->Request(), ensemble_status_,
             true /* release_requests */, FailureReason::OTHER);
@@ -1151,6 +1152,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL,
           ensemble_status_);
     } else {
+      LOG_VERBOSE(1) << "OTHER metrics called PT 5\n";
       InferenceRequest::RespondIfError(
           request_tracker_->Request(), ensemble_status_,
           true /* release_requests */, FailureReason::OTHER);

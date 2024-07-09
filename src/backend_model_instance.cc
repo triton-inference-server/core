@@ -559,6 +559,7 @@ TritonModelInstance::PrepareRequestsOrRespond(
   // If any errors occurred, respond with error for each request.
   if (!status.IsOk()) {
     for (auto& r : requests) {
+      LOG_VERBOSE(1) << "OTHER metrics called PT 1\n";
       InferenceRequest::RespondIfError(
           r, status, true /* release_requests */, FailureReason::OTHER);
     }

@@ -50,13 +50,14 @@ IsStaleState(Payload::State payload_state)
 void
 FinishSkippedRequests(
     std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&& requests,
-    const Status& response_status)
+    const Status& response_status, bool rejected, FailureReason reason)
 {
   for (auto& queue : requests) {
     for (auto& request : queue) {
+      LOG_VERBOSE(1) << "Adding metric \n";
       InferenceRequest::RespondIfError(
           request, response_status, true /* release_requests */,
-          FailureReason::OTHER);
+          reason);
     }
   }
 }
@@ -71,8 +72,10 @@ FinishRejectedCancelledRequests(
   const static Status rejected_status =
       Status(Status::Code::UNAVAILABLE, "Request timeout expired");
   const static Status cancelled_status = Status(Status::Code::CANCELLED);
-  FinishSkippedRequests(std::move(rejected_requests), rejected_status);
-  FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
+  LOG_VERBOSE(1) << "REJECTED metrics called \n";
+  FinishSkippedRequests(std::move(rejected_requests), FailureReason::REJECTED);
+  LOG_VERBOSE(1) << "CANCELED metrics called \n";
+  FinishSkippedRequests(std::move(cancelled_requests), FailureReason::CANCELED);
 }
 
 DynamicBatchScheduler::DynamicBatchScheduler(
