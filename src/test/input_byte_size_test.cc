@@ -261,7 +261,7 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "pt_identity", -1 /* model_version */),
+          &irequest_, server_, "simple", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -269,8 +269,8 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       "setting request release callback");
 
   // Define input shape and data
-  std::vector<int64_t> shape{1, 8};
-  std::vector<float> input_data(8, 1);
+  std::vector<int64_t> shape{1, 16};
+  std::vector<float> input_data(16, 1);
   const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
 
   // Set input for the request
@@ -315,7 +315,7 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "pt_identity", -1 /* model_version */),
+          &irequest_, server_, "simple", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -323,8 +323,8 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       "setting request release callback");
 
   // Define input shape and data
-  std::vector<int64_t> shape{1, 8};
-  std::vector<float> input_data(10, 1);
+  std::vector<int64_t> shape{1, 16};
+  std::vector<float> input_data(17, 1);
   const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
 
   // Set input for the request
@@ -353,8 +353,8 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
       "expect error with inference request",
-      "input byte size mismatch for input 'INPUT0' for model 'pt_identity'. "
-      "Expected 32, got 40");
+      "input byte size mismatch for input 'INPUT0' for model 'simple'. "
+      "Expected 64, got 68");
 
   // Need to manually delete request, otherwise server will not shut down.
   FAIL_TEST_IF_ERR(
