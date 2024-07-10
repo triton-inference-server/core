@@ -71,8 +71,10 @@ FinishRejectedCancelledRequests(
   const static Status rejected_status =
       Status(Status::Code::UNAVAILABLE, "Request timeout expired");
   const static Status cancelled_status = Status(Status::Code::CANCELLED);
-  FinishSkippedRequests(std::move(rejected_requests), rejected_status, FailureReason::REJECTED);
-  FinishSkippedRequests(std::move(cancelled_requests), cancelled_status, FailureReason::CANCELED);
+  FinishSkippedRequests(
+      std::move(rejected_requests), rejected_status, FailureReason::REJECTED);
+  FinishSkippedRequests(
+      std::move(cancelled_requests), cancelled_status, FailureReason::CANCELED);
 }
 
 DynamicBatchScheduler::DynamicBatchScheduler(
