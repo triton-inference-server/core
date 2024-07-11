@@ -687,9 +687,14 @@ TritonModelInstance::Execute(
     for (TRITONBACKEND_Request* tr : triton_requests) {
       std::unique_ptr<InferenceRequest> ur(
           reinterpret_cast<InferenceRequest*>(tr));
-      // CAVEAT: Any Backend calling TRITONBACKEND_ModelInstanceReportStatistics
-      // with an error can result in double counting of the failure metric,
-      // currently NO backend does this
+      // NOTE: If a backend both returns an error in
+      // TRITONBACKEND_ModelInstanceExecute and reports an error with
+      // TRITONBACKEND_ModelInstanceReportStatistics, this can result in double
+      // counting of the failure metric for the same request. However, it is
+      // currently not expected for this to be a common case, as the return
+      // value of TRITONBACKEND_ModelInstanceExecute is used to express
+      // ownership of the request rather than success of an inference request.
+      // See tritonbackend.h for more details on this.
       InferenceRequest::RespondIfError(
           ur, status, true /* release_requests */, FailureReason::BACKEND);
     }

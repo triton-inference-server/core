@@ -676,7 +676,12 @@ class InferenceRequest {
       const uint64_t compute_output_start_ns, const uint64_t compute_end_ns);
 
   // Report the error statistics to stats collectors associated with the
-  // request. reason provided
+  // request.
+  // FIXME: A separate function may not be necessary here, but is being used
+  // cautiously in case of unforeseen issues such as possibly capturing a trace
+  // twice. This should be revisited and better tested to see if the
+  // ReportStatistics function can be used as-is for the newly captured failure
+  // cases.
   void ReportErrorStatistics(
       MetricModelReporter* metric_reporter, FailureReason reason);
 

@@ -40,7 +40,7 @@
 namespace triton { namespace core {
 
 // Define the FailureReason enum within the triton::core namespace
-enum class FailureReason { SUCCESS, REJECTED, CANCELED, BACKEND, OTHER };
+enum class FailureReason { REJECTED, CANCELED, BACKEND, OTHER };
 
 class MetricModelReporter;
 
