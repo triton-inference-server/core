@@ -81,9 +81,10 @@ class RequestTracker {
     std::lock_guard<std::mutex> lk(mtx_);
     inflight_request_counter_--;
     if (inflight_request_counter_ == 0) {
-#ifdef TRITON_ENABLE_STATS
-      const auto& infer_stats = context_stats_aggregator_.ImmutableInferStats();
       if (request_ != nullptr) {
+#ifdef TRITON_ENABLE_STATS
+        const auto& infer_stats =
+            context_stats_aggregator_.ImmutableInferStats();
         request_->ReportStatisticsWithDuration(
             metric_reporter_, status_.IsOk(), compute_start_ns_,
             infer_stats.compute_input_duration_ns_,
