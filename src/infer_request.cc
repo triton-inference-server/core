@@ -457,10 +457,10 @@ InferenceRequest::RespondIfError(
       InferenceResponse::SendWithStatus(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
       (request->LogRequest() + "failed to send error response").c_str());
-
+#ifdef TRITON_ENABLE_STATS
   request->ReportErrorStatistics(
       request->model_raw_->MetricReporter().get(), reason);
-
+#endif
   // If releasing the request then invoke the release callback which
   // gives ownership to the callback. So can't access 'request' after
   // this point.
