@@ -1015,11 +1015,18 @@ InferenceRequest::Normalize()
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
+
       // For a shape tensor, mark that the input is a shape tensor.
       const inference::ModelInput* input_config;
       RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
         input.SetIsShapeTensor(true);
+      }
+
+      // For a refromat-free tensor, mark that the input is a refromat-free
+      // tensor.
+      if (input_config->is_reformat_free_tensor()) {
+        input.SetIsReformatFreeTensor(true);
       }
     }
   } else {
@@ -1030,11 +1037,17 @@ InferenceRequest::Normalize()
     batch_size_ = 0;
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
+
+      // For a refromat-free tensor, mark that the input is a refromat-free
+      // tensor.
+      if (input_config->is_reformat_free_tensor()) {
+        input.SetIsReformatFreeTensor(true);
+      }
 
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
-      const inference::ModelInput* input_config;
-      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
         *input.MutableShape() = input.OriginalShape();
         input.SetIsShapeTensor(true);
@@ -1189,7 +1202,7 @@ InferenceRequest::Normalize()
       const auto& data_type = input.DType();
       bool skip_byte_size_check = false;
 
-      if (!skip_byte_size_check) {
+      if (!input.IsReformatFreeTensor()) {
         TRITONSERVER_MemoryType input_memory_type;
         // Because Triton expects STRING type to be in special format
         // (prepend 4 bytes to specify string length), so need to add all the
@@ -1197,10 +1210,9 @@ InferenceRequest::Normalize()
         if (data_type == inference::DataType::TYPE_STRING) {
           RETURN_IF_ERROR(
               ValidateBytesInputs(input_id, input, &input_memory_type));
+
           // FIXME: Temporarily skips byte size checks for GPU tensors. See
           // DLIS-6820.
-          skip_byte_size_check |=
-              (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
           const std::vector<int64_t>& input_dims =
               input.IsShapeTensor() ? input.OriginalShape()
@@ -1222,9 +1234,6 @@ InferenceRequest::Normalize()
       }
     }
   }
-  std::cerr
-      << "*********************************************************************"
-      << std::endl;
   return Status::Success;
 }
 
@@ -1510,8 +1519,8 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
 // Input
 //
 InferenceRequest::Input::Input()
-    : is_shape_tensor_(false), data_(new MemoryReference),
-      has_host_policy_specific_data_(false)
+    : is_shape_tensor_(false), is_reformat_free_tensor_(false),
+      data_(new MemoryReference), has_host_policy_specific_data_(false)
 {
 }
 
@@ -1520,7 +1529,8 @@ InferenceRequest::Input::Input(
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
       original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+      is_reformat_free_tensor_(false), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1528,8 +1538,8 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape)
     : name_(name), datatype_(datatype), original_shape_(shape),
-      is_shape_tensor_(false), data_(new MemoryReference),
-      has_host_policy_specific_data_(false)
+      is_shape_tensor_(false), is_reformat_free_tensor_(false),
+      data_(new MemoryReference), has_host_policy_specific_data_(false)
 {
 }
 
@@ -1547,6 +1557,14 @@ Status
 InferenceRequest::Input::SetIsShapeTensor(const bool is_shape_tensor)
 {
   is_shape_tensor_ = is_shape_tensor;
+  return Status::Success;
+}
+
+Status
+InferenceRequest::Input::SetIsReformatFreeTensor(
+    const bool is_reformat_free_tensor)
+{
+  is_reformat_free_tensor_ = is_reformat_free_tensor;
   return Status::Success;
 }
 

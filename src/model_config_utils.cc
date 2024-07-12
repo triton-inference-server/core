@@ -1732,6 +1732,17 @@ ValidateModelInput(
         "shape tensors are only supported for TensorRT platform");
   }
 
+  if ((platform != kTensorRTPlanPlatform) && io.is_reformat_free_tensor()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Reformat-free tensors are only supported for the TensorRT platform");
+  }
+
+  if (io.is_reformat_free_tensor() && (io.dims_size() != 3)) {
+    return Status(
+        Status::Code::INVALID_ARG, "Reformat-free tensor input require 3 dims");
+  }
+
   return Status::Success;
 }
 
@@ -1766,6 +1777,12 @@ ValidateModelOutput(
     return Status(
         Status::Code::INVALID_ARG,
         "shape tensors are only supported for TensorRT platform");
+  }
+
+  if ((platform != kTensorRTPlanPlatform) && io.is_reformat_free_tensor()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Reformat-free tensors are only supported for the TensorRT platform");
   }
 
   return Status::Success;
