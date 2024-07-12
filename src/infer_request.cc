@@ -1200,7 +1200,6 @@ InferenceRequest::Normalize()
     // make sure that all the normalization is before the check.
     {
       const auto& data_type = input.DType();
-      bool skip_byte_size_check = false;
 
       if (!input.IsReformatFreeTensor()) {
         TRITONSERVER_MemoryType input_memory_type;
