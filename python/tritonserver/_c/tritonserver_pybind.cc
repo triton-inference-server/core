@@ -1434,6 +1434,8 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
+  int get_c_ptr() {return this->Ptr();} // Calls PyWrapper 
+
   void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(triton_object_)); }
 
   void RegisterModelRepository(
@@ -2096,6 +2098,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .export_values();
   py::class_<PyServer>(m, "TRITONSERVER_Server")
       .def(py::init<PyServerOptions&>())
+      .def("get_c_ptr()", &PyServer::get_c_ptr)
       .def("stop", &PyServer::Stop)
       .def("register_model_repository", &PyServer::RegisterModelRepository)
       .def("unregister_model_repository", &PyServer::UnregisterModelRepository)
