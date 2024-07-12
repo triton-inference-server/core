@@ -94,6 +94,8 @@ class MetricModelReporter {
   // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
 
+  static const std::map<FailureReason, std::string> failure_reasons_map;
+
  private:
   MetricModelReporter(
       const ModelIdentifier& model_id, const int64_t model_version,
