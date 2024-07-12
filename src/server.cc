@@ -181,6 +181,8 @@ InferenceServer::Init()
   }
 
   if (buffer_manager_thread_count_ > 0) {
+    LOG_INFO << "Initializing AsyncWorkQueue with buffer_manager_thread_count_="
+             << buffer_manager_thread_count_;
     status = CommonErrorToStatus(triton::common::AsyncWorkQueue::Initialize(
         buffer_manager_thread_count_));
     if (!status.IsOk()) {
