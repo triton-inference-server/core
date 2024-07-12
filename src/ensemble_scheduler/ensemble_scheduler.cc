@@ -81,23 +81,26 @@ class RequestTracker {
     std::lock_guard<std::mutex> lk(mtx_);
     inflight_request_counter_--;
     if (inflight_request_counter_ == 0) {
+      if (request_ != nullptr) {
 #ifdef TRITON_ENABLE_STATS
-      const auto& infer_stats = context_stats_aggregator_.ImmutableInferStats();
-      request_->ReportStatisticsWithDuration(
-          metric_reporter_, status_.IsOk(), compute_start_ns_,
-          infer_stats.compute_input_duration_ns_,
-          infer_stats.compute_infer_duration_ns_,
-          infer_stats.compute_output_duration_ns_);
-      if (status_.IsOk()) {
-        stats_aggregator_->UpdateInferBatchStatsWithDuration(
-            metric_reporter_, std::max(1U, request_->BatchSize()),
+        const auto& infer_stats =
+            context_stats_aggregator_.ImmutableInferStats();
+        request_->ReportStatisticsWithDuration(
+            metric_reporter_, status_.IsOk(), compute_start_ns_,
             infer_stats.compute_input_duration_ns_,
             infer_stats.compute_infer_duration_ns_,
             infer_stats.compute_output_duration_ns_);
-      }
+        if (status_.IsOk()) {
+          stats_aggregator_->UpdateInferBatchStatsWithDuration(
+              metric_reporter_, std::max(1U, request_->BatchSize()),
+              infer_stats.compute_input_duration_ns_,
+              infer_stats.compute_infer_duration_ns_,
+              infer_stats.compute_output_duration_ns_);
+        }
 #endif
-      InferenceRequest::Release(
-          std::move(request_), TRITONSERVER_REQUEST_RELEASE_ALL);
+        InferenceRequest::Release(
+            std::move(request_), TRITONSERVER_REQUEST_RELEASE_ALL);
+      }
     }
     return (inflight_request_counter_ == 0);
   }
@@ -1136,7 +1139,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                 "more "
                 "ensemble steps can be made");
         InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_);
+            request_tracker_->Request(), ensemble_status_,
+            false /* release_requests */, FailureReason::OTHER);
       } else {
         request_tracker_->Request()->ResponseFactory()->SendFlags(
             TRITONSERVER_RESPONSE_COMPLETE_FINAL);
@@ -1149,7 +1153,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
           ensemble_status_);
     } else {
       InferenceRequest::RespondIfError(
-          request_tracker_->Request(), ensemble_status_);
+          request_tracker_->Request(), ensemble_status_,
+          false /* release_requests */, FailureReason::OTHER);
     }
   }
 

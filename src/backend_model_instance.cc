@@ -36,6 +36,7 @@
 #include "backend_config.h"
 #include "backend_model.h"
 #include "cuda_utils.h"
+#include "infer_stats.h"
 #include "metrics.h"
 #include "model_config.pb.h"
 #include "numa_utils.h"
@@ -558,7 +559,8 @@ TritonModelInstance::PrepareRequestsOrRespond(
   // If any errors occurred, respond with error for each request.
   if (!status.IsOk()) {
     for (auto& r : requests) {
-      InferenceRequest::RespondIfError(r, status, true /* release_requests */);
+      InferenceRequest::RespondIfError(
+          r, status, true /* release_requests */, FailureReason::OTHER);
     }
     // Log a single error for batch of requests for better visibility
     LOG_STATUS_ERROR(status, "Requests failed pre-execution checks");
@@ -685,7 +687,16 @@ TritonModelInstance::Execute(
     for (TRITONBACKEND_Request* tr : triton_requests) {
       std::unique_ptr<InferenceRequest> ur(
           reinterpret_cast<InferenceRequest*>(tr));
-      InferenceRequest::RespondIfError(ur, status, true /* release_requests */);
+      // NOTE: If a backend both returns an error in
+      // TRITONBACKEND_ModelInstanceExecute and reports an error with
+      // TRITONBACKEND_ModelInstanceReportStatistics, this can result in double
+      // counting of the failure metric for the same request. However, it is
+      // currently not expected for this to be a common case, as the return
+      // value of TRITONBACKEND_ModelInstanceExecute is used to express
+      // ownership of the request rather than success of an inference request.
+      // See tritonbackend.h for more details on this.
+      InferenceRequest::RespondIfError(
+          ur, status, true /* release_requests */, FailureReason::BACKEND);
     }
 
     TRITONSERVER_ErrorDelete(err);
