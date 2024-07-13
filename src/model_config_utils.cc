@@ -1732,13 +1732,13 @@ ValidateModelInput(
         "shape tensors are only supported for TensorRT platform");
   }
 
-  if ((platform != kTensorRTPlanPlatform) && io.is_non_linear_format_io_()) {
+  if ((platform != kTensorRTPlanPlatform) && io.is_non_linear_format_io()) {
     return Status(
         Status::Code::INVALID_ARG,
         "Non-linear IO format is only supported for the TensorRT platform");
   }
 
-  if (io.is_non_linear_format_io_() && (io.dims_size() != 3)) {
+  if (io.is_non_linear_format_io() && (io.dims_size() != 3)) {
     return Status(
         Status::Code::INVALID_ARG,
         "Non-linear IO format require input with 3 dims");
@@ -1780,7 +1780,7 @@ ValidateModelOutput(
         "shape tensors are only supported for TensorRT platform");
   }
 
-  if ((platform != kTensorRTPlanPlatform) && io.is_non_linear_format_io_()) {
+  if ((platform != kTensorRTPlanPlatform) && io.is_non_linear_format_io()) {
     return Status(
         Status::Code::INVALID_ARG,
         "Non-linear IO format is only supported for the TensorRT platform");
