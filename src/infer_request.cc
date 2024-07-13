@@ -1563,7 +1563,7 @@ Status
 InferenceRequest::Input::SetIsNonLinearFormatIo(
     const bool is_non_linear_format_io)
 {
-  is_non_linear_  format_io_ = is_non_linear_format_io;
+  is_non_linear_format_io_ = is_non_linear_format_io;
   return Status::Success;
 }
 
