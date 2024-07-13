@@ -1434,7 +1434,7 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
-  int get_c_ptr() {return this->Ptr();} // Calls PyWrapper 
+  int get_c_ptr() {return &this->Ptr();} // Calls PyWrapper 
 
   void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(triton_object_)); }
 
