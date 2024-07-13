@@ -136,14 +136,14 @@ class InferenceRequest {
     // Whether or not the input is a tensorrt shape tensor
     bool IsShapeTensor() const { return is_shape_tensor_; }
 
-    // Whether or not the input is a tensorrt reformat-free tensor
-    bool IsReformatFreeTensor() const { return is_reformat_free_tensor_; }
+    // Specifies whether the input uses a non-linear IO format
+    bool IsNonLinearFormatIo() const { return is_non_linear_format_io_; }
 
     // Set the input to be treated as a shape tensor.
     Status SetIsShapeTensor(const bool is_shape_tensor);
 
-    // Set the input to be treated as a reformat-free tensor.
-    Status SetIsReformatFreeTensor(const bool is_reformat_free_tensor);
+    // Set the input uses a non-linear IO format
+    Status SetIsNonLinearFormatIo(const bool is_non_linear_format_io_);
 
     // The data for this input.
     const std::shared_ptr<Memory>& Data() const { return data_; }
@@ -247,7 +247,7 @@ class InferenceRequest {
     std::vector<int64_t> shape_;
     std::vector<int64_t> shape_with_batch_dim_;
     bool is_shape_tensor_;
-    bool is_reformat_free_tensor_;
+    bool is_non_linear_format_io_;
     std::shared_ptr<Memory> data_;
 
     bool has_host_policy_specific_data_;

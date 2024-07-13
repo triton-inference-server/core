@@ -1023,10 +1023,10 @@ InferenceRequest::Normalize()
         input.SetIsShapeTensor(true);
       }
 
-      // For a refromat-free tensor, mark that the input is a refromat-free
-      // tensor.
-      if (input_config->is_reformat_free_tensor()) {
-        input.SetIsReformatFreeTensor(true);
+      // If a tensor uses a non-linear IO format, indicate that the input uses a
+      // non-linear IO format.
+      if (input_config->is_non_linear_format_io()) {
+        input.SetIsNonLinearFormatIo(true);
       }
     }
   } else {
@@ -1040,10 +1040,10 @@ InferenceRequest::Normalize()
       const inference::ModelInput* input_config;
       RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
 
-      // For a refromat-free tensor, mark that the input is a refromat-free
-      // tensor.
-      if (input_config->is_reformat_free_tensor()) {
-        input.SetIsReformatFreeTensor(true);
+      // If a tensor uses a non-linear IO format, indicate that the input uses a
+      // non-linear IO format.
+      if (input_config->is_non_linear_format_io()) {
+        input.SetIsNonLinearFormatIo(true);
       }
 
       // For a shape tensor, keep the tensor's shape as it is and mark
@@ -1201,7 +1201,7 @@ InferenceRequest::Normalize()
     {
       const auto& data_type = input.DType();
 
-      if (!input.IsReformatFreeTensor()) {
+      if (!input.IsNonLinearFormatIo()) {
         TRITONSERVER_MemoryType input_memory_type;
         // Because Triton expects STRING type to be in special format
         // (prepend 4 bytes to specify string length), so need to add all the
@@ -1518,7 +1518,7 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
 // Input
 //
 InferenceRequest::Input::Input()
-    : is_shape_tensor_(false), is_reformat_free_tensor_(false),
+    : is_shape_tensor_(false), is_non_linear_format_io_(false),
       data_(new MemoryReference), has_host_policy_specific_data_(false)
 {
 }
@@ -1528,7 +1528,7 @@ InferenceRequest::Input::Input(
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
       original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      is_reformat_free_tensor_(false), data_(new MemoryReference),
+      is_non_linear_format_io_(false), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
 }
@@ -1537,7 +1537,7 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape)
     : name_(name), datatype_(datatype), original_shape_(shape),
-      is_shape_tensor_(false), is_reformat_free_tensor_(false),
+      is_shape_tensor_(false), is_non_linear_format_io_(false),
       data_(new MemoryReference), has_host_policy_specific_data_(false)
 {
 }
@@ -1560,10 +1560,10 @@ InferenceRequest::Input::SetIsShapeTensor(const bool is_shape_tensor)
 }
 
 Status
-InferenceRequest::Input::SetIsReformatFreeTensor(
-    const bool is_reformat_free_tensor)
+InferenceRequest::Input::SetIsNonLinearFormatIo(
+    const bool is_non_linear_format_io)
 {
-  is_reformat_free_tensor_ = is_reformat_free_tensor;
+  is_non_linear_  format_io_ = is_non_linear_format_io;
   return Status::Success;
 }
 
