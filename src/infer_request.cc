@@ -1201,6 +1201,8 @@ InferenceRequest::Normalize()
     {
       const auto& data_type = input.DType();
 
+      // Non-linear IO format input byte size validation will be handled in the
+      // backend.
       if (!input.IsNonLinearFormatIo()) {
         TRITONSERVER_MemoryType input_memory_type;
         // Because Triton expects STRING type to be in special format
@@ -1213,6 +1215,9 @@ InferenceRequest::Normalize()
           // FIXME: Temporarily skips byte size checks for GPU tensors. See
           // DLIS-6820.
         } else {
+          // Shape tensor with dynamic batching does not introduce a new
+          // dimension to the tensor but adds an additional value to the 1-D
+          // array.
           const std::vector<int64_t>& input_dims =
               input.IsShapeTensor() ? input.OriginalShape()
                                     : input.ShapeWithBatchDim();
