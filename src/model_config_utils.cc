@@ -1740,8 +1740,7 @@ ValidateModelInput(
 
   if (io.is_non_linear_format_io() && (io.dims_size() != 3)) {
     return Status(
-        Status::Code::INVALID_ARG,
-        "Non-linear IO format input require 3 dims");
+        Status::Code::INVALID_ARG, "Non-linear IO format input require 3 dims");
   }
 
   return Status::Success;
