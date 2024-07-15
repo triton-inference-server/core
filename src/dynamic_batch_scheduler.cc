@@ -50,11 +50,12 @@ IsStaleState(Payload::State payload_state)
 void
 FinishSkippedRequests(
     std::vector<std::deque<std::unique_ptr<InferenceRequest>>>&& requests,
-    const Status& response_status)
+    const Status& response_status, FailureReason reason)
 {
   for (auto& queue : requests) {
     for (auto& request : queue) {
-      InferenceRequest::RespondIfError(request, response_status, true);
+      InferenceRequest::RespondIfError(
+          request, response_status, true /* release_requests */, reason);
     }
   }
 }
@@ -69,8 +70,10 @@ FinishRejectedCancelledRequests(
   const static Status rejected_status =
       Status(Status::Code::UNAVAILABLE, "Request timeout expired");
   const static Status cancelled_status = Status(Status::Code::CANCELLED);
-  FinishSkippedRequests(std::move(rejected_requests), rejected_status);
-  FinishSkippedRequests(std::move(cancelled_requests), cancelled_status);
+  FinishSkippedRequests(
+      std::move(rejected_requests), rejected_status, FailureReason::REJECTED);
+  FinishSkippedRequests(
+      std::move(cancelled_requests), cancelled_status, FailureReason::CANCELED);
 }
 
 DynamicBatchScheduler::DynamicBatchScheduler(
