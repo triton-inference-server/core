@@ -623,6 +623,8 @@ class Server:
         self._server = Server._UnstartedServer()
 
     def get_c_ptr(self):
+        print("THIS FUNCTION IS CALLED.")
+        print(f"Here is C++ Output: {self._server.get_c_ptr()}")
         return self._server.get_c_ptr()
 
     def unregister_model_repository(self, repository_path: str) -> None:
