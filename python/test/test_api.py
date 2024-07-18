@@ -345,11 +345,6 @@ class ServerTests(unittest.TestCase):
         server = tritonserver.Server(self._server_options).start()
         self.assertTrue(server.ready())
 
-    @pytest.mark.xfail(
-        tritonserver.__version__ <= "2.48.0",
-        reason="Known issue on stop: Exit timeout expired. Exiting immediately",
-        raises=tritonserver.InternalError,
-    )
     def test_stop(self):
         server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 

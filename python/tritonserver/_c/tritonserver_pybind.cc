@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1434,7 +1434,18 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
-  void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(triton_object_)); }
+  void Stop() const
+  {
+    // ServerStop is blocking for the duration of the server exit timeout, so
+    // ensure to release the GIL. This can allow request release callbacks
+    // to be interleaved while server is waiting for live requests/models
+    // to complete. Without releasing GIL, this function may acquire the GIL
+    // first and block the Triton request from being released/freed, thus
+    // blocking the server's shutdown in a circular manner thinking a model is
+    // still alive.
+    py::gil_scoped_release release;
+    ThrowIfError(TRITONSERVER_ServerStop(triton_object_));
+  }
 
   void RegisterModelRepository(
       const std::string& repository_path,
