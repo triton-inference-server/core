@@ -172,6 +172,17 @@ Status ValidateInstanceGroup(
 /// is not valid.
 Status ValidateModelIOConfig(const inference::ModelConfig& config);
 
+/// Validate that Non-linear format inputs or outputs are specified correctly
+/// in a model configuration.
+/// \param io The model input.
+/// \param platform The platform name
+/// \param is_input Specifies whether it is an input or an output.
+/// \return The error status. A non-OK status indicates the configuration
+/// is not valid.
+Status ValidateNonLinearFormatIO(
+    const inference::ModelInput& io, const std::string& platform,
+    bool is_input);
+
 /// Validate that input is specified correctly in a model
 /// configuration.
 /// \param io The model input.

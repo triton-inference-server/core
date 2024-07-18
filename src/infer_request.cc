@@ -1016,17 +1016,15 @@ InferenceRequest::Normalize()
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
 
-      // For a shape tensor, mark that the input is a shape tensor.
       const inference::ModelInput* input_config;
       RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
-        input.SetIsShapeTensor(true);
-      }
-
-      // If a tensor uses a non-linear IO format, indicate that the input uses a
-      // non-linear IO format.
-      if (input_config->is_non_linear_format_io()) {
-        input.SetIsNonLinearFormatIo(true);
+        // For a shape tensor, mark that the input is a shape tensor.
+        input.SetIsShapeTensor();
+      } else if (input_config->is_non_linear_format_io()) {
+        // If a tensor uses a non-linear IO format, indicate that the input uses
+        // a non-linear IO format.
+        input.SetIsNonLinearFormatIo();
       }
     }
   } else {
@@ -1040,18 +1038,16 @@ InferenceRequest::Normalize()
       const inference::ModelInput* input_config;
       RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
 
-      // If a tensor uses a non-linear IO format, indicate that the input uses a
-      // non-linear IO format.
-      if (input_config->is_non_linear_format_io()) {
-        input.SetIsNonLinearFormatIo(true);
-      }
-
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
       if (input_config->is_shape_tensor()) {
         *input.MutableShape() = input.OriginalShape();
-        input.SetIsShapeTensor(true);
+        input.SetIsShapeTensor();
         continue;
+      } else if (input_config->is_non_linear_format_io()) {
+        // If a tensor uses a non-linear IO format, indicate that the input uses
+        // a non-linear IO format.
+        input.SetIsNonLinearFormatIo();
       }
 
       if (input.OriginalShape().size() == 0) {
@@ -1202,7 +1198,7 @@ InferenceRequest::Normalize()
       const auto& data_type = input.DType();
 
       // Non-linear IO format input byte size validation will be handled in the
-      // backend.
+      // TensorRT backend.
       if (!input.IsNonLinearFormatIo()) {
         TRITONSERVER_MemoryType input_memory_type;
         // Because Triton expects STRING type to be in special format
@@ -1215,12 +1211,7 @@ InferenceRequest::Normalize()
           // FIXME: Temporarily skips byte size checks for GPU tensors. See
           // DLIS-6820.
         } else {
-          // Shape tensor with dynamic batching does not introduce a new
-          // dimension to the tensor but adds an additional value to the 1-D
-          // array.
-          const std::vector<int64_t>& input_dims =
-              input.IsShapeTensor() ? input.OriginalShape()
-                                    : input.ShapeWithBatchDim();
+          const std::vector<int64_t>& input_dims = input.ShapeWithBatchDim();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
@@ -1523,8 +1514,8 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
 // Input
 //
 InferenceRequest::Input::Input()
-    : is_shape_tensor_(false), is_non_linear_format_io_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+    : tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1532,8 +1523,8 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
-      original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      is_non_linear_format_io_(false), data_(new MemoryReference),
+      original_shape_(shape, shape + dim_count),
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
 }
@@ -1542,8 +1533,8 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape)
     : name_(name), datatype_(datatype), original_shape_(shape),
-      is_shape_tensor_(false), is_non_linear_format_io_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1558,17 +1549,16 @@ InferenceRequest::Input::SetMetadata(
 }
 
 Status
-InferenceRequest::Input::SetIsShapeTensor(const bool is_shape_tensor)
+InferenceRequest::Input::SetIsShapeTensor()
 {
-  is_shape_tensor_ = is_shape_tensor;
+  tensor_type_ = TensorType::SHAPE_TENSOR;
   return Status::Success;
 }
 
 Status
-InferenceRequest::Input::SetIsNonLinearFormatIo(
-    const bool is_non_linear_format_io)
+InferenceRequest::Input::SetIsNonLinearFormatIo()
 {
-  is_non_linear_format_io_ = is_non_linear_format_io;
+  tensor_type_ = TensorType::NON_LINEAR;
   return Status::Success;
 }
 
