@@ -418,6 +418,34 @@ ValidateIOShape(
   return Status::Success;
 }
 
+/// Validate that Non-linear format inputs or outputs are specified correctly
+/// in a model configuration.
+template <class ModelIO>
+Status
+ValidateNonLinearFormatIO(
+    const ModelIO& io, const std::string& platform, bool is_input)
+{
+  if (!io.is_non_linear_format_io()) {
+    // Nothing to validate as the tensor is not non-linear format.
+    return Status::Success;
+  }
+
+  if (platform != kTensorRTPlanPlatform) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Non-linear IO format is only supported for the TensorRT platform");
+  }
+
+  if (io.dims_size() != 3) {
+    std::string io_type = is_input ? "input" : "output";
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Non-linear IO format " + io_type + " requires 3 dims");
+  }
+
+  return Status::Success;
+}
+
 }  // namespace
 
 Status
@@ -1709,31 +1737,6 @@ ValidateInstanceGroup(
       }
     }
   }
-  return Status::Success;
-}
-
-Status
-ValidateNonLinearFormatIO(
-    const inference::ModelInput& io, const std::string& platform, bool is_input)
-{
-  if (!io.is_non_linear_format_io()) {
-    // Nothing to validate as the tensor is not non-linear format.
-    return Status::Success;
-  }
-
-  if (platform != kTensorRTPlanPlatform) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "Non-linear IO format is only supported for the TensorRT platform");
-  }
-
-  if (io.dims_size() != 3) {
-    std::string io_type = is_input ? "input" : "output";
-    return Status(
-        Status::Code::INVALID_ARG,
-        "Non-linear IO format " + io_type + " requires 3 dims");
-  }
-
   return Status::Success;
 }
 
