@@ -680,8 +680,8 @@ if(${TRITON_ENABLE_GPU})
       GTest::gtest_main
       GTest::gmock
       protobuf::libprotobuf
-      ${CNMEM_LIBRARY}
       CUDA::cudart
+      ${CNMEM_LIBRARY}
   )
 else()
   add_executable(
