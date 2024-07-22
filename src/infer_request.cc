@@ -1211,7 +1211,12 @@ InferenceRequest::Normalize()
           // FIXME: Temporarily skips byte size checks for GPU tensors. See
           // DLIS-6820.
         } else {
-          const std::vector<int64_t>& input_dims = input.ShapeWithBatchDim();
+          // Shape tensor with dynamic batching does not introduce a new
+          // dimension to the tensor but adds an additional value to the 1-D
+          // array.
+          const std::vector<int64_t>& input_dims =
+              input.IsShapeTensor() ? input.OriginalShape()
+                                    : input.ShapeWithBatchDim();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);

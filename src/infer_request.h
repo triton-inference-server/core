@@ -122,14 +122,7 @@ class InferenceRequest {
     // into batch + shape.
     const std::vector<int64_t>& ShapeWithBatchDim() const
     {
-      if (tensor_type_ == TensorType::SHAPE_TENSOR) {
-        // Shape tensor with dynamic batching does not introduce a new
-        // dimension to the tensor but adds an additional value to the 1-D
-        // array.
-        return original_shape_;
-      } else {
         return shape_with_batch_dim_;
-      }
     }
     std::vector<int64_t>* MutableShapeWithBatchDim()
     {
