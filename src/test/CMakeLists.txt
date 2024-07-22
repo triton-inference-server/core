@@ -672,6 +672,7 @@ if(${TRITON_ENABLE_GPU})
   target_link_libraries(
     input_byte_size_test
     PRIVATE
+      dl
       triton-common-error        # from repo-common
       triton-core
       triton-common-logging      # from repo-common
