@@ -122,7 +122,7 @@ class InferenceRequest {
     // into batch + shape.
     const std::vector<int64_t>& ShapeWithBatchDim() const
     {
-        return shape_with_batch_dim_;
+      return shape_with_batch_dim_;
     }
     std::vector<int64_t>* MutableShapeWithBatchDim()
     {
