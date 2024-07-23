@@ -906,6 +906,7 @@ Status
 InferenceRequest::Normalize()
 {
   const inference::ModelConfig& model_config = model_raw_->Config();
+  const std::string& model_name = ModelName();
 
   // Fill metadata for raw input
   if (!raw_input_name_.empty()) {
@@ -918,7 +919,7 @@ InferenceRequest::Normalize()
               std::to_string(original_inputs_.size()) +
               ") to be deduced but got " +
               std::to_string(model_config.input_size()) + " inputs in '" +
-              ModelName() + "' model configuration");
+              model_name + "' model configuration");
     }
     auto it = original_inputs_.begin();
     if (raw_input_name_ != it->first) {
@@ -1036,7 +1037,7 @@ InferenceRequest::Normalize()
             Status::Code::INVALID_ARG,
             LogRequest() + "input '" + input.Name() +
                 "' has no shape but model requires batch dimension for '" +
-                ModelName() + "'");
+                model_name + "'");
       }
 
       if (batch_size_ == 0) {
@@ -1045,7 +1046,7 @@ InferenceRequest::Normalize()
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() + "input '" + input.Name() +
-                "' batch size does not match other inputs for '" + ModelName() +
+                "' batch size does not match other inputs for '" + model_name +
                 "'");
       }
 
@@ -1061,7 +1062,7 @@ InferenceRequest::Normalize()
         Status::Code::INVALID_ARG,
         LogRequest() + "inference request batch-size must be <= " +
             std::to_string(model_config.max_batch_size()) + " for '" +
-            ModelName() + "'");
+            model_name + "'");
   }
 
   // Verify that each input shape is valid for the model, make
@@ -1070,17 +1071,17 @@ InferenceRequest::Normalize()
     const inference::ModelInput* input_config;
     RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
 
-    auto& input_id = pr.first;
+    auto& input_name = pr.first;
     auto& input = pr.second;
     auto shape = input.MutableShape();
 
     if (input.DType() != input_config->data_type()) {
       return Status(
           Status::Code::INVALID_ARG,
-          LogRequest() + "inference input '" + input_id + "' data-type is '" +
+          LogRequest() + "inference input '" + input_name + "' data-type is '" +
               std::string(
                   triton::common::DataTypeToProtocolString(input.DType())) +
-              "', but model '" + ModelName() + "' expects '" +
+              "', but model '" + model_name + "' expects '" +
               std::string(triton::common::DataTypeToProtocolString(
                   input_config->data_type())) +
               "'");
@@ -1100,7 +1101,7 @@ InferenceRequest::Normalize()
                 Status::Code::INVALID_ARG,
                 LogRequest() +
                     "All input dimensions should be specified for input '" +
-                    input_id + "' for model '" + ModelName() + "', got " +
+                    input_name + "' for model '" + model_name + "', got " +
                     triton::common::DimsListToString(input.OriginalShape()));
           } else if (
               (config_dims[i] != triton::common::WILDCARD_DIM) &&
@@ -1129,8 +1130,8 @@ InferenceRequest::Normalize()
         }
         return Status(
             Status::Code::INVALID_ARG,
-            LogRequest() + "unexpected shape for input '" + input_id +
-                "' for model '" + ModelName() + "'. Expected " +
+            LogRequest() + "unexpected shape for input '" + input_name +
+                "' for model '" + model_name + "'. Expected " +
                 triton::common::DimsListToString(full_dims) + ", got " +
                 triton::common::DimsListToString(input.OriginalShape()) + ". " +
                 implicit_batch_note);
@@ -1192,8 +1193,8 @@ InferenceRequest::Normalize()
         // (prepend 4 bytes to specify string length), so need to add all the
         // first 4 bytes for each element to find expected byte size
         if (data_type == inference::DataType::TYPE_STRING) {
-          RETURN_IF_ERROR(
-              ValidateBytesInputs(input_id, input, &input_memory_type));
+          RETURN_IF_ERROR(ValidateBytesInputs(
+              input_name, input, model_name, &input_memory_type));
           // FIXME: Temporarily skips byte size checks for GPU tensors. See
           // DLIS-6820.
           skip_byte_size_check |=
@@ -1209,7 +1210,7 @@ InferenceRequest::Normalize()
             return Status(
                 Status::Code::INVALID_ARG,
                 LogRequest() + "input byte size mismatch for input '" +
-                    input_id + "' for model '" + ModelName() + "'. Expected " +
+                    input_name + "' for model '" + model_name + "'. Expected " +
                     std::to_string(expected_byte_size) + ", got " +
                     std::to_string(byte_size));
           }
@@ -1283,7 +1284,8 @@ InferenceRequest::ValidateRequestInputs()
 
 Status
 InferenceRequest::ValidateBytesInputs(
-    const std::string& input_id, const Input& input,
+    const std::string& input_name, const Input& input,
+    const std::string& model_name,
     TRITONSERVER_MemoryType* buffer_memory_type) const
 {
   const auto& input_dims = input.ShapeWithBatchDim();
@@ -1322,12 +1324,27 @@ InferenceRequest::ValidateBytesInputs(
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() +
-                "element byte size indicator exceeds the end of the buffer.");
+                "incomplete string length indicator for inference input '" +
+                input_name + "' for model '" + model_name + "', expecting " +
+                std::to_string(sizeof(uint32_t)) + " bytes but only " +
+                std::to_string(remaining_buffer_size) +
+                " bytes available. Please make sure the string length "
+                "indicator is in one buffer.");
       }
 
       // Start the next element and reset the remaining element size.
       remaining_element_size = *(reinterpret_cast<const uint32_t*>(buffer));
       element_checked++;
+
+      // Early stop
+      if (element_checked > element_count) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            LogRequest() + "unexpected number of string elements " +
+                std::to_string(element_checked) + " for inference input '" +
+                input_name + "' for model '" + model_name + "', expecting " +
+                std::to_string(element_count));
+      }
 
       // Advance pointer and remainder by the indicator size.
       buffer += kElementSizeIndicator;
@@ -1354,8 +1371,8 @@ InferenceRequest::ValidateBytesInputs(
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "expected " + std::to_string(buffer_count) +
-            " buffers for inference input '" + input_id + "', got " +
-            std::to_string(buffer_next_idx));
+            " buffers for inference input '" + input_name + "' for model '" +
+            model_name + "', got " + std::to_string(buffer_next_idx));
   }
 
   // Validate the number of processed elements exactly match expectations.
@@ -1363,7 +1380,8 @@ InferenceRequest::ValidateBytesInputs(
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "expected " + std::to_string(element_count) +
-            " string elements for inference input '" + input_id + "', got " +
+            " string elements for inference input '" + input_name +
+            "' for model '" + model_name + "', got " +
             std::to_string(element_checked));
   }
 
