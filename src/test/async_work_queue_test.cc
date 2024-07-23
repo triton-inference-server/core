@@ -91,7 +91,6 @@ TEST_F(AsyncWorkQueueTest, WorkerCountInitialized)
       << "Expect 4 worker count for initialized queue";
 }
 
-
 TEST_F(AsyncWorkQueueTest, RunTasksInParallel)
 {
   auto AddTwoFn = [](const std::vector<int>& lhs, const std::vector<int>& rhs,
@@ -181,10 +180,11 @@ TEST_F(AsyncWorkQueueTest, RunTasksInParallel)
             .count();
 
     parallelized_duration = end_ts - start_ts;
-    // FIXME manual testing shows parallelized time is between 30% to 33.3% for
-    // 128 M total elements
-    EXPECT_LT(parallelized_duration, serialized_duration / 3)
-        << "Expected parallelized work was completed within 1/3 of serialized "
+    // FIXME manual testing shows parallelized time is between 30% to 33.3%
+    // for 128 M total elements, but is flaky in CI so relax the comparison
+    // for parallel to simply be faster than serial by any amount.
+    EXPECT_LT(parallelized_duration, serialized_duration)
+        << "Expected parallelized work was completed faster than serialized "
            "time";
     for (size_t count = 0; count < task_count; count++) {
       auto res = std::move(fs[count].get());

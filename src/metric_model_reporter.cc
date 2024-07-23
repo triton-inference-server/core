@@ -29,6 +29,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include "constants.h"
+#include "infer_stats.h"
 #include "triton/common/logging.h"
 
 // Global config group has 'name' of empty string.
@@ -101,6 +102,13 @@ MetricReporterConfig::ParseQuantiles(std::string options)
 //
 // MetricModelReporter
 //
+const std::map<FailureReason, std::string>
+    MetricModelReporter::failure_reasons_map = {
+        {FailureReason::REJECTED, "REJECTED"},
+        {FailureReason::CANCELED, "CANCELED"},
+        {FailureReason::BACKEND, "BACKEND"},
+        {FailureReason::OTHER, "OTHER"}};
+
 Status
 MetricModelReporter::Create(
     const ModelIdentifier& model_id, const int64_t model_version,
@@ -189,7 +197,6 @@ MetricModelReporter::InitializeCounters(
 {
   // Always setup these counters, regardless of config
   counter_families_["inf_success"] = &Metrics::FamilyInferenceSuccess();
-  counter_families_["inf_failure"] = &Metrics::FamilyInferenceFailure();
   counter_families_["inf_count"] = &Metrics::FamilyInferenceCount();
   counter_families_["inf_exec_count"] =
       &Metrics::FamilyInferenceExecutionCount();
@@ -226,6 +233,15 @@ MetricModelReporter::InitializeCounters(
     if (family_ptr) {
       counters_[name] = CreateMetric<prometheus::Counter>(*family_ptr, labels);
     }
+  }
+
+  // Initialize failure metrics with reasons
+  for (const auto& reason_pair : failure_reasons_map) {
+    std::map<std::string, std::string> extended_labels = labels;
+    extended_labels["reason"] = reason_pair.second;
+    counters_["inf_failure_" + reason_pair.second] =
+        CreateMetric<prometheus::Counter>(
+            Metrics::FamilyInferenceFailure(), extended_labels);
   }
 }
 

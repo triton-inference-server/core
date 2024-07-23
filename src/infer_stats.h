@@ -39,6 +39,9 @@
 
 namespace triton { namespace core {
 
+// Define the FailureReason enum within the triton::core namespace
+enum class FailureReason { REJECTED, CANCELED, BACKEND, OTHER };
+
 class MetricModelReporter;
 
 
@@ -136,7 +139,7 @@ class InferenceStatsAggregator {
   // Add durations to Infer stats for a failed inference request.
   void UpdateFailure(
       MetricModelReporter* metric_reporter, const uint64_t request_start_ns,
-      const uint64_t request_end_ns);
+      const uint64_t request_end_ns, FailureReason reason);
 
   // Add durations to infer stats for a successful inference request.
   void UpdateSuccess(
