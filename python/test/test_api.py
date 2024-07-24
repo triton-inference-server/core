@@ -70,7 +70,7 @@ server_options = tritonserver.Options(
     exit_on_error=True,
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
-    exit_timeout=10,
+    exit_timeout=30,
 )
 
 
@@ -357,6 +357,8 @@ class ServerTests(unittest.TestCase):
                     {
                         "backend": "python",
                         "parameters": {"decoupled": {"string_value": "False"}},
+                        # Keep instance count low for fast startup/cleanup
+                        "instance_group": [{"kind": "KIND_GPU", "count": 1}],
                     }
                 )
             },
