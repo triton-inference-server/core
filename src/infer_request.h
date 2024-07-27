@@ -775,6 +775,7 @@ class InferenceRequest {
 
   Status ValidateBytesInputs(
       const std::string& input_id, const Input& input,
+      const std::string& model_name,
       TRITONSERVER_MemoryType* buffer_memory_type) const;
 
   // Helpers for pending request metrics
