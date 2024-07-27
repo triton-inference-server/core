@@ -70,8 +70,9 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
-      original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+      original_shape_(shape, shape + dim_count),
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 

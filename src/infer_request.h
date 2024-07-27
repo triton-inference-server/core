@@ -82,6 +82,8 @@ class InferenceRequest {
   // Input tensor
   class Input {
    public:
+    enum class TensorType { TENSOR, SHAPE_TENSOR, NON_LINEAR };
+
     Input();
     Input(
         const std::string& name, const inference::DataType datatype,
@@ -134,10 +136,22 @@ class InferenceRequest {
     }
 
     // Whether or not the input is a tensorrt shape tensor
-    bool IsShapeTensor() const { return is_shape_tensor_; }
+    bool IsShapeTensor() const
+    {
+      return tensor_type_ == TensorType::SHAPE_TENSOR;
+    }
+
+    // Specifies whether the input uses a non-linear IO format
+    bool IsNonLinearFormatIo() const
+    {
+      return tensor_type_ == TensorType::NON_LINEAR;
+    }
 
     // Set the input to be treated as a shape tensor.
-    Status SetIsShapeTensor(const bool is_shape_tensor);
+    Status SetIsShapeTensor();
+
+    // Set the input uses a non-linear IO format
+    Status SetIsNonLinearFormatIo();
 
     // The data for this input.
     const std::shared_ptr<Memory>& Data() const { return data_; }
@@ -240,7 +254,7 @@ class InferenceRequest {
     std::vector<int64_t> original_shape_;
     std::vector<int64_t> shape_;
     std::vector<int64_t> shape_with_batch_dim_;
-    bool is_shape_tensor_;
+    TensorType tensor_type_;
     std::shared_ptr<Memory> data_;
 
     bool has_host_policy_specific_data_;

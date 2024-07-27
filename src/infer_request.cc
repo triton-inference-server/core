@@ -1016,6 +1016,17 @@ InferenceRequest::Normalize()
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
+
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
+      if (input_config->is_shape_tensor()) {
+        // For a shape tensor, mark that the input is a shape tensor.
+        input.SetIsShapeTensor();
+      } else if (input_config->is_non_linear_format_io()) {
+        // If a tensor uses a non-linear IO format, indicate that the input uses
+        // a non-linear IO format.
+        input.SetIsNonLinearFormatIo();
+      }
     }
   } else {
     // Model does support Triton-style batching so each input tensor
@@ -1025,15 +1036,19 @@ InferenceRequest::Normalize()
     batch_size_ = 0;
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
 
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
-      const inference::ModelInput* input_config;
-      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
         *input.MutableShape() = input.OriginalShape();
-        input.SetIsShapeTensor(true);
+        input.SetIsShapeTensor();
         continue;
+      } else if (input_config->is_non_linear_format_io()) {
+        // If a tensor uses a non-linear IO format, indicate that the input uses
+        // a non-linear IO format.
+        input.SetIsNonLinearFormatIo();
       }
 
       if (input.OriginalShape().size() == 0) {
@@ -1183,15 +1198,9 @@ InferenceRequest::Normalize()
     {
       const auto& data_type = input.DType();
 
-      // FIXME: Skip byte size validation for TensorRT backend because it breaks
-      // shape-size assumption. See DLIS-6805 for proper fix for TRT backend
-      // reformat_free tensors.
-      bool skip_byte_size_check = false;
-      constexpr char trt_prefix[] = "tensorrt_";
-      const std::string& platform = model_raw_->Config().platform();
-      skip_byte_size_check |= (platform.rfind(trt_prefix) == 0);
-
-      if (!skip_byte_size_check) {
+      // Non-linear IO format input byte size validation will be handled in the
+      // TensorRT backend.
+      if (!input.IsNonLinearFormatIo()) {
         TRITONSERVER_MemoryType input_memory_type;
         // Because Triton expects STRING type to be in special format
         // (prepend 4 bytes to specify string length), so need to add all the
@@ -1201,10 +1210,13 @@ InferenceRequest::Normalize()
               input_name, input, model_name, &input_memory_type));
           // FIXME: Temporarily skips byte size checks for GPU tensors. See
           // DLIS-6820.
-          skip_byte_size_check |=
-              (input_memory_type == TRITONSERVER_MEMORY_GPU);
         } else {
-          const auto& input_dims = input.ShapeWithBatchDim();
+          // Shape tensor with dynamic batching does not introduce a new
+          // dimension to the tensor but adds an additional value to the 1-D
+          // array.
+          const std::vector<int64_t>& input_dims =
+              input.IsShapeTensor() ? input.OriginalShape()
+                                    : input.ShapeWithBatchDim();
           int64_t expected_byte_size = INT_MAX;
           expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
@@ -1524,7 +1536,7 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
 // Input
 //
 InferenceRequest::Input::Input()
-    : is_shape_tensor_(false), data_(new MemoryReference),
+    : tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
 }
@@ -1533,8 +1545,9 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
-      original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+      original_shape_(shape, shape + dim_count),
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1542,7 +1555,7 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape)
     : name_(name), datatype_(datatype), original_shape_(shape),
-      is_shape_tensor_(false), data_(new MemoryReference),
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
 }
@@ -1558,9 +1571,16 @@ InferenceRequest::Input::SetMetadata(
 }
 
 Status
-InferenceRequest::Input::SetIsShapeTensor(const bool is_shape_tensor)
+InferenceRequest::Input::SetIsShapeTensor()
 {
-  is_shape_tensor_ = is_shape_tensor;
+  tensor_type_ = TensorType::SHAPE_TENSOR;
+  return Status::Success;
+}
+
+Status
+InferenceRequest::Input::SetIsNonLinearFormatIo()
+{
+  tensor_type_ = TensorType::NON_LINEAR;
   return Status::Success;
 }
 
