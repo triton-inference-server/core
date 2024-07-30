@@ -1343,9 +1343,11 @@ SequenceBatch::SetControlTensors(
     auto& seq_corr_id = seq_slot_corrid_override_;
     size_t size_p = triton::common::GetDataTypeByteSize(seq_corr_id->DType());
     if (seq_corr_id->DType() == inference::DataType::TYPE_STRING) {
-      // 4 bytes for length of string plus pre-defined max string correlation id
+      // 4 bytes for length of string plus length of the corrid string
       // length in bytes
-      size_p = 4 + triton::core::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
+      std::string correlation_id = corrid.StringValue();
+      uint32_t correlation_id_length = correlation_id.length();
+      size_p = 4 + correlation_id_length;
     }
 
     TRITONSERVER_MemoryType memory_type;
