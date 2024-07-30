@@ -455,15 +455,20 @@ class InferenceTests(unittest.TestCase):
             "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
         }
 
-        for response in server.model("test").infer(
+        response_iterator = server.model("test").infer(
             inputs=inputs,
             output_memory_type="cpu",
             raise_on_error=True,
-        ):
-            for input_name, input_value in inputs.items():
-                output_value = response.outputs[input_name.replace("input", "output")]
-                output_value = numpy.from_dlpack(output_value)
-                numpy.testing.assert_array_equal(input_value, output_value)
+        )
+
+        responses = list(response_iterator)
+        self.assertTrue(len(responses), 1)
+        response = responses[0]
+
+        for input_name, input_value in inputs.items():
+            output_value = response.outputs[input_name.replace("input", "output")]
+            output_value = numpy.from_dlpack(output_value)
+            numpy.testing.assert_array_equal(input_value, output_value)
 
         # test normal bool
         inputs = {"bool_input": [[True, False, False, True]]}
