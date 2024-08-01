@@ -3371,7 +3371,8 @@ TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
 TRITONSERVER_Error*
 TRITONSERVER_MetricNew(
     TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
-    const TRITONSERVER_Parameter** labels, const uint64_t label_count)
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count,
+    const void* buckets)
 {
 #ifdef TRITON_ENABLE_METRICS
   std::vector<const tc::InferenceParameter*> labels_vec;
@@ -3381,8 +3382,9 @@ TRITONSERVER_MetricNew(
   }
 
   try {
-    *metric = reinterpret_cast<TRITONSERVER_Metric*>(
-        new tc::Metric(family, labels_vec));
+    *metric = reinterpret_cast<TRITONSERVER_Metric*>(new tc::Metric(
+        family, labels_vec,
+        reinterpret_cast<const std::vector<double>*>(buckets)));
   }
   catch (std::invalid_argument const& ex) {
     // Catch invalid kinds passed to constructor
@@ -3444,6 +3446,17 @@ TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
 {
 #ifdef TRITON_ENABLE_METRICS
   return reinterpret_cast<tc::Metric*>(metric)->Set(value);
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricObserve(TRITONSERVER_Metric* metric, double value)
+{
+#ifdef TRITON_ENABLE_METRICS
+  return reinterpret_cast<tc::Metric*>(metric)->Observe(value);
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");

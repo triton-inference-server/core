@@ -35,6 +35,7 @@
 
 #include "prometheus/counter.h"
 #include "prometheus/gauge.h"
+#include "prometheus/histogram.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
 #include "prometheus/summary.h"
