@@ -1100,7 +1100,7 @@ TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelServer(
 /// Get the backend used by the model.
 ///
 /// \param model The model.
-/// \param model Returns the backend object.
+/// \param backend Returns the backend object.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONBACKEND_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ModelBackend(
     TRITONBACKEND_Model* model, TRITONBACKEND_Backend** backend);
