@@ -775,6 +775,7 @@ class Server:
         True
 
         """
+
         return self._server.is_live()
 
     def ready(self) -> bool:
