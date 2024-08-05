@@ -56,6 +56,7 @@ from tritonserver._c.triton_bindings import (
     TRITONSERVER_ServerOptions,
     UnavailableError,
 )
+
 # from tritonserver._c.triton_bindings import g
 
 uint = Annotated[int, ctypes.c_uint]
@@ -536,7 +537,7 @@ class Server:
             options = Options(**kwargs)
         self.options: Options = options
         self._server = Server._UnstartedServer()
-    
+
     def start(
         self,
         wait_until_ready: bool = False,

@@ -186,9 +186,7 @@ class PyWrapper {
   // requires a function wrapper to generalize the destructor.
 
   // Use internally to get the pointer of the underlying Triton object
-  TritonStruct* Ptr() { 
-    return triton_object_; 
-  }
+  TritonStruct* Ptr() { return triton_object_; }
 
   DISALLOW_COPY_AND_ASSIGN(PyWrapper);
 
@@ -1436,9 +1434,10 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
-  uintptr_t get_c_ptr() { // Calls PyWrapper
+  uintptr_t get_c_ptr()
+  {  // Calls PyWrapper
     return reinterpret_cast<uintptr_t>(this->Ptr());
-  }  
+  }
 
   void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(triton_object_)); }
 
