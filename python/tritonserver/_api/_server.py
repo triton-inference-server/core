@@ -57,8 +57,6 @@ from tritonserver._c.triton_bindings import (
     UnavailableError,
 )
 
-# from tritonserver._c.triton_bindings import g
-
 uint = Annotated[int, ctypes.c_uint]
 
 
@@ -777,7 +775,6 @@ class Server:
         True
 
         """
-        print("RUNNING LIVE!")
         return self._server.is_live()
 
     def ready(self) -> bool:
