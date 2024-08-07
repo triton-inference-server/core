@@ -76,6 +76,10 @@ MetricFamily::Add(
   void* prom_metric = nullptr;
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
+      if (buckets != nullptr) {
+        throw std::invalid_argument(
+            "Unexpected buckets found in counter Metric constructor.");
+      }
       auto counter_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
       auto counter_ptr = &counter_family_ptr->Add(label_map);
@@ -83,6 +87,10 @@ MetricFamily::Add(
       break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
+      if (buckets != nullptr) {
+        throw std::invalid_argument(
+            "Unexpected buckets found in gauge Metric constructor.");
+      }
       auto gauge_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
       auto gauge_ptr = &gauge_family_ptr->Add(label_map);
@@ -92,7 +100,7 @@ MetricFamily::Add(
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
       if (buckets == nullptr) {
         throw std::invalid_argument(
-            "Histogram must be constructed with bucket boundaries.");
+            "Missing required buckets in histogram Metric constructor.");
       }
       auto histogram_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
@@ -383,6 +391,40 @@ Metric::Observe(double value)
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
       auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
       histogram_ptr->Observe(value);
+      break;
+    }
+    default:
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "Unsupported TRITONSERVER_MetricKind");
+  }
+
+  return nullptr;  // Success
+}
+
+TRITONSERVER_Error*
+Metric::Collect(prometheus::ClientMetric* value)
+{
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not collect metric value. Metric has been invalidated.");
+  }
+
+  switch (kind_) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
+      *value = counter_ptr->Collect();
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
+      *value = gauge_ptr->Collect();
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
+      *value = histogram_ptr->Collect();
       break;
     }
     default:

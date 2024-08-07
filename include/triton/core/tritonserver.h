@@ -2720,6 +2720,18 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricSet(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricObserve(
     struct TRITONSERVER_Metric* metric, double value);
 
+/// Collect metrics.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_COUNTER,
+/// TRITONSERVER_METRIC_KIND_GAUGE, TRITONSERVER_METRIC_KIND_HISTOGRAM and
+/// returns TRITONSERVER_ERROR_UNSUPPORTED for unsupported
+/// TRITONSERVER_MetricKind.
+///
+/// \param metric The metric object to collect.
+/// \param value Returns the current value of the metric object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricCollect(
+    struct TRITONSERVER_Metric* metric, void* value);
+
 /// Get the TRITONSERVER_MetricKind of metric and its corresponding family.
 ///
 /// \param metric The metric object to query.

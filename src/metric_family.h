@@ -99,6 +99,7 @@ class Metric {
   TRITONSERVER_Error* Increment(double value);
   TRITONSERVER_Error* Set(double value);
   TRITONSERVER_Error* Observe(double value);
+  TRITONSERVER_Error* Collect(prometheus::ClientMetric* value);
 
   // If a MetricFamily is deleted before its dependent Metric, we want to
   // invalidate the references so we don't access invalid memory.
