@@ -1101,6 +1101,11 @@ TRITONSERVER_MetricSet()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricObserve()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONSERVER_GetMetricKind()
 {
 }

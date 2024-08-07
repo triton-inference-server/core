@@ -1,4 +1,5 @@
-// Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights
+// reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -50,7 +51,9 @@ class MetricFamily {
   void* Family() const { return family_; }
   TRITONSERVER_MetricKind Kind() const { return kind_; }
 
-  void* Add(std::map<std::string, std::string> label_map, Metric* metric);
+  void* Add(
+      std::map<std::string, std::string> label_map, Metric* metric,
+      const std::vector<double>* buckets = nullptr);
   void Remove(void* prom_metric, Metric* metric);
 
   int NumMetrics()
@@ -86,7 +89,8 @@ class Metric {
  public:
   Metric(
       TRITONSERVER_MetricFamily* family,
-      std::vector<const InferenceParameter*> labels);
+      std::vector<const InferenceParameter*> labels,
+      const std::vector<double>* buckets = nullptr);
   ~Metric();
 
   MetricFamily* Family() const { return family_; }
@@ -95,6 +99,8 @@ class Metric {
   TRITONSERVER_Error* Value(double* value);
   TRITONSERVER_Error* Increment(double value);
   TRITONSERVER_Error* Set(double value);
+  TRITONSERVER_Error* Observe(double value);
+  TRITONSERVER_Error* Collect(prometheus::ClientMetric* value);
 
   // If a MetricFamily is deleted before its dependent Metric, we want to
   // invalidate the references so we don't access invalid memory.

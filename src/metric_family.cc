@@ -1,4 +1,5 @@
-// Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights
+// reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -54,6 +55,12 @@ MetricFamily::MetricFamily(
                                              .Help(description)
                                              .Register(*registry));
       break;
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM:
+      family_ = reinterpret_cast<void*>(&prometheus::BuildHistogram()
+                                             .Name(name)
+                                             .Help(description)
+                                             .Register(*registry));
+      break;
     default:
       throw std::invalid_argument(
           "Unsupported kind passed to MetricFamily constructor.");
@@ -63,11 +70,17 @@ MetricFamily::MetricFamily(
 }
 
 void*
-MetricFamily::Add(std::map<std::string, std::string> label_map, Metric* metric)
+MetricFamily::Add(
+    std::map<std::string, std::string> label_map, Metric* metric,
+    const std::vector<double>* buckets)
 {
   void* prom_metric = nullptr;
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
+      if (buckets != nullptr) {
+        throw std::invalid_argument(
+            "Unexpected buckets found in counter Metric constructor.");
+      }
       auto counter_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
       auto counter_ptr = &counter_family_ptr->Add(label_map);
@@ -75,10 +88,25 @@ MetricFamily::Add(std::map<std::string, std::string> label_map, Metric* metric)
       break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
+      if (buckets != nullptr) {
+        throw std::invalid_argument(
+            "Unexpected buckets found in gauge Metric constructor.");
+      }
       auto gauge_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
       auto gauge_ptr = &gauge_family_ptr->Add(label_map);
       prom_metric = reinterpret_cast<void*>(gauge_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      if (buckets == nullptr) {
+        throw std::invalid_argument(
+            "Missing required buckets in histogram Metric constructor.");
+      }
+      auto histogram_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
+      auto histogram_ptr = &histogram_family_ptr->Add(label_map, *buckets);
+      prom_metric = reinterpret_cast<void*>(histogram_ptr);
       break;
     }
     default:
@@ -134,6 +162,14 @@ MetricFamily::Remove(void* prom_metric, Metric* metric)
       gauge_family_ptr->Remove(gauge_ptr);
       break;
     }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      auto histogram_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
+      auto histogram_ptr =
+          reinterpret_cast<prometheus::Histogram*>(prom_metric);
+      histogram_family_ptr->Remove(histogram_ptr);
+      break;
+    }
     default:
       // Invalid kind should be caught in constructor
       LOG_ERROR << "Unsupported kind in Metric destructor.";
@@ -169,7 +205,8 @@ MetricFamily::~MetricFamily()
 //
 Metric::Metric(
     TRITONSERVER_MetricFamily* family,
-    std::vector<const InferenceParameter*> labels)
+    std::vector<const InferenceParameter*> labels,
+    const std::vector<double>* buckets)
 {
   family_ = reinterpret_cast<MetricFamily*>(family);
   kind_ = family_->Kind();
@@ -188,7 +225,7 @@ Metric::Metric(
         std::string(reinterpret_cast<const char*>(param->ValuePointer()));
   }
 
-  metric_ = family_->Add(label_map, this);
+  metric_ = family_->Add(label_map, this, buckets);
 }
 
 Metric::~Metric()
@@ -235,6 +272,11 @@ Metric::Value(double* value)
       *value = gauge_ptr->Value();
       break;
     }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_HISTOGRAM does not support Value");
+    }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_UNSUPPORTED,
@@ -279,6 +321,11 @@ Metric::Increment(double value)
       }
       break;
     }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_HISTOGRAM does not support Increment");
+    }
     default:
       return TRITONSERVER_ErrorNew(
           TRITONSERVER_ERROR_UNSUPPORTED,
@@ -306,6 +353,79 @@ Metric::Set(double value)
     case TRITONSERVER_METRIC_KIND_GAUGE: {
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
       gauge_ptr->Set(value);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_HISTOGRAM does not support Set");
+    }
+    default:
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "Unsupported TRITONSERVER_MetricKind");
+  }
+
+  return nullptr;  // Success
+}
+
+TRITONSERVER_Error*
+Metric::Observe(double value)
+{
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not set metric value. Metric has been invalidated.");
+  }
+
+  switch (kind_) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_COUNTER does not support Observe");
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_GAUGE does not support Observe");
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
+      histogram_ptr->Observe(value);
+      break;
+    }
+    default:
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "Unsupported TRITONSERVER_MetricKind");
+  }
+
+  return nullptr;  // Success
+}
+
+TRITONSERVER_Error*
+Metric::Collect(prometheus::ClientMetric* value)
+{
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not collect metric value. Metric has been invalidated.");
+  }
+
+  switch (kind_) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
+      *value = counter_ptr->Collect();
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
+      *value = gauge_ptr->Collect();
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
+      *value = histogram_ptr->Collect();
       break;
     }
     default:
