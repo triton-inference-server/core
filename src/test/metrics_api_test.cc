@@ -242,7 +242,7 @@ HistogramAPIHelper(TRITONSERVER_Metric* metric)
   double sum = 0.0;
   for (auto datum : data) {
     FAIL_TEST_IF_ERR(
-        TRITONSERVER_MetricObserve(metric, datum), "observe metric value");
+        TRITONSERVER_MetricSet(metric, datum), "observe metric value");
     sum += datum;
   }
 
@@ -406,20 +406,29 @@ TEST_F(MetricsApiTest, TestHistogramEndToEnd)
 
   // Create metric
   TRITONSERVER_Metric* metric;
+  // Create labels
   std::vector<const TRITONSERVER_Parameter*> labels;
   labels.emplace_back(TRITONSERVER_ParameterNew(
       "example1", TRITONSERVER_PARAMETER_STRING, "histogram_label1"));
   labels.emplace_back(TRITONSERVER_ParameterNew(
       "example2", TRITONSERVER_PARAMETER_STRING, "histogram_label2"));
+  // Create metric args
   std::vector<double> buckets = {0.1, 1.0, 2.5, 5.0, 10.0};
+  TRITONSERVER_MetricArgs* args;
   FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricNew(
-          &metric, family, labels.data(), labels.size(),
-          reinterpret_cast<void*>(&buckets)),
+      TRITONSERVER_MetricArgsNew(&args), "Creating new metric args");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricArgsSetHistogram(args, buckets.data(), buckets.size()),
+      "setting histogram metric args");
+
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNewWithArgs(
+          &metric, family, labels.data(), labels.size(), args),
       "Creating new metric");
   for (const auto label : labels) {
     TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
   }
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
 
   // Run through metric APIs and assert correctness
   HistogramAPIHelper(metric);
@@ -435,7 +444,6 @@ TEST_F(MetricsApiTest, TestHistogramEndToEnd)
   // Assert custom metric/family is unregistered and no longer in output
   ASSERT_EQ(NumMetricMatches(server_, description), 0);
 }
-
 
 // Test that a duplicate metric family can't be added
 // with a conflicting type/kind

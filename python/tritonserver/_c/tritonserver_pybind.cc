@@ -1672,16 +1672,14 @@ class PyMetric : public PyWrapper<struct TRITONSERVER_Metric> {
   DESTRUCTOR_WITH_LOG(PyMetric, TRITONSERVER_MetricDelete);
   PyMetric(
       PyMetricFamily& family,
-      const std::vector<std::shared_ptr<PyParameter>>& labels,
-      const std::vector<double>* buckets)
+      const std::vector<std::shared_ptr<PyParameter>>& labels)
   {
     std::vector<const struct TRITONSERVER_Parameter*> params;
     for (const auto& label : labels) {
       params.emplace_back(label->Ptr());
     }
     ThrowIfError(TRITONSERVER_MetricNew(
-        &triton_object_, family.Ptr(), params.data(), params.size(),
-        reinterpret_cast<const void*>(buckets)));
+        &triton_object_, family.Ptr(), params.data(), params.size()));
     owned_ = true;
   }
 
@@ -1700,11 +1698,6 @@ class PyMetric : public PyWrapper<struct TRITONSERVER_Metric> {
   void SetValue(double val) const
   {
     ThrowIfError(TRITONSERVER_MetricSet(triton_object_, val));
-  }
-
-  void Observe(double val) const
-  {
-    ThrowIfError(TRITONSERVER_MetricObserve(triton_object_, val));
   }
 
   TRITONSERVER_MetricKind Kind() const
@@ -2147,8 +2140,7 @@ PYBIND11_MODULE(triton_bindings, m)
   // TRITONSERVER_MetricKind
   py::enum_<TRITONSERVER_MetricKind>(m, "TRITONSERVER_MetricKind")
       .value("COUNTER", TRITONSERVER_METRIC_KIND_COUNTER)
-      .value("GAUGE", TRITONSERVER_METRIC_KIND_GAUGE)
-      .value("HISTOGRAM", TRITONSERVER_METRIC_KIND_HISTOGRAM);
+      .value("GAUGE", TRITONSERVER_METRIC_KIND_GAUGE);
   // TRITONSERVER_MetricFamily
   py::class_<PyMetricFamily>(m, "TRITONSERVER_MetricFamily")
       .def(py::init<
@@ -2157,13 +2149,12 @@ PYBIND11_MODULE(triton_bindings, m)
   py::class_<PyMetric>(m, "TRITONSERVER_Metric")
       .def(
           py::init<
-              PyMetricFamily&, const std::vector<std::shared_ptr<PyParameter>>&,
-              const std::vector<double>*>(),
+              PyMetricFamily&,
+              const std::vector<std::shared_ptr<PyParameter>>&>(),
           py::keep_alive<1, 2>())
       .def_property_readonly("value", &PyMetric::Value)
       .def("increment", &PyMetric::Increment)
       .def("set_value", &PyMetric::SetValue)
-      .def("observe", &PyMetric::Observe)
       .def_property_readonly("kind", &PyMetric::Kind);
 }
 

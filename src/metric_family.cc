@@ -72,14 +72,14 @@ MetricFamily::MetricFamily(
 void*
 MetricFamily::Add(
     std::map<std::string, std::string> label_map, Metric* metric,
-    const std::vector<double>* buckets)
+    const TritonServerMetricArgs* args)
 {
   void* prom_metric = nullptr;
   switch (kind_) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
-      if (buckets != nullptr) {
+      if (args != nullptr) {
         throw std::invalid_argument(
-            "Unexpected buckets found in counter Metric constructor.");
+            "Unexpected args found in counter Metric constructor.");
       }
       auto counter_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
@@ -88,9 +88,9 @@ MetricFamily::Add(
       break;
     }
     case TRITONSERVER_METRIC_KIND_GAUGE: {
-      if (buckets != nullptr) {
+      if (args != nullptr) {
         throw std::invalid_argument(
-            "Unexpected buckets found in gauge Metric constructor.");
+            "Unexpected args found in gauge Metric constructor.");
       }
       auto gauge_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
@@ -99,13 +99,14 @@ MetricFamily::Add(
       break;
     }
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
-      if (buckets == nullptr) {
+      if (args == nullptr) {
         throw std::invalid_argument(
-            "Missing required buckets in histogram Metric constructor.");
+            "Bucket boundaries not found in Metric constructor args.");
       }
       auto histogram_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
-      auto histogram_ptr = &histogram_family_ptr->Add(label_map, *buckets);
+      auto histogram_ptr =
+          &histogram_family_ptr->Add(label_map, args->buckets());
       prom_metric = reinterpret_cast<void*>(histogram_ptr);
       break;
     }
@@ -206,7 +207,7 @@ MetricFamily::~MetricFamily()
 Metric::Metric(
     TRITONSERVER_MetricFamily* family,
     std::vector<const InferenceParameter*> labels,
-    const std::vector<double>* buckets)
+    const TritonServerMetricArgs* args)
 {
   family_ = reinterpret_cast<MetricFamily*>(family);
   kind_ = family_->Kind();
@@ -225,7 +226,7 @@ Metric::Metric(
         std::string(reinterpret_cast<const char*>(param->ValuePointer()));
   }
 
-  metric_ = family_->Add(label_map, this, buckets);
+  metric_ = family_->Add(label_map, this, args);
 }
 
 Metric::~Metric()
@@ -354,40 +355,6 @@ Metric::Set(double value)
       auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
       gauge_ptr->Set(value);
       break;
-    }
-    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "TRITONSERVER_METRIC_KIND_HISTOGRAM does not support Set");
-    }
-    default:
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "Unsupported TRITONSERVER_MetricKind");
-  }
-
-  return nullptr;  // Success
-}
-
-TRITONSERVER_Error*
-Metric::Observe(double value)
-{
-  if (metric_ == nullptr) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL,
-        "Could not set metric value. Metric has been invalidated.");
-  }
-
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "TRITONSERVER_METRIC_KIND_COUNTER does not support Observe");
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "TRITONSERVER_METRIC_KIND_GAUGE does not support Observe");
     }
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
       auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);

@@ -64,6 +64,7 @@ struct TRITONSERVER_Server;
 struct TRITONSERVER_ServerOptions;
 struct TRITONSERVER_Metric;
 struct TRITONSERVER_MetricFamily;
+struct TRITONSERVER_MetricArgs;
 
 ///
 /// TRITONSERVER API Version
@@ -2645,6 +2646,42 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_MetricFamilyDelete(struct TRITONSERVER_MetricFamily* family);
 
+/// Get the TRITONSERVER_MetricKind of the metric family.
+///
+/// \param metric The metric family object to query.
+/// \param kind Returns the TRITONSERVER_MetricKind of metric.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_GetMetricFamilyKind(
+    struct TRITONSERVER_MetricFamily* family, TRITONSERVER_MetricKind* kind);
+
+/// Create a new metric args object. The caller takes ownership of the
+/// TRITONSERVER_MetricArgs object and must call TRITONSERVER_MetricArgsDelete
+/// to release the object.
+///
+/// \param args Returns the new metric args object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsNew(
+    struct TRITONSERVER_MetricArgs** args);
+
+/// Set metric args with prometheus histogram metric parameter.
+///
+/// \param args The metric args object to set.
+/// \param buckets The array of bucket boundaries.
+/// \param buckets_count The number of bucket boundaries.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_MetricArgsSetHistogram(
+    struct TRITONSERVER_MetricArgs* args, const double* buckets,
+    const uint64_t buckets_count);
+
+/// Delete a metric args object.
+///
+/// \param args The metric args object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsDelete(
+    struct TRITONSERVER_MetricArgs* args);
+
 /// Create a new metric object. The caller takes ownership of the
 /// TRITONSERVER_Metric object and must call
 /// TRITONSERVER_MetricDelete to release the object. The caller is also
@@ -2662,8 +2699,29 @@ TRITONSERVER_MetricFamilyDelete(struct TRITONSERVER_MetricFamily* family);
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNew(
     struct TRITONSERVER_Metric** metric,
     struct TRITONSERVER_MetricFamily* family,
+    const struct TRITONSERVER_Parameter** labels, const uint64_t label_count);
+
+/// Create a new metric object. The caller takes ownership of the
+/// TRITONSERVER_Metric object and must call
+/// TRITONSERVER_MetricDelete to release the object. The caller is also
+/// responsible for ownership of the labels passed in.
+/// Each label can be deleted immediately after creating the metric with
+/// TRITONSERVER_ParameterDelete if not re-using the labels.
+/// Metric args can be deleted immediately after creating the metric with
+/// TRITONSERVER_MetricArgsDelete if not re-using the metric args.
+///
+/// \param metric Returns the new metric object.
+/// \param family The metric family to add this new metric to.
+/// \param labels The array of labels to associate with this new metric.
+/// \param label_count The number of labels.
+/// \param args Metric args that store additional arguments to construct
+/// particular metric types, e.g. histogram.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNewWithArgs(
+    struct TRITONSERVER_Metric** metric,
+    struct TRITONSERVER_MetricFamily* family,
     const struct TRITONSERVER_Parameter** labels, const uint64_t label_count,
-    const void* buckets = nullptr);
+    const struct TRITONSERVER_MetricArgs* args);
 
 /// Delete a metric object.
 /// All TRITONSERVER_Metric* objects should be deleted BEFORE their
@@ -2700,24 +2758,15 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricValue(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
     struct TRITONSERVER_Metric* metric, double value);
 
-/// Set the current value of metric to value.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE and returns
+/// Set the current value of metric to value or observe the value to metric.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE and
+/// TRITONSERVER_METRIC_KIND_HISTOGRAM. Returns
 /// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
 ///
 /// \param metric The metric object to update.
 /// \param value The amount to set metric's value to.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricSet(
-    struct TRITONSERVER_Metric* metric, double value);
-
-/// Observe the current value of metric to value.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_HISTOGRAM and returns
-/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
-///
-/// \param metric The metric object to update.
-/// \param value The amount to observe metric's value to.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricObserve(
     struct TRITONSERVER_Metric* metric, double value);
 
 /// Collect metrics.
@@ -2732,7 +2781,7 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricObserve(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricCollect(
     struct TRITONSERVER_Metric* metric, void* value);
 
-/// Get the TRITONSERVER_MetricKind of metric and its corresponding family.
+/// Get the TRITONSERVER_MetricKind of metric of its corresponding family.
 ///
 /// \param metric The metric object to query.
 /// \param kind Returns the TRITONSERVER_MetricKind of metric.

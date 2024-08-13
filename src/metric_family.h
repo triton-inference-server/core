@@ -28,6 +28,7 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
+#include <cstring>
 #include <mutex>
 #include <set>
 #include <unordered_map>
@@ -37,6 +38,30 @@
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
+
+//
+// TritonServerMetricArgs
+//
+// Implementation for TRITONSERVER_MetricArgs.
+//
+class TritonServerMetricArgs {
+ public:
+  TritonServerMetricArgs() = default;
+
+  void* SetHistogramArgs(const double* buckets, uint64_t bucket_count)
+  {
+    kind_ = TRITONSERVER_MetricKind::TRITONSERVER_METRIC_KIND_HISTOGRAM;
+    buckets_.resize(bucket_count);
+    std::memcpy(buckets_.data(), buckets, sizeof(double) * bucket_count);
+    return nullptr;
+  }
+
+  const std::vector<double>& buckets() const { return buckets_; }
+
+ private:
+  TRITONSERVER_MetricKind kind_;
+  std::vector<double> buckets_;
+};
 
 //
 // Implementation for TRITONSERVER_MetricFamily.
@@ -53,7 +78,7 @@ class MetricFamily {
 
   void* Add(
       std::map<std::string, std::string> label_map, Metric* metric,
-      const std::vector<double>* buckets = nullptr);
+      const TritonServerMetricArgs* buckets);
   void Remove(void* prom_metric, Metric* metric);
 
   int NumMetrics()
@@ -90,7 +115,7 @@ class Metric {
   Metric(
       TRITONSERVER_MetricFamily* family,
       std::vector<const InferenceParameter*> labels,
-      const std::vector<double>* buckets = nullptr);
+      const TritonServerMetricArgs* args);
   ~Metric();
 
   MetricFamily* Family() const { return family_; }
