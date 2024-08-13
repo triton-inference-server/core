@@ -2432,13 +2432,15 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
 }
 
 bool
-EquivalentInNonInstanceGroupConfig(
+EquivalentInNonInstanceGroupAndNonVersionPolicyConfig(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config)
 {
   ::google::protobuf::util::MessageDifferencer pb_diff;
   pb_diff.IgnoreField(
       old_config.descriptor()->FindFieldByLowercaseName("instance_group"));
+  pb_diff.IgnoreField(
+      old_config.descriptor()->FindFieldByLowercaseName("version_policy"));
   return pb_diff.Compare(old_config, new_config);
 }
 

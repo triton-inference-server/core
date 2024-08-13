@@ -288,12 +288,14 @@ TRITONSERVER_DataType DataTypeToTriton(const inference::DataType dtype);
 /// \return The data type.
 inference::DataType TritonToDataType(const TRITONSERVER_DataType dtype);
 
-/// Check if non instance group settings on the model configs are equivalent.
+/// Check if non instance group and non version policy settings on the model
+/// configs are equivalent.
 /// \param old_config The old model config.
 /// \param new_config The new model config.
 /// \return True if the model configs are equivalent in all non instance group
-/// settings. False if they differ in non instance group settings.
-bool EquivalentInNonInstanceGroupConfig(
+/// and non version policy settings. False if they differ in non instance group
+/// and non version policy settings.
+bool EquivalentInNonInstanceGroupAndNonVersionPolicyConfig(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config);
 
