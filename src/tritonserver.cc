@@ -3526,18 +3526,6 @@ TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
 }
 
 TRITONSERVER_Error*
-TRITONSERVER_MetricCollect(TRITONSERVER_Metric* metric, void* value)
-{
-#ifdef TRITON_ENABLE_METRICS
-  return reinterpret_cast<tc::Metric*>(metric)->Collect(
-      reinterpret_cast<prometheus::ClientMetric*>(value));
-#else
-  return TRITONSERVER_ErrorNew(
-      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
-#endif  // TRITON_ENABLE_METRICS
-}
-
-TRITONSERVER_Error*
 TRITONSERVER_GetMetricKind(
     TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind)
 {

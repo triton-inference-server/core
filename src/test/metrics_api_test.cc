@@ -234,29 +234,61 @@ MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
 }
 
 void
-HistogramAPIHelper(TRITONSERVER_Metric* metric)
+HistogramAPIHelper(
+    TRITONSERVER_Server* server, TRITONSERVER_Metric* metric,
+    std::vector<double> buckets, std::string metric_name,
+    std::string labels_str)
 {
-  // Observe
+  // Observe data
   std::vector<double> data{0.05, 1.5, 6.0};
-  std::vector<std::uint64_t> cumulative_counts = {1, 1, 2, 2, 3, 3};
   double sum = 0.0;
   for (auto datum : data) {
     FAIL_TEST_IF_ERR(
         TRITONSERVER_MetricSet(metric, datum), "observe metric value");
     sum += datum;
   }
+  std::vector<std::uint64_t> cumulative_counts = {1, 1, 2, 2, 3, 3};
+  ASSERT_EQ(buckets.size() + 1, cumulative_counts.size());
 
-  // Collect
-  prometheus::ClientMetric value;
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_MetricCollect(metric, &value),
-      "query metric value after observe");
-  auto hist = value.histogram;
-  ASSERT_EQ(hist.sample_count, data.size());
-  ASSERT_EQ(hist.sample_sum, sum);
-  ASSERT_EQ(hist.bucket.size(), cumulative_counts.size());
-  for (uint64_t i = 0; i < hist.bucket.size(); ++i) {
-    ASSERT_EQ(hist.bucket[i].cumulative_count, cumulative_counts[i]);
+  // Collect formatted output
+  std::string metrics_str;
+  GetMetrics(server, &metrics_str);
+
+  // All strings in this function are generated from ostringstream to make sure
+  // there is no trailing zeros. For example, std::to_string(7.55) is "7.550000"
+  // which is inconsistent with prometheus text_serializer output "7.55".
+
+  // custom_histogram_example_count{example1="histogram_label1",example2="histogram_label2"}
+  // 3
+  std::ostringstream count_ss;
+  count_ss << metric_name << "_count{" << labels_str << "} " << data.size();
+  ASSERT_EQ(NumMetricMatches(server, count_ss.str()), 1);
+
+  // custom_histogram_example_sum{example1="histogram_label1",example2="histogram_label2"}
+  // 7.55
+  std::ostringstream sum_ss;
+  sum_ss << metric_name << "_sum{" << labels_str << "} " << sum;
+  ASSERT_EQ(NumMetricMatches(server, sum_ss.str()), 1);
+
+  // custom_histogram_example_bucket{example1="histogram_label1",example2="histogram_label2"
+  std::ostringstream bucket_partial_ss;
+  bucket_partial_ss << metric_name << "_bucket{" << labels_str;
+  ASSERT_EQ(
+      NumMetricMatches(server, bucket_partial_ss.str()),
+      cumulative_counts.size());
+  for (uint64_t i = 0; i < cumulative_counts.size(); ++i) {
+    // custom_histogram_example_bucket{example1="histogram_label1",example2="histogram_label2",le="0.1"}
+    // 1
+    std::ostringstream le_ss;
+    if (i < buckets.size()) {
+      le_ss << "\"" << buckets[i] << "\"";
+    } else {
+      le_ss << "\"+Inf\"";
+    }
+    std::ostringstream bucket_ss;
+    bucket_ss << metric_name << "_bucket{" << labels_str
+              << ",le=" << le_ss.str() << "} " << cumulative_counts[i];
+    ASSERT_EQ(NumMetricMatches(server, bucket_ss.str()), 1);
   }
 }
 
@@ -431,7 +463,9 @@ TEST_F(MetricsApiTest, TestHistogramEndToEnd)
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
 
   // Run through metric APIs and assert correctness
-  HistogramAPIHelper(metric);
+  std::string labels_str =
+      "example1=\"histogram_label1\",example2=\"histogram_label2\"";
+  HistogramAPIHelper(server_, metric, buckets, name, labels_str);
 
   // Assert custom metric is reported and found in output
   ASSERT_EQ(NumMetricMatches(server_, description), 1);

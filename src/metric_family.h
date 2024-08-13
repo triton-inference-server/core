@@ -50,12 +50,12 @@ class TritonServerMetricArgs {
 
   void* SetHistogramArgs(const double* buckets, uint64_t bucket_count)
   {
-    kind_ = TRITONSERVER_MetricKind::TRITONSERVER_METRIC_KIND_HISTOGRAM;
+    kind_ = TRITONSERVER_METRIC_KIND_HISTOGRAM;
     buckets_.resize(bucket_count);
     std::memcpy(buckets_.data(), buckets, sizeof(double) * bucket_count);
     return nullptr;
   }
-
+  TRITONSERVER_MetricKind kind() const { return kind_; }
   const std::vector<double>& buckets() const { return buckets_; }
 
  private:
@@ -78,7 +78,7 @@ class MetricFamily {
 
   void* Add(
       std::map<std::string, std::string> label_map, Metric* metric,
-      const TritonServerMetricArgs* buckets);
+      const TritonServerMetricArgs* args);
   void Remove(void* prom_metric, Metric* metric);
 
   int NumMetrics()
@@ -125,7 +125,6 @@ class Metric {
   TRITONSERVER_Error* Increment(double value);
   TRITONSERVER_Error* Set(double value);
   TRITONSERVER_Error* Observe(double value);
-  TRITONSERVER_Error* Collect(prometheus::ClientMetric* value);
 
   // If a MetricFamily is deleted before its dependent Metric, we want to
   // invalidate the references so we don't access invalid memory.

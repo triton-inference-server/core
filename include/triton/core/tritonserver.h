@@ -2693,7 +2693,6 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsDelete(
 /// \param family The metric family to add this new metric to.
 /// \param labels The array of labels to associate with this new metric.
 /// \param label_count The number of labels.
-/// \param buckets Monotonically increasing values representing the
 /// bucket boundaries. For histogram only.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNew(
@@ -2768,18 +2767,6 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricSet(
     struct TRITONSERVER_Metric* metric, double value);
-
-/// Collect metrics.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_COUNTER,
-/// TRITONSERVER_METRIC_KIND_GAUGE, TRITONSERVER_METRIC_KIND_HISTOGRAM and
-/// returns TRITONSERVER_ERROR_UNSUPPORTED for unsupported
-/// TRITONSERVER_MetricKind.
-///
-/// \param metric The metric object to collect.
-/// \param value Returns the current value of the metric object.
-/// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricCollect(
-    struct TRITONSERVER_Metric* metric, void* value);
 
 /// Get the TRITONSERVER_MetricKind of metric of its corresponding family.
 ///

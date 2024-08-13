@@ -101,7 +101,11 @@ MetricFamily::Add(
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
       if (args == nullptr) {
         throw std::invalid_argument(
-            "Bucket boundaries not found in Metric constructor args.");
+            "Bucket boundaries not found in Metric args.");
+      }
+      if (args->kind() != TRITONSERVER_METRIC_KIND_HISTOGRAM) {
+        throw std::invalid_argument(
+            "Incorrect Metric args kind in histogram Metric constructor.");
       }
       auto histogram_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
@@ -359,40 +363,6 @@ Metric::Set(double value)
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
       auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
       histogram_ptr->Observe(value);
-      break;
-    }
-    default:
-      return TRITONSERVER_ErrorNew(
-          TRITONSERVER_ERROR_UNSUPPORTED,
-          "Unsupported TRITONSERVER_MetricKind");
-  }
-
-  return nullptr;  // Success
-}
-
-TRITONSERVER_Error*
-Metric::Collect(prometheus::ClientMetric* value)
-{
-  if (metric_ == nullptr) {
-    return TRITONSERVER_ErrorNew(
-        TRITONSERVER_ERROR_INTERNAL,
-        "Could not collect metric value. Metric has been invalidated.");
-  }
-
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(metric_);
-      *value = counter_ptr->Collect();
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(metric_);
-      *value = gauge_ptr->Collect();
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
-      auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
-      *value = histogram_ptr->Collect();
       break;
     }
     default:
