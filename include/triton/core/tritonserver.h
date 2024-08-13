@@ -2693,7 +2693,6 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsDelete(
 /// \param family The metric family to add this new metric to.
 /// \param labels The array of labels to associate with this new metric.
 /// \param label_count The number of labels.
-/// bucket boundaries. For histogram only.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNew(
     struct TRITONSERVER_Metric** metric,

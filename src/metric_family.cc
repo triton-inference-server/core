@@ -104,8 +104,7 @@ MetricFamily::Add(
             "Bucket boundaries not found in Metric args.");
       }
       if (args->kind() != TRITONSERVER_METRIC_KIND_HISTOGRAM) {
-        throw std::invalid_argument(
-            "Incorrect Metric args kind in histogram Metric constructor.");
+        throw std::invalid_argument("Metric args not set to histogram kind.");
       }
       auto histogram_family_ptr =
           reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);

@@ -479,6 +479,67 @@ TEST_F(MetricsApiTest, TestHistogramEndToEnd)
   ASSERT_EQ(NumMetricMatches(server_, description), 0);
 }
 
+// Test create a histogram metric without creating metric arguments
+TEST_F(MetricsApiTest, TestHistogramNoMetricArgs)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_HISTOGRAM;
+  const char* name = "no_metric_args";
+  const char* description = "no metric args description";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // MetricArgs not created
+  TRITONSERVER_MetricArgs* args = nullptr;
+  // Create metric
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  TRITONSERVER_Metric* metric = nullptr;
+  auto err = TRITONSERVER_MetricNewWithArgs(
+      &metric, family, labels.data(), labels.size(), args);
+  EXPECT_THAT(
+      TRITONSERVER_ErrorMessage(err),
+      HasSubstr("Bucket boundaries not found in Metric args"));
+
+  // Cleanup
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+}
+
+// Test create a histogram metric without setting metric arguments
+TEST_F(MetricsApiTest, TestHistogramMetricArgsNotset)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_HISTOGRAM;
+  const char* name = "metric_args_not_set";
+  const char* description = "metric args not set description";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // Create metric args object without setting it
+  TRITONSERVER_MetricArgs* args;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricArgsNew(&args), "Creating new metric args");
+
+  // Create metric
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  TRITONSERVER_Metric* metric = nullptr;
+  auto err = TRITONSERVER_MetricNewWithArgs(
+      &metric, family, labels.data(), labels.size(), args);
+  EXPECT_THAT(
+      TRITONSERVER_ErrorMessage(err),
+      HasSubstr("Metric args not set to histogram kind"));
+
+  // Cleanup
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+}
+
 // Test that a duplicate metric family can't be added
 // with a conflicting type/kind
 TEST_F(MetricsApiTest, TestDupeMetricFamilyDiffKind)
