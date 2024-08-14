@@ -221,19 +221,14 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   # Some libs are installed to ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/{LIB}/lib64 instead
   # of ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/{LIB}/lib on Centos
   set (LIB_DIR "lib")
-  # /etc/os-release does not exist on Windows
-  if(EXISTS "/etc/os-release")
-    file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
-    file(STRINGS /etc/os-release DISTRO_LIKE REGEX "^ID_LIKE=")
-    string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
-    string(REGEX REPLACE "ID_LIKE=\"(.*)\"" "\\1" DISTRO_LIKE "${DISTRO_LIKE}")
-    message(STATUS "Distro Name: ${DISTRO}")
-    message(STATUS "Distro Like: ${DISTRO_LIKE}")
-    if(DISTRO_LIKE MATCHES ".*rhel.*" OR DISTRO_LIKE MATCHES ".*centos.*")
+  if(LINUX)
+    file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
+    if(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
       set (LIB_DIR "lib64")
-    endif()
-  endif()
-
+    endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
+  endif(LINUX)
+  set(TRITON_CORE_HEADERS_ONLY OFF)
+  
   # Need to use ExternalProject for our builds so that we can get the
   # correct dependencies between Triton shared library components and
   # the ExternalProject dependencies (found in the third_party repo)
