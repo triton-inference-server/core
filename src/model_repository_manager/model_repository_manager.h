@@ -49,6 +49,33 @@ enum ActionType { NO_ACTION, LOAD, UNLOAD };
 /// Predefined reason strings
 #define MODEL_READY_REASON_DUPLICATE "model appears in two or more repositories"
 
+// Information about timestamps in model directory.
+class ModelTimestamp {
+ public:
+  ModelTimestamp() {}
+  ModelTimestamp(
+      const std::string& model_dir_path, const std::string& model_config_path);
+
+  bool IsModified(const ModelTimestamp& new_timestamp) const;
+  bool IsModelVersionModified(
+      const ModelTimestamp& new_timestamp, const int64_t version) const;
+
+  void SetModelConfigModifiedTime(const int64_t time_ns);
+
+ private:
+  int64_t GetModifiedTime() const;
+  int64_t GetModelVersionModifiedTime(const int64_t version) const;
+  int64_t GetNonModelConfigNorVersionNorDirModifiedTime() const;
+
+  // Timestamps of all contents in the model directory, i.e.
+  // - "<model_config_content_name_>": ns timestamp of model config (directory)
+  // -                            "1": ns timestamp of model version 1
+  // -                             "": ns timestamp of the model directory
+  std::unordered_map<std::string, int64_t> model_timestamps_;
+  // If empty, model config is not detected on the model directory.
+  std::string model_config_content_name_;
+};
+
 /// An object to manage the model repository active in the server.
 class ModelRepositoryManager {
  public:
@@ -77,23 +104,16 @@ class ModelRepositoryManager {
   // Information about the model.
   struct ModelInfo {
     ModelInfo(
-        const std::pair<int64_t, int64_t>& mtime_nsec,
-        const std::pair<int64_t, int64_t>& prev_mtime_ns,
+        const ModelTimestamp& mtime_nsec, const ModelTimestamp& prev_mtime_ns,
         const std::string& model_path, const std::string& model_config_path)
         : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
           explicitly_load_(true), model_path_(model_path),
           model_config_path_(model_config_path), is_config_provided_(false)
     {
     }
-    ModelInfo()
-        : mtime_nsec_(0, 0), prev_mtime_ns_(0, 0), explicitly_load_(true),
-          is_config_provided_(false)
-    {
-    }
-    // Current last modified time in ns, for '<config.pbtxt, model files>'
-    std::pair<int64_t, int64_t> mtime_nsec_;
-    // Previous last modified time in ns, for '<config.pbtxt, model files>'
-    std::pair<int64_t, int64_t> prev_mtime_ns_;
+    ModelInfo() : explicitly_load_(true), is_config_provided_(false) {}
+    ModelTimestamp mtime_nsec_;
+    ModelTimestamp prev_mtime_ns_;
     bool explicitly_load_;
     inference::ModelConfig model_config_;
     std::string model_path_;

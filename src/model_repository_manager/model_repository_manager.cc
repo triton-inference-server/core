@@ -267,7 +267,7 @@ CreateAgentModelListWithLoadAction(
 // Return the latest modification time in ns for all files/folders starting
 // from the path. The modification time will be 0 if there is an error.
 int64_t
-GetModifiedTime(const std::string& path)
+GetPathModifiedTime(const std::string& path)
 {
   // If there is an error in any step the fall-back default
   // modification time is 0. This means that in error cases 'path'
@@ -306,18 +306,15 @@ GetModifiedTime(const std::string& path)
 
   for (const auto& child : contents) {
     const auto full_path = JoinPath({path, child});
-    mtime = std::max(mtime, GetModifiedTime(full_path));
+    mtime = std::max(mtime, GetPathModifiedTime(full_path));
   }
 
   return mtime;
 }
-// Return the latest modification time in ns for '<config.pbtxt, model files>'
-// in a model directory path. The time for "config.pbtxt" will be 0 if not
-// found at "[model_dir_path]/config.pbtxt" or "[model_dir_path]/configs/
-// <custom-config-name>.pbtxt" if "--model-config-name" is set. The time for
-// "model files" includes the time for 'model_dir_path'.
-std::pair<int64_t, int64_t>
-GetDetailedModifiedTime(
+
+}  // namespace
+
+ModelTimestamp::ModelTimestamp(
     const std::string& model_dir_path, const std::string& model_config_path)
 {
   // Check if 'model_dir_path' is a directory.
@@ -326,64 +323,131 @@ GetDetailedModifiedTime(
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
               << "': " << status.AsString();
-    return std::make_pair(0, 0);
+    return;
   }
   if (!is_dir) {
     LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
               << "': Model directory path is not a directory";
-    return std::make_pair(0, 0);
+    return;
   }
 
-  std::pair<int64_t, int64_t> mtime(0, 0);  // <config.pbtxt, model files>
-
-  // Populate 'model files' time to the model directory time
-  status = FileModificationTime(model_dir_path, &mtime.second);
+  // Populate time for 'model_dir_path'.
+  int64_t model_dir_time = 0;
+  status = FileModificationTime(model_dir_path, &model_dir_time);
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
               << "': " << status.AsString();
-    return std::make_pair(0, 0);
+    return;
   }
+  model_timestamps_.emplace("", model_dir_time);
 
-  // Get files/folders in model_dir_path.
-  std::set<std::string> contents;
-  status = GetDirectoryContents(model_dir_path, &contents);
+  // Populate time for all immediate files/folders in 'model_dir_path'.
+  std::set<std::string> dir_contents;
+  status = GetDirectoryContents(model_dir_path, &dir_contents);
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
               << "': " << status.AsString();
-    return std::make_pair(0, 0);
+    model_timestamps_.clear();
+    return;
   }
-  // Get latest modification time for each files/folders, and place it at the
-  // correct category.
-  for (const auto& child : contents) {
-    const auto full_path = JoinPath({model_dir_path, child});
-    if (full_path == model_config_path) {
-      // config.pbtxt or customized config file in configs folder
-      mtime.first = GetModifiedTime(full_path);
-    } else {
-      // model files
-      mtime.second = std::max(mtime.second, GetModifiedTime(full_path));
+  for (const auto& content_name : dir_contents) {
+    const auto content_path = JoinPath({model_dir_path, content_name});
+    bool is_model_config = model_config_path.rfind(content_path, 0) == 0;
+    if (is_model_config) {
+      if (!model_config_content_name_.empty()) {
+        LOG_ERROR << "Failed to determine modification time for '"
+                  << model_dir_path << "': Duplicate model config is detected";
+        model_timestamps_.clear();
+        model_config_content_name_.clear();
+        return;
+      }
+      model_config_content_name_ = content_name;
+    }
+    model_timestamps_.emplace(content_name, GetPathModifiedTime(content_path));
+  }
+}
+
+bool
+ModelTimestamp::IsModified(const ModelTimestamp& new_timestamp) const
+{
+  int64_t old_modified_time = GetModifiedTime();
+  int64_t new_modified_time = new_timestamp.GetModifiedTime();
+  return new_modified_time > old_modified_time;
+}
+
+bool
+ModelTimestamp::IsModelVersionModified(
+    const ModelTimestamp& new_timestamp, const int64_t version) const
+{
+  int64_t old_modified_time = std::max(
+      GetModelVersionModifiedTime(version),
+      GetNonModelConfigNorVersionNorDirModifiedTime());
+  int64_t new_modified_time = std::max(
+      new_timestamp.GetModelVersionModifiedTime(version),
+      new_timestamp.GetNonModelConfigNorVersionNorDirModifiedTime());
+  return new_modified_time > old_modified_time;
+}
+
+int64_t
+ModelTimestamp::GetModifiedTime() const
+{
+  int64_t modified_time = 0;
+  for (const auto& pair : model_timestamps_) {
+    const int64_t time = pair.second;
+    modified_time = std::max(modified_time, time);
+  }
+  return modified_time;
+}
+
+int64_t
+ModelTimestamp::GetModelVersionModifiedTime(const int64_t version) const
+{
+  int64_t modified_time = 0;
+  auto itr = model_timestamps_.find(std::to_string(version));
+  if (itr != model_timestamps_.end()) {
+    modified_time = itr->second;
+  }
+  return modified_time;
+}
+
+int64_t
+ModelTimestamp::GetNonModelConfigNorVersionNorDirModifiedTime() const
+{
+  // Get modified time excluding time from model config, model version
+  // directory(s) and model directory.
+  int64_t modified_time = 0;
+  for (const auto& pair : model_timestamps_) {
+    const std::string& content_name = pair.first;
+    bool found_non_digit_in_content_name = false;
+    for (const char& c : content_name) {
+      if (std::isdigit(c) == 0) {
+        found_non_digit_in_content_name = true;
+        break;
+      }
+    }
+    // All model version directory(s) will not 'found_non_digit_in_content_name'
+    // as they are all digit(s).
+    // Model directory name will not 'found_non_digit_in_content_name' as it is
+    // empty.
+    if (found_non_digit_in_content_name &&
+        content_name != model_config_content_name_) {
+      const int64_t time = pair.second;
+      modified_time = std::max(modified_time, time);
     }
   }
-
-  return mtime;
+  return modified_time;
 }
-// Return true if any file in the 'model_dir_path' has been modified more
-// recently than 'last_ns', which represents last modified time for
-// '<config.pbtxt, model files>'. Update the 'last_ns' to the most-recent
-// modified time.
-bool
-IsModified(
-    const std::string& model_dir_path, const std::string& model_config_path,
-    std::pair<int64_t, int64_t>* last_ns)
+
+void
+ModelTimestamp::SetModelConfigModifiedTime(const int64_t time_ns)
 {
-  auto new_ns = GetDetailedModifiedTime(model_dir_path, model_config_path);
-  bool modified = std::max(new_ns.first, new_ns.second) >
-                  std::max(last_ns->first, last_ns->second);
-  last_ns->swap(new_ns);
-  return modified;
+  if (model_config_content_name_.empty()) {
+    LOG_ERROR << "Failed to set config modification time: "
+                 "model_config_content_name_ is empty";
+    return;
+  }
+  model_timestamps_[model_config_content_name_] = time_ns;
 }
-
-}  // namespace
 
 ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
@@ -624,7 +688,7 @@ ModelRepositoryManager::LoadModelByDependency(
       auto status = model_life_cycle_->AsyncLoad(
           valid_model->model_id_, itr->second->model_path_,
           valid_model->model_config_, itr->second->is_config_provided_,
-          itr->second->mtime_nsec_.second > itr->second->prev_mtime_ns_.second,
+          itr->second->prev_mtime_ns_, itr->second->mtime_nsec_,
           itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();
@@ -1406,7 +1470,7 @@ ModelRepositoryManager::InitializeModelInfo(
   if (iitr != infos_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
   } else {
-    linfo->prev_mtime_ns_ = std::make_pair(0, 0);
+    linfo->prev_mtime_ns_ = ModelTimestamp();
   }
 
   // Set 'mtime_nsec_' and override 'model_path_' if current path is empty
@@ -1435,7 +1499,7 @@ ModelRepositoryManager::InitializeModelInfo(
     // For file override, set 'mtime_nsec_' to minimum value so that
     // the next load without override will trigger re-load to undo
     // the override while the local files may still be unchanged.
-    linfo->mtime_nsec_ = std::make_pair(0, 0);
+    linfo->mtime_nsec_ = ModelTimestamp();
     linfo->model_path_ = location;
     linfo->model_config_path_ = JoinPath({location, kModelConfigPbTxt});
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
@@ -1445,14 +1509,16 @@ ModelRepositoryManager::InitializeModelInfo(
         GetModelConfigFullPath(linfo->model_path_, model_config_name_);
     // Model is not loaded.
     if (iitr == infos_.end()) {
-      linfo->mtime_nsec_ = GetDetailedModifiedTime(
-          linfo->model_path_, linfo->model_config_path_);
+      linfo->mtime_nsec_ =
+          ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
     } else {
       // Check the current timestamps to determine if model actually has been
       // modified
       linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
-      unmodified = !IsModified(
-          linfo->model_path_, linfo->model_config_path_, &linfo->mtime_nsec_);
+      ModelTimestamp new_mtime_ns =
+          ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
+      unmodified = !linfo->mtime_nsec_.IsModified(new_mtime_ns);
+      linfo->mtime_nsec_ = new_mtime_ns;
     }
   }
 
@@ -1467,9 +1533,9 @@ ModelRepositoryManager::InitializeModelInfo(
       // the override while the local files may still be unchanged.
       auto time_since_epoch =
           std::chrono::system_clock::now().time_since_epoch();
-      linfo->mtime_nsec_.first =
+      linfo->mtime_nsec_.SetModelConfigModifiedTime(
           std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_epoch)
-              .count();
+              .count());
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();

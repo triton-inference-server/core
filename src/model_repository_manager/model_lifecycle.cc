@@ -434,7 +434,7 @@ Status
 ModelLifeCycle::AsyncLoad(
     const ModelIdentifier& model_id, const std::string& model_path,
     const inference::ModelConfig& model_config, const bool is_config_provided,
-    const bool is_model_file_updated,
+    const ModelTimestamp& prev_timestamp, const ModelTimestamp& curr_timestamp,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)>&& OnComplete)
 {
@@ -488,7 +488,8 @@ ModelLifeCycle::AsyncLoad(
       if (serving_model->state_ == ModelReadyState::READY) {
         // The model is currently being served. Check if the model load could
         // be completed with a simple config update.
-        if (!is_model_file_updated && !serving_model->is_ensemble_ &&
+        if (!serving_model->is_ensemble_ &&
+            !prev_timestamp.IsModelVersionModified(curr_timestamp, version) &&
             EquivalentInNonInstanceGroupAndNonVersionPolicyConfig(
                 serving_model->model_config_, model_config)) {
           // Update the model
