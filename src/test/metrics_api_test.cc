@@ -233,6 +233,34 @@ MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
   TRITONSERVER_ErrorDelete(err);
 }
 
+// Calculate the cumulative_counts vector based on data and buckets.
+std::vector<std::uint64_t>
+GetCumulativeCounts(
+    const std::vector<double>& data, const std::vector<double>& buckets)
+{
+  std::vector<std::uint64_t> cumulative_counts(buckets.size() + 1, 0);
+  for (double datum : data) {
+    int i = 0;
+    for (; i < buckets.size(); ++i) {
+      if (datum <= buckets[i]) {
+        cumulative_counts[i]++;
+        break;
+      }
+    }
+    if (i == buckets.size()) {
+      cumulative_counts[i]++;
+    }
+  }
+
+  double cumulative_sum = 0.0;
+  for (int i = 0; i < cumulative_counts.size(); ++i) {
+    std::cout << cumulative_counts[i] << std::endl;
+    cumulative_sum += cumulative_counts[i];
+    cumulative_counts[i] = cumulative_sum;
+  }
+  return cumulative_counts;
+}
+
 void
 HistogramAPIHelper(
     TRITONSERVER_Server* server, TRITONSERVER_Metric* metric,
@@ -247,8 +275,8 @@ HistogramAPIHelper(
         TRITONSERVER_MetricObserve(metric, datum), "observe metric value");
     sum += datum;
   }
-  std::vector<std::uint64_t> cumulative_counts = {1, 1, 2, 2, 3, 3};
-  ASSERT_EQ(buckets.size() + 1, cumulative_counts.size());
+  std::vector<std::uint64_t> cumulative_counts =
+      GetCumulativeCounts(data, buckets);
 
   // Collect formatted output
   std::string metrics_str;

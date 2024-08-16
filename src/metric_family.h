@@ -51,8 +51,7 @@ class TritonServerMetricArgs {
   void* SetHistogramArgs(const double* buckets, uint64_t bucket_count)
   {
     kind_ = TRITONSERVER_METRIC_KIND_HISTOGRAM;
-    buckets_.resize(bucket_count);
-    std::memcpy(buckets_.data(), buckets, sizeof(double) * bucket_count);
+    buckets_ = std::vector<double>(buckets, buckets + bucket_count);
     return nullptr;
   }
   TRITONSERVER_MetricKind kind() const { return kind_; }
