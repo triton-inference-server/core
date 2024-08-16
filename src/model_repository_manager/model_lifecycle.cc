@@ -490,7 +490,7 @@ ModelLifeCycle::AsyncLoad(
         // be completed with a simple config update.
         if (!serving_model->is_ensemble_ &&
             !prev_timestamp.IsModelVersionModified(curr_timestamp, version) &&
-            EquivalentInNonInstanceGroupAndNonVersionPolicyConfig(
+            !ConfigChangeRequiresReload(
                 serving_model->model_config_, model_config)) {
           // Update the model
           model_info = serving_model.get();

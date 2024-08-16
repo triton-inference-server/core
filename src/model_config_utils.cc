@@ -2432,7 +2432,7 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
 }
 
 bool
-EquivalentInNonInstanceGroupAndNonVersionPolicyConfig(
+ConfigChangeRequiresReload(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config)
 {
@@ -2441,7 +2441,7 @@ EquivalentInNonInstanceGroupAndNonVersionPolicyConfig(
       old_config.descriptor()->FindFieldByLowercaseName("instance_group"));
   pb_diff.IgnoreField(
       old_config.descriptor()->FindFieldByLowercaseName("version_policy"));
-  return pb_diff.Compare(old_config, new_config);
+  return !pb_diff.Compare(old_config, new_config);
 }
 
 bool
