@@ -252,11 +252,8 @@ GetCumulativeCounts(
     }
   }
 
-  double cumulative_sum = 0.0;
-  for (int i = 0; i < cumulative_counts.size(); ++i) {
-    std::cout << cumulative_counts[i] << std::endl;
-    cumulative_sum += cumulative_counts[i];
-    cumulative_counts[i] = cumulative_sum;
+  for (int i = 1; i < cumulative_counts.size(); ++i) {
+    cumulative_counts[i] += cumulative_counts[i - 1];
   }
   return cumulative_counts;
 }
