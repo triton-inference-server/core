@@ -360,6 +360,40 @@ Metric::Set(double value)
       break;
     }
     case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_HISTOGRAM does not support Set");
+    }
+    default:
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "Unsupported TRITONSERVER_MetricKind");
+  }
+
+  return nullptr;  // Success
+}
+
+TRITONSERVER_Error*
+Metric::Observe(double value)
+{
+  if (metric_ == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "Could not set metric value. Metric has been invalidated.");
+  }
+
+  switch (kind_) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_COUNTER does not support Observe");
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_UNSUPPORTED,
+          "TRITONSERVER_METRIC_KIND_GAUGE does not support Observe");
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
       auto histogram_ptr = reinterpret_cast<prometheus::Histogram*>(metric_);
       histogram_ptr->Observe(value);
       break;

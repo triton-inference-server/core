@@ -244,7 +244,7 @@ HistogramAPIHelper(
   double sum = 0.0;
   for (auto datum : data) {
     FAIL_TEST_IF_ERR(
-        TRITONSERVER_MetricSet(metric, datum), "observe metric value");
+        TRITONSERVER_MetricObserve(metric, datum), "observe metric value");
     sum += datum;
   }
   std::vector<std::uint64_t> cumulative_counts = {1, 1, 2, 2, 3, 3};

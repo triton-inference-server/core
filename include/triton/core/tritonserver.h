@@ -2648,7 +2648,7 @@ TRITONSERVER_MetricFamilyDelete(struct TRITONSERVER_MetricFamily* family);
 
 /// Get the TRITONSERVER_MetricKind of the metric family.
 ///
-/// \param metric The metric family object to query.
+/// \param family The metric family object to query.
 /// \param kind Returns the TRITONSERVER_MetricKind of metric.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
@@ -2664,10 +2664,12 @@ TRITONSERVER_GetMetricFamilyKind(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsNew(
     struct TRITONSERVER_MetricArgs** args);
 
-/// Set metric args with prometheus histogram metric parameter.
+/// Set metric args with histogram metric parameter.
 ///
 /// \param args The metric args object to set.
-/// \param buckets The array of bucket boundaries.
+/// \param buckets The array of bucket boundaries for the expected range of
+/// observed values.
+///
 /// \param buckets_count The number of bucket boundaries.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
@@ -2732,10 +2734,9 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricDelete(
     struct TRITONSERVER_Metric* metric);
 
 /// Get the current value of a metric object.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_COUNTER,
-/// TRITONSERVER_METRIC_KIND_GAUGE, TRITONSERVER_METRIC_KIND_HISTOGRAM, and
-/// returns TRITONSERVER_ERROR_UNSUPPORTED for unsupported
-/// TRITONSERVER_MetricKind.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_COUNTER
+/// and TRITONSERVER_METRIC_KIND_GAUGE, and returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
 ///
 /// \param metric The metric object to query.
 /// \param value Returns the current value of the metric object.
@@ -2756,15 +2757,24 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricValue(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
     struct TRITONSERVER_Metric* metric, double value);
 
-/// Set the current value of metric to value or observe the value to metric.
-/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE and
-/// TRITONSERVER_METRIC_KIND_HISTOGRAM. Returns
+/// Set the current value of metric to value.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_GAUGE and returns
 /// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
 ///
 /// \param metric The metric object to update.
 /// \param value The amount to set metric's value to.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricSet(
+    struct TRITONSERVER_Metric* metric, double value);
+
+/// Sample an observation and count it to the appropriate bucket of a metric.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_HISTOGRAM and returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
+///
+/// \param metric The metric object to update.
+/// \param value The amount for metric to sample observation.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricObserve(
     struct TRITONSERVER_Metric* metric, double value);
 
 /// Get the TRITONSERVER_MetricKind of metric of its corresponding family.
