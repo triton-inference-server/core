@@ -3386,7 +3386,7 @@ TRITONSERVER_MetricArgsNew(TRITONSERVER_MetricArgs** args)
   *args = reinterpret_cast<TRITONSERVER_MetricArgs*>(largs);
   return nullptr;  // Success
 #else
-  *metrics = nullptr;
+  *args = nullptr;
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
@@ -3402,7 +3402,6 @@ TRITONSERVER_MetricArgsSetHistogram(
   largs->SetHistogramArgs(buckets, buckets_count);
   return nullptr;  // Success
 #else
-  *metrics = nullptr;
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
