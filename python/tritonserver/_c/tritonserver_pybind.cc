@@ -1434,7 +1434,7 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
-  uintptr_t get_c_ptr()
+  uintptr_t _ptr()
   {  // Calls PyWrapper
     return reinterpret_cast<uintptr_t>(this->Ptr());
   }
