@@ -228,8 +228,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
   endif(LINUX)
   set(TRITON_CORE_HEADERS_ONLY OFF)
-  
-  
+
   # Need to use ExternalProject for our builds so that we can get the
   # correct dependencies between Triton shared library components and
   # the ExternalProject dependencies (found in the third_party repo)
