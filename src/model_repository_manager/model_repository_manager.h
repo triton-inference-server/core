@@ -52,26 +52,20 @@ enum ActionType { NO_ACTION, LOAD, UNLOAD };
 // Information about timestamps in model directory.
 class ModelTimestamp {
  public:
-  ModelTimestamp() noexcept {}
+  ModelTimestamp() {}
   ModelTimestamp(
       const std::string& model_dir_path, const std::string& model_config_path);
 
-  bool IsModified(const ModelTimestamp& new_timestamp) const noexcept;
+  bool IsModified(const ModelTimestamp& new_timestamp) const;
   bool IsModelVersionModified(
-      const ModelTimestamp& new_timestamp,
-      const int64_t version) const noexcept;
+      const ModelTimestamp& new_timestamp, const int64_t version) const;
 
   void SetModelConfigModifiedTime(const int64_t time_ns);
 
  private:
-  void AssertPathIsDirectory(const std::string& path) const;
-  void PopulateModelDirectoryTime(const std::string& dir_path);
-  void PopulateModelDirectoryContentsTime(
-      const std::string& dir_path, const std::string& config_path);
-
-  int64_t GetModifiedTime() const noexcept;
-  int64_t GetModelVersionModifiedTime(const int64_t version) const noexcept;
-  int64_t GetNonModelConfigNorVersionNorDirModifiedTime() const noexcept;
+  int64_t GetModifiedTime() const;
+  int64_t GetModelVersionModifiedTime(const int64_t version) const;
+  int64_t GetNonModelConfigNorVersionNorDirModifiedTime() const;
 
   // Timestamps of all contents in the model directory, i.e.
   // - "<model_config_content_name_>": ns timestamp of model config (directory)
