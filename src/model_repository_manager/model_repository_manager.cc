@@ -276,9 +276,9 @@ GetPathModifiedTime(const std::string& path)
   bool path_is_dir;
   Status status = IsDirectory(path, &path_is_dir);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << path
-              << "': " << status.AsString();
-    return 0;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + path +
+        "': " + status.AsString());
   }
 
   // If 'path' is a file return its mtime. Otherwise, using the modification
@@ -286,9 +286,9 @@ GetPathModifiedTime(const std::string& path)
   int64_t mtime = 0;
   status = FileModificationTime(path, &mtime);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << path
-              << "': " << status.AsString();
-    return 0;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + path +
+        "': " + status.AsString());
   }
   if (!path_is_dir) {
     return mtime;
@@ -299,9 +299,9 @@ GetPathModifiedTime(const std::string& path)
   std::set<std::string> contents;
   status = GetDirectoryContents(path, &contents);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << path
-              << "': " << status.AsString();
-    return 0;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + path +
+        "': " + status.AsString());
   }
 
   for (const auto& child : contents) {
@@ -317,49 +317,60 @@ GetPathModifiedTime(const std::string& path)
 ModelTimestamp::ModelTimestamp(
     const std::string& model_dir_path, const std::string& model_config_path)
 {
-  // Check if 'model_dir_path' is a directory.
+  AssertPathIsDirectory(model_dir_path);
+  PopulateModelDirectoryTime(model_dir_path);
+  PopulateModelDirectoryContentsTime(model_dir_path, model_config_path);
+}
+
+void
+ModelTimestamp::AssertPathIsDirectory(const std::string& path) const
+{
   bool is_dir;
-  Status status = IsDirectory(model_dir_path, &is_dir);
+  Status status = IsDirectory(path, &is_dir);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': " << status.AsString();
-    return;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + path +
+        "': " + status.AsString());
   }
   if (!is_dir) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': Model directory path is not a directory";
-    return;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + path +
+        "': Path is not a directory");
   }
+}
 
-  // Populate time for 'model_dir_path'.
-  int64_t model_dir_time = 0;
-  status = FileModificationTime(model_dir_path, &model_dir_time);
+void
+ModelTimestamp::PopulateModelDirectoryTime(const std::string& dir_path)
+{
+  int64_t time_ns = 0;
+  Status status = FileModificationTime(dir_path, &time_ns);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': " << status.AsString();
-    return;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + dir_path +
+        "': " + status.AsString());
   }
-  model_timestamps_.emplace("", model_dir_time);
+  model_timestamps_.emplace("", time_ns);
+}
 
-  // Populate time for all immediate files/folders in 'model_dir_path'.
+void
+ModelTimestamp::PopulateModelDirectoryContentsTime(
+    const std::string& dir_path, const std::string& config_path)
+{
   std::set<std::string> dir_contents;
-  status = GetDirectoryContents(model_dir_path, &dir_contents);
+  Status status = GetDirectoryContents(dir_path, &dir_contents);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': " << status.AsString();
-    model_timestamps_.clear();
-    return;
+    throw std::runtime_error(
+        std::string("Failed to determine modification time for '") + dir_path +
+        "': " + status.AsString());
   }
   for (const auto& content_name : dir_contents) {
-    const auto content_path = JoinPath({model_dir_path, content_name});
-    bool is_model_config = model_config_path.rfind(content_path, 0) == 0;
+    const auto content_path = JoinPath({dir_path, content_name});
+    bool is_model_config = config_path.rfind(content_path, 0) == 0;
     if (is_model_config) {
       if (!model_config_content_name_.empty()) {
-        LOG_ERROR << "Failed to determine modification time for '"
-                  << model_dir_path << "': Duplicate model config is detected";
-        model_timestamps_.clear();
-        model_config_content_name_.clear();
-        return;
+        throw std::runtime_error(
+            std::string("Failed to determine modification time for '") +
+            dir_path + "': Duplicate model config is detected");
       }
       model_config_content_name_ = content_name;
     }
@@ -368,7 +379,7 @@ ModelTimestamp::ModelTimestamp(
 }
 
 bool
-ModelTimestamp::IsModified(const ModelTimestamp& new_timestamp) const
+ModelTimestamp::IsModified(const ModelTimestamp& new_timestamp) const noexcept
 {
   int64_t old_modified_time = GetModifiedTime();
   int64_t new_modified_time = new_timestamp.GetModifiedTime();
@@ -377,7 +388,7 @@ ModelTimestamp::IsModified(const ModelTimestamp& new_timestamp) const
 
 bool
 ModelTimestamp::IsModelVersionModified(
-    const ModelTimestamp& new_timestamp, const int64_t version) const
+    const ModelTimestamp& new_timestamp, const int64_t version) const noexcept
 {
   int64_t old_modified_time = std::max(
       GetModelVersionModifiedTime(version),
@@ -389,7 +400,7 @@ ModelTimestamp::IsModelVersionModified(
 }
 
 int64_t
-ModelTimestamp::GetModifiedTime() const
+ModelTimestamp::GetModifiedTime() const noexcept
 {
   int64_t modified_time = 0;
   for (const auto& pair : model_timestamps_) {
@@ -400,7 +411,8 @@ ModelTimestamp::GetModifiedTime() const
 }
 
 int64_t
-ModelTimestamp::GetModelVersionModifiedTime(const int64_t version) const
+ModelTimestamp::GetModelVersionModifiedTime(
+    const int64_t version) const noexcept
 {
   int64_t modified_time = 0;
   auto itr = model_timestamps_.find(std::to_string(version));
@@ -411,7 +423,7 @@ ModelTimestamp::GetModelVersionModifiedTime(const int64_t version) const
 }
 
 int64_t
-ModelTimestamp::GetNonModelConfigNorVersionNorDirModifiedTime() const
+ModelTimestamp::GetNonModelConfigNorVersionNorDirModifiedTime() const noexcept
 {
   // Get modified time excluding time from model config, model version
   // directory(s) and model directory.
@@ -442,9 +454,9 @@ void
 ModelTimestamp::SetModelConfigModifiedTime(const int64_t time_ns)
 {
   if (model_config_content_name_.empty()) {
-    LOG_ERROR << "Failed to set config modification time: "
-                 "model_config_content_name_ is empty";
-    return;
+    throw std::runtime_error(
+        "Failed to set model configuration modification time: "
+        "model_config_content_name_ is empty");
   }
   model_timestamps_[model_config_content_name_] = time_ns;
 }
@@ -1508,17 +1520,22 @@ ModelRepositoryManager::InitializeModelInfo(
     linfo->model_config_path_ =
         GetModelConfigFullPath(linfo->model_path_, model_config_name_);
     // Model is not loaded.
-    if (iitr == infos_.end()) {
-      linfo->mtime_nsec_ =
-          ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
-    } else {
-      // Check the current timestamps to determine if model actually has been
-      // modified
-      linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
-      ModelTimestamp new_mtime_ns =
-          ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
-      unmodified = !linfo->mtime_nsec_.IsModified(new_mtime_ns);
-      linfo->mtime_nsec_ = new_mtime_ns;
+    try {  // ModelTimestamp(...) may throw
+      if (iitr == infos_.end()) {
+        linfo->mtime_nsec_ =
+            ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
+      } else {
+        // Check the current timestamps to determine if model actually has been
+        // modified
+        linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
+        ModelTimestamp new_mtime_ns =
+            ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
+        unmodified = !linfo->mtime_nsec_.IsModified(new_mtime_ns);
+        linfo->mtime_nsec_ = new_mtime_ns;
+      }
+    }
+    catch (const std::runtime_error& e) {
+      return Status(Status::Code::INTERNAL, e.what());
     }
   }
 
@@ -1533,9 +1550,16 @@ ModelRepositoryManager::InitializeModelInfo(
       // the override while the local files may still be unchanged.
       auto time_since_epoch =
           std::chrono::system_clock::now().time_since_epoch();
-      linfo->mtime_nsec_.SetModelConfigModifiedTime(
+      int64_t time_since_epoch_ns =
           std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_epoch)
-              .count());
+              .count();
+      try {
+        linfo->mtime_nsec_.SetModelConfigModifiedTime(time_since_epoch_ns);
+      }
+      catch (const std::runtime_error& e) {
+        return Status(Status::Code::INTERNAL, e.what());
+      }
+
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();
