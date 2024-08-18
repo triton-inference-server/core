@@ -1081,6 +1081,11 @@ TRITONSERVER_MetricNew()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricNewWithArgs()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONSERVER_MetricDelete()
 {
 }
@@ -1097,6 +1102,11 @@ TRITONSERVER_MetricIncrement()
 
 TRITONAPI_DECLSPEC void
 TRITONSERVER_MetricSet()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricObserve()
 {
 }
 

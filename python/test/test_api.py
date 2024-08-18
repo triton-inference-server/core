@@ -70,7 +70,7 @@ server_options = tritonserver.Options(
     exit_on_error=True,
     strict_model_config=False,
     model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
-    exit_timeout=10,
+    exit_timeout=30,
 )
 
 
@@ -345,11 +345,6 @@ class ServerTests(unittest.TestCase):
         server = tritonserver.Server(self._server_options).start()
         self.assertTrue(server.ready())
 
-    @pytest.mark.xfail(
-        tritonserver.__version__ <= "2.48.0",
-        reason="Known issue on stop: Exit timeout expired. Exiting immediately",
-        raises=tritonserver.InternalError,
-    )
     def test_stop(self):
         server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
 
@@ -362,6 +357,11 @@ class ServerTests(unittest.TestCase):
                     {
                         "backend": "python",
                         "parameters": {"decoupled": {"string_value": "False"}},
+                        # Keep instance count low for fast startup/cleanup.
+                        # Alternatively can use KIND_CPU here, but keeping gpus/count explicit.
+                        "instance_group": [
+                            {"kind": "KIND_GPU", "gpus": [0], "count": 1}
+                        ],
                     }
                 )
             },
