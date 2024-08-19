@@ -317,38 +317,62 @@ GetPathModifiedTime(const std::string& path)
 ModelTimestamp::ModelTimestamp(
     const std::string& model_dir_path, const std::string& model_config_path)
 {
-  // Check if 'model_dir_path' is a directory.
+  bool init_success =
+      ModelDirectoryPathIsValid(model_dir_path) &&
+      ReadModelDirectoryTimestamp(model_dir_path, model_config_path) &&
+      ReadModelDirectoryContentTimestamps(model_dir_path, model_config_path);
+  if (!init_success) {
+    // Same as calling the default constructor. All timestamps are presumed to
+    // be 0 when comparing.
+    model_timestamps_.clear();
+    model_config_content_name_.clear();
+  }
+}
+
+bool
+ModelTimestamp::ModelDirectoryPathIsValid(const std::string& path) const
+{
   bool is_dir;
-  Status status = IsDirectory(model_dir_path, &is_dir);
+  Status status = IsDirectory(path, &is_dir);
   if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+    LOG_ERROR << "Failed to determine modification time for '" << path
               << "': " << status.AsString();
-    return;
+    return false;
   }
   if (!is_dir) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+    LOG_ERROR << "Failed to determine modification time for '" << path
               << "': Model directory path is not a directory";
-    return;
+    return false;
   }
+  return true;
+}
 
-  // Populate time for 'model_dir_path'.
+bool
+ModelTimestamp::ReadModelDirectoryTimestamp(
+    const std::string& model_dir_path, const std::string& model_config_path)
+{
   int64_t model_dir_time = 0;
-  status = FileModificationTime(model_dir_path, &model_dir_time);
+  Status status = FileModificationTime(model_dir_path, &model_dir_time);
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
               << "': " << status.AsString();
-    return;
+    return false;
   }
   model_timestamps_.emplace("", model_dir_time);
 
-  // Populate time for all immediate files/folders in 'model_dir_path'.
+  return true;
+}
+
+bool
+ModelTimestamp::ReadModelDirectoryContentTimestamps(
+    const std::string& model_dir_path, const std::string& model_config_path)
+{
   std::set<std::string> dir_contents;
-  status = GetDirectoryContents(model_dir_path, &dir_contents);
+  Status status = GetDirectoryContents(model_dir_path, &dir_contents);
   if (!status.IsOk()) {
     LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
               << "': " << status.AsString();
-    model_timestamps_.clear();
-    return;
+    return false;
   }
   for (const auto& content_name : dir_contents) {
     const auto content_path = JoinPath({model_dir_path, content_name});
@@ -357,14 +381,14 @@ ModelTimestamp::ModelTimestamp(
       if (!model_config_content_name_.empty()) {
         LOG_ERROR << "Failed to determine modification time for '"
                   << model_dir_path << "': Duplicate model config is detected";
-        model_timestamps_.clear();
-        model_config_content_name_.clear();
-        return;
+        return false;
       }
       model_config_content_name_ = content_name;
     }
     model_timestamps_.emplace(content_name, GetPathModifiedTime(content_path));
   }
+
+  return true;
 }
 
 bool

@@ -63,6 +63,12 @@ class ModelTimestamp {
   void SetModelConfigModifiedTime(const int64_t time_ns);
 
  private:
+  bool ModelDirectoryPathIsValid(const std::string& path) const;
+  bool ReadModelDirectoryTimestamp(
+      const std::string& model_dir_path, const std::string& model_config_path);
+  bool ReadModelDirectoryContentTimestamps(
+      const std::string& model_dir_path, const std::string& model_config_path);
+
   int64_t GetModifiedTime() const;
   int64_t GetModelVersionModifiedTime(const int64_t version) const;
   int64_t GetNonModelConfigNorVersionNorDirModifiedTime() const;
