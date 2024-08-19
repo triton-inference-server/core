@@ -1,4 +1,5 @@
-// Copyright (c) 2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights
+// reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -232,6 +233,89 @@ MetricAPIHelper(TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind kind)
   TRITONSERVER_ErrorDelete(err);
 }
 
+// Calculate the cumulative_counts vector based on data and buckets.
+std::vector<std::uint64_t>
+GetCumulativeCounts(
+    const std::vector<double>& data, const std::vector<double>& buckets)
+{
+  std::vector<std::uint64_t> cumulative_counts(buckets.size() + 1, 0);
+  for (double datum : data) {
+    int i = 0;
+    for (; i < buckets.size(); ++i) {
+      if (datum <= buckets[i]) {
+        cumulative_counts[i]++;
+        break;
+      }
+    }
+    if (i == buckets.size()) {
+      cumulative_counts[i]++;
+    }
+  }
+
+  for (int i = 1; i < cumulative_counts.size(); ++i) {
+    cumulative_counts[i] += cumulative_counts[i - 1];
+  }
+  return cumulative_counts;
+}
+
+void
+HistogramAPIHelper(
+    TRITONSERVER_Server* server, TRITONSERVER_Metric* metric,
+    std::vector<double> buckets, std::string metric_name,
+    std::string labels_str)
+{
+  // Observe data
+  std::vector<double> data{0.05, 1.5, 6.0};
+  double sum = 0.0;
+  for (auto datum : data) {
+    FAIL_TEST_IF_ERR(
+        TRITONSERVER_MetricObserve(metric, datum), "observe metric value");
+    sum += datum;
+  }
+  std::vector<std::uint64_t> cumulative_counts =
+      GetCumulativeCounts(data, buckets);
+
+  // Collect formatted output
+  std::string metrics_str;
+  GetMetrics(server, &metrics_str);
+
+  // All strings in this function are generated from ostringstream to make sure
+  // there is no trailing zeros. For example, std::to_string(7.55) is "7.550000"
+  // which is inconsistent with prometheus text_serializer output "7.55".
+
+  // custom_histogram_example_count{example1="histogram_label1",example2="histogram_label2"}
+  // 3
+  std::ostringstream count_ss;
+  count_ss << metric_name << "_count{" << labels_str << "} " << data.size();
+  ASSERT_EQ(NumMetricMatches(server, count_ss.str()), 1);
+
+  // custom_histogram_example_sum{example1="histogram_label1",example2="histogram_label2"}
+  // 7.55
+  std::ostringstream sum_ss;
+  sum_ss << metric_name << "_sum{" << labels_str << "} " << sum;
+  ASSERT_EQ(NumMetricMatches(server, sum_ss.str()), 1);
+
+  // custom_histogram_example_bucket{example1="histogram_label1",example2="histogram_label2"
+  std::ostringstream bucket_partial_ss;
+  bucket_partial_ss << metric_name << "_bucket{" << labels_str;
+  ASSERT_EQ(
+      NumMetricMatches(server, bucket_partial_ss.str()),
+      cumulative_counts.size());
+  for (uint64_t i = 0; i < cumulative_counts.size(); ++i) {
+    // custom_histogram_example_bucket{example1="histogram_label1",example2="histogram_label2",le="0.1"}
+    // 1
+    std::ostringstream le_ss;
+    if (i < buckets.size()) {
+      le_ss << "\"" << buckets[i] << "\"";
+    } else {
+      le_ss << "\"+Inf\"";
+    }
+    std::ostringstream bucket_ss;
+    bucket_ss << metric_name << "_bucket{" << labels_str
+              << ",le=" << le_ss.str() << "} " << cumulative_counts[i];
+    ASSERT_EQ(NumMetricMatches(server, bucket_ss.str()), 1);
+  }
+}
 
 // Test Fixture
 class MetricsApiTest : public ::testing::Test {
@@ -362,6 +446,123 @@ TEST_F(MetricsApiTest, TestGaugeEndToEnd)
 
   // Assert custom metric/family is unregistered and no longer in output
   ASSERT_EQ(NumMetricMatches(server_, description), 0);
+}
+
+// Test end-to-end flow of Generic Metrics API for Histogram metric
+TEST_F(MetricsApiTest, TestHistogramEndToEnd)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_HISTOGRAM;
+  const char* name = "custom_histogram_example";
+  const char* description =
+      "this is an example histogram metric added via API.";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // Create metric
+  TRITONSERVER_Metric* metric;
+  // Create labels
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      "example1", TRITONSERVER_PARAMETER_STRING, "histogram_label1"));
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      "example2", TRITONSERVER_PARAMETER_STRING, "histogram_label2"));
+  // Create metric args
+  std::vector<double> buckets = {0.1, 1.0, 2.5, 5.0, 10.0};
+  TRITONSERVER_MetricArgs* args;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricArgsNew(&args), "Creating new metric args");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricArgsSetHistogram(args, buckets.data(), buckets.size()),
+      "setting histogram metric args");
+
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNewWithArgs(
+          &metric, family, labels.data(), labels.size(), args),
+      "Creating new metric");
+  for (const auto label : labels) {
+    TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
+  }
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
+
+  // Run through metric APIs and assert correctness
+  std::string labels_str =
+      "example1=\"histogram_label1\",example2=\"histogram_label2\"";
+  HistogramAPIHelper(server_, metric, buckets, name, labels_str);
+
+  // Assert custom metric is reported and found in output
+  ASSERT_EQ(NumMetricMatches(server_, description), 1);
+
+  // Cleanup
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric), "delete metric");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+
+  // Assert custom metric/family is unregistered and no longer in output
+  ASSERT_EQ(NumMetricMatches(server_, description), 0);
+}
+
+// Test create a histogram metric without creating metric arguments
+TEST_F(MetricsApiTest, TestHistogramNoMetricArgs)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_HISTOGRAM;
+  const char* name = "no_metric_args";
+  const char* description = "no metric args description";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // MetricArgs not created
+  TRITONSERVER_MetricArgs* args = nullptr;
+  // Create metric
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  TRITONSERVER_Metric* metric = nullptr;
+  auto err = TRITONSERVER_MetricNewWithArgs(
+      &metric, family, labels.data(), labels.size(), args);
+  EXPECT_THAT(
+      TRITONSERVER_ErrorMessage(err),
+      HasSubstr("Bucket boundaries not found in Metric args"));
+
+  // Cleanup
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
+}
+
+// Test create a histogram metric without setting metric arguments
+TEST_F(MetricsApiTest, TestHistogramMetricArgsNotset)
+{
+  // Create metric family
+  TRITONSERVER_MetricFamily* family;
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_HISTOGRAM;
+  const char* name = "metric_args_not_set";
+  const char* description = "metric args not set description";
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family, kind, name, description),
+      "Creating new metric family");
+
+  // Create metric args object without setting it
+  TRITONSERVER_MetricArgs* args;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricArgsNew(&args), "Creating new metric args");
+
+  // Create metric
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  TRITONSERVER_Metric* metric = nullptr;
+  auto err = TRITONSERVER_MetricNewWithArgs(
+      &metric, family, labels.data(), labels.size(), args);
+  EXPECT_THAT(
+      TRITONSERVER_ErrorMessage(err),
+      HasSubstr("Metric args not set to histogram kind"));
+
+  // Cleanup
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricArgsDelete(args), "delete metric args");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyDelete(family), "delete metric family");
 }
 
 // Test that a duplicate metric family can't be added
