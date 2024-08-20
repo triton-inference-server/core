@@ -317,6 +317,7 @@ GetPathModifiedTime(const std::string& path)
 ModelTimestamp::ModelTimestamp(
     const std::string& model_dir_path, const std::string& model_config_path)
 {
+  // DLIS-7221: Raise an exception when failed to create timestamp
   bool init_success =
       ModelDirectoryPathIsValid(model_dir_path) &&
       ReadModelDirectoryTimestamp(model_dir_path, model_config_path) &&
