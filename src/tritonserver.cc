@@ -2133,6 +2133,32 @@ TRITONSERVER_InferenceRequestSetDoubleParameter(
   return nullptr;  // success
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestAddRefShmRegion(
+    TRITONSERVER_InferenceRequest* request, const char* name, bool* is_added)
+{
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  RETURN_IF_STATUS_ERROR(tr->AddRefShmRegion(name, is_added));
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceRequestGetRefShmRegions(
+    TRITONSERVER_InferenceRequest* request,
+    const std::set<std::string>** ref_shm_regions)
+{
+  if (ref_shm_regions == nullptr || request == nullptr) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL, "Received nullptr");
+  }
+
+  tc::InferenceRequest* tr = reinterpret_cast<tc::InferenceRequest*>(request);
+  const std::set<std::string>& regions = tr->GetRefShmRegions();
+  *ref_shm_regions = &regions;
+
+  return nullptr;  // Success
+}
+
 //
 // TRITONSERVER_InferenceResponse
 //
