@@ -1434,6 +1434,11 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
+  uintptr_t _ptr()
+  {  // Calls PyWrapper
+    return reinterpret_cast<uintptr_t>(this->Ptr());
+  }
+
   void Stop() const
   {
     // ServerStop is blocking for the duration of the server exit timeout, so
@@ -2107,7 +2112,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .export_values();
   py::class_<PyServer>(m, "TRITONSERVER_Server")
       .def(py::init<PyServerOptions&>())
-      .def("_ptr", &PyServer::Ptr)
+      .def("_ptr", &PyServer::_ptr)
       .def("stop", &PyServer::Stop)
       .def("register_model_repository", &PyServer::RegisterModelRepository)
       .def("unregister_model_repository", &PyServer::UnregisterModelRepository)
