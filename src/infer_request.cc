@@ -1320,6 +1320,8 @@ InferenceRequest::ValidateBytesInputs(
           buffer_next_idx++, (const void**)(&buffer), &remaining_buffer_size,
           buffer_memory_type, &buffer_memory_id));
 
+      // GPU tensors are validated at platform backends to avoid additional
+      // data copying. Check "ValidateStringBuffer" in backend_common.cc.
       if (*buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
         return Status::Success;
       }
