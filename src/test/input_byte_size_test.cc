@@ -364,6 +364,62 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       "deleting inference request");
 }
 
+TEST_F(InputByteSizeTest, InputByteSizeLarge)
+{
+  const char* model_name = "savedmodel_zero_1_float32";
+  // Create an inference request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(
+          &irequest_, server_, model_name, -1 /* model_version */),
+      "creating inference request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetReleaseCallback(
+          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
+      "setting request release callback");
+
+  // Define input shape and data
+  size_t element_cnt = (1LL << 31) / sizeof(float);
+  std::vector<int64_t> shape{1, element_cnt};
+  std::vector<float> input_data(element_cnt, 1);
+  const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
+
+  // Set input for the request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAddInput(
+          irequest_, "INPUT0", TRITONSERVER_TYPE_FP32, shape.data(),
+          shape.size()),
+      "setting input for the request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAppendInputData(
+          irequest_, "INPUT0", input_data.data(), input0_byte_size,
+          TRITONSERVER_MEMORY_CPU, 0),
+      "assigning INPUT data");
+
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
+
+  // Set response callback
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetResponseCallback(
+          irequest_, allocator_, nullptr /* response_allocator_userp */,
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
+      "setting response callback");
+
+  // Run inference
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
+      "running inference");
+
+  // Get the inference response
+  response_ = future.get();
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseError(response_), "response status");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseDelete(response_),
+      "deleting inference response");
+  ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+}
+
 TEST_F(InputByteSizeTest, ValidStringInputByteSize)
 {
   const char* model_name = "savedmodel_zero_1_object";
