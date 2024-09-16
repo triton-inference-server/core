@@ -64,6 +64,7 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
+  return;
   if (!SetDllDirectory(path.c_str())) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
@@ -88,6 +89,7 @@ SharedLibrary::ResetLibraryDirectory()
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "ResetLibraryDirectory";
+  return;
   if (!SetDllDirectory(NULL)) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
