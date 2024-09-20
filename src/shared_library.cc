@@ -63,9 +63,8 @@ Status
 SharedLibrary::SetLibraryDirectory(const std::string& path)
 {
 #ifdef _WIN32
-  LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
-  return Status::Success;
-  if (!SetDllDirectory(path.c_str())) {
+  LOG_VERBOSE(1) << "AddDllDirectory: path = " << path;
+  if (AddDllDirectory(path.c_str()) == 0) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -132,7 +131,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
-  *handle = LoadLibrary(path.c_str());
+  *handle = LoadLibraryEx(path.c_str(), NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
