@@ -1152,8 +1152,8 @@ Status
 ModelRepositoryManager::RepositoryIndex(
     const bool ready_only, std::vector<ModelIndex>* index)
 {
-  std::set<ModelIdentifier> seen_models;
-  std::set<ModelIdentifier> duplicate_models;
+  std::unordered_set<ModelIdentifier> seen_models;
+  std::unordered_set<ModelIdentifier> duplicate_models;
   for (const auto& repository_path : repository_paths_) {
     const std::string model_namespace =
         (enable_model_namespacing_ ? repository_path : "");
@@ -1180,6 +1180,18 @@ ModelRepositoryManager::RepositoryIndex(
       }
 
       seen_models.insert(model_id);
+    }
+  }
+
+  // Any loaded models which are
+  // not present in the local model repository
+  // are added to the index directly
+
+  for (const auto& mapping_it : global_map_) {
+    for (const auto& model_id : mapping_it.second) {
+      if (seen_models.count(model_id) == 0) {
+        seen_models.insert(model_id);
+      }
     }
   }
 
