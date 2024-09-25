@@ -137,7 +137,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // Need to put shared library directory on the DLL path so that any
   // dependencies of the shared library are found
   const std::string library_dir = DirName(path);
-  RETURN_IF_ERROR(AddLibraryDirectory(library_dir));
+  std::vector<DLL_DIRECTORY_COOKIE> library_cookies;
+  RETURN_IF_ERROR(AddLibraryDirectory(library_dir, library_cookies));
 
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
@@ -146,7 +147,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
-  RETURN_IF_ERROR(ResetLibraryDirectory());
+  RETURN_IF_ERROR(ResetLibraryDirectory(library_cookies));
 
   if (*handle == nullptr) {
     LPSTR err_buffer = nullptr;
