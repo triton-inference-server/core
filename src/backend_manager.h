@@ -73,6 +73,7 @@ class TritonBackend {
       const std::string& name, const std::string& dir,
       const std::string& libpath,
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
+      const std::vector<std::string>& additional_dependency_dirs,
       std::shared_ptr<TritonBackend>* backend);
   ~TritonBackend();
 
@@ -128,8 +129,7 @@ class TritonBackend {
       const std::string& libpath, const TritonServerMessage& backend_config);
 
   void ClearHandles();
-  Status LoadBackendLibrary(
-      const std::vector<std::string>& additional_depenedency_dirs);
+  Status LoadBackendLibrary();
 
   Status UpdateAttributes();
 
@@ -177,7 +177,9 @@ class TritonBackendManager {
       const std::string& name, const std::string& dir,
       const std::string& libpath,
       const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-      bool is_python_based_backend, std::shared_ptr<TritonBackend>* backend);
+      bool is_python_based_backend,
+      const std::vector<std::string>& additional_dependency_dirs,
+      std::shared_ptr<TritonBackend>* backend);
 
   Status BackendState(
       std::unique_ptr<
