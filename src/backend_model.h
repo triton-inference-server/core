@@ -126,7 +126,8 @@ class TritonModel : public Model {
       const int64_t version, const inference::ModelConfig& config,
       const bool auto_complete_config,
       const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map);
+      const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+      const std::vector<std::string>& additional_dependency_dirs);
 
   // Prepare the next set of instances on the background. Returns the instances
   // that will be added and removed if the next set of instances is to be
