@@ -30,6 +30,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "constants.h"
 #include "filesystem/api.h"
@@ -127,7 +128,8 @@ class TritonBackend {
       const std::string& libpath, const TritonServerMessage& backend_config);
 
   void ClearHandles();
-  Status LoadBackendLibrary();
+  Status LoadBackendLibrary(
+      const std::vector<std::string>& additional_depenedency_dirs);
 
   Status UpdateAttributes();
 

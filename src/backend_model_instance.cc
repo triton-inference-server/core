@@ -222,6 +222,7 @@ TritonModelInstance::CreateInstance(
     const std::string& host_policy_name,
     const inference::ModelRateLimiter& rate_limiter_config,
     const std::vector<SecondaryDevice>& secondary_devices,
+    const std::vector<std::string>& additional_dependency_dirs,
     std::shared_ptr<TritonModelInstance>* triton_model_instance)
 {
   static triton::common::HostPolicyCmdlineConfig empty_host_policy;
@@ -236,7 +237,7 @@ TritonModelInstance::CreateInstance(
   auto err = ConstructAndInitializeInstance(
       model, name, signature, kind, device_id, profile_names, passive,
       host_policy_name, *host_policy, rate_limiter_config, secondary_devices,
-      triton_model_instance);
+      additional_dependency_dirs, triton_model_instance);
   RETURN_IF_ERROR(ResetNumaMemoryPolicy());
   RETURN_IF_ERROR(err);
 
@@ -263,6 +264,7 @@ TritonModelInstance::ConstructAndInitializeInstance(
     const triton::common::HostPolicyCmdlineConfig& host_policy,
     const inference::ModelRateLimiter& rate_limiter_config,
     const std::vector<SecondaryDevice>& secondary_devices,
+    const std::vector<std::string>& additional_dependency_dirs,
     std::shared_ptr<TritonModelInstance>* triton_model_instance)
 {
   // Create the JSON representation of the backend configuration.
@@ -298,15 +300,21 @@ TritonModelInstance::ConstructAndInitializeInstance(
     // [FIXME] Reduce lock WAR on SharedLibrary (DLIS-4300)
 #ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
+    std::vector<DLL_DIRECTORY_COOKIE> library_cookies;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->SetLibraryDirectory(model->Backend()->Directory()));
+    RETURN_IF_ERROR(slib->AddLibraryDirectory(
+        model->Backend()->Directory(), library_cookies));
+    for (size_t i = 0; i < model->AdditionalDependencyDirs().size(); i++) {
+      RETURN_IF_ERROR(slib->AddLibraryDirectory(
+          model->AdditionalDependencyDirs()[i], library_cookies));
+    }
 #endif
 
     TRITONSERVER_Error* err =
         model->Backend()->ModelInstanceInitFn()(triton_instance);
 
 #ifdef _WIN32
-    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+    RETURN_IF_ERROR(slib->ResetLibraryDirectory(library_cookies));
 #endif
     RETURN_IF_TRITONSERVER_ERROR(err);
   }

@@ -127,10 +127,17 @@ TritonModel::Create(
 
   RETURN_IF_ERROR(SetBackendConfigDefaults(config));
 
+  // Extract any additional dependency folders set in the model config
+  std::vector<std::string> additional_dependency_dirs;
+  for (int i = 0; i < model_config.additional_dependency_dirs().size(); i++) {
+    additional_dependency_dirs.push_back(
+        model_config.additional_dependency_dirs(i));
+  }
+
   std::shared_ptr<TritonBackend> backend;
   RETURN_IF_ERROR(server->BackendManager()->CreateBackend(
       backend_name, backend_libdir, backend_libpath, config,
-      is_python_based_backend, &backend));
+      is_python_based_backend, additional_dependency_dirs, &backend));
 
   // Normalize backend-dependent config
   {
@@ -146,7 +153,7 @@ TritonModel::Create(
   std::unique_ptr<TritonModel> local_model(new TritonModel(
       server, localized_model_dir, backend, min_compute_capability, model_id,
       version, model_config, auto_complete_config, backend_cmdline_config_map,
-      host_policy_map));
+      host_policy_map, additional_dependency_dirs));
 
   TritonModel* raw_local_model = local_model.get();
 
@@ -162,15 +169,22 @@ TritonModel::Create(
     // [FIXME] Reduce lock WAR on SharedLibrary (DLIS-4300)
 #ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
+    std::vector<DLL_DIRECTORY_COOKIE> library_cookies;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->SetLibraryDirectory(backend->Directory()));
+    RETURN_IF_ERROR(
+        slib->AddLibraryDirectory(backend->Directory(), library_cookies));
+    for (size_t i = 0; i < local_model->AdditionalDependencyDirs().size();
+         i++) {
+      RETURN_IF_ERROR(slib->AddLibraryDirectory(
+          local_model->AdditionalDependencyDirs()[i], library_cookies));
+    }
 #endif
 
     TRITONSERVER_Error* err = backend->ModelInitFn()(
         reinterpret_cast<TRITONBACKEND_Model*>(raw_local_model));
 
 #ifdef _WIN32
-    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+    RETURN_IF_ERROR(slib->ResetLibraryDirectory(library_cookies));
 #endif
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
@@ -653,6 +667,14 @@ TritonModel::PrepareInstances(
           }
         }
 
+        // Extract any additional dependency folders set in the model config
+        std::vector<std::string> additional_dependency_dirs;
+        for (int i = 0; i < model_config.additional_dependency_dirs().size();
+             i++) {
+          additional_dependency_dirs.push_back(
+              model_config.additional_dependency_dirs(i));
+        }
+
         // Note that the local variables should be captured by value
         creation_results.emplace_back(
             std::async(launch_policy, [=, &instance_mu]() {
@@ -662,7 +684,8 @@ TritonModel::PrepareInstances(
               RETURN_IF_ERROR(TritonModelInstance::CreateInstance(
                   this, instance_name, signature, is.kind_, is.device_id_,
                   profile_names, passive, is.policy_name_,
-                  *is.rate_limiter_config_, secondary_devices, &new_instance));
+                  *is.rate_limiter_config_, secondary_devices,
+                  additional_dependency_dirs, &new_instance));
               {
                 std::lock_guard<std::mutex> lk(instance_mu);
                 added_instances->push_back(new_instance);
@@ -934,16 +957,18 @@ TritonModel::TritonModel(
     const int64_t version, const inference::ModelConfig& config,
     const bool auto_complete_config,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
-    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
+    const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
+    const std::vector<std::string>& additional_dependency_dirs)
     : Model(
           min_compute_capability, localized_model_dir->Path(), model_id,
           version, config),
       server_(server), min_compute_capability_(min_compute_capability),
       auto_complete_config_(auto_complete_config),
       backend_cmdline_config_map_(backend_cmdline_config_map),
-      host_policy_map_(host_policy_map), device_blocking_(false),
-      localized_model_dir_(localized_model_dir), backend_(backend),
-      state_(nullptr)
+      host_policy_map_(host_policy_map),
+      additional_dependency_dirs_(additional_dependency_dirs),
+      device_blocking_(false), localized_model_dir_(localized_model_dir),
+      backend_(backend), state_(nullptr)
 {
 }
 

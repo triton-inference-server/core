@@ -34,11 +34,8 @@
 #include <cuda_runtime_api.h>
 #endif
 
-#ifdef _WIN32
-// suppress the min and max definitions in Windef.h.
-#define NOMINMAX
-#include <Windows.h>
-#else
+
+#ifndef _WIN32
 #include <dlfcn.h>
 #endif
 
@@ -59,12 +56,15 @@ SharedLibrary::~SharedLibrary()
   mu_.unlock();
 }
 
-Status
-SharedLibrary::SetLibraryDirectory(const std::string& path)
-{
 #ifdef _WIN32
-  LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
-  if (!SetDllDirectory(path.c_str())) {
+Status
+SharedLibrary::AddLibraryDirectory(
+    const std::string& path, std::vector<DLL_DIRECTORY_COOKIE>& library_cookies)
+{
+  LOG_VERBOSE(1) << "AddDllDirectory: path = " << path;
+  DLL_DIRECTORY_COOKIE cookie =
+      AddDllDirectory(std::wstring(path.begin(), path.end()).c_str());
+  if (!cookie) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -76,35 +76,47 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 
     return Status(
         Status::Code::NOT_FOUND,
-        "unable to set dll path " + path + ": " + errstr);
+        "unable to add dll path " + path + ": " + errstr);
   }
-#endif
+  library_cookies.push_back(cookie);
+  return Status::Success;
+}
 
+Status
+SharedLibrary::ResetLibraryDirectory(
+    const std::vector<DLL_DIRECTORY_COOKIE>& library_cookies)
+{
+  LOG_VERBOSE(1) << "ResetLibraryDirectory";
+  for (size_t i = 0; i < library_cookies.size(); i++) {
+    if (!RemoveDllDirectory(library_cookies[i])) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
+
+      return Status(
+          Status::Code::NOT_FOUND, "unable to reset dll path: " + errstr);
+    }
+  }
+  return Status::Success;
+}
+#else
+Status
+SharedLibrary::AddLibraryDirectory(const std::string& path)
+{
   return Status::Success;
 }
 
 Status
 SharedLibrary::ResetLibraryDirectory()
 {
-#ifdef _WIN32
-  LOG_VERBOSE(1) << "ResetLibraryDirectory";
-  if (!SetDllDirectory(NULL)) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
-
-    return Status(
-        Status::Code::NOT_FOUND, "unable to reset dll path: " + errstr);
-  }
-#endif
-
   return Status::Success;
 }
+#endif
 
 Status
 SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
@@ -125,12 +137,12 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // Need to put shared library directory on the DLL path so that any
   // dependencies of the shared library are found
   const std::string library_dir = DirName(path);
-  RETURN_IF_ERROR(SetLibraryDirectory(library_dir));
+  RETURN_IF_ERROR(AddLibraryDirectory(library_dir));
 
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
-  *handle = LoadLibrary(path.c_str());
+  *handle = LoadLibraryEx(path.c_str(), NULL, LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.

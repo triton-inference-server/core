@@ -28,6 +28,14 @@
 #include <memory>
 #include <string>
 
+#ifdef _WIN32
+// suppress the min and max definitions in Windef.h.
+#define NOMINMAX
+#include <Windows.h>
+
+#include <vector>
+#endif
+
 #include "constants.h"
 #include "status.h"
 
@@ -48,12 +56,22 @@ class SharedLibrary {
 
   ~SharedLibrary();
 
+#ifdef _WIN32
+  // Add path to DLL search path
+  Status AddLibraryDirectory(
+      const std::string& path,
+      std::vector<DLL_DIRECTORY_COOKIE>& library_cookies);
+  // Remove path from DLL search path
+  Status ResetLibraryDirectory(
+      const std::vector<DLL_DIRECTORY_COOKIE>& library_cookies);
+#else
   // Configuration so that dependent libraries will be searched for in
   // 'path' during OpenLibraryHandle.
-  Status SetLibraryDirectory(const std::string& path);
-
+  Status AddLibraryDirectory(const std::string& path);
   // Reset any configuration done by SetLibraryDirectory.
   Status ResetLibraryDirectory();
+
+#endif
 
   // Open shared library and return generic handle.
   Status OpenLibraryHandle(const std::string& path, void** handle);

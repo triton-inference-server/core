@@ -92,7 +92,10 @@ class TritonModel : public Model {
   {
     return host_policy_map_;
   }
-
+  const std::vector<std::string>& AdditionalDependencyDirs() const
+  {
+    return additional_dependency_dirs_;
+  }
   // True if different instances should be grouped by device; false otherwise.
   bool DeviceBlocking() const { return device_blocking_; }
   // Get a vector of non-passive background instances that share the device id.
@@ -251,6 +254,8 @@ class TritonModel : public Model {
   const triton::common::BackendCmdlineConfigMap backend_cmdline_config_map_;
   // The host policy map.
   const triton::common::HostPolicyCmdlineConfigMap host_policy_map_;
+  // Additional dependency directories optionally specified in the user config.
+  const std::vector<std::string> additional_dependency_dirs_;
   // The device blocking. It should not be changed after the model is created.
   bool device_blocking_;
 

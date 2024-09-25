@@ -52,6 +52,7 @@ Status
 TritonBackend::Create(
     const std::string& name, const std::string& dir, const std::string& libpath,
     const triton::common::BackendCmdlineConfig& backend_cmdline_config,
+    const std::vector<std::string>& additional_dependency_dirs,
     std::shared_ptr<TritonBackend>* backend)
 {
   // Create the JSON representation of the backend configuration.
@@ -73,24 +74,45 @@ TritonBackend::Create(
   auto local_backend = std::shared_ptr<TritonBackend>(
       new TritonBackend(name, dir, libpath, backend_config));
 
+  // We must set set shared library path to point to the backend directory in
+  // case the backend library attempts to load additional shared libraries or
+  // in the case that implicit dependencies are stored in a user-defined
+  // location. Currently, the set and reset function is effective only on
+  // Windows, so there is no need to set path on non-Windows. However, parallel
+  // model loading will not see any speedup on Windows and the global lock
+  // inside the SharedLibrary is a WAR. [FIXME] Reduce lock WAR on SharedLibrary
+  // (DLIS-4300)
+#ifdef _WIN32
+  std::vector<DLL_DIRECTORY_COOKIE> library_cookies;
+  {
+    // Create a new scope to add the additional DLL search directories before
+    // attempting to load the backend library. The lock on 'slib' will be
+    // released prior to being needed by LoadBackendLibrary().
+    std::unique_ptr<SharedLibrary> slib;
+    RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+    RETURN_IF_ERROR(
+        slib->AddLibraryDirectory(local_backend->dir_, library_cookies));
+    for (size_t i = 0; i < additional_dependency_dirs.size(); i++) {
+      RETURN_IF_ERROR(slib->AddLibraryDirectory(
+          additional_dependency_dirs[i], library_cookies));
+    }
+  }
+#endif
   // Load the library and initialize all the entrypoints
   RETURN_IF_ERROR(local_backend->LoadBackendLibrary());
 
   // Backend initialization is optional... The TRITONBACKEND_Backend
-  // object is this TritonBackend object. We must set set shared
-  // library path to point to the backend directory in case the
-  // backend library attempts to load additional shared libraries.
+  // object is this TritonBackend object.
   if (local_backend->backend_init_fn_ != nullptr) {
-    std::unique_ptr<SharedLibrary> slib;
-    RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->SetLibraryDirectory(local_backend->dir_));
-
     TRITONSERVER_Error* err = local_backend->backend_init_fn_(
         reinterpret_cast<TRITONBACKEND_Backend*>(local_backend.get()));
-
-    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
+#ifdef _WIN32
+  std::unique_ptr<SharedLibrary> slib;
+  RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+  RETURN_IF_ERROR(slib->ResetLibraryDirectory(library_cookies));
+#endif
 
   local_backend->UpdateAttributes();
 
@@ -338,7 +360,9 @@ Status
 TritonBackendManager::CreateBackend(
     const std::string& name, const std::string& dir, const std::string& libpath,
     const triton::common::BackendCmdlineConfig& backend_cmdline_config,
-    bool is_python_based_backend, std::shared_ptr<TritonBackend>* backend)
+    bool is_python_based_backend,
+    const std::vector<std::string>& additional_dependency_dirs,
+    std::shared_ptr<TritonBackend>* backend)
 {
   std::lock_guard<std::mutex> lock(mu_);
 
@@ -359,7 +383,8 @@ TritonBackendManager::CreateBackend(
   }
 
   RETURN_IF_ERROR(TritonBackend::Create(
-      name, dir, libpath, backend_cmdline_config, backend));
+      name, dir, libpath, backend_cmdline_config, additional_dependency_dirs,
+      backend));
 
   (*backend)->SetPythonBasedBackendFlag(is_python_based_backend);
   if (is_python_based_backend) {
