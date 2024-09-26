@@ -152,9 +152,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   if (*handle == nullptr) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL,
+        GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
         (LPSTR)&err_buffer, 0, NULL);
     std::string errstr(err_buffer, size);
     LocalFree(err_buffer);
