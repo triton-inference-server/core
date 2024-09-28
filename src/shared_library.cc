@@ -243,7 +243,8 @@ SharedLibrary::GetEntrypoint(
 }
 
 Status
-AppendDirsToPath(const std::vector<std::string>& additional_dependency_dirs)
+SharedLibrary::AppendDirsToPath(
+    const std::vector<std::string>& additional_dependency_dirs)
 {
 #ifdef _WIN32
   const std::wstring PATH(L"Path");
@@ -263,11 +264,11 @@ AppendDirsToPath(const std::vector<std::string>& additional_dependency_dirs)
     new_paths += additional_dependency_dirs[i];
     new_paths += ";";
   }
-  std::wstring update_path_value =
+  std::wstring updated_path_value =
       std::wstring(new_paths.begin(), new_paths.end());
-  update_path_value += current_path_value;
+  updated_path_value += current_path_value;
 
-  if (!SetEnvironmentVariableW(PATH.c_str(), update_path_value.c_str())) {
+  if (!SetEnvironmentVariableW(PATH.c_str(), updated_path_value.c_str())) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -281,9 +282,8 @@ AppendDirsToPath(const std::vector<std::string>& additional_dependency_dirs)
         "failed to append user-provided directories to PATH " + errstr);
   }
 
-#else
-  return Status::Success;
 #endif
+  return Status::Success;
 }
 
 }}  // namespace triton::core
