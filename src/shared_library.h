@@ -27,6 +27,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "constants.h"
 #include "status.h"
@@ -61,9 +62,14 @@ class SharedLibrary {
   // Close shared library.
   Status CloseLibraryHandle(void* handle);
 
-  // Get a generic pointer for an entrypoint into a shared library.
-  Status GetEntrypoint(
-      void* handle, const std::string& name, const bool optional, void** befn);
+  // Append user-provided dependencies to PATH
+  Status AppendDirsToPath(
+      const std::vector<std::string>& additional_dependency_dirs)
+
+      // Get a generic pointer for an entrypoint into a shared library.
+      Status GetEntrypoint(
+          void* handle, const std::string& name, const bool optional,
+          void** befn);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);

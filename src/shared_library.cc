@@ -242,4 +242,48 @@ SharedLibrary::GetEntrypoint(
   return Status::Success;
 }
 
+Status
+AppendDirsToPath(const std::vector<std::string>& additional_dependency_dirs)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+  std::wstring current_path_value;
+
+  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    current_path_value.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &current_path_value[0], len);
+  } else {
+    return Status(Status::Code::INTERNAL, "PATH variable is empty");
+  }
+  std::wcout << current_path_value << std::endl;
+
+  std::string new_paths = ";";
+  for (size_t i = 0; i < additional_dependency_dirs.size(); i++) {
+    new_paths += additional_dependency_dirs[i];
+    new_paths += ";";
+  }
+  std::wstring update_path_value =
+      std::wstring(new_paths.begin(), new_paths.end());
+  update_path_value += current_path_value;
+
+  if (!SetEnvironmentVariableW(PATH.c_str(), update_path_value.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to append user-provided directories to PATH " + errstr);
+  }
+
+#else
+  return Status::Success;
+#endif
+}
+
 }}  // namespace triton::core

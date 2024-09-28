@@ -127,6 +127,20 @@ TritonModel::Create(
 
   RETURN_IF_ERROR(SetBackendConfigDefaults(config));
 
+  // Extract any additional dependency folders set in the model config
+  std::vector<std::string> additional_dependency_dirs;
+  for (int i = 0; i < model_config.additional_dependency_dirs().size(); i++) {
+    additional_dependency_dirs.push_back(
+        model_config.additional_dependency_dirs(i));
+  }
+#ifdef _WIN32
+  {
+    std::unique_ptr<SharedLibrary> slib;
+    RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
+    RETURN_IF_ERROR(slib->AppendDirsToPath(additional_dependency_dirs));
+  }
+#endif
+
   std::shared_ptr<TritonBackend> backend;
   RETURN_IF_ERROR(server->BackendManager()->CreateBackend(
       backend_name, backend_libdir, backend_libpath, config,
