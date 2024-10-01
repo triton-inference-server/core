@@ -44,6 +44,23 @@
 
 namespace triton { namespace core {
 
+#ifdef _WIN32
+namespace {
+
+std::wstring
+GetWindowsExtendedPath(const std::string& path)
+{
+  // Prefixing with '\\?\' allows Windows to take in paths lengths that exceed
+  // 'MAX_PATH'
+  const std::wstring ext_path_prefix = L"\\\\?\\";
+  const std::wstring converted_path = std::wstring(path.begin(), path.end());
+  return (ext_path_prefix + converted_path);
+}
+
+}  // namespace
+
+#endif
+
 static std::mutex mu_;
 
 Status
@@ -64,9 +81,10 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
-  if (!SetDllDirectory(path.c_str())) {
+  const std::wstring extended_path = GetWindowsExtendedPath(path);
+  if (!SetDllDirectoryW(extended_path.c_str())) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
+    size_t size = FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -88,9 +106,9 @@ SharedLibrary::ResetLibraryDirectory()
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "ResetLibraryDirectory";
-  if (!SetDllDirectory(NULL)) {
+  if (!SetDllDirectoryW(NULL)) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
+    size_t size = FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -130,7 +148,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
-  *handle = LoadLibrary(path.c_str());
+  const std::wstring extended_path = GetWindowsExtendedPath(path);
+  *handle = LoadLibraryW(extended_path.c_str());
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
@@ -138,7 +157,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 
   if (*handle == nullptr) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
+    size_t size = FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -168,7 +187,7 @@ SharedLibrary::CloseLibraryHandle(void* handle)
 #ifdef _WIN32
     if (FreeLibrary((HMODULE)handle) == 0) {
       LPSTR err_buffer = nullptr;
-      size_t size = FormatMessageA(
+      size_t size = FormatMessageW(
           FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
               FORMAT_MESSAGE_IGNORE_INSERTS,
           NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -200,7 +219,7 @@ SharedLibrary::GetEntrypoint(
   void* fn = GetProcAddress((HMODULE)handle, name.c_str());
   if ((fn == nullptr) && !optional) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
+    size_t size = FormatMessageW(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),

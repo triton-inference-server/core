@@ -505,6 +505,96 @@ TritonServerOptions::SetHostPolicy(
     PARENT.Add(STAT_NAME, std::move(dstat));                 \
   } while (false)
 
+TRITONSERVER_Error*
+AddAdditionalDependencyDir(
+    const std::string& additional_path, std::wstring& original_path)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+
+  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    original_path.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &original_path[0], len);
+  } else {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL, "PATH variable is empty");
+  }
+  std::wcout << "Before Add: " << original_path << std::endl;
+
+  std::wstring updated_path_value =
+      std::wstring(additional_path.begin(), additional_path.end());
+  updated_path_value += original_path;
+
+  if (!SetEnvironmentVariableW(PATH.c_str(), updated_path_value.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "failed to append user-provided directory to PATH " + errstr);
+  }
+
+  // TODO: Delete -- just for sanity purposes
+  std::wstring path_after;
+  len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    path_after.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+  }
+  std::wcout << "After Add: " << path_after << std::endl;
+  return nullptr;
+
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "The 'additional_dependency_dir' parameter is not currently supported "
+      "for Linux.");
+#endif
+}
+
+TRITONSERVER_Error*
+RemoveAdditionalDependencyDir(std::wstring& original_path)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+  if (!SetEnvironmentVariableW(PATH.c_str(), original_path.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INTERNAL,
+        "failed to append user-provided directory to PATH " + errstr);
+  }
+
+  // TODO: Delete -- just for sanity purposes
+  std::wstring path_after;
+  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    path_after.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+  }
+  std::wcout << "After Restore: " << path_after << std::endl;
+
+  return nullptr;
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED,
+      "The 'additional_dependency_dir' parameter is not currently supported "
+      "for Linux.");
+#endif
+}
+
 }  // namespace
 
 extern "C" {
@@ -3215,12 +3305,19 @@ TRITONSERVER_ServerLoadModelWithParameters(
   std::unordered_map<std::string, std::vector<const tc::InferenceParameter*>>
       models;
   std::vector<const tc::InferenceParameter*> mp;
+  std::wstring original_environment;
   for (size_t i = 0; i < parameter_count; ++i) {
-    mp.emplace_back(
-        reinterpret_cast<const tc::InferenceParameter*>(parameters[i]));
+    const tc::InferenceParameter* param =
+        reinterpret_cast<const tc::InferenceParameter*>(parameters[i]);
+    if (param->Name() == "additional_dependency_dir") {
+      RETURN_IF_STATUS_ERROR(AddAdditionalDependencyDir(
+          param->ValueString(), original_environment));
+    }
+    mp.emplace_back(param);
   }
   models[model_name] = std::move(mp);
   RETURN_IF_STATUS_ERROR(lserver->LoadModel(models));
+  RETURN_IF_STATUS_ERROR(RemoveAdditionalDependencyDir(original_environment));
 
   return nullptr;  // success
 }
