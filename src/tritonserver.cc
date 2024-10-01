@@ -3222,14 +3222,16 @@ TRITONSERVER_ServerLoadModelWithParameters(
     if (param->Name() == "additional_dependency_dir") {
       RETURN_IF_STATUS_ERROR(lserver->AddAdditionalDependencyDir(
           param->ValueString(), original_environment));
+    } else {
+      mp.emplace_back(param);
     }
-    mp.emplace_back(param);
   }
   models[model_name] = std::move(mp);
   RETURN_IF_STATUS_ERROR(lserver->LoadModel(models));
-  RETURN_IF_STATUS_ERROR(
-      lserver->RemoveAdditionalDependencyDir(original_environment));
-
+  if (!original_environment.empty()) {
+    RETURN_IF_STATUS_ERROR(
+        lserver->RemoveAdditionalDependencyDir(original_environment));
+  }
   return nullptr;  // success
 }
 
