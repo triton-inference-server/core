@@ -84,7 +84,7 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
   const std::wstring extended_path = GetWindowsExtendedPath(path);
   if (!SetDllDirectoryW(extended_path.c_str())) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageW(
+    size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -108,7 +108,7 @@ SharedLibrary::ResetLibraryDirectory()
   LOG_VERBOSE(1) << "ResetLibraryDirectory";
   if (!SetDllDirectoryW(NULL)) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageW(
+    size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -157,7 +157,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 
   if (*handle == nullptr) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageW(
+    size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -187,7 +187,7 @@ SharedLibrary::CloseLibraryHandle(void* handle)
 #ifdef _WIN32
     if (FreeLibrary((HMODULE)handle) == 0) {
       LPSTR err_buffer = nullptr;
-      size_t size = FormatMessageW(
+      size_t size = FormatMessageA(
           FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
               FORMAT_MESSAGE_IGNORE_INSERTS,
           NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
@@ -219,7 +219,7 @@ SharedLibrary::GetEntrypoint(
   void* fn = GetProcAddress((HMODULE)handle, name.c_str());
   if ((fn == nullptr) && !optional) {
     LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageW(
+    size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
             FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),

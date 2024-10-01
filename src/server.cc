@@ -691,4 +691,94 @@ InferenceServer::UnregisterModelRepository(const std::string& repository)
   return model_repository_manager_->UnregisterModelRepository(repository);
 }
 
+Status
+AddAdditionalDependencyDir(
+    const std::string& additional_path, std::wstring& original_path)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+
+  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    original_path.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &original_path[0], len);
+  } else {
+    return Status(Status::Code::INTERNAL, "PATH variable is empty");
+  }
+  std::wcout << "Before Add: " << original_path << std::endl;
+
+  std::wstring updated_path_value =
+      std::wstring(additional_path.begin(), additional_path.end());
+  updated_path_value += original_path;
+
+  if (!SetEnvironmentVariableW(PATH.c_str(), updated_path_value.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to append user-provided directory to PATH " + errstr);
+  }
+
+  // TODO: Delete -- just for sanity purposes
+  std::wstring path_after;
+  len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    path_after.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+  }
+  std::wcout << "After Add: " << path_after << std::endl;
+
+  return Status::Success;
+
+#else
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "The 'additional_dependency_dir' parameter is not currently supported "
+      "for Linux.");
+#endif
+}
+
+Status
+RemoveAdditionalDependencyDir(std::wstring& original_path)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+  if (!SetEnvironmentVariableW(PATH.c_str(), original_path.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to restore PATH to its original configuration " + errstr);
+  }
+
+  // TODO: Delete -- just for sanity purposes
+  std::wstring path_after;
+  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    path_after.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+  }
+  std::wcout << "After Restore: " << path_after << std::endl;
+
+  return Status::Success;
+#else
+  return Status(
+      Status::Code::UNSUPPORTED,
+      "The 'additional_dependency_dir' parameter is not currently supported "
+      "for Linux.");
+#endif
+}
+
 }}  // namespace triton::core

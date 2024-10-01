@@ -144,6 +144,14 @@ class InferenceServer {
   // Unregister model repository path.
   Status UnregisterModelRepository(const std::string& repository);
 
+  // Add an additional dependency directory to PATH (Windows-only).
+  Status AddAdditionalDependencyDir(
+      const std::string& additional_path, std::wstring& original_path);
+
+  // Restore PATH to its original configuration. Should be used in conjunction
+  // with AddAdditionalDependencyDir (Windows-only).
+  Status RemoveAdditionalDependencyDir(std::wstring& original_path);
+
   // Return the server version.
   const std::string& Version() const { return version_; }
 
