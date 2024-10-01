@@ -692,7 +692,7 @@ InferenceServer::UnregisterModelRepository(const std::string& repository)
 }
 
 Status
-AddAdditionalDependencyDir(
+InferenceServer::AddAdditionalDependencyDir(
     const std::string& additional_path, std::wstring& original_path)
 {
 #ifdef _WIN32
@@ -745,7 +745,7 @@ AddAdditionalDependencyDir(
 }
 
 Status
-RemoveAdditionalDependencyDir(std::wstring& original_path)
+InferenceServer::RemoveAdditionalDependencyDir(std::wstring& original_path)
 {
 #ifdef _WIN32
   const std::wstring PATH(L"Path");
