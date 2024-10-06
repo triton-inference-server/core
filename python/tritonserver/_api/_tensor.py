@@ -58,6 +58,8 @@ DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
 )
 
+import sys
+
 try:
     import cupy
 except ImportError:
@@ -214,25 +216,20 @@ class Tensor:
         Any
             A DLPack-compatible object representing the tensor.
         """
-
         self._sync_on_requested_stream(stream)
-
         dl_managed_tensor = Tensor._create_managed_tensor()
         dl_managed_tensor.dl_tensor.data = self.data_ptr
         dl_managed_tensor.dl_tensor.device = DLDevice(
             TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
             self.memory_type_id,
         )
-
         dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
         dl_managed_tensor.dl_tensor.ndim = len(self.shape)
-        dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
-            *self.shape
-        )
+        self._ctypes_shape = (ctypes.c_int64 * len(self.shape))(*self.shape)
+        dl_managed_tensor.dl_tensor.shape = self._ctypes_shape
         dl_managed_tensor.dl_tensor.strides = ctypes.POINTER(ctypes.c_int64)()
         dl_managed_tensor.dl_tensor.byte_offset = 0
         dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
-
         self._set_dlpack_manager_ctx(dl_managed_tensor)
         pycapsule = ctypes.pythonapi.PyCapsule_New(
             ctypes.byref(dl_managed_tensor),
@@ -618,8 +615,6 @@ class Tensor:
         )
         tensor_obj = tensor_obj_ptr.contents
         ctypes.pythonapi.Py_DecRef(tensor_obj)
-        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        ctypes.pythonapi.Py_DecRef(shape_obj)
         ctypes.pythonapi.PyMem_RawFree(handle)
 
     @staticmethod
@@ -643,9 +638,7 @@ class Tensor:
         tensor_obj = ctypes.py_object(self)
         tensor_obj_ptr = ctypes.pointer(tensor_obj)
         dl_managed_tensor.manager_ctx = ctypes.cast(tensor_obj_ptr, ctypes.c_void_p)
-        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
         ctypes.pythonapi.Py_IncRef(tensor_obj)
-        ctypes.pythonapi.Py_IncRef(shape_obj)
 
     _from_converters: ClassVar[dict[type, Callable[[Any], Tensor]]] = dict(
         {numpy.ndarray: _from_numpy, numpy.generic: _from_numpy, list: _from_list},
