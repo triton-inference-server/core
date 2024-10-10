@@ -65,6 +65,14 @@ class SharedLibrary {
   Status GetEntrypoint(
       void* handle, const std::string& name, const bool optional, void** befn);
 
+  // Add an additional dependency directory to PATH (Windows-only).
+  Status AddAdditionalDependencyDir(
+      const std::string& additional_path, std::wstring& original_path);
+
+  // Restore PATH to its original configuration. Should be used in
+  // conjunction with AddAdditionalDependencyDir (Windows-only).
+  Status RemoveAdditionalDependencyDir(std::wstring& original_path);
+
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);
   explicit SharedLibrary() = default;
