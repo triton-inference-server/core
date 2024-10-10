@@ -190,9 +190,10 @@ TritonModelInstance::TritonModelInstance(
     const bool response_cache_enabled =
         model_->ResponseCacheEnabled() &&
         model_->Server()->ResponseCacheEnabled();
+    const bool is_decoupled = model_->Decoupled();
     MetricModelReporter::Create(
         model_->ModelId(), model_->Version(), id, response_cache_enabled,
-        model_->Config().metric_tags(), &reporter_);
+        is_decoupled, model_->Config().metric_tags(), &reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
 }

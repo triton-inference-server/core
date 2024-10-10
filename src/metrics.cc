@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -107,6 +107,12 @@ Metrics::Metrics()
               .Name("nv_inference_pending_request_count")
               .Help("Instantaneous number of pending requests awaiting "
                     "execution per-model.")
+              .Register(*registry_)),
+
+      first_response_duration_ms_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_first_response_duration_ms")
+              .Help("")  // Add description
               .Register(*registry_)),
 
       pinned_memory_pool_total_family_(
