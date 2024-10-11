@@ -231,14 +231,15 @@ class ModelLifeCycle {
     ModelInfo(
         const std::string& model_path,
         const inference::ModelConfig& model_config,
-        const uint64_t last_update_ns)
+        const uint64_t last_update_ns, const uint64_t load_start_ns)
         : model_config_(model_config), model_path_(model_path),
 #ifdef TRITON_ENABLE_ENSEMBLE
           is_ensemble_(model_config.platform() == kEnsemblePlatform),
 #else
           is_ensemble_(false),
 #endif  // TRITON_ENABLE_ENSEMBLE
-          last_update_ns_(last_update_ns), state_(ModelReadyState::UNKNOWN)
+          last_update_ns_(last_update_ns), load_start_ns_(load_start_ns),
+          state_(ModelReadyState::UNKNOWN)
     {
     }
 
@@ -260,6 +261,7 @@ class ModelLifeCycle {
     std::mutex mtx_;
 
     uint64_t last_update_ns_;
+    uint64_t load_start_ns_;
 
     ModelReadyState state_;
     std::string state_reason_;

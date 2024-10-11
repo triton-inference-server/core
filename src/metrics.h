@@ -215,6 +215,12 @@ class Metrics {
     return GetSingleton()->inf_pending_request_count_family_;
   }
 
+  // Metric family of load time per model
+  static prometheus::Family<prometheus::Counter>& FamilyModelLoadTime()
+  {
+    return GetSingleton()->model_load_time_family_;
+  }
+
   // Metric families of per-model response cache metrics
   // NOTE: These are used in infer_stats for perf_analyzer
   static prometheus::Family<prometheus::Counter>& FamilyCacheHitCount()
@@ -300,6 +306,7 @@ class Metrics {
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
   prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
+  prometheus::Family<prometheus::Gauge>& model_load_time_family_;
 
   prometheus::Family<prometheus::Gauge>& pinned_memory_pool_total_family_;
   prometheus::Family<prometheus::Gauge>& pinned_memory_pool_used_family_;

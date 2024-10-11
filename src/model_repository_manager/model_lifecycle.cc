@@ -36,6 +36,7 @@
 #include "backend_model.h"
 #include "constants.h"
 #include "filesystem/api.h"
+#include "metrics.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "repo_agent.h"
@@ -470,6 +471,7 @@ ModelLifeCycle::AsyncLoad(
     ModelInfo* model_info = linfo.get();
 
     LOG_INFO << "loading: " << model_id << ":" << version;
+    model_info->load_start_ns = now_ns;
     model_info->state_ = ModelReadyState::LOADING;
     model_info->state_reason_.clear();
     model_info->agent_model_list_ = agent_model_list;
@@ -526,6 +528,7 @@ ModelLifeCycle::AsyncLoad(
     load_pool_->Enqueue([this, model_id, version, model_info, OnComplete,
                          load_tracker, is_config_provided]() {
       for (size_t retry = 0; retry <= options_.load_retry; ++retry) {
+        // TODO add here
         model_info->state_ = ModelReadyState::LOADING;
         CreateModel(model_id, version, model_info, is_config_provided);
         // Model state will be changed to NOT loading if failed to load,
@@ -798,11 +801,17 @@ ModelLifeCycle::OnLoadFinal(
 
     // Mark current versions ready and track info in foreground
     for (auto& loaded : load_tracker->load_set_) {
+      // loaded is of type ModelInfo
       std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
-
       loaded.second->state_ = ModelReadyState::READY;
-      loaded.second->state_reason_.clear();
-
+      // Use this Metric
+      auto reporter = loaded.second->model_->MetricReporter();
+      const uint64_t now_ns =
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+              std::chrono::steady_clock::now().time_since_epoch())
+              .count();
+      uint64_t time_to_load = now_ns - loaded.second->load_start_ns_;
+      ReportModelLoadTime(reporter, time_to_load);
       auto bit = background_models_.find((uintptr_t)loaded.second);
       // Check if the version model is loaded in background, if so,
       // replace and unload the current serving version
@@ -845,6 +854,20 @@ ModelLifeCycle::OnLoadFinal(
             ? Status(Status::Code::INVALID_ARG, load_tracker->reason_)
             : Status::Success);
   }
+}
+
+void
+ModelLifeCycle::ReportModelLoadTime(
+    std::shared_ptr<MetricModelReporter>* reporter,
+    const std::chrono::duration<double>& time_to_load)
+{
+#ifdef TRITON_ENABLE_METRICS
+  // Pending request count should always be 0 or 1 per-request. A request should
+  // not decrement the count unless it has already been incremented.
+  if (reporter) {
+    reporter->SetGauge(kModelLoadTimeMetric, time_to_load);
+  }
+#endif  // TRITON_ENABLE_METRICS
 }
 
 }}  // namespace triton::core

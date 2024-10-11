@@ -109,6 +109,11 @@ Metrics::Metrics()
                     "execution per-model.")
               .Register(*registry_)),
 
+      model_load_time_family_(prometheus::BuildGauge()
+                                  .Name("nv_model_load_time")
+                                  .Help("Load Time per-model")
+                                  .Register(*registry_)),
+
       pinned_memory_pool_total_family_(
           prometheus::BuildGauge()
               .Name("nv_pinned_memory_pool_total_bytes")
