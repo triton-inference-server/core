@@ -231,14 +231,14 @@ class ModelLifeCycle {
     ModelInfo(
         const std::string& model_path,
         const inference::ModelConfig& model_config,
-        const uint64_t last_update_ns, const uint64_t load_start_ns)
+        const uint64_t last_update_ns)
         : model_config_(model_config), model_path_(model_path),
 #ifdef TRITON_ENABLE_ENSEMBLE
           is_ensemble_(model_config.platform() == kEnsemblePlatform),
 #else
           is_ensemble_(false),
 #endif  // TRITON_ENABLE_ENSEMBLE
-          last_update_ns_(last_update_ns), load_start_ns_(load_start_ns),
+          last_update_ns_(last_update_ns),
           state_(ModelReadyState::UNKNOWN)
     {
     }
@@ -315,6 +315,10 @@ class ModelLifeCycle {
       ModelInfo* model_info, const bool is_update,
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
+  // Report Load time per model metrics
+  void ReportModelLoadTime(
+      std::shared_ptr<MetricModelReporter> reporter,
+      const std::chrono::duration<double>& time_to_load);
   // Helper function for 'OnLoadComplete()' to finish final operations after
   // loading **all** model versions.
   void OnLoadFinal(

@@ -471,7 +471,7 @@ ModelLifeCycle::AsyncLoad(
     ModelInfo* model_info = linfo.get();
 
     LOG_INFO << "loading: " << model_id << ":" << version;
-    model_info->load_start_ns = now_ns;
+    model_info->load_start_ns_ = now_ns;
     model_info->state_ = ModelReadyState::LOADING;
     model_info->state_reason_.clear();
     model_info->agent_model_list_ = agent_model_list;
@@ -810,8 +810,12 @@ ModelLifeCycle::OnLoadFinal(
           std::chrono::duration_cast<std::chrono::nanoseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
-      uint64_t time_to_load = now_ns - loaded.second->load_start_ns_;
+      uint64_t time_to_load_ns = now_ns - loaded.second->load_start_ns_;
+      #ifdef TRITON_ENABLE_METRICS
+        std::chrono::duration<double> time_to_load = 
+          std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::nanoseconds(time_to_load_ns));
       ReportModelLoadTime(reporter, time_to_load);
+      #endif  // TRITON_ENABLE_METRICS
       auto bit = background_models_.find((uintptr_t)loaded.second);
       // Check if the version model is loaded in background, if so,
       // replace and unload the current serving version
@@ -858,14 +862,15 @@ ModelLifeCycle::OnLoadFinal(
 
 void
 ModelLifeCycle::ReportModelLoadTime(
-    std::shared_ptr<MetricModelReporter>* reporter,
+    std::shared_ptr<MetricModelReporter> reporter,
     const std::chrono::duration<double>& time_to_load)
 {
 #ifdef TRITON_ENABLE_METRICS
   // Pending request count should always be 0 or 1 per-request. A request should
   // not decrement the count unless it has already been incremented.
   if (reporter) {
-    reporter->SetGauge(kModelLoadTimeMetric, time_to_load);
+    double load_time_in_seconds = time_to_load.count();
+    reporter->SetGauge(kModelLoadTimeMetric, load_time_in_seconds);
   }
 #endif  // TRITON_ENABLE_METRICS
 }

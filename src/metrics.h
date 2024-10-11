@@ -216,7 +216,7 @@ class Metrics {
   }
 
   // Metric family of load time per model
-  static prometheus::Family<prometheus::Counter>& FamilyModelLoadTime()
+  static prometheus::Family<prometheus::Gauge>& FamilyModelLoadTime()
   {
     return GetSingleton()->model_load_time_family_;
   }
