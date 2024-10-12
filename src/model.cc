@@ -135,7 +135,7 @@ Model::Init(const bool is_config_provided)
 #ifdef TRITON_ENABLE_METRICS
   MetricModelReporter::Create(
       ModelId(), Version(), METRIC_REPORTER_ID_UTILITY, ResponseCacheEnabled(),
-      Config().metric_tags(), &reporter_);
+      isDecoupled(), Config().metric_tags(), &reporter_);
 #endif  // TRITON_ENABLE_METRICS
 
   return Status::Success;

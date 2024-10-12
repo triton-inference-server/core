@@ -41,7 +41,8 @@ namespace triton { namespace core {
 // MetricReporterConfig
 //
 void
-MetricReporterConfig::ParseConfig(bool response_cache_enabled)
+MetricReporterConfig::ParseConfig(
+    bool response_cache_enabled, bool is_decoupled)
 {
   // Global config only for now in config map
   auto metrics_config_map = Metrics::ConfigMap();
@@ -51,6 +52,10 @@ MetricReporterConfig::ParseConfig(bool response_cache_enabled)
   for (const auto& pair : metrics_config) {
     if (pair.first == "counter_latencies" && pair.second == "false") {
       latency_counters_enabled_ = false;
+    }
+
+    if (pair.first == "histogram_latencies" && pair.second == "false") {
+      latency_histograms_enabled_ = false;
     }
 
     if (pair.first == "summary_latencies" && pair.second == "true") {
@@ -68,6 +73,7 @@ MetricReporterConfig::ParseConfig(bool response_cache_enabled)
 
   // Set flag to signal to stats aggregator if caching is enabled or not
   cache_enabled_ = response_cache_enabled;
+  is_decoupled_ = is_decoupled;
 }
 
 prometheus::Summary::Quantiles
@@ -112,7 +118,7 @@ const std::map<FailureReason, std::string>
 Status
 MetricModelReporter::Create(
     const ModelIdentifier& model_id, const int64_t model_version,
-    const int device, bool response_cache_enabled,
+    const int device, bool response_cache_enabled, bool is_decoupled,
     const triton::common::MetricTagsMap& model_tags,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
@@ -141,25 +147,27 @@ MetricModelReporter::Create(
   }
 
   metric_model_reporter->reset(new MetricModelReporter(
-      model_id, model_version, device, response_cache_enabled, model_tags));
+      model_id, model_version, device, response_cache_enabled, is_decoupled,
+      model_tags));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
 
 MetricModelReporter::MetricModelReporter(
     const ModelIdentifier& model_id, const int64_t model_version,
-    const int device, bool response_cache_enabled,
+    const int device, bool response_cache_enabled, bool is_decoupled,
     const triton::common::MetricTagsMap& model_tags)
 {
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_id, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
-  config_.ParseConfig(response_cache_enabled);
+  config_.ParseConfig(response_cache_enabled, is_decoupled);
 
   // Initialize families and metrics
   InitializeCounters(labels);
   InitializeGauges(labels);
+  InitializeHistograms(labels);
   InitializeSummaries(labels);
 }
 
@@ -179,6 +187,14 @@ MetricModelReporter::~MetricModelReporter()
     auto family_ptr = iter.second;
     if (family_ptr) {
       family_ptr->Remove(gauges_[name]);
+    }
+  }
+
+  for (auto& iter : histogram_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      family_ptr->Remove(histograms_[name]);
     }
   }
 
@@ -257,6 +273,28 @@ MetricModelReporter::InitializeGauges(
     auto family_ptr = iter.second;
     if (family_ptr) {
       gauges_[name] = CreateMetric<prometheus::Gauge>(*family_ptr, labels);
+    }
+  }
+}
+
+void
+MetricModelReporter::InitializeHistograms(
+    const std::map<std::string, std::string>& labels)
+{
+  // Only create response metrics if decoupled model to reduce metric output
+  if (config_.latency_histograms_enabled_) {
+    if (config_.is_decoupled_) {
+      histogram_families_["first_response_histogram"] =
+          &Metrics::FamilyFirstResponseDuration();
+    }
+  }
+
+  for (auto& iter : histogram_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      histograms_[name] = CreateMetric<prometheus::Histogram>(
+          *family_ptr, labels, config_.buckets_);
     }
   }
 }
@@ -396,6 +434,23 @@ void
 MetricModelReporter::DecrementGauge(const std::string& name, double value)
 {
   IncrementGauge(name, -1 * value);
+}
+
+void
+MetricModelReporter::ObserveHistogram(const std::string& name, double value)
+{
+  auto iter = histograms_.find(name);
+  if (iter == histograms_.end()) {
+    // No histogram metric exists with this name
+    return;
+  }
+
+  auto histogram = iter->second;
+  if (!histogram) {
+    // histogram is uninitialized/nullptr
+    return;
+  }
+  histogram->Observe(value);
 }
 
 void
