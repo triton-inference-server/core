@@ -803,13 +803,13 @@ ModelLifeCycle::OnLoadFinal(
       std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
       loaded.second->state_ = ModelReadyState::READY;
       loaded.second->state_reason_.clear();
+#ifdef TRITON_ENABLE_METRICS      
       auto reporter = loaded.second->model_->MetricReporter();
       const uint64_t now_ns =
           std::chrono::duration_cast<std::chrono::nanoseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
       uint64_t time_to_load_ns = now_ns - loaded.second->load_start_ns_;
-#ifdef TRITON_ENABLE_METRICS
       std::chrono::duration<double> time_to_load =
           std::chrono::duration_cast<std::chrono::duration<double>>(
               std::chrono::nanoseconds(time_to_load_ns));
