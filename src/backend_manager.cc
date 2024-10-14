@@ -78,7 +78,7 @@ TritonBackend::Create(
   auto it = find_if(
       backend_cmdline_config.begin(), backend_cmdline_config.end(),
       [](const std::pair<std::string, std::string>& config_pair) {
-        return config_pair.first == "additional-dependency-dir";
+        return config_pair.first == "additional-dependency-dirs";
       });
   std::string additional_dependency_dir_path;
   if (it != backend_cmdline_config.end()) {

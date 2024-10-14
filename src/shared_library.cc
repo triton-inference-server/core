@@ -256,7 +256,9 @@ SharedLibrary::AddAdditionalDependencyDir(
   } else {
     return Status(Status::Code::INTERNAL, "PATH variable is empty");
   }
-  std::wcout << "Before Add: " << original_path << std::endl;
+
+  LOG_VERBOSE(1) << "Environment before extending PATH: "
+                 << std::string(original_path.begin(), original_path.end());
 
   std::wstring updated_path_value =
       std::wstring(additional_path.begin(), additional_path.end());
@@ -276,14 +278,21 @@ SharedLibrary::AddAdditionalDependencyDir(
         "failed to append user-provided directory to PATH " + errstr);
   }
 
-  // TODO: Delete -- just for sanity purposes
-  std::wstring path_after;
-  len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
-  if (len > 0) {
-    path_after.resize(len);
-    GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::wstring path_after;
+    len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+    if (len > 0) {
+      path_after.resize(len);
+      GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+    }
+    LOG_VERBOSE(1) << "Environment after extending PATH: "
+                   << std::string(path_after.begin(), path_after.end());
   }
-  std::wcout << "After Add: " << path_after << std::endl;
+#else
+  LOG_WARNING
+      << "The parameter \"additional-dependency-dirs\" has been specified but "
+         "is not supported for Linux. It is currently a Windows-only feature. "
+         "No change to the environment will take effect.";
 #endif
   return Status::Success;
 }
@@ -307,14 +316,16 @@ SharedLibrary::RemoveAdditionalDependencyDir(std::wstring& original_path)
         "failed to restore PATH to its original configuration " + errstr);
   }
 
-  // TODO: Delete -- just for sanity purposes
-  std::wstring path_after;
-  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
-  if (len > 0) {
-    path_after.resize(len);
-    GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::wstring path_after;
+    DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+    if (len > 0) {
+      path_after.resize(len);
+      GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+    }
+    LOG_VERBOSE(1) << "Environment after restoring PATH: "
+                   << std::string(path_after.begin(), path_after.end());
   }
-  std::wcout << "After Restore: " << path_after << std::endl;
 #endif
   return Status::Success;
 }
