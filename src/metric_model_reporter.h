@@ -87,7 +87,7 @@ class MetricModelReporter {
   const MetricReporterConfig& Config();
   // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
-  // Increase gauge by value.
+  // Set gauge value.
   void SetGauge(const std::string& name, double value);
   // Increase gauge by value.
   void IncrementGauge(const std::string& name, double value);

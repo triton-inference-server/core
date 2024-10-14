@@ -528,7 +528,6 @@ ModelLifeCycle::AsyncLoad(
     load_pool_->Enqueue([this, model_id, version, model_info, OnComplete,
                          load_tracker, is_config_provided]() {
       for (size_t retry = 0; retry <= options_.load_retry; ++retry) {
-        // TODO add here
         model_info->state_ = ModelReadyState::LOADING;
         CreateModel(model_id, version, model_info, is_config_provided);
         // Model state will be changed to NOT loading if failed to load,
@@ -866,8 +865,6 @@ ModelLifeCycle::ReportModelLoadTime(
     const std::chrono::duration<double>& time_to_load)
 {
 #ifdef TRITON_ENABLE_METRICS
-  // Pending request count should always be 0 or 1 per-request. A request should
-  // not decrement the count unless it has already been incremented.
   if (reporter) {
     double load_time_in_seconds = time_to_load.count();
     reporter->SetGauge(kModelLoadTimeMetric, load_time_in_seconds);
