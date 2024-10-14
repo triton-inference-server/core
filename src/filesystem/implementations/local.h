@@ -31,7 +31,7 @@
 #include <fstream>
 
 #include "../../constants.h"
-#include "common.h"W
+#include "common.h"
 
 namespace triton { namespace core {
 
@@ -60,7 +60,8 @@ class LocalFileSystem : public FileSystem {
   Status MakeTemporaryDirectory(
       std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
-private:
+
+ private:
   inline std::string getOSValidPath(const std::string& _path);
   const char* kWindowsLongPathPrefix = "\\\\?\\";
 };
