@@ -111,7 +111,7 @@ Metrics::Metrics()
 
       model_load_time_family_(prometheus::BuildGauge()
                                   .Name("nv_model_load_time")
-                                  .Help("Load Time per-model")
+                                  .Help("Load Time per-model in nanoseconds")
                                   .Register(*registry_)),
 
       pinned_memory_pool_total_family_(
