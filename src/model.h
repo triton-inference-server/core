@@ -148,7 +148,7 @@ class Model {
     return config_.response_cache().enable();
   }
 
-  bool isDecoupled() const
+  bool IsDecoupled() const
   {
     return config_.model_transaction_policy().decoupled();
   }

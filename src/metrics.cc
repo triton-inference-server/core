@@ -112,7 +112,7 @@ Metrics::Metrics()
       inf_first_response_histogram_ms_family_(
           prometheus::BuildHistogram()
               .Name("nv_inference_first_response_histogram_ms")
-              .Help("Duration from request to first response in milliseconds.")
+              .Help("Duration from request to first response in milliseconds")
               .Register(*registry_)),
 
       pinned_memory_pool_total_family_(
