@@ -801,21 +801,21 @@ ModelLifeCycle::OnLoadFinal(
 
     // Mark current versions ready and track info in foreground
     for (auto& loaded : load_tracker->load_set_) {
-      // loaded is of type ModelInfo
       std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
       loaded.second->state_ = ModelReadyState::READY;
-      // Use this Metric
+      loaded.second->state_reason_.clear();
       auto reporter = loaded.second->model_->MetricReporter();
       const uint64_t now_ns =
           std::chrono::duration_cast<std::chrono::nanoseconds>(
               std::chrono::steady_clock::now().time_since_epoch())
               .count();
       uint64_t time_to_load_ns = now_ns - loaded.second->load_start_ns_;
-      #ifdef TRITON_ENABLE_METRICS
-        std::chrono::duration<double> time_to_load = 
-          std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::nanoseconds(time_to_load_ns));
+#ifdef TRITON_ENABLE_METRICS
+      std::chrono::duration<double> time_to_load =
+          std::chrono::duration_cast<std::chrono::duration<double>>(
+              std::chrono::nanoseconds(time_to_load_ns));
       ReportModelLoadTime(reporter, time_to_load);
-      #endif  // TRITON_ENABLE_METRICS
+#endif  // TRITON_ENABLE_METRICS
       auto bit = background_models_.find((uintptr_t)loaded.second);
       // Check if the version model is loaded in background, if so,
       // replace and unload the current serving version

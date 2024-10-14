@@ -238,8 +238,7 @@ class ModelLifeCycle {
 #else
           is_ensemble_(false),
 #endif  // TRITON_ENABLE_ENSEMBLE
-          last_update_ns_(last_update_ns),
-          state_(ModelReadyState::UNKNOWN)
+          last_update_ns_(last_update_ns), state_(ModelReadyState::UNKNOWN)
     {
     }
 
