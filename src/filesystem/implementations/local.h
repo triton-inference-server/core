@@ -31,7 +31,7 @@
 #include <fstream>
 
 #include "../../constants.h"
-#include "common.h"
+#include "common.h"W
 
 namespace triton { namespace core {
 
@@ -60,12 +60,44 @@ class LocalFileSystem : public FileSystem {
   Status MakeTemporaryDirectory(
       std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
+private:
+  inline std::string getOSValidPath(const std::string& _path);
+  const char* kWindowsLongPathPrefix = "\\\\?\\";
 };
+
+
+//! Converts incoming utf-8 path to an OS valid path
+//!
+//! On Linux there is not much to do but make sure correct slashes are used
+//! On Windows we need to take care of the long paths and handle them correctly
+//! to avoid legacy issues with MAX_PATH
+//!
+//! More details:
+//! https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry
+//!
+inline std::string
+LocalFileSystem::getOSValidPath(const std::string& _path)
+{
+  std::string path(_path);
+#ifdef _WIN32
+  // On Windows long paths must be marked correctly otherwise, due to backwards
+  // compatibility, all paths are limited to MAX_PATH length
+  if (path.size() >= MAX_PATH) {
+    // Must be prefixed with "\\?\" to be considered long path
+    if (path.substr(0, 4) != (kWindowsLongPathPrefix)) {
+      // Long path but not "tagged" correctly
+      path = (kWindowsLongPathPrefix) + path;
+    }
+  }
+  std::replace(path.begin(), path.end(), '/', '\\');
+#endif
+  return path;
+}
 
 Status
 LocalFileSystem::FileExists(const std::string& path, bool* exists)
 {
-  *exists = (access(path.c_str(), F_OK) == 0);
+  *exists = (access(getOSValidPath(path).c_str(), F_OK) == 0);
   return Status::Success;
 }
 
@@ -75,7 +107,7 @@ LocalFileSystem::IsDirectory(const std::string& path, bool* is_dir)
   *is_dir = false;
 
   struct stat st;
-  if (stat(path.c_str(), &st) != 0) {
+  if (stat(getOSValidPath(path).c_str(), &st) != 0) {
     return Status(Status::Code::INTERNAL, "failed to stat file " + path);
   }
 
@@ -88,7 +120,7 @@ LocalFileSystem::FileModificationTime(
     const std::string& path, int64_t* mtime_ns)
 {
   struct stat st;
-  if (stat(path.c_str(), &st) != 0) {
+  if (stat(getOSValidPath(path).c_str(), &st) != 0) {
     return Status(Status::Code::INTERNAL, "failed to stat file " + path);
   }
 
@@ -187,7 +219,7 @@ LocalFileSystem::GetDirectoryFiles(
 Status
 LocalFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 {
-  std::ifstream in(path, std::ios::in | std::ios::binary);
+  std::ifstream in(getOSValidPath(path), std::ios::in | std::ios::binary);
   if (!in) {
     return Status(
         Status::Code::INTERNAL,
