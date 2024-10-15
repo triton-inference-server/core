@@ -261,7 +261,7 @@ class InferenceResponse {
       void* response_userp,
       const std::function<void(
           std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-      uint64_t seq_num
+      uint64_t seq_idx
 #ifdef TRITON_ENABLE_METRICS
       ,
       uint64_t infer_start_ns
@@ -382,7 +382,7 @@ class InferenceResponse {
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>
       response_delegator_;
 
-  const uint64_t seq_num_;
+  const uint64_t seq_idx_;
 #ifdef TRITON_ENABLE_METRICS
   const uint64_t infer_start_ns_;
 #endif  // TRITON_ENABLE_METRICS

@@ -187,7 +187,7 @@ InferenceResponse::InferenceResponse(
     void* response_userp,
     const std::function<
         void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
-    uint64_t seq_num
+    uint64_t seq_idx
 #ifdef TRITON_ENABLE_METRICS
     ,
     uint64_t infer_start_ns
@@ -195,7 +195,7 @@ InferenceResponse::InferenceResponse(
     )
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
-      response_delegator_(delegator), seq_num_(seq_num),
+      response_delegator_(delegator), seq_idx_(seq_idx),
 #ifdef TRITON_ENABLE_METRICS
       infer_start_ns_(infer_start_ns),
 #endif  // TRITON_ENABLE_METRICS
