@@ -315,7 +315,7 @@ class ModelLifeCycle {
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
   // Calculate time to load model
-  void ModelLifeCycle::CalculateAndReportLoadTime(ModelInfo* loaded_model_info);
+  void CalculateAndReportLoadTime(ModelInfo* loaded_model_info);
   // Report Load time per model metrics
   void ReportModelLoadTime(
       std::shared_ptr<MetricModelReporter> reporter,
