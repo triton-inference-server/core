@@ -42,11 +42,7 @@ InferenceResponseFactory::CreateResponse(
 {
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_
-#ifdef TRITON_ENABLE_STATS
-      ,
-      response_index_++
-#endif  // TRITON_ENABLE_STATS
+      response_delegator_, response_cnt_
 #ifdef TRITON_ENABLE_METRICS
       ,
       infer_start_ns_
@@ -55,6 +51,7 @@ InferenceResponseFactory::CreateResponse(
 #ifdef TRITON_ENABLE_TRACING
   (*response)->SetTrace(trace_);
 #endif  // TRITON_ENABLE_TRACING
+  response_cnt_++;
   return Status::Success;
 }
 
@@ -81,11 +78,8 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp,
     const std::function<
-        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator
-#ifdef TRITON_ENABLE_STATS
-    ,
-    uint64_t index
-#endif  // TRITON_ENABLE_STATS
+        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator,
+    uint64_t seq_num
 #ifdef TRITON_ENABLE_METRICS
     ,
     uint64_t infer_start_ns
@@ -93,10 +87,7 @@ InferenceResponse::InferenceResponse(
     )
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
-      response_delegator_(delegator),
-#ifdef TRITON_ENABLE_STATS
-      index_(index),
-#endif  // TRITON_ENABLE_STATS
+      response_delegator_(delegator), seq_num_(seq_num),
 #ifdef TRITON_ENABLE_METRICS
       infer_start_ns_(infer_start_ns),
 #endif  // TRITON_ENABLE_METRICS
@@ -117,10 +108,7 @@ InferenceResponse::InferenceResponse(
 InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp)
-    : response_fn_(response_fn), response_userp_(response_userp),
-#ifdef TRITON_ENABLE_STATS
-      index_(0),
-#endif  // TRITON_ENABLE_STATS
+    : response_fn_(response_fn), response_userp_(response_userp), seq_num_(0),
 #ifdef TRITON_ENABLE_METRICS
       infer_start_ns_(0),
 #endif  // TRITON_ENABLE_METRICS
@@ -321,7 +309,7 @@ InferenceResponse::TraceOutputTensors(
 void
 InferenceResponse::UpdateResponseMetrics() const
 {
-  if (model_ != nullptr && index_ == 0) {
+  if (model_ != nullptr && seq_num_ == 0) {
     auto first_response_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())

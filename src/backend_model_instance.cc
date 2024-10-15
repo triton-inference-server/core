@@ -1103,7 +1103,8 @@ TRITONBACKEND_ModelInstanceReportResponseStatistics(
 
   InferenceStatsAggregator* sa =
       rs->model_instance->Model()->MutableStatsAggregator();
-  std::string key = std::to_string((*rs->response_factory)->GetResponseIndex());
+  std::string key =
+      std::to_string((*rs->response_factory)->GetAndIncrementResponseIndex());
 
   if (rs->error == nullptr) {
     if (rs->compute_output_start > 0) {
