@@ -317,7 +317,8 @@ InferenceResponse::UpdateResponseMetrics() const
                       .count();
     if (auto reporter = model_->MetricReporter()) {
       reporter->ObserveHistogram(
-          "first_response_histogram", (now_ns - infer_start_ns_) / 1000000);
+          "first_response_histogram",
+          (now_ns - infer_start_ns_) / NANOS_PER_MILLIS);
     }
   }
 }
