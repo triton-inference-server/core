@@ -571,7 +571,9 @@ ModelLifeCycle::CreateModel(
         is_config_provided, &model);
     is.reset(model.release());
     if (status.IsOk()) {
+#ifdef TRITON_ENABLE_METRICS
       CalculateAndReportLoadTime(model_info);
+#endif  // TRITON_ENABLE_METRICS
     }
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
