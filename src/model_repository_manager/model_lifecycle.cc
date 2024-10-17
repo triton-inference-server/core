@@ -471,12 +471,6 @@ ModelLifeCycle::AsyncLoad(
     ModelInfo* model_info = linfo.get();
 
     LOG_INFO << "loading: " << model_id << ":" << version;
-    const uint64_t model_load_ns =
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch())
-            .count();
-
-    model_info->load_start_ns_ = model_load_ns;
     model_info->state_ = ModelReadyState::LOADING;
     model_info->state_reason_.clear();
     model_info->agent_model_list_ = agent_model_list;
@@ -566,11 +560,19 @@ ModelLifeCycle::CreateModel(
   // backend.
   if (!model_config.backend().empty()) {
     std::unique_ptr<TritonModel> model;
+    const uint64_t model_load_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+    model_info->load_start_ns_ = model_load_ns;
     status = TritonModel::Create(
         server_, model_info->model_path_, options_.backend_cmdline_config_map,
         options_.host_policy_map, model_id, version, model_config,
         is_config_provided, &model);
     is.reset(model.release());
+    if (status.IsOk()) {
+      CalculateAndReportLoadTime(model_info);
+    }
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
@@ -808,9 +810,6 @@ ModelLifeCycle::OnLoadFinal(
       std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
       loaded.second->state_ = ModelReadyState::READY;
       loaded.second->state_reason_.clear();
-#ifdef TRITON_ENABLE_METRICS
-      CalculateAndReportLoadTime(loaded.second);
-#endif  // TRITON_ENABLE_METRICS
       auto bit = background_models_.find((uintptr_t)loaded.second);
       // Check if the version model is loaded in background, if so,
       // replace and unload the current serving version
