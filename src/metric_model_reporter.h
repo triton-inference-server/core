@@ -57,11 +57,13 @@ struct MetricReporterConfig {
   bool latency_histograms_enabled_ = true;
   // Create and use Summaries for per-model latency related metrics
   bool latency_summaries_enabled_ = false;
+  // Buckets used for any histogram metrics. Each value represents
+  // a bucket boundary.
+  prometheus::Histogram::BucketBoundaries buckets_ = {100, 500, 2000, 5000};
   // Quantiles used for any summary metrics. Each pair of values represents
   // { quantile, error }. For example, {0.90, 0.01} means to compute the
   // 90th percentile with 1% error on either side, so the approximate 90th
   // percentile value will be between the 89th and 91st percentiles.
-  prometheus::Histogram::BucketBoundaries buckets_ = {10, 100, 500, 1000};
   prometheus::Summary::Quantiles quantiles_ = {
       {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
 

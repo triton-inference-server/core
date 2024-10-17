@@ -63,7 +63,7 @@ class InferenceResponseFactory {
         is_cancelled_(false)
 #ifdef TRITON_ENABLE_METRICS
         ,
-        responses_sent_(0)
+        responses_sent_(std::make_shared<std::atomic<uint64_t>>(0))
 #endif  // TRITON_ENABLE_METRICS
 #ifdef TRITON_ENABLE_STATS
         ,
@@ -387,7 +387,7 @@ class InferenceResponse {
 
 #ifdef TRITON_ENABLE_METRICS
   // Total number of responses sent created by its response factory.
-  std::shared_ptr<std::atomic<uint64_t>> responses_sent_;
+  const std::shared_ptr<std::atomic<uint64_t>> responses_sent_;
 
   // The start time of associate request in ns.
   const uint64_t infer_start_ns_;

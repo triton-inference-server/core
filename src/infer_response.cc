@@ -88,7 +88,8 @@ InferenceResponse::InferenceResponse(
       response_fn_(response_fn), response_userp_(response_userp),
       response_delegator_(delegator),
 #ifdef TRITON_ENABLE_METRICS
-      responses_sent_(responses_sent), infer_start_ns_(infer_start_ns),
+      responses_sent_(std::move(responses_sent)),
+      infer_start_ns_(infer_start_ns),
 #endif  // TRITON_ENABLE_METRICS
       null_response_(false)
 {
