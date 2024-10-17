@@ -862,7 +862,7 @@ ModelLifeCycle::CalculateAndReportLoadTime(ModelInfo* loaded_model_info, std::un
   if(model == nullptr) {
     LOG_INFO << "nullptr in CalculateAndReportLoadTime";
   }
-  auto reporter = model_->MetricReporter();
+  auto reporter = model->MetricReporter();
   if(model == nullptr) {
     LOG_INFO << "nullptr in CalculateAndReportLoadTime MetricReporter";
   }
