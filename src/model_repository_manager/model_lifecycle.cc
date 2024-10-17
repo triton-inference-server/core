@@ -471,7 +471,12 @@ ModelLifeCycle::AsyncLoad(
     ModelInfo* model_info = linfo.get();
 
     LOG_INFO << "loading: " << model_id << ":" << version;
-    model_info->load_start_ns_ = now_ns;
+    const uint64_t model_load_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+
+    model_info->load_start_ns_ = model_load_ns;
     model_info->state_ = ModelReadyState::LOADING;
     model_info->state_reason_.clear();
     model_info->agent_model_list_ = agent_model_list;
