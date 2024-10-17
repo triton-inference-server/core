@@ -859,6 +859,9 @@ ModelLifeCycle::OnLoadFinal(
 void
 ModelLifeCycle::CalculateAndReportLoadTime(ModelInfo* loaded_model_info)
 {
+  if(loaded_model_info->model_ == nullptr) {
+    LOG_INFO << "nullptr in CalculateAndReportLoadTime";
+  }
   auto reporter = loaded_model_info->model_->MetricReporter();
   const uint64_t now_ns =
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -869,6 +872,7 @@ ModelLifeCycle::CalculateAndReportLoadTime(ModelInfo* loaded_model_info)
       std::chrono::duration_cast<std::chrono::duration<double>>(
           std::chrono::nanoseconds(time_to_load_ns));
   ReportModelLoadTime(reporter, time_to_load);
+  LOG_INFO << "Metric Reported for load time";
 }
 
 void
