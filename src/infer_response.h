@@ -267,7 +267,7 @@ class InferenceResponse {
           void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator
 #ifdef TRITON_ENABLE_METRICS
       ,
-      std::shared_ptr<std::atomic<uint64_t>> responses_sent_,
+      std::shared_ptr<std::atomic<uint64_t>> responses_sent,
       uint64_t infer_start_ns
 #endif  // TRITON_ENABLE_METRICS
   );

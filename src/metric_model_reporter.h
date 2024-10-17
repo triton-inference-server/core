@@ -58,7 +58,8 @@ struct MetricReporterConfig {
   // Create and use Summaries for per-model latency related metrics
   bool latency_summaries_enabled_ = false;
   // Buckets used for any histogram metrics. Each value represents
-  // a bucket boundary.
+  // a bucket boundary. For example, {100, 500, 2000, 5000} are latencies
+  // in milliseconds in first_response_histogram.
   prometheus::Histogram::BucketBoundaries buckets_ = {100, 500, 2000, 5000};
   // Quantiles used for any summary metrics. Each pair of values represents
   // { quantile, error }. For example, {0.90, 0.01} means to compute the
