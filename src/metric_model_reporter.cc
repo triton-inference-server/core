@@ -54,8 +54,8 @@ MetricReporterConfig::ParseConfig(
       latency_counters_enabled_ = false;
     }
 
-    if (pair.first == "histogram_latencies" && pair.second == "false") {
-      latency_histograms_enabled_ = false;
+    if (pair.first == "histogram_latencies" && pair.second == "true") {
+      latency_histograms_enabled_ = true;
     }
 
     if (pair.first == "summary_latencies" && pair.second == "true") {

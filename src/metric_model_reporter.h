@@ -54,7 +54,7 @@ struct MetricReporterConfig {
   // Create and use Counters for per-model latency related metrics
   bool latency_counters_enabled_ = true;
   // Create and use Histograms for per-model latency related metrics
-  bool latency_histograms_enabled_ = true;
+  bool latency_histograms_enabled_ = false;
   // Create and use Summaries for per-model latency related metrics
   bool latency_summaries_enabled_ = false;
   // Buckets used for any histogram metrics. Each value represents
