@@ -249,6 +249,13 @@ SharedLibrary::AddAdditionalDependencyDir(
 #ifdef _WIN32
   const std::wstring PATH(L"Path");
 
+  if (additional_path.back() != ';') {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "backend config parameter \"additional-dependency-dirs\" is malformed. "
+        "Each additional path provided should terminate with a ';'.");
+  }
+
   DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
   if (len > 0) {
     original_path.resize(len);
