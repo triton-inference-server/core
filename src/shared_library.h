@@ -71,7 +71,7 @@ class SharedLibrary {
 
   // Restore PATH to its original configuration. Should be used in
   // conjunction with AddAdditionalDependencyDir (Windows-only).
-  Status RemoveAdditionalDependencyDir(std::wstring& original_path);
+  Status RemoveAdditionalDependencyDir(const std::wstring& original_path);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);
