@@ -316,7 +316,8 @@ class ModelLifeCycle {
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
   // Calculate time to load model
-  void CalculateAndReportLoadTime(ModelInfo* loaded_model_info, std::unique_ptr<TritonModel>* model);
+  void CalculateAndReportLoadTime(
+      ModelInfo* loaded_model_info, std::unique_ptr<Model>* model);
   // Report Load time per model metrics
   void ReportModelLoadTime(
       std::shared_ptr<MetricModelReporter> reporter,

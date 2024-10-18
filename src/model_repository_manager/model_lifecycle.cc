@@ -572,7 +572,7 @@ ModelLifeCycle::CreateModel(
     is.reset(model.release());
     if (status.IsOk()) {
 #ifdef TRITON_ENABLE_METRICS
-      CalculateAndReportLoadTime(model_info, &model);
+      CalculateAndReportLoadTime(model_info, &is);
 #endif  // TRITON_ENABLE_METRICS
     }
   } else {
@@ -857,13 +857,14 @@ ModelLifeCycle::OnLoadFinal(
 }
 
 void
-ModelLifeCycle::CalculateAndReportLoadTime(ModelInfo* loaded_model_info, std::unique_ptr<TritonModel>* model)
+ModelLifeCycle::CalculateAndReportLoadTime(
+    ModelInfo* loaded_model_info, std::unique_ptr<Model>* model)
 {
-  if(model == nullptr) {
+  if (model == nullptr) {
     LOG_INFO << "nullptr in CalculateAndReportLoadTime";
   }
   auto reporter = model->MetricReporter();
-  if(model == nullptr) {
+  if (model == nullptr) {
     LOG_INFO << "nullptr in CalculateAndReportLoadTime MetricReporter";
   }
   const uint64_t now_ns =
