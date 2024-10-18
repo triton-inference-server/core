@@ -31,6 +31,7 @@
 #include <map>
 #include <mutex>
 
+#include "backend_model.h"
 #include "infer_parameter.h"
 #include "model.h"
 #include "model_config.pb.h"
@@ -315,7 +316,8 @@ class ModelLifeCycle {
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
   // Calculate time to load model
-  void CalculateAndReportLoadTime(ModelInfo* loaded_model_info);
+  void CalculateAndReportLoadTime(
+      ModelInfo* loaded_model_info, std::unique_ptr<Model>* model);
   // Report Load time per model metrics
   void ReportModelLoadTime(
       std::shared_ptr<MetricModelReporter> reporter,

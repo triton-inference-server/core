@@ -572,7 +572,7 @@ ModelLifeCycle::CreateModel(
     is.reset(model.release());
     if (status.IsOk()) {
 #ifdef TRITON_ENABLE_METRICS
-      CalculateAndReportLoadTime(model_info);
+      CalculateAndReportLoadTime(model_info, &is);
 #endif  // TRITON_ENABLE_METRICS
     }
   } else {
@@ -857,9 +857,10 @@ ModelLifeCycle::OnLoadFinal(
 }
 
 void
-ModelLifeCycle::CalculateAndReportLoadTime(ModelInfo* loaded_model_info)
+ModelLifeCycle::CalculateAndReportLoadTime(
+    ModelInfo* loaded_model_info, std::unique_ptr<Model>* model)
 {
-  auto reporter = loaded_model_info->model_->MetricReporter();
+  auto reporter = (*model)->MetricReporter();
   const uint64_t now_ns =
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now().time_since_epoch())
