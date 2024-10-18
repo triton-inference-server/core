@@ -251,6 +251,7 @@ MetricModelReporter::InitializeGauges(
 {
   // Always setup these inference request metrics, regardless of config
   gauge_families_[kPendingRequestMetric] = &Metrics::FamilyInferenceQueueSize();
+  gauge_families_[kModelLoadTimeMetric] = &Metrics::FamilyModelLoadTime();
 
   for (auto& iter : gauge_families_) {
     const auto& name = iter.first;
@@ -389,6 +390,15 @@ MetricModelReporter::IncrementGauge(const std::string& name, double value)
   auto gauge = GetGauge(name);
   if (gauge) {
     gauge->Increment(value);
+  }
+}
+
+void
+MetricModelReporter::SetGauge(const std::string& name, double value)
+{
+  auto gauge = GetGauge(name);
+  if (gauge) {
+    gauge->Set(value);
   }
 }
 
