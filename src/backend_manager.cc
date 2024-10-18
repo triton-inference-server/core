@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "backend_manager.h"
+
+#include <algorithm>
 
 #include "backend_memory_manager.h"
 #include "server_message.h"
@@ -73,8 +75,19 @@ TritonBackend::Create(
   auto local_backend = std::shared_ptr<TritonBackend>(
       new TritonBackend(name, dir, libpath, backend_config));
 
+  auto it = find_if(
+      backend_cmdline_config.begin(), backend_cmdline_config.end(),
+      [](const std::pair<std::string, std::string>& config_pair) {
+        return config_pair.first == "additional-dependency-dirs";
+      });
+  std::string additional_dependency_dir_path;
+  if (it != backend_cmdline_config.end()) {
+    additional_dependency_dir_path = it->second;
+  }
+
   // Load the library and initialize all the entrypoints
-  RETURN_IF_ERROR(local_backend->LoadBackendLibrary());
+  RETURN_IF_ERROR(
+      local_backend->LoadBackendLibrary(additional_dependency_dir_path));
 
   // Backend initialization is optional... The TRITONBACKEND_Backend
   // object is this TritonBackend object. We must set set shared
@@ -163,7 +176,8 @@ TritonBackend::ClearHandles()
 }
 
 Status
-TritonBackend::LoadBackendLibrary()
+TritonBackend::LoadBackendLibrary(
+    const std::string& additional_dependency_dir_path)
 {
   TritonBackendInitFn_t bifn;
   TritonBackendFiniFn_t bffn;
@@ -178,7 +192,17 @@ TritonBackend::LoadBackendLibrary()
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
+    std::wstring original_path;
+    if (!additional_dependency_dir_path.empty()) {
+      RETURN_IF_ERROR(slib->AddAdditionalDependencyDir(
+          additional_dependency_dir_path, original_path));
+    }
+
     RETURN_IF_ERROR(slib->OpenLibraryHandle(libpath_, &dlhandle_));
+
+    if (!additional_dependency_dir_path.empty()) {
+      RETURN_IF_ERROR(slib->RemoveAdditionalDependencyDir(original_path));
+    }
 
     // Backend initialize and finalize functions, optional
     RETURN_IF_ERROR(slib->GetEntrypoint(
