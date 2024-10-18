@@ -254,7 +254,7 @@ SharedLibrary::AddAdditionalDependencyDir(
     original_path.resize(len);
     GetEnvironmentVariableW(PATH.c_str(), &original_path[0], len);
   } else {
-    return Status(Status::Code::INTERNAL, "PATH variable is empty");
+    original_path = L"";
   }
 
   LOG_VERBOSE(1) << "Environment before extending PATH: "
@@ -298,7 +298,7 @@ SharedLibrary::AddAdditionalDependencyDir(
 }
 
 Status
-SharedLibrary::RemoveAdditionalDependencyDir(std::wstring& original_path)
+SharedLibrary::RemoveAdditionalDependencyDir(const std::wstring& original_path)
 {
 #ifdef _WIN32
   const std::wstring PATH(L"Path");
