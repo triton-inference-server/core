@@ -860,6 +860,7 @@ void
 ModelLifeCycle::CalculateAndReportLoadTime(
     ModelInfo* loaded_model_info, std::unique_ptr<Model>* model)
 {
+#ifdef TRITON_ENABLE_METRICS
   auto reporter = (*model)->MetricReporter();
   const uint64_t now_ns =
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -870,6 +871,7 @@ ModelLifeCycle::CalculateAndReportLoadTime(
       std::chrono::duration_cast<std::chrono::duration<double>>(
           std::chrono::nanoseconds(time_to_load_ns));
   ReportModelLoadTime(reporter, time_to_load);
+#endif  // TRITON_ENABLE_METRICS
 }
 
 void
