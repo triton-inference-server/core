@@ -1200,11 +1200,6 @@ EnsembleContext::CheckAndSetEnsembleOutput(
         ready = false;
         break;
       }
-      // check if the output is provided
-      else if (tensor[iteration_count].data_ == nullptr) {
-        ready = false;
-        break;
-      }
     }
   }
   if (!ready) {
@@ -1223,6 +1218,12 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     // Check if output is ready
     auto& tensor_data = tensor_data_[output_pair.first];
     auto& tensor = tensor_data.tensor_[iteration_count];
+
+    if (tensor.data_ == nullptr) {
+      LOG_VERBOSE(1) << "Composing models did not output tensor "
+                     << output_pair.first;
+      continue;
+    }
 
     auto shape = ReshapeTensorDims(
         output_pair.second, (lrequest->BatchSize() != 0),
