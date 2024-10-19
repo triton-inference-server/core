@@ -564,7 +564,6 @@ ModelLifeCycle::CreateModel(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count();
-    model_info->load_start_ns_ = model_load_ns;
     status = TritonModel::Create(
         server_, model_info->model_path_, options_.backend_cmdline_config_map,
         options_.host_policy_map, model_id, version, model_config,
@@ -572,7 +571,7 @@ ModelLifeCycle::CreateModel(
     is.reset(model.release());
     if (status.IsOk()) {
 #ifdef TRITON_ENABLE_METRICS
-      CalculateAndReportLoadTime(model_info, &is);
+      CalculateAndReportLoadTime(model_load_ns, &is);
 #endif  // TRITON_ENABLE_METRICS
     }
   } else {
@@ -858,7 +857,7 @@ ModelLifeCycle::OnLoadFinal(
 
 void
 ModelLifeCycle::CalculateAndReportLoadTime(
-    ModelInfo* loaded_model_info, std::unique_ptr<Model>* model)
+    uint64_t load_start_ns_, std::unique_ptr<Model>* model)
 {
 #ifdef TRITON_ENABLE_METRICS
   auto reporter = (*model)->MetricReporter();
@@ -866,7 +865,7 @@ ModelLifeCycle::CalculateAndReportLoadTime(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
           std::chrono::steady_clock::now().time_since_epoch())
           .count();
-  uint64_t time_to_load_ns = now_ns - loaded_model_info->load_start_ns_;
+  uint64_t time_to_load_ns = now_ns - load_start_ns_;
   std::chrono::duration<double> time_to_load =
       std::chrono::duration_cast<std::chrono::duration<double>>(
           std::chrono::nanoseconds(time_to_load_ns));

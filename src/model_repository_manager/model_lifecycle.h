@@ -261,7 +261,6 @@ class ModelLifeCycle {
     std::mutex mtx_;
 
     uint64_t last_update_ns_;
-    uint64_t load_start_ns_;
 
     ModelReadyState state_;
     std::string state_reason_;
@@ -317,7 +316,7 @@ class ModelLifeCycle {
       std::shared_ptr<LoadTracker> load_tracker);
   // Calculate time to load model
   void CalculateAndReportLoadTime(
-      ModelInfo* loaded_model_info, std::unique_ptr<Model>* model);
+      uint64_t load_start_ns_, std::unique_ptr<Model>* model);
   // Report Load time per model metrics
   void ReportModelLoadTime(
       std::shared_ptr<MetricModelReporter> reporter,
