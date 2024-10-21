@@ -115,6 +115,11 @@ Metrics::Metrics()
               .Help("Duration from request to first response in milliseconds")
               .Register(*registry_)),
 
+      model_load_time_family_(prometheus::BuildGauge()
+                                  .Name("nv_model_load_duration_secs")
+                                  .Help("Model load time in seconds")
+                                  .Register(*registry_)),
+
       pinned_memory_pool_total_family_(
           prometheus::BuildGauge()
               .Name("nv_pinned_memory_pool_total_bytes")
