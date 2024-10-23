@@ -560,10 +560,12 @@ ModelLifeCycle::CreateModel(
   // backend.
   if (!model_config.backend().empty()) {
     std::unique_ptr<TritonModel> model;
+#ifdef TRITON_ENABLE_METRICS
     const uint64_t model_load_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count();
+#endif  // TRITON_ENABLE_METRICS            
     status = TritonModel::Create(
         server_, model_info->model_path_, options_.backend_cmdline_config_map,
         options_.host_policy_map, model_id, version, model_config,
