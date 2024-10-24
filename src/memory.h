@@ -66,6 +66,7 @@ class Memory {
   // Return the total byte size of the data buffer
   size_t TotalByteSize() const { return total_byte_size_; }
 
+  virtual ~Memory() = default;
  protected:
   Memory() : total_byte_size_(0), buffer_count_(0) {}
   size_t total_byte_size_;
