@@ -565,7 +565,7 @@ ModelLifeCycle::CreateModel(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch())
             .count();
-#endif  // TRITON_ENABLE_METRICS            
+#endif  // TRITON_ENABLE_METRICS
     status = TritonModel::Create(
         server_, model_info->model_path_, options_.backend_cmdline_config_map,
         options_.host_policy_map, model_id, version, model_config,
