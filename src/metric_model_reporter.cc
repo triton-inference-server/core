@@ -42,7 +42,8 @@ namespace triton { namespace core {
 //
 void
 MetricReporterConfig::ParseConfig(
-    bool response_cache_enabled, bool is_decoupled)
+    bool response_cache_enabled, bool is_decoupled,
+    const inference::ModelMetrics& model_metrics)
 {
   // Global config only for now in config map
   auto metrics_config_map = Metrics::ConfigMap();
@@ -74,6 +75,20 @@ MetricReporterConfig::ParseConfig(
   // Set flag to signal to stats aggregator if caching is enabled or not
   cache_enabled_ = response_cache_enabled;
   is_decoupled_ = is_decoupled;
+
+  // Override default histogram options if set in model_metrics.
+  for (const auto& metric_control : model_metrics.metric_control()) {
+    const std::string& family_name =
+        metric_control.metric_identifier().family();
+    // Copy protobuf RepeatedField to std::vector
+    const auto& buckets_proto = metric_control.histogram_options().buckets();
+    const prometheus::Histogram::BucketBoundaries buckets(
+        buckets_proto.begin(), buckets_proto.end());
+
+    if (metric_map_.find(family_name) != metric_map_.end()) {
+      histogram_options_[metric_map_.at(family_name)] = buckets;
+    }
+  }
 }
 
 prometheus::Summary::Quantiles
@@ -120,6 +135,7 @@ MetricModelReporter::Create(
     const ModelIdentifier& model_id, const int64_t model_version,
     const int device, bool response_cache_enabled, bool is_decoupled,
     const triton::common::MetricTagsMap& model_tags,
+    const inference::ModelMetrics& model_metrics,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
   static std::mutex mtx;
@@ -148,7 +164,7 @@ MetricModelReporter::Create(
 
   metric_model_reporter->reset(new MetricModelReporter(
       model_id, model_version, device, response_cache_enabled, is_decoupled,
-      model_tags));
+      model_tags, model_metrics));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
@@ -156,13 +172,14 @@ MetricModelReporter::Create(
 MetricModelReporter::MetricModelReporter(
     const ModelIdentifier& model_id, const int64_t model_version,
     const int device, bool response_cache_enabled, bool is_decoupled,
-    const triton::common::MetricTagsMap& model_tags)
+    const triton::common::MetricTagsMap& model_tags,
+    const inference::ModelMetrics& model_metrics)
 {
   std::map<std::string, std::string> labels;
   GetMetricLabels(&labels, model_id, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
-  config_.ParseConfig(response_cache_enabled, is_decoupled);
+  config_.ParseConfig(response_cache_enabled, is_decoupled, model_metrics);
 
   // Initialize families and metrics
   InitializeCounters(labels);
@@ -285,7 +302,7 @@ MetricModelReporter::InitializeHistograms(
   // Only create response metrics if decoupled model to reduce metric output
   if (config_.latency_histograms_enabled_) {
     if (config_.is_decoupled_) {
-      histogram_families_["first_response_histogram"] =
+      histogram_families_[kFirstResponseHistogram] =
           &Metrics::FamilyFirstResponseDuration();
     }
   }
@@ -294,8 +311,9 @@ MetricModelReporter::InitializeHistograms(
     const auto& name = iter.first;
     auto family_ptr = iter.second;
     if (family_ptr) {
-      histograms_[name] = CreateMetric<prometheus::Histogram>(
-          *family_ptr, labels, config_.buckets_);
+      const auto& buckets = config_.histogram_options_[name];
+      histograms_[name] =
+          CreateMetric<prometheus::Histogram>(*family_ptr, labels, buckets);
     }
   }
 }

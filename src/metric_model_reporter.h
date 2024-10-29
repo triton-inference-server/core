@@ -46,7 +46,9 @@ struct ModelIdentifier;
 struct MetricReporterConfig {
 #ifdef TRITON_ENABLE_METRICS
   // Parses Metrics::ConfigMap and sets fields if specified
-  void ParseConfig(bool response_cache_enabled, bool is_decoupled);
+  void ParseConfig(
+      bool response_cache_enabled, bool is_decoupled,
+      const inference::ModelMetrics& model_metrics);
   // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
   // and overwrites quantiles_ field if successful.
   prometheus::Summary::Quantiles ParseQuantiles(std::string options);
@@ -57,10 +59,12 @@ struct MetricReporterConfig {
   bool latency_histograms_enabled_ = false;
   // Create and use Summaries for per-model latency related metrics
   bool latency_summaries_enabled_ = false;
-  // Buckets used for any histogram metrics. Each value represents
-  // a bucket boundary. For example, {100, 500, 2000, 5000} are latencies
+  // Default bucket boundaries used for each histogram metric. Each value
+  // represents a boundary. For example, {100, 500, 2000, 5000} are latencies.
   // in milliseconds in first_response_histogram.
-  prometheus::Histogram::BucketBoundaries buckets_ = {100, 500, 2000, 5000};
+  std::unordered_map<std::string, prometheus::Histogram::BucketBoundaries>
+      histogram_options_ = {{kFirstResponseHistogram, {100, 500, 2000, 5000}}};
+
   // Quantiles used for any summary metrics. Each pair of values represents
   // { quantile, error }. For example, {0.90, 0.01} means to compute the
   // 90th percentile with 1% error on either side, so the approximate 90th
@@ -73,6 +77,12 @@ struct MetricReporterConfig {
   bool cache_enabled_ = false;
 
   bool is_decoupled_ = false;
+
+ private:
+  // Maps the metric fullname to its lookup key.
+  // All new histograms must update the map.
+  const std::unordered_map<std::string, std::string> metric_map_ = {
+      {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram}};
 #endif  // TRITON_ENABLE_METRICS
 };
 
@@ -86,7 +96,9 @@ class MetricModelReporter {
       const triton::core::ModelIdentifier& model_id,
       const int64_t model_version, const int device,
       bool response_cache_enabled, bool is_decoupled,
+      // FIXME: [DLIS-7497] Merge model_tags with model_metrics
       const triton::common::MetricTagsMap& model_tags,
+      const inference::ModelMetrics& model_metrics,
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
@@ -112,7 +124,8 @@ class MetricModelReporter {
   MetricModelReporter(
       const ModelIdentifier& model_id, const int64_t model_version,
       const int device, bool response_cache_enabled, bool is_decoupled,
-      const triton::common::MetricTagsMap& model_tags);
+      const triton::common::MetricTagsMap& model_tags,
+      const inference::ModelMetrics& model_metrics);
 
   static void GetMetricLabels(
       std::map<std::string, std::string>* labels,

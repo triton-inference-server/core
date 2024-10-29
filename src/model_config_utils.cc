@@ -1591,7 +1591,7 @@ ValidateModelConfig(
     }
   }
 
-  // If ensemble scheduling is specified, validate it.  Otherwise,
+  // If ensemble scheduling is specified, validate it. Otherwise,
   // must validate platform and instance_group
   if (config.has_ensemble_scheduling()) {
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -1620,6 +1620,32 @@ ValidateModelConfig(
             " cache.");
   }
 
+  // If model_metric is specified, validate it.
+  if (config.has_model_metrics()) {
+#ifdef TRITON_ENABLE_METRICS
+    for (const auto& metric_control : config.model_metrics().metric_control()) {
+      if (metric_control.has_metric_identifier()) {
+        if (metric_control.metric_identifier().family().empty()) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "metric_identifier must specify 'family'");
+        }
+      } else {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "model_control must specify 'metric_identifier'");
+      }
+
+      if (!metric_control.has_histogram_options()) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "model_control must specify 'histogram_options'");
+      }
+    }
+#else
+    return Status(Status::Code::INVALID_ARG, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+  }
   return Status::Success;
 }
 

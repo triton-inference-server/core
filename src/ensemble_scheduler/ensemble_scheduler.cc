@@ -1477,7 +1477,7 @@ EnsembleScheduler::EnsembleScheduler(
     MetricModelReporter::Create(
         model_id, 1 /* model_version */, METRIC_REPORTER_ID_CPU,
         false /* response_cache_enabled */, is_decoupled, config.metric_tags(),
-        &metric_reporter_);
+        config.model_metrics(), &metric_reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
 
