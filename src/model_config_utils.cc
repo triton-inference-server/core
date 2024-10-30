@@ -1624,16 +1624,16 @@ ValidateModelConfig(
   if (config.has_model_metrics()) {
 #ifdef TRITON_ENABLE_METRICS
     for (const auto& metric_control : config.model_metrics().metric_control()) {
-      if (metric_control.has_metric_identifier()) {
-        if (metric_control.metric_identifier().family().empty()) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "metric_identifier must specify 'family'");
-        }
-      } else {
+      if (!metric_control.has_metric_identifier()) {
         return Status(
             Status::Code::INVALID_ARG,
             "model_control must specify 'metric_identifier'");
+      }
+
+      if (metric_control.metric_identifier().family().empty()) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "metric_identifier must specify 'family'");
       }
 
       if (!metric_control.has_histogram_options()) {

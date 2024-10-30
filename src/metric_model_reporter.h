@@ -79,7 +79,9 @@ struct MetricReporterConfig {
   bool is_decoupled_ = false;
 
  private:
-  // Maps the metric fullname to its lookup key.
+  // Maps the metric family fullname to its lookup key. This field is required
+  // to find the lookup key given its fullname when users specify in the custom
+  // metric configuration "ModelMetrics".
   // All new histograms must update the map.
   const std::unordered_map<std::string, std::string> metric_map_ = {
       {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram}};

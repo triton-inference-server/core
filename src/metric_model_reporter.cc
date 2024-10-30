@@ -80,12 +80,13 @@ MetricReporterConfig::ParseConfig(
   for (const auto& metric_control : model_metrics.metric_control()) {
     const std::string& family_name =
         metric_control.metric_identifier().family();
-    // Copy protobuf RepeatedField to std::vector
-    const auto& buckets_proto = metric_control.histogram_options().buckets();
-    const prometheus::Histogram::BucketBoundaries buckets(
-        buckets_proto.begin(), buckets_proto.end());
 
+    // If family name exists, override with new options.
     if (metric_map_.find(family_name) != metric_map_.end()) {
+      // Copy protobuf RepeatedField to std::vector
+      const auto& buckets_proto = metric_control.histogram_options().buckets();
+      const prometheus::Histogram::BucketBoundaries buckets(
+          buckets_proto.begin(), buckets_proto.end());
       histogram_options_[metric_map_.at(family_name)] = buckets;
     }
   }
