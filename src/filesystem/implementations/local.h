@@ -63,7 +63,7 @@ class LocalFileSystem : public FileSystem {
 
  private:
   inline std::string getOSValidPath(const std::string& _path);
-  const char* kWindowsLongPathPrefix = "\\\\?\\";
+  const char* WindowsLongPathPrefix = "\\\\?\\";
 };
 
 
@@ -77,22 +77,22 @@ class LocalFileSystem : public FileSystem {
 //! https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry
 //!
 inline std::string
-LocalFileSystem::getOSValidPath(const std::string& _path)
+LocalFileSystem::getOSValidPath(const std::string& path)
 {
-  std::string path(_path);
+  std::string l_path(path);
 #ifdef _WIN32
   // On Windows long paths must be marked correctly otherwise, due to backwards
   // compatibility, all paths are limited to MAX_PATH length
-  if (path.size() >= MAX_PATH) {
+  if (l_path.size() >= MAX_PATH) {
     // Must be prefixed with "\\?\" to be considered long path
-    if (path.substr(0, 4) != (kWindowsLongPathPrefix)) {
+    if (l_path.substr(0, 4) != (WindowsLongPathPrefix)) {
       // Long path but not "tagged" correctly
-      path = (kWindowsLongPathPrefix) + path;
+      l_path = (WindowsLongPathPrefix) + l_path;
     }
   }
-  std::replace(path.begin(), path.end(), '/', '\\');
+  std::replace(l_path.begin(), l_path.end(), '/', '\\');
 #endif
-  return path;
+  return l_path;
 }
 
 Status
