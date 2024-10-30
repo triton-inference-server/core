@@ -31,6 +31,7 @@
 #include <map>
 #include <mutex>
 
+#include "backend_model.h"
 #include "infer_parameter.h"
 #include "model.h"
 #include "model_config.pb.h"
@@ -313,6 +314,13 @@ class ModelLifeCycle {
       ModelInfo* model_info, const bool is_update,
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
+  // Calculate time to load model
+  void CalculateAndReportLoadTime(
+      uint64_t load_start_ns_, std::unique_ptr<Model>* model);
+  // Report Load time per model metrics
+  void ReportModelLoadTime(
+      std::shared_ptr<MetricModelReporter> reporter,
+      const std::chrono::duration<double>& time_to_load);
   // Helper function for 'OnLoadComplete()' to finish final operations after
   // loading **all** model versions.
   void OnLoadFinal(

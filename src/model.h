@@ -148,6 +148,12 @@ class Model {
     return config_.response_cache().enable();
   }
 
+  // Get whether the model is decoupled.
+  bool IsDecoupled() const
+  {
+    return config_.model_transaction_policy().decoupled();
+  }
+
   // Get the number of required inputs
   size_t RequiredInputCount() const { return required_input_count_; }
 

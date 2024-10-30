@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -64,6 +64,14 @@ class SharedLibrary {
   // Get a generic pointer for an entrypoint into a shared library.
   Status GetEntrypoint(
       void* handle, const std::string& name, const bool optional, void** befn);
+
+  // Add an additional dependency directory to PATH.
+  Status AddAdditionalDependencyDir(
+      const std::string& additional_path, std::wstring& original_path);
+
+  // Restore PATH to its original configuration. Should be used in
+  // conjunction with AddAdditionalDependencyDir.
+  Status RemoveAdditionalDependencyDir(const std::wstring& original_path);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);

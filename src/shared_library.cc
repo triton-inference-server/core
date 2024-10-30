@@ -1,4 +1,4 @@
-// Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -239,6 +239,101 @@ SharedLibrary::GetEntrypoint(
 #endif
 
   *befn = fn;
+  return Status::Success;
+}
+
+Status
+SharedLibrary::AddAdditionalDependencyDir(
+    const std::string& additional_path, std::wstring& original_path)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+
+  if (additional_path.back() != ';') {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "backend config parameter \"additional-dependency-dirs\" is malformed. "
+        "Each additional path provided should terminate with a ';'.");
+  }
+
+  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+  if (len > 0) {
+    original_path.resize(len);
+    GetEnvironmentVariableW(PATH.c_str(), &original_path[0], len);
+  } else {
+    original_path = L"";
+  }
+
+  LOG_VERBOSE(1) << "Environment before extending PATH: "
+                 << std::string(original_path.begin(), original_path.end());
+
+  std::wstring updated_path_value =
+      std::wstring(additional_path.begin(), additional_path.end());
+  updated_path_value += original_path;
+
+  if (!SetEnvironmentVariableW(PATH.c_str(), updated_path_value.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to append user-provided directory to PATH " + errstr);
+  }
+
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::wstring path_after;
+    len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+    if (len > 0) {
+      path_after.resize(len);
+      GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+    }
+    LOG_VERBOSE(1) << "Environment after extending PATH: "
+                   << std::string(path_after.begin(), path_after.end());
+  }
+#else
+  LOG_WARNING
+      << "The parameter \"additional-dependency-dirs\" has been specified but "
+         "is not supported for Linux. It is currently a Windows-only feature. "
+         "No change to the environment will take effect.";
+#endif
+  return Status::Success;
+}
+
+Status
+SharedLibrary::RemoveAdditionalDependencyDir(const std::wstring& original_path)
+{
+#ifdef _WIN32
+  const std::wstring PATH(L"Path");
+  if (!SetEnvironmentVariableW(PATH.c_str(), original_path.c_str())) {
+    LPSTR err_buffer = nullptr;
+    size_t size = FormatMessageA(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+            FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&err_buffer, 0, NULL);
+    std::string errstr(err_buffer, size);
+    LocalFree(err_buffer);
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to restore PATH to its original configuration " + errstr);
+  }
+
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::wstring path_after;
+    DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
+    if (len > 0) {
+      path_after.resize(len);
+      GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
+    }
+    LOG_VERBOSE(1) << "Environment after restoring PATH: "
+                   << std::string(path_after.begin(), path_after.end());
+  }
+#endif
   return Status::Success;
 }
 
