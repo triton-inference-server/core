@@ -84,9 +84,9 @@ LocalFileSystem::GetOSValidPath(const std::string& path)
   // compatibility, all paths are limited to MAX_PATH length
   if (l_path.size() >= MAX_PATH) {
     // Must be prefixed with "\\?\" to be considered long path
-    if (l_path.substr(0, 4) != (WindowsLongPathPrefix)) {
+    if (l_path.substr(0, 4) != (kWindowsLongPathPrefix)) {
       // Long path but not "tagged" correctly
-      l_path = (WindowsLongPathPrefix) + l_path;
+      l_path = (kWindowsLongPathPrefix) + l_path;
     }
   }
   std::replace(l_path.begin(), l_path.end(), '/', '\\');
