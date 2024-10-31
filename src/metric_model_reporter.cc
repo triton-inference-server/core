@@ -88,6 +88,10 @@ MetricReporterConfig::ParseConfig(
       const prometheus::Histogram::BucketBoundaries buckets(
           buckets_proto.begin(), buckets_proto.end());
       histogram_options_[metric_map_.at(family_name)] = buckets;
+    } else {
+      // metric_control config may be extended to support backend metrics.
+      LOG_WARNING << "Metric family '" << family_name
+                  << "' in 'model_identifier' is not a Triton core metric.";
     }
   }
 }
