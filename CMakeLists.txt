@@ -323,6 +323,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-c-common_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-common/cmake
       -Daws-checksums_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-checksums/cmake
       -Daws-crt-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-crt-cpp/cmake
+      -Daws-c-http_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-http/cmake
       -DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
       -DTRITON_REPO_ORGANIZATION:STRING=${TRITON_REPO_ORGANIZATION}
