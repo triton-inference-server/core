@@ -295,6 +295,11 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(TRITON_DEPENDS ${TRITON_DEPENDS} cnmem)
   endif() # TRITON_ENABLE_GPU
 
+  aws-c-s3
+  aws-c-auth
+  aws-c-compression
+  aws-c-mqtt
+  aws-c-sdkutils
   ExternalProject_Add(triton-core
     PREFIX triton-core
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -327,6 +332,11 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-c-io_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-io/cmake
       -Ds2n_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/s2n/cmake
       -Daws-c-cal_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-cal/cmake
+      -Daws-c-s3_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-s3/cmake
+      -Daws-c-auth_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-auth/cmake
+      -Daws-c-compression_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-compression/cmake
+      -Daws-c-mqtt_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-mqtt/cmake
+      -Daws-c-sdkutils_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-sdkutils/cmake
       -DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
       -DTRITON_REPO_ORGANIZATION:STRING=${TRITON_REPO_ORGANIZATION}
