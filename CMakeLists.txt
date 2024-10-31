@@ -295,11 +295,6 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(TRITON_DEPENDS ${TRITON_DEPENDS} cnmem)
   endif() # TRITON_ENABLE_GPU
 
-  aws-c-s3
-  aws-c-auth
-  aws-c-compression
-  aws-c-mqtt
-  aws-c-sdkutils
   ExternalProject_Add(triton-core
     PREFIX triton-core
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src"
