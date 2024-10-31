@@ -1627,19 +1627,25 @@ ValidateModelConfig(
       if (!metric_control.has_metric_identifier()) {
         return Status(
             Status::Code::INVALID_ARG,
-            "model_control must specify 'metric_identifier'");
+            "metric control must specify 'metric_identifier'");
       }
 
       if (metric_control.metric_identifier().family().empty()) {
         return Status(
             Status::Code::INVALID_ARG,
-            "metric_identifier must specify 'family'");
+            "metric identifier must specify non-empty 'family'");
       }
 
       if (!metric_control.has_histogram_options()) {
         return Status(
             Status::Code::INVALID_ARG,
-            "model_control must specify 'histogram_options'");
+            "metric control must specify 'histogram_options'");
+      }
+
+      if (metric_control.histogram_options().buckets_size() == 0) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "histogram options must specify non-empty 'buckets'");
       }
     }
 #else
