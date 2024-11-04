@@ -304,6 +304,7 @@ void
 MetricModelReporter::InitializeHistograms(
     const std::map<std::string, std::string>& labels)
 {
+  // Update MetricReporterConfig::metric_map_ for new histograms.
   // Only create response metrics if decoupled model to reduce metric output
   if (config_.latency_histograms_enabled_) {
     if (config_.is_decoupled_) {

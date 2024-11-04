@@ -80,9 +80,9 @@ struct MetricReporterConfig {
 
  private:
   // Maps the metric family fullname to its lookup key. This field is required
-  // because the users are expected to configure metric configuration "ModelMetrics"
-  // with the full name displayed from metrics reporting while a different name is used internally .
-  // All new histograms must update the map.
+  // because the users are expected to configure metric configuration
+  // "ModelMetrics" with the full name displayed from metrics reporting while a
+  // different name is used internally. All new histograms must update the map.
   const std::unordered_map<std::string, std::string> metric_map_ = {
       {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram}};
 #endif  // TRITON_ENABLE_METRICS
