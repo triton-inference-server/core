@@ -91,7 +91,8 @@ MetricReporterConfig::ParseConfig(
     } else {
       // metric_control config may be extended to support backend metrics.
       LOG_WARNING << "Metric family '" << family_name
-                  << "' in 'metric_identifier' is not a Triton core metric.";
+                  << "' in 'metric_identifier' is not a customizable metric in "
+                     "Triton core.";
     }
   }
 }
