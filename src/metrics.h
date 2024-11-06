@@ -312,8 +312,6 @@ class Metrics {
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
   prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
-  prometheus::Family<prometheus::Histogram>&
-      inf_first_response_histogram_ms_family_;
   prometheus::Family<prometheus::Gauge>& model_load_time_family_;
 
   prometheus::Family<prometheus::Gauge>& pinned_memory_pool_total_family_;
@@ -329,6 +327,10 @@ class Metrics {
   prometheus::Family<prometheus::Counter>& cache_hit_duration_us_model_family_;
   prometheus::Family<prometheus::Counter>& cache_num_misses_model_family_;
   prometheus::Family<prometheus::Counter>& cache_miss_duration_us_model_family_;
+
+  // Histograms
+  prometheus::Family<prometheus::Histogram>&
+      inf_first_response_histogram_ms_family_;
 
   // Summaries
   prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;

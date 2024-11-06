@@ -446,6 +446,39 @@ ValidateNonLinearFormatIO(
   return Status::Success;
 }
 
+// Helper function to validate that model_metrics contains all required data.
+Status
+ValidateModelMetrics(const inference::ModelMetrics& model_metrics)
+{
+  for (const auto& metric_control : model_metrics.metric_control()) {
+    if (!metric_control.has_metric_identifier()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "metric control must specify 'metric_identifier'");
+    }
+
+    if (metric_control.metric_identifier().family().empty()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "metric identifier must specify non-empty 'family'");
+    }
+
+    if (!metric_control.has_histogram_options()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "metric control must specify 'histogram_options'");
+    }
+
+    if (metric_control.histogram_options().buckets_size() == 0) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "histogram options must specify non-empty 'buckets'");
+    }
+  }
+
+  return Status::Success;
+}
+
 }  // namespace
 
 Status
@@ -1591,7 +1624,7 @@ ValidateModelConfig(
     }
   }
 
-  // If ensemble scheduling is specified, validate it.  Otherwise,
+  // If ensemble scheduling is specified, validate it. Otherwise,
   // must validate platform and instance_group
   if (config.has_ensemble_scheduling()) {
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -1620,6 +1653,14 @@ ValidateModelConfig(
             " cache.");
   }
 
+  // If model_metric is specified, validate it.
+  if (config.has_model_metrics()) {
+#ifdef TRITON_ENABLE_METRICS
+    RETURN_IF_ERROR(ValidateModelMetrics(config.model_metrics()));
+#else
+    return Status(Status::Code::INVALID_ARG, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+  }
   return Status::Success;
 }
 
