@@ -1656,10 +1656,7 @@ ValidateModelConfig(
   // If model_metric is specified, validate it.
   if (config.has_model_metrics()) {
 #ifdef TRITON_ENABLE_METRICS
-    Status status = ValidateModelMetrics(config.model_metrics());
-    if (!status.IsOk()) {
-      return status;
-    }
+    RETURN_IF_ERROR(ValidateModelMetrics(config.model_metrics()));
 #else
     return Status(Status::Code::INVALID_ARG, "metrics not supported");
 #endif  // TRITON_ENABLE_METRICS
