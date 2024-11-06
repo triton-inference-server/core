@@ -63,7 +63,7 @@ class LocalFileSystem : public FileSystem {
 
  private:
   inline std::string GetOSValidPath(const std::string& path);
-  static constexpr char* kWindowsLongPathPrefix = "\\\\?\\";
+  static constexpr const char* kWindowsLongPathPrefix = "\\\\?\\";
 };
 
 //! Converts incoming utf-8 path to an OS valid path
