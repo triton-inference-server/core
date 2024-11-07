@@ -63,7 +63,6 @@ class LocalFileSystem : public FileSystem {
 
  private:
   inline std::string GetOSValidPath(const std::string& path);
-  static constexpr const char* kWindowsLongPathPrefix = "\\\\?\\";
 };
 
 //! Converts incoming utf-8 path to an OS valid path
@@ -82,6 +81,7 @@ LocalFileSystem::GetOSValidPath(const std::string& path)
 #ifdef _WIN32
   // On Windows long paths must be marked correctly otherwise, due to backwards
   // compatibility, all paths are limited to MAX_PATH length
+  static constexpr const char* kWindowsLongPathPrefix = "\\\\?\\";
   if (l_path.size() >= MAX_PATH) {
     // Must be prefixed with "\\?\" to be considered long path
     if (l_path.substr(0, 4) != (kWindowsLongPathPrefix)) {
