@@ -446,6 +446,8 @@ ValidateNonLinearFormatIO(
   return Status::Success;
 }
 
+#ifdef TRITON_ENABLE_METRICS
+
 // Helper function to validate that model_metrics contains all required data.
 Status
 ValidateModelMetrics(const inference::ModelMetrics& model_metrics)
@@ -478,6 +480,8 @@ ValidateModelMetrics(const inference::ModelMetrics& model_metrics)
 
   return Status::Success;
 }
+
+#endif  // TRITON_ENABLE_METRICS
 
 }  // namespace
 
