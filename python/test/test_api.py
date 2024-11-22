@@ -120,7 +120,10 @@ class TestAllocators:
         for response in server.model("test").infer(
             inputs={"fp16_input": fp16_input},
         ):
-            assert response.outputs["fp16_output"].memory_type == tritonserver.MemoryType.CPU
+            assert (
+                response.outputs["fp16_output"].memory_type
+                == tritonserver.MemoryType.CPU
+            )
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             assert fp16_input[0][0] == fp16_output[0][0]
 
@@ -145,7 +148,9 @@ class TestAllocators:
 
         with pytest.raises(tritonserver.InternalError):
             for response in server.model("test").infer(
-                inputs={"string_input": tritonserver.Tensor.from_string_array([["hello"]])},
+                inputs={
+                    "string_input": tritonserver.Tensor.from_string_array([["hello"]])
+                },
                 output_memory_type="gpu",
                 output_memory_allocator=TestAllocators.MockMemoryAllocator(),
             ):
@@ -169,7 +174,9 @@ class TestAllocators:
         )
 
         if tritonserver.MemoryType.GPU in tritonserver.default_memory_allocators:
-            allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
+            allocator = tritonserver.default_memory_allocators[
+                tritonserver.MemoryType.GPU
+            ]
 
             del tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
         else:
@@ -177,19 +184,25 @@ class TestAllocators:
 
         with pytest.raises(tritonserver.InvalidArgumentError):
             for response in server.model("test").infer(
-                inputs={"string_input": tritonserver.Tensor.from_string_array([["hello"]])},
+                inputs={
+                    "string_input": tritonserver.Tensor.from_string_array([["hello"]])
+                },
                 output_memory_type="gpu",
             ):
                 pass
 
         if allocator is not None:
-            tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU] = allocator
+            tritonserver.default_memory_allocators[
+                tritonserver.MemoryType.GPU
+            ] = allocator
 
     @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
     def test_allocate_on_cpu_and_reshape(self):
         allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.CPU]
 
-        memory_buffer = allocator.allocate(memory_type=tritonserver.MemoryType.CPU, memory_type_id=0, size=200)
+        memory_buffer = allocator.allocate(
+            memory_type=tritonserver.MemoryType.CPU, memory_type_id=0, size=200
+        )
 
         cpu_array = memory_buffer.owner
 
@@ -197,7 +210,9 @@ class TestAllocators:
 
         fp32_size = int(memory_buffer.size / 4)
 
-        tensor = tritonserver.Tensor(tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer)
+        tensor = tritonserver.Tensor(
+            tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer
+        )
 
         cpu_fp32_array = numpy.from_dlpack(tensor)
         assert cpu_array.ctypes.data == cpu_fp32_array.ctypes.data
@@ -209,7 +224,9 @@ class TestAllocators:
     def test_allocate_on_gpu_and_reshape(self):
         allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
 
-        memory_buffer = allocator.allocate(memory_type=tritonserver.MemoryType.GPU, memory_type_id=0, size=200)
+        memory_buffer = allocator.allocate(
+            memory_type=tritonserver.MemoryType.GPU, memory_type_id=0, size=200
+        )
 
         gpu_array = memory_buffer.owner
 
@@ -220,17 +237,25 @@ class TestAllocators:
 
         fp32_size = int(memory_buffer.size / 4)
 
-        tensor = tritonserver.Tensor(tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer)
+        tensor = tritonserver.Tensor(
+            tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer
+        )
 
         gpu_fp32_array = cupy.from_dlpack(tensor)
-        assert gpu_array.__cuda_array_interface__["data"][0] == gpu_fp32_array.__cuda_array_interface__["data"][0]
+        assert (
+            gpu_array.__cuda_array_interface__["data"][0]
+            == gpu_fp32_array.__cuda_array_interface__["data"][0]
+        )
 
         assert gpu_fp32_array.dtype == cupy.float32
         assert gpu_fp32_array.nbytes == 200
 
         torch_fp32_tensor = torch.from_dlpack(tensor)
         assert torch_fp32_tensor.dtype == torch.float32
-        assert torch_fp32_tensor.data_ptr() == gpu_array.__cuda_array_interface__["data"][0]
+        assert (
+            torch_fp32_tensor.data_ptr()
+            == gpu_array.__cuda_array_interface__["data"][0]
+        )
         assert torch_fp32_tensor.nbytes == 200
 
 
@@ -250,7 +275,9 @@ class TestTensor:
 
         assert gpu_array.__cuda_array_interface__["data"][0] == memory_buffer.data_ptr
 
-    @pytest.mark.skipif(torch is None, reason="Skipping gpu memory, torch not installed")
+    @pytest.mark.skipif(
+        torch is None, reason="Skipping gpu memory, torch not installed"
+    )
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_gpu_tensor_from_dl_pack(self):
         cupy_array = cupy.ones([100]).astype(cupy.float64)
@@ -412,7 +439,9 @@ class TestInference:
             raise_on_error=True,
         ):
             for input_name, input_value in inputs.items():
-                output_value = numpy.from_dlpack(response.outputs[input_name.replace("input", "output")])
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
                 numpy.testing.assert_array_equal(input_value, output_value)
 
     def test_parameters(self, server_options):
@@ -448,7 +477,9 @@ class TestInference:
         ):
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
-            output_parameters = json.loads(response.outputs["output_parameters"].to_string_array()[0])
+            output_parameters = json.loads(
+                response.outputs["output_parameters"].to_string_array()[0]
+            )
             assert input_parameters == output_parameters
 
         with pytest.raises(tritonserver.InvalidArgumentError):
