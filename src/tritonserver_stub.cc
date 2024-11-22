@@ -1205,4 +1205,17 @@ TRITONCACHE_Copy()
 {
 }
 
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ServerLoadModelWithParameters()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ServerUnloadModel()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONBACKEND_ServerUnloadModelAndDependents()
+{
+}
+
 } /* extern "C" */

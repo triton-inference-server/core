@@ -443,13 +443,18 @@ class ModelRepositoryManager {
   /// Expect the number of models to be exactly one.
   /// \param type The type action to be performed. If the action is LOAD and
   /// the model has been loaded, the model will be re-loaded.
+  /// \param unload_dependents Also unload the dependent models of ensemble
+  /// models.
+  /// \param ignore_model_control The load/unload action will be carried out
+  /// regardless of model control setting.
   /// \return error status. Return "NOT_FOUND" if it tries to load
   /// a non-existing model or if it tries to unload a model that hasn't been
   /// loaded.
   Status LoadUnloadModel(
       const std::unordered_map<
           std::string, std::vector<const InferenceParameter*>>& models,
-      const ActionType type, const bool unload_dependents);
+      const ActionType type, const bool unload_dependents,
+      const bool ignore_model_control);
 
   /// Unload all models that are tracked by the model repository manager. If a
   /// model is loading or unloading when this function is called, or a model

@@ -1804,6 +1804,31 @@ TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_InferenceResponseOutput(
     TRITONSERVER_DataType* datatype, const int64_t** shape,
     uint64_t* dim_count);
 
+/// TRITONBACKEND Model Control
+///
+/// API to load/unload server models
+///
+/// The following functions can be implemented by a backend to load/unload
+/// server models, bypassing explicit model control restriction.
+///
+
+/// See TRITONSERVER_ServerLoadModelWithParameters description in tritonserver.h
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ServerLoadModelWithParameters(
+    TRITONSERVER_Server* server, const char* model_name,
+    const struct TRITONSERVER_Parameter** parameters,
+    const uint64_t parameter_count);
+
+/// See TRITONSERVER_ServerUnloadModel description in tritonserver.h
+TRITONSERVER_DECLSPEC TRITONSERVER_Error* TRITONBACKEND_ServerUnloadModel(
+    TRITONSERVER_Server* server, const char* model_name);
+
+/// See TRITONSERVER_ServerUnloadModelAndDependents description in
+/// tritonserver.h
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ServerUnloadModelAndDependents(
+    TRITONSERVER_Server* server, const char* model_name);
+
 #ifdef __cplusplus
 }
 #endif

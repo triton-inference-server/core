@@ -3194,7 +3194,8 @@ TRITONSERVER_ServerLoadModel(
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  RETURN_IF_STATUS_ERROR(lserver->LoadModel({{std::string(model_name), {}}}));
+  RETURN_IF_STATUS_ERROR(lserver->LoadModel(
+      {{std::string(model_name), {}}}, false /* ignore_model_control */));
 
   return nullptr;  // success
 }
@@ -3220,7 +3221,35 @@ TRITONSERVER_ServerLoadModelWithParameters(
         reinterpret_cast<const tc::InferenceParameter*>(parameters[i]));
   }
   models[model_name] = std::move(mp);
-  RETURN_IF_STATUS_ERROR(lserver->LoadModel(models));
+  RETURN_IF_STATUS_ERROR(
+      lserver->LoadModel(models, false /* ignore_model_control */));
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ServerLoadModelWithParameters(
+    TRITONSERVER_Server* server, const char* model_name,
+    const TRITONSERVER_Parameter** parameters, const uint64_t parameter_count)
+{
+  if ((parameters == nullptr) && (parameter_count != 0)) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG,
+        "load parameters are not provided while parameter count is non-zero");
+  }
+
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  std::unordered_map<std::string, std::vector<const tc::InferenceParameter*>>
+      models;
+  std::vector<const tc::InferenceParameter*> mp;
+  for (size_t i = 0; i < parameter_count; ++i) {
+    mp.emplace_back(
+        reinterpret_cast<const tc::InferenceParameter*>(parameters[i]));
+  }
+  models[model_name] = std::move(mp);
+  RETURN_IF_STATUS_ERROR(
+      lserver->LoadModel(models, true /* ignore_model_control */));
 
   return nullptr;  // success
 }
@@ -3232,7 +3261,21 @@ TRITONSERVER_ServerUnloadModel(
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
-      std::string(model_name), false /* unload_dependents */));
+      std::string(model_name), false /* unload_dependents */,
+      false /* ignore_model_control */));
+
+  return nullptr;  // success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ServerUnloadModel(
+    TRITONSERVER_Server* server, const char* model_name)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+
+  RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
+      std::string(model_name), false /* unload_dependents */,
+      true /* ignore_model_control */));
 
   return nullptr;  // success
 }
@@ -3246,7 +3289,24 @@ TRITONSERVER_ServerUnloadModelAndDependents(
         reinterpret_cast<tc::InferenceServer*>(server);
 
     RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
-        std::string(model_name), true /* unload_dependents */));
+        std::string(model_name), true /* unload_dependents */,
+        false /* ignore_model_control */));
+
+    return nullptr;  // success
+  }
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONBACKEND_ServerUnloadModelAndDependents(
+    TRITONSERVER_Server* server, const char* model_name)
+{
+  {
+    tc::InferenceServer* lserver =
+        reinterpret_cast<tc::InferenceServer*>(server);
+
+    RETURN_IF_STATUS_ERROR(lserver->UnloadModel(
+        std::string(model_name), true /* unload_dependents */,
+        true /* ignore_model_control */));
 
     return nullptr;  // success
   }

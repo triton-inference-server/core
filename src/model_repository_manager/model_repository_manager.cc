@@ -758,9 +758,10 @@ Status
 ModelRepositoryManager::LoadUnloadModel(
     const std::unordered_map<
         std::string, std::vector<const InferenceParameter*>>& models,
-    const ActionType type, const bool unload_dependents)
+    const ActionType type, const bool unload_dependents,
+    const bool ignore_model_control)
 {
-  if (!model_control_enabled_) {
+  if (!ignore_model_control && !model_control_enabled_) {
     return Status(
         Status::Code::UNAVAILABLE,
         "explicit model load / unload is not allowed if polling is enabled");

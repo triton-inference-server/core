@@ -127,11 +127,13 @@ class InferenceServer {
   // Load the corresponding model. Reload the model if it has been loaded.
   Status LoadModel(
       const std::unordered_map<
-          std::string, std::vector<const InferenceParameter*>>& models);
+          std::string, std::vector<const InferenceParameter*>>& models,
+      const bool ignore_model_control);
 
   // Unload the corresponding model.
   Status UnloadModel(
-      const std::string& model_name, const bool unload_dependents);
+      const std::string& model_name, const bool unload_dependents,
+      const bool ignore_model_control);
 
   // Print backends and models summary
   Status PrintBackendAndModelSummary();

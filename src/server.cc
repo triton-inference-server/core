@@ -554,7 +554,8 @@ InferenceServer::InferAsync(std::unique_ptr<InferenceRequest>& request)
 Status
 InferenceServer::LoadModel(
     const std::unordered_map<
-        std::string, std::vector<const InferenceParameter*>>& models)
+        std::string, std::vector<const InferenceParameter*>>& models,
+    const bool ignore_model_control)
 {
   if (ready_state_ != ServerReadyState::SERVER_READY) {
     return Status(Status::Code::UNAVAILABLE, "Server not ready");
@@ -564,12 +565,13 @@ InferenceServer::LoadModel(
 
   auto action_type = ActionType::LOAD;
   return model_repository_manager_->LoadUnloadModel(
-      models, action_type, false /* unload_dependents */);
+      models, action_type, false /* unload_dependents */, ignore_model_control);
 }
 
 Status
 InferenceServer::UnloadModel(
-    const std::string& model_name, const bool unload_dependents)
+    const std::string& model_name, const bool unload_dependents,
+    const bool ignore_model_control)
 {
   if (ready_state_ != ServerReadyState::SERVER_READY) {
     return Status(Status::Code::UNAVAILABLE, "Server not ready");
@@ -579,7 +581,7 @@ InferenceServer::UnloadModel(
 
   auto action_type = ActionType::UNLOAD;
   return model_repository_manager_->LoadUnloadModel(
-      {{model_name, {}}}, action_type, unload_dependents);
+      {{model_name, {}}}, action_type, unload_dependents, ignore_model_control);
 }
 
 Status
