@@ -16,23 +16,6 @@ jobs:
         - ${{ github.workspace }}:/core
 
     steps:
-      # Based on https://stackoverflow.com/q/75536771
-      - name: Free disk space
-        run: |
-          sudo docker system prune -a -f
-          sudo rm -rf \
-            /usr/share/dotnet "$AGENT_TOOLSDIRECTORY" /usr/local/lib/android /opt/ghc \
-            /usr/local/share/powershell /usr/share/swift /usr/local/.ghcup \
-            /usr/lib/jvm
-
-          sudo apt-get purge microsoft-edge-stable || true
-          sudo apt-get purge google-cloud-cli || true
-          sudo apt-get purge dotnet-sdk-* || true
-          sudo apt-get purge google-chrome-stable || true
-
-          sudo apt-get autoremove -y
-          sudo apt-get autoclean -y
-
       - uses: actions/checkout@v3
 
       - name: Install dependencies
