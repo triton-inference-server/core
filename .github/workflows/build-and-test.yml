@@ -1,0 +1,40 @@
+name: Build And Test
+
+on:
+    pull_request:
+      branches:
+        - main
+      types: [synchronize, opened, reopened, ready_for_review]
+
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container:
+      image: nvcr.io/nvidia/tritonserver:24.10-py3
+      volumes:
+        - ${{ github.workspace }}:/core
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y --no-install-recommends clang-format-15 cmake libb64-dev rapidjson-dev libre2-dev
+          wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && (cd /tmp && tar xzf boost.tar.gz) && mv /tmp/boost_1_80_0/boost /usr/include/boost
+          pip install build pytest
+
+      - name: Build
+        run: |
+          mkdir -p /core/build
+          cd /core/build
+          cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_CORE_HEADERS_ONLY=OFF ..
+          export TRITON_PYBIND="_c/triton_bindings.cpython-310-x86_64-linux-gnu.so"
+          make -j8
+
+      - name: Run tests with pytest
+        run: |
+          cd /core
+          python3 -m pip install --force-reinstall build/python/generic/wheel/dist/tritonserver-*.whl
+          pytest python/test -v
