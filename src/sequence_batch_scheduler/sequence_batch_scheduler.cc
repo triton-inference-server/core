@@ -1468,7 +1468,7 @@ DirectSequenceBatch::DirectSequenceBatch(
   const int nice = 0;
   NewPayload();
   scheduler_thread_.reset(
-      new std::thread([this, nice]() { BatcherThread(nice); }));
+      new std::thread([this]() { BatcherThread(nice); }));
 
   *is_initialized = true;
 }
