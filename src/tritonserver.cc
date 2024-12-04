@@ -1712,6 +1712,7 @@ TRITONSERVER_InferenceRequestNew(
     TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version)
 {
+  NVTX_RANGE(nvtx_, "TRITONSERVER_InferenceRequestNew");
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   std::shared_ptr<tc::Model> model;

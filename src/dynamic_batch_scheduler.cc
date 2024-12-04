@@ -184,6 +184,7 @@ DynamicBatchScheduler::~DynamicBatchScheduler()
 Status
 DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 {
+  NVTX_RANGE(nvtx_, "Enqueue " + model_name_);
   if (stop_) {
     return Status(
         Status::Code::UNAVAILABLE,

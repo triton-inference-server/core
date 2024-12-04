@@ -42,6 +42,7 @@
 #include "rate_limiter.h"
 #include "status.h"
 #include "triton/common/model_config.h"
+#include "triton/common/nvtx.h"
 
 namespace triton { namespace core {
 
@@ -299,6 +300,7 @@ class InferenceServer {
         (ready_state_ != ServerReadyState::SERVER_EXITING)) {
       return Status(Status::Code::UNAVAILABLE, "Server not ready");
     }
+    NVTX_RANGE(nvtx_, "GetModel");
     return model_repository_manager_->GetModel(
         model_name, model_version, model);
   }
