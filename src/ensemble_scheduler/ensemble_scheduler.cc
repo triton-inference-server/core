@@ -1470,13 +1470,12 @@ EnsembleScheduler::EnsembleScheduler(
   }
 #endif  // TRITON_ENABLE_GPU
 
-  const bool is_decoupled = config.model_transaction_policy().decoupled();
 #ifdef TRITON_ENABLE_METRICS
   if (Metrics::Enabled()) {
     // Ensemble scheduler doesn't currently support response cache at top level.
     MetricModelReporter::Create(
         model_id, 1 /* model_version */, METRIC_REPORTER_ID_CPU,
-        false /* response_cache_enabled */, is_decoupled, config.metric_tags(),
+        false /* response_cache_enabled */, config.metric_tags(),
         &metric_reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
@@ -1487,7 +1486,7 @@ EnsembleScheduler::EnsembleScheduler(
   info_->ensemble_name_ = config.name();
 
   // This config field is filled internally for ensemble models
-  info_->is_decoupled_ = is_decoupled;
+  info_->is_decoupled_ = config.model_transaction_policy().decoupled();
 
   // field to check if response cache enabled in the ensemble model config.
   info_->is_cache_enabled_ =

@@ -61,20 +61,11 @@ class InferenceResponseFactory {
         alloc_userp_(alloc_userp), response_fn_(response_fn),
         response_userp_(response_userp), response_delegator_(delegator),
         is_cancelled_(false)
-#ifdef TRITON_ENABLE_METRICS
-        ,
-        responses_sent_(std::make_shared<std::atomic<uint64_t>>(0))
-#endif  // TRITON_ENABLE_METRICS
 #ifdef TRITON_ENABLE_STATS
         ,
         response_stats_index_(0)
 #endif  // TRITON_ENABLE_STATS
   {
-#ifdef TRITON_ENABLE_METRICS
-    infer_start_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                          std::chrono::steady_clock::now().time_since_epoch())
-                          .count();
-#endif  // TRITON_ENABLE_METRICS
   }
 
   void Cancel() { is_cancelled_ = true; }
@@ -142,14 +133,6 @@ class InferenceResponseFactory {
       response_delegator_;
 
   std::atomic<bool> is_cancelled_;
-
-#ifdef TRITON_ENABLE_METRICS
-  // Total number of responses sent created by this response factory.
-  std::shared_ptr<std::atomic<uint64_t>> responses_sent_;
-
-  // The start time of associate request in ns.
-  uint64_t infer_start_ns_;
-#endif  // TRITON_ENABLE_METRICS
 
 #ifdef TRITON_ENABLE_TRACING
   // Inference trace associated with this response.
@@ -263,14 +246,8 @@ class InferenceResponse {
       const ResponseAllocator* allocator, void* alloc_userp,
       TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
       void* response_userp,
-      const std::function<
-          void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator
-#ifdef TRITON_ENABLE_METRICS
-      ,
-      std::shared_ptr<std::atomic<uint64_t>> responses_sent,
-      uint64_t infer_start_ns
-#endif  // TRITON_ENABLE_METRICS
-  );
+      const std::function<void(
+          std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator);
 
   // "null" InferenceResponse is a special instance of InferenceResponse which
   // contains minimal information for calling InferenceResponse::Send,
@@ -347,10 +324,6 @@ class InferenceResponse {
       TRITONSERVER_InferenceTraceActivity activity, const std::string& msg);
 #endif  // TRITON_ENABLE_TRACING
 
-#ifdef TRITON_ENABLE_METRICS
-  void UpdateResponseMetrics() const;
-#endif  // TRITON_ENABLE_METRICS
-
   // The model associated with this factory. For normal
   // requests/responses this will always be defined and acts to keep
   // the model loaded as long as this factory is live. It may be
@@ -384,14 +357,6 @@ class InferenceResponse {
   // Delegator to be invoked on sending responses.
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>
       response_delegator_;
-
-#ifdef TRITON_ENABLE_METRICS
-  // Total number of responses sent created by its response factory.
-  const std::shared_ptr<std::atomic<uint64_t>> responses_sent_;
-
-  // The start time of associate request in ns.
-  const uint64_t infer_start_ns_;
-#endif  // TRITON_ENABLE_METRICS
 
   bool null_response_;
 
