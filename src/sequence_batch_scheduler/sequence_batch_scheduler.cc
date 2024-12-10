@@ -1345,7 +1345,9 @@ SequenceBatch::SetControlTensors(
     if (seq_corr_id->DType() == inference::DataType::TYPE_STRING) {
       // 4 bytes for length of string plus pre-defined max string correlation id
       // length in bytes
-      size_p = 4 + triton::core::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
+      std::string correlation_id = corrid.StringValue();
+      uint32_t correlation_id_length = correlation_id.length();
+      size_p = 4 + correlation_id_length;
     }
 
     TRITONSERVER_MemoryType memory_type;
