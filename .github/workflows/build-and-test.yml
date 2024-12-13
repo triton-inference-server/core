@@ -27,7 +27,7 @@ jobs:
           # To avoid system/pip package conflict errors - use a venv:
           # https://stackoverflow.com/questions/75602063/pip-install-r-requirements-txt-is-failing-this-environment-is-externally-mana
           python3 -m venv .venv
-          source .venv/bin/activate
+          . .venv/bin/activate
           python3 -m pip install build pytest
 
       - name: Build
