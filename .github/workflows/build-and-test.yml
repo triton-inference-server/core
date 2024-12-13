@@ -34,7 +34,7 @@ jobs:
         run: |
           mkdir -p /core/build
           cd /core/build
-          cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_CORE_HEADERS_ONLY=OFF ..
+          cmake -D CMAKE_INSTALL_PREFIX:PATH=`pwd`/install -D TRITON_CORE_HEADERS_ONLY=OFF -D TRITON_ENABLE_GPU=OFF ..
           export TRITON_PYBIND="_c/triton_bindings.cpython-310-x86_64-linux-gnu.so"
           make -j8
 
