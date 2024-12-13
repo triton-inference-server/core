@@ -378,7 +378,7 @@ TEST_F(InputByteSizeTest, InputByteSizeLarge)
       "setting request release callback");
 
   // Define input shape and data
-  size_t element_cnt = (1LL << 31) / sizeof(float);
+  int64_t element_cnt = (1LL << 31) / sizeof(float);
   std::vector<int64_t> shape{1, element_cnt};
   std::vector<float> input_data(element_cnt, 1);
   const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
