@@ -357,11 +357,7 @@ class ServerTests(unittest.TestCase):
                     {
                         "backend": "python",
                         "parameters": {"decoupled": {"string_value": "False"}},
-                        # Keep instance count low for fast startup/cleanup.
-                        # Alternatively can use KIND_CPU here, but keeping gpus/count explicit.
-                        "instance_group": [
-                            {"kind": "KIND_GPU", "gpus": [0], "count": 1}
-                        ],
+                        "instance_group": [{"kind": "KIND_CPU"}],
                     }
                 )
             },
