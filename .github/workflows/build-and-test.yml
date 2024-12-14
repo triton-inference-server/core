@@ -14,9 +14,21 @@ jobs:
       image: ubuntu:24.04
       volumes:
         - ${{ github.workspace }}:/core
+        # Mount /usr so we can free space
+        - /usr:/host_usr
+      env:
+        AGENT_TOOLSDIRECTORY: "$AGENT_TOOLSDIRECTORY"
 
     steps:
       - uses: actions/checkout@v3
+
+      - name: Free space
+        run: |
+          rm -rf \
+            /host_usr/share/dotnet /host_usr/local/lib/android /opt/ghc \
+            /host_usr/local/share/powershell /host_usr/share/swift /host_usr/local/.ghcup \
+            /host_usr/lib/jvm
+          rm -rf "$AGENT_TOOLSDIRECTORY"
 
       - name: Install dependencies
         run: |
@@ -37,7 +49,7 @@ jobs:
             rapidjson-dev \
             software-properties-common \
             wget
-          wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && (cd /tmp && tar xzf boost.tar.gz) && mv /tmp/boost_1_80_0/boost /usr/include/boost
+          wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && (cd /tmp && tar xzf boost.tar.gz) && mv /tmp/boost_1_80_0/boost /usr/include/boost && rm /tmp/boost.tar.gz
           apt install -y python3 python3-pip python3-venv
           # To avoid system/pip package conflict errors - use a venv:
           # https://stackoverflow.com/questions/75602063/pip-install-r-requirements-txt-is-failing-this-environment-is-externally-mana
