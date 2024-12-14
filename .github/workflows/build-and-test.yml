@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: nvcr.io/nvidia/tritonserver:24.10-py3
+      image: ubuntu:24.04
       volumes:
         - ${{ github.workspace }}:/core
         # Mount /usr so we can free space
@@ -32,16 +32,36 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install -y --no-install-recommends clang-format-15 cmake libb64-dev rapidjson-dev libre2-dev
+          apt update -y
+          apt install --no-install-recommends --yes --fix-missing  \
+            clang-format-15 \
+            cmake \
+            curl \
+            dirmngr \
+            git \
+            gperf \
+            libb64-dev \
+            libcurl4-openssl-dev \
+            libgoogle-perftools4 \
+            libjemalloc2 \
+            libnuma1 \
+            libre2-dev \
+            rapidjson-dev \
+            software-properties-common \
+            wget
           wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && (cd /tmp && tar xzf boost.tar.gz) && mv /tmp/boost_1_80_0/boost /usr/include/boost && rm /tmp/boost.tar.gz
-          pip install build pytest
+          apt install -y python3 python3-pip python3-venv
+          # To avoid system/pip package conflict errors - use a venv:
+          # https://stackoverflow.com/questions/75602063/pip-install-r-requirements-txt-is-failing-this-environment-is-externally-mana
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python3 -m pip install build pytest
 
       - name: Build
         run: |
           mkdir -p /core/build
           cd /core/build
-          cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_CORE_HEADERS_ONLY=OFF ..
+          cmake -D CMAKE_INSTALL_PREFIX:PATH=`pwd`/install -D TRITON_CORE_HEADERS_ONLY=OFF -D TRITON_ENABLE_GPU=OFF -D TRITON_ENABLE_METRICS_GPU=OFF ..
           export TRITON_PYBIND="_c/triton_bindings.cpython-310-x86_64-linux-gnu.so"
           make -j8
 
