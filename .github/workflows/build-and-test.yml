@@ -21,7 +21,22 @@ jobs:
       - name: Install dependencies
         run: |
           apt update -y
-          apt install -y --no-install-recommends clang-format-15 cmake libb64-dev rapidjson-dev libre2-dev git wget software-properties-common
+          apt install --no-install-recommends --yes --fix-missing  \
+            clang-format-15 \
+            cmake \
+            curl \
+            dirmngr \
+            git \
+            gperf \
+            libb64-dev \
+            libcurl4-openssl-dev \
+            libgoogle-perftools4 \
+            libjemalloc2 \
+            libnuma1 \
+            libre2-dev \
+            rapidjson-dev \
+            software-properties-common \
+            wget
           wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && (cd /tmp && tar xzf boost.tar.gz) && mv /tmp/boost_1_80_0/boost /usr/include/boost
           apt install -y python3 python3-pip python3-venv
           # To avoid system/pip package conflict errors - use a venv:
