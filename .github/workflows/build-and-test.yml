@@ -42,7 +42,6 @@ jobs:
           mkdir -p /core/build
           cd /core/build
           cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_CORE_HEADERS_ONLY=OFF ..
-          export TRITON_PYBIND="_c/triton_bindings.cpython-310-x86_64-linux-gnu.so"
           make -j8
 
       - name: Run tests with pytest

@@ -30,6 +30,7 @@ add_subdirectory(tritonserver)
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION ${TRITON_VERSION})
 configure_file(../LICENSE LICENSE.txt COPYONLY)
 configure_file(setup.py setup.py @ONLY)
+configure_file(../pyproject.toml pyproject.toml COPYONLY)
 file(COPY test/  DESTINATION ./test/.)
 
 set(WHEEL_DEPENDS
