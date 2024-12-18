@@ -414,3 +414,74 @@ class InferenceResponse:
         # values["classification_label"] = response.output_classification_label()
 
         return result
+
+@dataclass
+class AsyncInferenceResponse:
+    model: _model.Model
+    request_id: Optional[str] = None
+    parameters: dict[str, str | int | bool] = field(default_factory=dict)
+    outputs: dict[str, bytes] = field(default_factory=dict)
+    error: Optional[TritonError] = None
+    classification_label: Optional[str] = None
+    final: bool = False
+
+    @staticmethod
+    def _from_tritonserver_inference_response(
+        model: _model.Model,
+        request: TRITONSERVER_AsyncInferenceRequest,
+        response,
+        flags: TRITONSERVER_ResponseCompleteFlag,
+    ):
+        result = AsyncInferenceResponse(
+            model,
+            request.id,
+            final=(flags == TRITONSERVER_ResponseCompleteFlag.FINAL),
+        )
+
+        try:
+            if response is None:
+                return result
+
+            try:
+                response.throw_if_response_error()
+            except TritonError as error:
+                error.args += (result,)
+                result.error = error
+
+            name, version = response.model
+            result.model.name = name
+            result.model.version = version
+            result.request_id = response.id
+            parameters = {}
+            for parameter_index in range(response.parameter_count):
+                name, type_, value = response.parameter(parameter_index)
+                parameters[name] = value
+            result.parameters = parameters
+            outputs = {}
+            for output_index in range(response.output_count):
+                (
+                    name,
+                    data_type,
+                    shape,
+                    _data_ptr,
+                    _byte_size,
+                    _memory_type,
+                    _memory_type_id,
+                    memory_buffer,
+                ) = response.output(output_index)
+                #print("-----")
+                #print(memory_buffer)
+                #print("-----")
+                #tensor = Tensor(data_type, shape, memory_buffer)
+
+                outputs[name] = memory_buffer
+            result.outputs = outputs
+        except Exception as e:
+            error = InternalError(f"Unexpected error in creating response object: {e}")
+            error.args += (result,)
+            result.error = error
+
+        # TODO: support classification
+        # values["classification_label"] = response.output_classification_label()
+
+        return result

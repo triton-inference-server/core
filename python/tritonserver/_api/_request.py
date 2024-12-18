@@ -40,7 +40,7 @@ from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
-from tritonserver._c.triton_bindings import TRITONSERVER_InferenceRequest
+from tritonserver._c.triton_bindings import TRITONSERVER_InferenceRequest, TRITONSERVER_AsyncInferenceRequest
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
 
@@ -195,5 +195,81 @@ class InferenceRequest:
         self._set_parameters(request)
 
         request.set_release_callback(self._release_request, None)
+
+        return request
+
+
+@dataclass
+class AsyncInferenceRequest():
+
+    model: _model.Model
+    request_id: Optional[str] = None
+    flags: int = 0
+    correlation_id: Optional[int | str] = None
+    priority: int = 0
+    timeout: int = 0
+    inputs: dict[str, Tensor | Any] = field(default_factory=dict)
+    parameters: dict[str, str | int | bool | float] = field(default_factory=dict)
+    output_memory_type: Optional[DeviceOrMemoryType] = None
+    output_memory_allocator: Optional[MemoryAllocator] = None
+    response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
+    _serialized_inputs: dict[str, Tensor] = field(init=False, default_factory=dict)
+    _server: TRITONSERVER_Server = field(init=False)
+
+    _set_parameter_methods = CustomKeyErrorDict(
+        "Value",
+        "Request Parameter",
+        {
+            str: TRITONSERVER_AsyncInferenceRequest.set_string_parameter,
+            int: TRITONSERVER_AsyncInferenceRequest.set_int_parameter,
+            float: TRITONSERVER_AsyncInferenceRequest.set_double_parameter,
+            bool: TRITONSERVER_AsyncInferenceRequest.set_bool_parameter,
+        },
+    )
+
+    def __post_init__(self):
+        self._server = self.model._server
+
+    def _release_request(self, _request, _flags, _user_object):
+        pass
+
+    def _add_inputs(self, request):
+        for name, value in self.inputs.items():
+            if not isinstance(value, Tensor):
+                tensor = Tensor._from_object(value)
+            else:
+                tensor = value
+            if tensor.data_type == DataType.BYTES:
+                # to ensure lifetime of array
+                self._serialized_inputs[name] = tensor
+            request.add_input(name, tensor.data_type, tensor.shape)
+
+            request.append_input_data_with_buffer_attributes(
+                name,
+                tensor.data_ptr,
+                tensor.memory_buffer._create_tritonserver_buffer_attributes(),
+            )
+
+    def _set_parameters(self, request):
+        for key, value in self.parameters.items():
+            AsyncInferenceRequest._set_parameter_methods[type(value)](request, key, value)
+
+    def _create_tritonserver_inference_request(self):
+        request = TRITONSERVER_AsyncInferenceRequest(
+            self._server, self.model.name, self.model.version
+        )
+        if self.request_id is not None:
+            request.id = self.request_id
+        request.priority_uint64 = self.priority
+        request.timeout_microseconds = self.timeout
+        if self.correlation_id is not None:
+            if isinstance(self.correlation_id, int):
+                request.correlation_id = self.correlation_id
+            else:
+                request.correlation_id_string = self.correlation_id
+        request.flags = self.flags
+
+        self._add_inputs(request)
+        self._set_parameters(request)
 
         return request

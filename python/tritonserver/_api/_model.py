@@ -34,8 +34,8 @@ import queue
 from typing import TYPE_CHECKING, Any, Optional
 
 from tritonserver._api._allocators import ResponseAllocator
-from tritonserver._api._request import InferenceRequest
-from tritonserver._api._response import AsyncResponseIterator, ResponseIterator
+from tritonserver._api._request import InferenceRequest, AsyncInferenceRequest
+from tritonserver._api._response import AsyncResponseIterator, ResponseIterator, AsyncInferenceResponse
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
@@ -136,7 +136,13 @@ class Model:
         if "model" in kwargs:
             kwargs.pop("model")
         return InferenceRequest(model=self, **kwargs)
+    
+    def create_async_request(self, **kwargs: Unpack[AsyncInferenceRequest]) -> AsyncInferenceRequest:
+        if "model" in kwargs:
+            kwargs.pop("model")
+        return AsyncInferenceRequest(model=self, **kwargs)
 
+    '''
     def async_infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
@@ -207,6 +213,45 @@ class Model:
 
         self._server.infer_async(request)
         return response_iterator
+    '''
+
+    def async_infer(
+        self,
+        inference_request: Optional[AsyncInferenceRequest] = None,
+        raise_on_error: bool = True,
+        **kwargs: Unpack[AsyncInferenceRequest],
+    ) -> AsyncIterable:
+        if inference_request is None:
+            inference_request = AsyncInferenceRequest(model=self, **kwargs)
+        
+        request = inference_request._create_tritonserver_inference_request()
+
+        self._server.infer_async(request)
+
+        class AsyncResponseGenerator:
+            def __init__(self, model, request, keep_alive_obj = None):
+                self._model = model
+                self._request = request
+                self._keep_alive_obj = keep_alive_obj
+                self._complete = False
+            
+            def __aiter__(self):
+                return self
+            
+            async def __anext__(self):
+                if self._complete:
+                    raise StopAsyncIteration
+                future = asyncio.get_running_loop().create_future()
+                self._request.get_next_response(future)
+                response, flags = await future
+                response = AsyncInferenceResponse._from_tritonserver_inference_response(
+                    self._model, self._request, response, flags
+                )
+                self._complete = response.final
+
+                return response
+        
+        return AsyncResponseGenerator(self, request, keep_alive_obj=inference_request)
 
     def infer(
         self,
