@@ -54,6 +54,9 @@ from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import UnsupportedError
 
+# import objgraph
+
+
 DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
 )
@@ -217,7 +220,10 @@ class Tensor:
             A DLPack-compatible object representing the tensor.
         """
         self._sync_on_requested_stream(stream)
+
+        ## Debug Note: creates managed tensor with malloc
         dl_managed_tensor = Tensor._create_managed_tensor()
+
         dl_managed_tensor.dl_tensor.data = self.data_ptr
         dl_managed_tensor.dl_tensor.device = DLDevice(
             TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
@@ -225,12 +231,25 @@ class Tensor:
         )
         dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
         dl_managed_tensor.dl_tensor.ndim = len(self.shape)
-        self._ctypes_shape = (ctypes.c_int64 * len(self.shape))(*self.shape)
-        dl_managed_tensor.dl_tensor.shape = self._ctypes_shape
+
+        ## Original issue was that the shape was created here but never unreferenced
+        ## self._ctypes_shape = (ctypes.c_int64 * len(self.shape))(*self.shape)
+        ## now we create the shape array using malloc
+        dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
+            *self.shape
+        )
+        # dl_managed_tensor.dl_tensor.shape = Tensor._create_shape_array(self.shape)
+
+        ## NOTE for debug: this is a null ptr
         dl_managed_tensor.dl_tensor.strides = ctypes.POINTER(ctypes.c_int64)()
         dl_managed_tensor.dl_tensor.byte_offset = 0
         dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
+
+        ## Note for debug: this method sets the context to point to
+        ## this Tensor instance after increasing the reference count
+
         self._set_dlpack_manager_ctx(dl_managed_tensor)
+
         pycapsule = ctypes.pythonapi.PyCapsule_New(
             ctypes.byref(dl_managed_tensor),
             c_str_dltensor,
@@ -601,6 +620,16 @@ class Tensor:
         return Tensor(data_type, shape, memory_buffer)
 
     @staticmethod
+    def _create_shape_array(shape):
+        array_type = ctypes.c_int64 * len(shape)
+        size = ctypes.c_size_t(ctypes.sizeof(array_type))
+        address = ctypes.pythonapi.PyMem_RawMalloc(size)
+        array = array_type.from_address(address)
+        for index in range(len(shape)):
+            array[index] = shape[index]
+        return array
+
+    @staticmethod
     def _create_managed_tensor():
         size = ctypes.c_size_t(ctypes.sizeof(DLManagedTensor))
         address = ctypes.pythonapi.PyMem_RawMalloc(size)
@@ -609,18 +638,33 @@ class Tensor:
     @staticmethod
     @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
     def _managed_tensor_deleter(handle: int) -> None:
+        # DEBUG print("managed tensor deleter!",flush=True)
+
         dl_managed_tensor = DLManagedTensor.from_address(handle)
         tensor_obj_ptr = ctypes.cast(
             dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
         )
         tensor_obj = tensor_obj_ptr.contents
+
+        # DEBUG Note: free the shape array
+        #        ctypes.pythonapi.PyMem_RawFree(dl_managed_tensor.dl_tensor.shape)
+
+        # DEBUG Note: decrement reference to original tensor object
         ctypes.pythonapi.Py_DecRef(tensor_obj)
+
+        # DEBUG Note: free the managed tensor
+
         ctypes.pythonapi.PyMem_RawFree(handle)
+
+        # DEBUG chain = objgraph.find_backref_chain(tensor_obj, objgraph.is_proper_module)
+        # DEBUG print(len(chain))
+        # DEBUG print([type(x) for x in chain])
 
     @staticmethod
     @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
     def _pycapsule_deleter(handle: ctypes.c_void_p) -> None:
         try:
+            # DEBUG print("capsule deleter!",flush=True)
             pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
             if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, c_str_dltensor):
                 dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(

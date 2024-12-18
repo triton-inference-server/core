@@ -37,6 +37,9 @@ import numpy
 import pytest
 import tritonserver
 
+# import objgraph
+
+
 try:
     import cupy
 except ImportError:
@@ -272,6 +275,10 @@ class AllocatorTests(unittest.TestCase):
         self.assertEqual(torch_fp32_tensor.nbytes, 200)
 
 
+import gc
+from collections import Counter
+
+
 class TensorTests(unittest.TestCase):
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_cpu_to_gpu(self):
@@ -314,6 +321,66 @@ class TensorTests(unittest.TestCase):
         torch_tensor = torch.from_dlpack(tensor)
         numpy.testing.assert_array_equal(torch_tensor.numpy(), cpu_array)
         self.assertEqual(torch_tensor.data_ptr(), cpu_array.ctypes.data)
+
+    def test_cpu_memory_leak(self):
+        gc.collect()
+        objects_before = gc.get_objects()
+        for index in range(20):
+            tensor = numpy.ones(2**27)
+            dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
+            array = numpy.from_dlpack(dl_pack_tensor)
+            #           print(index, index*torch.numel(tensor)*tensor.element_size())
+            del array
+            del tensor
+            del dl_pack_tensor
+            print(index)
+            # NOTE: if gc collect is called here
+            # no tensors are leaked - indicating a circular reference
+            # gc.collect()
+        gc.collect()
+        objects_after = gc.get_objects()
+        print(len(objects_after) - len(objects_before))
+        new_objects = [type(x) for x in objects_after[len(objects_before) :]]
+        tensor_objects = [
+            x for x in objects_after if isinstance(x, tritonserver.Tensor)
+        ]
+        if tensor_objects:
+            print("Tensor objects")
+            print(len(tensor_objects))
+            print(type(tensor_objects[-1].memory_buffer.owner))
+
+            # chain = objgraph.find_backref_chain(
+            #    tensor_objects[-1], objgraph.is_proper_module
+            # )
+            # print(len(chain))
+            # print(chain)
+        print(Counter(new_objects))
+
+    def test_gpu_memory_leak(self):
+        gc.collect()
+        objects_before = gc.get_objects()
+        for index in range(1000):
+            tensor = cupy.ones(2**27)
+            dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
+            array = cupy.from_dlpack(dl_pack_tensor)
+            #            print(index, index*torch.numel(tensor)*tensor.element_size())
+            del array
+            del tensor
+            del dl_pack_tensor
+            print(index)
+        #        gc.collect()
+        objects_after = gc.get_objects()
+        print(len(objects_after) - len(objects_before))
+        new_objects = [type(x) for x in objects_after[len(objects_before) :]]
+        tensor_objects = [
+            x for x in objects_after if isinstance(x, tritonserver.Tensor)
+        ]
+        if tensor_objects:
+            print(type(tensor_objects[-1].memory_buffer.owner))
+
+        print(Counter(new_objects))
+
+        assert len(tensor_objects) == 0, "Leaked Objects"
 
 
 class ServerTests(unittest.TestCase):
