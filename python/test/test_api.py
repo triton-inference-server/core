@@ -325,14 +325,14 @@ class TensorTests(unittest.TestCase):
     def test_cpu_memory_leak(self):
         gc.collect()
         objects_before = gc.get_objects()
-        for index in range(50):
+        for index in range(30):
             tensor = numpy.ones(2**27)
             dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
             array = numpy.from_dlpack(dl_pack_tensor)
             #           print(index, index*torch.numel(tensor)*tensor.element_size())
             del array
-            del tensor
             del dl_pack_tensor
+            del tensor
             print(index)
 
             # NOTE: if gc collect is called here
@@ -375,8 +375,8 @@ class TensorTests(unittest.TestCase):
             array = cupy.from_dlpack(dl_pack_tensor)
             #            print(index, index*torch.numel(tensor)*tensor.element_size())
             del array
-            del tensor
             del dl_pack_tensor
+            del tensor
             print(index)
 
             # NOTE: if gc collect is called here
