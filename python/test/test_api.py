@@ -325,7 +325,7 @@ class TensorTests(unittest.TestCase):
     def test_cpu_memory_leak(self):
         gc.collect()
         objects_before = gc.get_objects()
-        for index in range(20):
+        for index in range(50):
             tensor = numpy.ones(2**27)
             dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
             array = numpy.from_dlpack(dl_pack_tensor)
@@ -334,10 +334,18 @@ class TensorTests(unittest.TestCase):
             del tensor
             del dl_pack_tensor
             print(index)
+
             # NOTE: if gc collect is called here
             # no tensors are leaked - indicating a circular reference
             # gc.collect()
-        gc.collect()
+
+            # Note:
+            # Originally gc.collect() had no effect on memory reclaiming
+            # with the changes in the PR - uncommenting this line
+            # forces all tensors to be reclaimed and test passes
+            # This shouldn't be needed
+
+        #        gc.collect()
         objects_after = gc.get_objects()
         print(len(objects_after) - len(objects_before))
         new_objects = [type(x) for x in objects_after[len(objects_before) :]]
@@ -356,10 +364,12 @@ class TensorTests(unittest.TestCase):
             # print(chain)
         print(Counter(new_objects))
 
+        assert len(tensor_objects) == 0, "Leaked Objects"
+
     def test_gpu_memory_leak(self):
         gc.collect()
         objects_before = gc.get_objects()
-        for index in range(1000):
+        for index in range(50):
             tensor = cupy.ones(2**27)
             dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
             array = cupy.from_dlpack(dl_pack_tensor)
@@ -368,6 +378,18 @@ class TensorTests(unittest.TestCase):
             del tensor
             del dl_pack_tensor
             print(index)
+
+            # NOTE: if gc collect is called here
+            # no tensors are leaked - indicating a circular reference
+            # gc.collect()
+
+            # Note:
+            # Originally gc.collect() had no effect on memory reclaiming
+            # with the changes in the PR - uncommenting this line
+            # forces all tensors to be reclaimed and test passes
+            # This shouldn't be needed
+
+            # gc.collect()
         #        gc.collect()
         objects_after = gc.get_objects()
         print(len(objects_after) - len(objects_before))

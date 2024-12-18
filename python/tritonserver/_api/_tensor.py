@@ -231,14 +231,17 @@ class Tensor:
         )
         dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
         dl_managed_tensor.dl_tensor.ndim = len(self.shape)
+        print("storing shape", self.shape)
 
-        ## Original issue was that the shape was created here but never unreferenced
-        ## self._ctypes_shape = (ctypes.c_int64 * len(self.shape))(*self.shape)
+        ## Original issue was that the shape was created here
+        ## But could not be freed correctly
+        ##
+        ## dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
+        ##          *self.shape
+        ##     )
+
         ## now we create the shape array using malloc
-        dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
-            *self.shape
-        )
-        # dl_managed_tensor.dl_tensor.shape = Tensor._create_shape_array(self.shape)
+        dl_managed_tensor.dl_tensor.shape = Tensor._create_shape_array(self.shape)
 
         ## NOTE for debug: this is a null ptr
         dl_managed_tensor.dl_tensor.strides = ctypes.POINTER(ctypes.c_int64)()
@@ -646,8 +649,14 @@ class Tensor:
         )
         tensor_obj = tensor_obj_ptr.contents
 
+        print(dl_managed_tensor.dl_tensor.shape[0])
+
         # DEBUG Note: free the shape array
-        #        ctypes.pythonapi.PyMem_RawFree(dl_managed_tensor.dl_tensor.shape)
+        ctypes.pythonapi.PyMem_RawFree(dl_managed_tensor.dl_tensor.shape)
+
+        ## Original - caused memory leak
+        ## shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
+        ## ctypes.pythonapi.Py_DecRef(shape_obj)
 
         # DEBUG Note: decrement reference to original tensor object
         ctypes.pythonapi.Py_DecRef(tensor_obj)
@@ -683,6 +692,15 @@ class Tensor:
         tensor_obj_ptr = ctypes.pointer(tensor_obj)
         dl_managed_tensor.manager_ctx = ctypes.cast(tensor_obj_ptr, ctypes.c_void_p)
         ctypes.pythonapi.Py_IncRef(tensor_obj)
+
+        ## Original Issue
+        ## this caused the tensor object to never be garbage collected
+        ##
+        ## Removing the IncRef caused the shape to be corrupted
+        ## Current solution uses malloc
+
+        ## shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
+        ## ctypes.pythonapi.Py_IncRef(shape_obj)
 
     _from_converters: ClassVar[dict[type, Callable[[Any], Tensor]]] = dict(
         {numpy.ndarray: _from_numpy, numpy.generic: _from_numpy, list: _from_list},
