@@ -114,7 +114,6 @@ MetricModelReporter::Create(
     const ModelIdentifier& model_id, const int64_t model_version,
     const int device, bool response_cache_enabled,
     const triton::common::MetricTagsMap& model_tags,
-    const inference::ModelMetrics& model_metrics,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
 {
   static std::mutex mtx;
