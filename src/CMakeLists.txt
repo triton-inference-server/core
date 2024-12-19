@@ -336,12 +336,12 @@ target_compile_definitions(
   PRIVATE TRITON_VERSION="${TRITON_VERSION}"
 )
 
-if(${TRITON_ENABLE_NVTX})
-  target_compile_definitions(
-    triton-core
-    PRIVATE TRITON_ENABLE_NVTX=1
-  )
-endif() # TRITON_ENABLE_NVTX
+#if(${TRITON_ENABLE_NVTX})
+target_compile_definitions(
+  triton-core
+  PRIVATE TRITON_ENABLE_NVTX=1
+)
+#endif() # TRITON_ENABLE_NVTX
 
 if(${TRITON_ENABLE_TRACING})
   target_compile_definitions(
