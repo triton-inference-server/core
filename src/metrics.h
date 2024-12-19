@@ -215,12 +215,6 @@ class Metrics {
     return GetSingleton()->inf_pending_request_count_family_;
   }
 
-  static prometheus::Family<prometheus::Histogram>&
-  FamilyFirstResponseDuration()
-  {
-    return GetSingleton()->inf_first_response_histogram_ms_family_;
-  }
-
   // Metric family of load time per model
   static prometheus::Family<prometheus::Gauge>& FamilyModelLoadTime()
   {
