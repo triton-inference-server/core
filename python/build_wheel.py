@@ -108,17 +108,18 @@ if __name__ == "__main__":
 
     shutil.copyfile("LICENSE.txt", os.path.join(FLAGS.whl_dir, "LICENSE.txt"))
     shutil.copyfile("setup.py", os.path.join(FLAGS.whl_dir, "setup.py"))
+    shutil.copyfile("pyproject.toml", os.path.join(FLAGS.whl_dir, "pyproject.toml"))
 
     os.chdir(FLAGS.whl_dir)
     print("=== Building wheel")
-    args = ["python3", "setup.py", "bdist_wheel"]
+    args = ["python3", "-m", "build"]
 
     wenv = os.environ.copy()
     wenv["VERSION"] = FLAGS.triton_version
     wenv["TRITON_PYBIND"] = PYBIND_LIB
     p = subprocess.Popen(args, env=wenv)
     p.wait()
-    fail_if(p.returncode != 0, "setup.py failed")
+    fail_if(p.returncode != 0, "Building wheel failed failed")
 
     cpdir("dist", FLAGS.dest_dir)
 
