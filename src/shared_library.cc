@@ -64,7 +64,8 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
-  if (!SetDllDirectory(path.c_str())) {
+  std::wstring wpath = LocalizedPath::string2wstring(path);
+  if (!SetDllDirectoryW(wpath.c_str())) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -88,7 +89,7 @@ SharedLibrary::ResetLibraryDirectory()
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "ResetLibraryDirectory";
-  if (!SetDllDirectory(NULL)) {
+  if (!SetDllDirectoryW(NULL)) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -130,7 +131,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
-  *handle = LoadLibrary(path.c_str());
+  std::wstring wpath = LocalizedPath::string2wstring(path);
+  *handle = LoadLibraryW(wpath.c_str());
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.

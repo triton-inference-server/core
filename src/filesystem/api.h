@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <codecvt>
+#include <locale>
 #include <string>
 
 #include "../status.h"
@@ -67,6 +69,20 @@ class LocalizedPath {
   // tmp directory for the lifetime of this object
   // FIXME: Remove when no longer required
   std::vector<std::shared_ptr<LocalizedPath>> other_localized_path;
+
+  static inline std::wstring string2wstring(const std::string& str)
+  {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::wstring wide = converter.from_bytes(str);
+    return wide;
+  }
+
+  static inline std::string wstring2string(const std::wstring& str)
+  {
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    std::string narrow = converter.to_bytes(str);
+    return narrow;
+  }
 
  private:
   std::string original_path_;
