@@ -32,6 +32,12 @@
 #include "../status.h"
 #include "google/protobuf/message.h"
 
+#ifdef _WIN32
+// suppress the min and max definitions in Windef.h.
+#define NOMINMAX
+#include <Windows.h>
+#endif
+
 namespace triton { namespace core {
 
 enum class FileSystemType { LOCAL, GCS, S3, AS };
@@ -70,14 +76,42 @@ class LocalizedPath {
   // FIXME: Remove when no longer required
   std::vector<std::shared_ptr<LocalizedPath>> other_localized_path;
 
-  static inline std::wstring string2wstring(const std::string& str)
+#ifdef _WIN32
+  //! Converts incoming utf-8 path to an OS valid path
+  //!
+  //! On Linux there is not much to do but make sure correct slashes are used
+  //! On Windows we need to take care of the long paths and handle them
+  //! correctly to avoid legacy issues with MAX_PATH
+  //!
+  //! More details:
+  //! https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry
+  //!
+  static inline std::wstring GetWindowsValidPath(const std::string& path)
+  {
+    std::string l_path(path);
+    // On Windows long paths must be marked correctly otherwise, due to
+    // backwards compatibility, all paths are limited to MAX_PATH length
+    static constexpr const char* kWindowsLongPathPrefix = "\\\\?\\";
+    if (l_path.size() >= MAX_PATH) {
+      // Must be prefixed with "\\?\" to be considered long path
+      if (l_path.substr(0, 4) != (kWindowsLongPathPrefix)) {
+        // Long path but not "tagged" correctly
+        l_path = (kWindowsLongPathPrefix) + l_path;
+      }
+    }
+    std::replace(l_path.begin(), l_path.end(), '/', '\\');
+    return String2Wstring(l_path);
+  }
+#endif  // _WIN32
+
+  static inline std::wstring String2Wstring(const std::string& str)
   {
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     std::wstring wide = converter.from_bytes(str);
     return wide;
   }
 
-  static inline std::string wstring2string(const std::wstring& str)
+  static inline std::string Wstring2String(const std::wstring& str)
   {
     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
     std::string narrow = converter.to_bytes(str);
