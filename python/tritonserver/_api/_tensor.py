@@ -54,14 +54,9 @@ from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import UnsupportedError
 
-# import objgraph
-
-
 DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
 )
-
-import sys
 
 try:
     import cupy
