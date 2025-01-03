@@ -26,6 +26,7 @@
 
 import asyncio
 import copy
+import gc
 import json
 import os
 import queue
@@ -33,6 +34,7 @@ import shutil
 import sys
 import time
 import unittest
+from collections import Counter
 from contextlib import contextmanager
 
 import numpy
@@ -274,10 +276,6 @@ class AllocatorTests(unittest.TestCase):
         self.assertEqual(torch_fp32_tensor.nbytes, 200)
 
 
-import gc
-from collections import Counter
-
-
 class TensorTests(unittest.TestCase):
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_cpu_to_gpu(self):
@@ -342,9 +340,6 @@ class TensorTests(unittest.TestCase):
     @staticmethod
     @contextmanager
     def object_collector():
-        import gc
-        from collections import Counter
-
         gc.collect()
         objects_before = gc.get_objects()
         yield
