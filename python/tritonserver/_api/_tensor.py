@@ -219,39 +219,10 @@ class Tensor:
         Any
             A DLPack-compatible object representing the tensor.
         """
+
         self._sync_on_requested_stream(stream)
 
-        ## Debug Note: creates managed tensor with malloc
-        dl_managed_tensor = Tensor._create_managed_tensor()
-
-        dl_managed_tensor.dl_tensor.data = self.data_ptr
-        dl_managed_tensor.dl_tensor.device = DLDevice(
-            TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
-            self.memory_type_id,
-        )
-        dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
-        dl_managed_tensor.dl_tensor.ndim = len(self.shape)
-        print("storing shape", self.shape)
-
-        ## Original issue was that the shape was created here
-        ## But could not be freed correctly
-        ##
-        ## dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
-        ##          *self.shape
-        ##     )
-
-        ## now we create the shape array using malloc
-        dl_managed_tensor.dl_tensor.shape = Tensor._create_shape_array(self.shape)
-
-        ## NOTE for debug: this is a null ptr
-        dl_managed_tensor.dl_tensor.strides = ctypes.POINTER(ctypes.c_int64)()
-        dl_managed_tensor.dl_tensor.byte_offset = 0
-        dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
-
-        ## Note for debug: this method sets the context to point to
-        ## this Tensor instance after increasing the reference count
-
-        self._set_dlpack_manager_ctx(dl_managed_tensor)
+        dl_managed_tensor = self._create_managed_tensor()
 
         pycapsule = ctypes.pythonapi.PyCapsule_New(
             ctypes.byref(dl_managed_tensor),
@@ -619,61 +590,45 @@ class Tensor:
             size=obj.itemsize * obj.size,
             owner=obj,
         )
-
         return Tensor(data_type, shape, memory_buffer)
 
-    @staticmethod
-    def _create_shape_array(shape):
-        array_type = ctypes.c_int64 * len(shape)
-        size = ctypes.c_size_t(ctypes.sizeof(array_type))
-        address = ctypes.pythonapi.PyMem_RawMalloc(size)
-        array = array_type.from_address(address)
-        for index in range(len(shape)):
-            array[index] = shape[index]
-        return array
+    def _create_managed_tensor(self) -> DLManagedTensor:
+        # Allocates space for a managed tensor object
+        # and fills in the fields
+        #
+        # To ensure the lifetime of the managed tensor we create a
+        # context object that includes a newly created shape array and a
+        # reference to self
 
-    @staticmethod
-    def _create_managed_tensor():
         size = ctypes.c_size_t(ctypes.sizeof(DLManagedTensor))
         address = ctypes.pythonapi.PyMem_RawMalloc(size)
-        return DLManagedTensor.from_address(address)
+        dl_managed_tensor = DLManagedTensor.from_address(address)
+        dl_managed_tensor.dl_tensor.data = self.data_ptr
+        dl_managed_tensor.dl_tensor.device = DLDevice(
+            TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
+            self.memory_type_id,
+        )
+        dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
+        dl_managed_tensor.dl_tensor.ndim = len(self.shape)
+        manager_ctx = _ManagerCtx(self)
+        dl_managed_tensor.dl_tensor.shape = manager_ctx.shape
+        dl_managed_tensor.dl_tensor.strides = manager_ctx.strides
+        dl_managed_tensor.dl_tensor.byte_offset = 0
+        dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
+        dl_managed_tensor.manager_ctx = manager_ctx.reference()
+        return dl_managed_tensor
 
     @staticmethod
     @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
     def _managed_tensor_deleter(handle: int) -> None:
-        # DEBUG print("managed tensor deleter!",flush=True)
-
         dl_managed_tensor = DLManagedTensor.from_address(handle)
-        tensor_obj_ptr = ctypes.cast(
-            dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
-        )
-        tensor_obj = tensor_obj_ptr.contents
-
-        print(dl_managed_tensor.dl_tensor.shape[0])
-
-        # DEBUG Note: free the shape array
-        ctypes.pythonapi.PyMem_RawFree(dl_managed_tensor.dl_tensor.shape)
-
-        ## Original - caused memory leak
-        ## shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        ## ctypes.pythonapi.Py_DecRef(shape_obj)
-
-        # DEBUG Note: decrement reference to original tensor object
-        ctypes.pythonapi.Py_DecRef(tensor_obj)
-
-        # DEBUG Note: free the managed tensor
-
+        _ManagerCtx.release(dl_managed_tensor.manager_ctx)
         ctypes.pythonapi.PyMem_RawFree(handle)
-
-        # DEBUG chain = objgraph.find_backref_chain(tensor_obj, objgraph.is_proper_module)
-        # DEBUG print(len(chain))
-        # DEBUG print([type(x) for x in chain])
 
     @staticmethod
     @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
     def _pycapsule_deleter(handle: ctypes.c_void_p) -> None:
         try:
-            # DEBUG print("capsule deleter!",flush=True)
             pycapsule: ctypes.py_object = ctypes.cast(handle, ctypes.py_object)
             if ctypes.pythonapi.PyCapsule_IsValid(pycapsule, c_str_dltensor):
                 dl_managed_tensor = ctypes.pythonapi.PyCapsule_GetPointer(
@@ -687,21 +642,27 @@ class Tensor:
             print(f"Exception occurred while deleting capsule: {e}")
             raise e
 
-    def _set_dlpack_manager_ctx(self, dl_managed_tensor):
-        tensor_obj = ctypes.py_object(self)
-        tensor_obj_ptr = ctypes.pointer(tensor_obj)
-        dl_managed_tensor.manager_ctx = ctypes.cast(tensor_obj_ptr, ctypes.c_void_p)
-        ctypes.pythonapi.Py_IncRef(tensor_obj)
-
-        ## Original Issue
-        ## this caused the tensor object to never be garbage collected
-        ##
-        ## Removing the IncRef caused the shape to be corrupted
-        ## Current solution uses malloc
-
-        ## shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        ## ctypes.pythonapi.Py_IncRef(shape_obj)
-
     _from_converters: ClassVar[dict[type, Callable[[Any], Tensor]]] = dict(
         {numpy.ndarray: _from_numpy, numpy.generic: _from_numpy, list: _from_list},
     )
+
+
+class _ManagerCtx:
+    # To ensure the lifetime of the managed tensor we create a
+    # context object that includes a newly created shape array and a
+    # reference to self
+
+    def __init__(self, tensor: Tensor) -> None:
+        self._tensor = tensor
+        self.shape = (ctypes.c_int64 * len(tensor.shape))(*tensor.shape)
+        self.strides = ctypes.POINTER(ctypes.c_int64)()
+
+    def reference(self) -> ctypes.c_void_p:
+        py_obj = ctypes.py_object(self)
+        ctypes.pythonapi.Py_IncRef(py_obj)
+        return ctypes.POINTER(ctypes.c_void_p)(py_obj)[0]
+
+    @staticmethod
+    def release(reference: ctypes.c_void_p) -> None:
+        tensor_py_obj = ctypes.cast(reference, ctypes.py_object)
+        ctypes.pythonapi.Py_DecRef(tensor_py_obj)

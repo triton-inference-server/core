@@ -30,15 +30,14 @@ import json
 import os
 import queue
 import shutil
+import sys
 import time
 import unittest
+from contextlib import contextmanager
 
 import numpy
 import pytest
 import tritonserver
-
-# import objgraph
-
 
 try:
     import cupy
@@ -322,32 +321,34 @@ class TensorTests(unittest.TestCase):
         numpy.testing.assert_array_equal(torch_tensor.numpy(), cpu_array)
         self.assertEqual(torch_tensor.data_ptr(), cpu_array.ctypes.data)
 
-    def test_cpu_memory_leak(self):
+    async def _tensor_from_numpy(self):
+        owner = numpy.ones(2**27)
+        tensor = tritonserver.Tensor.from_dlpack(owner)
+        array = numpy.from_dlpack(tensor)
+        del owner
+        del tensor
+        del array
+        await asyncio.sleep(0.1)
+
+    async def _async_test_runs(self):
+        tasks = []
+        for _ in range(100):
+            tasks.append(asyncio.create_task(self._tensor_from_numpy()))
+        try:
+            await asyncio.wait(tasks)
+        except Exception as e:
+            print(e)
+
+    @staticmethod
+    @contextmanager
+    def object_collector():
+        import gc
+        from collections import Counter
+
         gc.collect()
         objects_before = gc.get_objects()
-        for index in range(30):
-            tensor = numpy.ones(2**27)
-            dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
-            array = numpy.from_dlpack(dl_pack_tensor)
-            #           print(index, index*torch.numel(tensor)*tensor.element_size())
-            del array
-            del dl_pack_tensor
-            del tensor
-            print(index)
-
-            # NOTE: if gc collect is called here
-            # no tensors are leaked - indicating a circular reference
-            # gc.collect()
-
-            # Note:
-            # Originally gc.collect() had no effect on memory reclaiming
-            # with the changes in the PR - uncommenting this line
-            # forces all tensors to be reclaimed and test passes
-            # This shouldn't be needed
-
-        #        gc.collect()
+        yield
         objects_after = gc.get_objects()
-        print(len(objects_after) - len(objects_before))
         new_objects = [type(x) for x in objects_after[len(objects_before) :]]
         tensor_objects = [
             x for x in objects_after if isinstance(x, tritonserver.Tensor)
@@ -356,53 +357,62 @@ class TensorTests(unittest.TestCase):
             print("Tensor objects")
             print(len(tensor_objects))
             print(type(tensor_objects[-1].memory_buffer.owner))
+            print(
+                f"\nTotal Collected Objects ({len(new_objects)}) {Counter(new_objects)}"
+            )
+        assert len(tensor_objects) == 0, "Leaked Tensors"
 
-            # chain = objgraph.find_backref_chain(
-            #    tensor_objects[-1], objgraph.is_proper_module
-            # )
-            # print(len(chain))
-            # print(chain)
-        print(Counter(new_objects))
+    def test_cpu_memory_leak_async(self):
+        with TensorTests.object_collector():
+            asyncio.run(self._async_test_runs())
 
-        assert len(tensor_objects) == 0, "Leaked Objects"
+    def test_cpu_memory_leak_sync(self):
+        with TensorTests.object_collector():
+            for _ in range(100):
+                owner = numpy.ones(2**27)
+                tensor = tritonserver.Tensor.from_dlpack(owner)
+                array = numpy.from_dlpack(tensor)
+                del owner
+                del tensor
+                del array
 
+    @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_gpu_memory_leak(self):
-        gc.collect()
-        objects_before = gc.get_objects()
-        for index in range(50):
-            tensor = cupy.ones(2**27)
-            dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
-            array = cupy.from_dlpack(dl_pack_tensor)
-            #            print(index, index*torch.numel(tensor)*tensor.element_size())
-            del array
-            del dl_pack_tensor
+        with TensorTests.object_collector():
+            for _ in range(100):
+                owner = cupy.ones(2**27)
+                tensor = tritonserver.Tensor.from_dlpack(owner)
+                array = cupy.from_dlpack(tensor)
+                del owner
+                del tensor
+                del array
+
+    def test_reference_counts(self):
+        with TensorTests.object_collector():
+            owner = numpy.ones(2**27)
+            owner_data = owner.ctypes.data
+            assert sys.getrefcount(owner) - 1 == 1, "Invalid Count"
+
+            tensor = tritonserver.Tensor.from_dlpack(owner)
+            assert sys.getrefcount(owner) - 1 == 2, "Invalid Count"
+            assert sys.getrefcount(tensor) - 1 == 1, "Invalid Count"
+            del owner
+
+            numpy_array = numpy.from_dlpack(tensor)
+            assert owner_data == numpy_array.ctypes.data
+            assert sys.getrefcount(tensor) - 1 == 2, "Invalid Count"
+            assert sys.getrefcount(numpy_array) - 1 == 1, "Invalid Count"
+
+            tensor.shape = [2, 2**26]
+
+            assert numpy_array.shape == (2**27,), "Invalid Shape"
+
+            numpy_array_2 = numpy.from_dlpack(tensor)
             del tensor
-            print(index)
-
-            # NOTE: if gc collect is called here
-            # no tensors are leaked - indicating a circular reference
-            # gc.collect()
-
-            # Note:
-            # Originally gc.collect() had no effect on memory reclaiming
-            # with the changes in the PR - uncommenting this line
-            # forces all tensors to be reclaimed and test passes
-            # This shouldn't be needed
-
-            # gc.collect()
-        #        gc.collect()
-        objects_after = gc.get_objects()
-        print(len(objects_after) - len(objects_before))
-        new_objects = [type(x) for x in objects_after[len(objects_before) :]]
-        tensor_objects = [
-            x for x in objects_after if isinstance(x, tritonserver.Tensor)
-        ]
-        if tensor_objects:
-            print(type(tensor_objects[-1].memory_buffer.owner))
-
-        print(Counter(new_objects))
-
-        assert len(tensor_objects) == 0, "Leaked Objects"
+            assert owner_data == numpy_array.ctypes.data
+            assert numpy_array_2.shape == (2, 2**26)
+            del numpy_array
+            del numpy_array_2
 
 
 class ServerTests(unittest.TestCase):
