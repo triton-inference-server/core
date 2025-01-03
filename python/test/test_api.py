@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -24,6 +24,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import asyncio
 import json
 import os
 import shutil
@@ -260,6 +261,22 @@ class TestAllocators:
 
 
 class TestTensor:
+    async def _tensor_from_numpy(self):
+        tensor = numpy.ones(2**27)
+        dl_pack_tensor = tritonserver.Tensor.from_dlpack(tensor)
+        array = numpy.from_dlpack(dl_pack_tensor)
+        await asyncio.sleep(1)
+
+    async def _async_test_runs(self):
+        tasks = []
+        # NOTE: Reduce the count to pass the test
+        for index in range(100):
+            tasks.append(asyncio.create_task(self._tensor_from_numpy()))
+        try:
+            await asyncio.wait(tasks)
+        except Exception as e:
+            print(e)
+
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_cpu_to_gpu(self):
         cpu_array = numpy.random.rand(1, 3, 100, 100).astype(numpy.float32)
@@ -295,6 +312,32 @@ class TestTensor:
         torch_tensor = torch.from_dlpack(tensor)
         numpy.testing.assert_array_equal(torch_tensor.numpy(), cpu_array)
         assert torch_tensor.data_ptr() == cpu_array.ctypes.data
+
+    def test_cpu_memory_leak_async(self):
+        # Note: This test is currently failing with leaked objects.
+        # With the changes from PR #421, this test will cause
+        # segmentation fault.
+
+        import gc
+        from collections import Counter
+
+        gc.collect()
+        objects_before = gc.get_objects()
+        asyncio.run(self._async_test_runs())
+        gc.collect()
+        objects_after = gc.get_objects()
+        print(len(objects_after) - len(objects_before))
+        new_objects = [type(x) for x in objects_after[len(objects_before) :]]
+        tensor_objects = [
+            x for x in objects_after if isinstance(x, tritonserver.Tensor)
+        ]
+        if tensor_objects:
+            print("Tensor objects")
+            print(len(tensor_objects))
+            print(type(tensor_objects[-1].memory_buffer.owner))
+        print(Counter(new_objects))
+
+        assert len(tensor_objects) == 0, "Leaked Objects"
 
 
 class TestServer:
