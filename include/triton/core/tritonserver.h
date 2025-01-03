@@ -847,9 +847,9 @@ TRITONSERVER_InferenceTraceTensorNew(
 /// \param timestamp The timestamp associated with the trace activity.
 /// \param name The trace activity name.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceReportActivity(
-    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
+    struct TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
     const char* activity_name);
 
 /// Delete a trace object.
@@ -1938,9 +1938,9 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
 /// \param gpu_device The GPU device to set the CUDA virtual address space size
 /// \param size The size of the CUDA virtual address space.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaVirtualAddressSize(
-    TRITONSERVER_ServerOptions* options, int gpu_device,
+    struct TRITONSERVER_ServerOptions* options, int gpu_device,
     size_t cuda_virtual_address_size);
 
 /// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.

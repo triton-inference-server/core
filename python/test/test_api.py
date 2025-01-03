@@ -29,7 +29,6 @@ import copy
 import gc
 import json
 import os
-import queue
 import shutil
 import sys
 import time
@@ -54,46 +53,44 @@ try:
 except ImportError:
     torch = None
 
-module_directory = os.path.split(os.path.abspath(__file__))[0]
-test_model_directory = os.path.abspath(
-    os.path.join(module_directory, "test_api_models")
-)
-test_logs_directory = os.path.abspath(os.path.join(module_directory, "test_api_logs"))
-
-shutil.rmtree(test_logs_directory, ignore_errors=True)
-
-os.makedirs(test_logs_directory)
-
-server_options = tritonserver.Options(
-    server_id="TestServer",
-    model_repository=test_model_directory,
-    log_verbose=6,
-    log_error=True,
-    log_warn=True,
-    log_info=True,
-    exit_on_error=True,
-    strict_model_config=False,
-    model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
-    exit_timeout=30,
-)
+TEST_ROOT = os.path.abspath(os.path.dirname(__file__))
+TEST_MODEL_DIR = os.path.abspath(os.path.join(TEST_ROOT, "test_api_models"))
+TEST_LOGS_DIR = os.path.abspath(os.path.join(TEST_ROOT, "test_api_logs"))
 
 
-class ModelTests(unittest.TestCase):
-    def setup_method(self, method):
-        self._server_options = copy.copy(server_options)
-        self._server_options.log_file = os.path.join(
-            test_logs_directory, method.__name__ + ".server.log"
-        )
+@pytest.fixture(autouse=True, scope="module")
+def create_log_dir():
+    shutil.rmtree(TEST_LOGS_DIR, ignore_errors=True)
+    os.makedirs(TEST_LOGS_DIR)
 
-    def test_create_request(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+
+@pytest.fixture()
+def server_options(request):
+    return tritonserver.Options(
+        server_id="TestServer",
+        model_repository=TEST_MODEL_DIR,
+        log_verbose=6,
+        log_error=True,
+        log_warn=True,
+        log_info=True,
+        exit_on_error=True,
+        strict_model_config=False,
+        model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
+        exit_timeout=5,
+        log_file=os.path.join(TEST_LOGS_DIR, request.node.name + ".server.log"),
+    )
+
+
+class TestModels:
+    def test_create_request(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
         request = server.models()["test"].create_request()
 
         request = tritonserver.InferenceRequest(server.model("test"))
 
 
-class AllocatorTests(unittest.TestCase):
+class TestAllocators:
     class MockMemoryAllocator(tritonserver.MemoryAllocator):
         def __init__(self):
             pass
@@ -101,17 +98,11 @@ class AllocatorTests(unittest.TestCase):
         def allocate(self, *args, **kwargs):
             raise Exception("foo")
 
-    def setup_method(self, method):
-        self._server_options = copy.copy(server_options)
-        self._server_options.log_file = os.path.join(
-            test_logs_directory, method.__name__ + ".server.log"
-        )
-
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
-    def test_memory_fallback_to_cpu(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_memory_fallback_to_cpu(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
 
@@ -137,18 +128,19 @@ class AllocatorTests(unittest.TestCase):
         for response in server.model("test").infer(
             inputs={"fp16_input": fp16_input},
         ):
-            self.assertEqual(
-                response.outputs["fp16_output"].memory_type, tritonserver.MemoryType.CPU
+            assert (
+                response.outputs["fp16_output"].memory_type
+                == tritonserver.MemoryType.CPU
             )
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
-            self.assertEqual(fp16_input[0][0], fp16_output[0][0])
+            assert fp16_input[0][0] == fp16_output[0][0]
 
         tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU] = allocator
 
-    def test_memory_allocator_exception(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_memory_allocator_exception(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         server.load(
             "test",
@@ -162,20 +154,20 @@ class AllocatorTests(unittest.TestCase):
             },
         )
 
-        with self.assertRaises(tritonserver.InternalError):
+        with pytest.raises(tritonserver.InternalError):
             for response in server.model("test").infer(
                 inputs={
                     "string_input": tritonserver.Tensor.from_string_array([["hello"]])
                 },
                 output_memory_type="gpu",
-                output_memory_allocator=AllocatorTests.MockMemoryAllocator(),
+                output_memory_allocator=TestAllocators.MockMemoryAllocator(),
             ):
                 pass
 
-    def test_unsupported_memory_type(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_unsupported_memory_type(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         server.load(
             "test",
@@ -198,7 +190,7 @@ class AllocatorTests(unittest.TestCase):
         else:
             allocator = None
 
-        with self.assertRaises(tritonserver.InvalidArgumentError):
+        with pytest.raises(tritonserver.InvalidArgumentError):
             for response in server.model("test").infer(
                 inputs={
                     "string_input": tritonserver.Tensor.from_string_array([["hello"]])
@@ -222,7 +214,7 @@ class AllocatorTests(unittest.TestCase):
 
         cpu_array = memory_buffer.owner
 
-        self.assertEqual(memory_buffer.size, 200)
+        assert memory_buffer.size == 200
 
         fp32_size = int(memory_buffer.size / 4)
 
@@ -231,16 +223,13 @@ class AllocatorTests(unittest.TestCase):
         )
 
         cpu_fp32_array = numpy.from_dlpack(tensor)
-        self.assertEqual(cpu_array.ctypes.data, cpu_fp32_array.ctypes.data)
-        self.assertEqual(cpu_fp32_array.dtype, numpy.float32)
-        self.assertEqual(cpu_fp32_array.nbytes, 200)
+        assert cpu_array.ctypes.data == cpu_fp32_array.ctypes.data
+        assert cpu_fp32_array.dtype == numpy.float32
+        assert cpu_fp32_array.nbytes == 200
 
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
     def test_allocate_on_gpu_and_reshape(self):
-        if cupy is None:
-            return
-
         allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
 
         memory_buffer = allocator.allocate(
@@ -252,7 +241,7 @@ class AllocatorTests(unittest.TestCase):
         gpu_array = cupy.empty([10, 20], dtype=cupy.uint8)
         memory_buffer = tritonserver.MemoryBuffer.from_dlpack(gpu_array)
 
-        self.assertEqual(memory_buffer.size, 200)
+        assert memory_buffer.size == 200
 
         fp32_size = int(memory_buffer.size / 4)
 
@@ -261,55 +250,51 @@ class AllocatorTests(unittest.TestCase):
         )
 
         gpu_fp32_array = cupy.from_dlpack(tensor)
-        self.assertEqual(
-            gpu_array.__cuda_array_interface__["data"][0],
-            gpu_fp32_array.__cuda_array_interface__["data"][0],
+        assert (
+            gpu_array.__cuda_array_interface__["data"][0]
+            == gpu_fp32_array.__cuda_array_interface__["data"][0]
         )
-        self.assertEqual(gpu_fp32_array.dtype, cupy.float32)
-        self.assertEqual(gpu_fp32_array.nbytes, 200)
+
+        assert gpu_fp32_array.dtype == cupy.float32
+        assert gpu_fp32_array.nbytes == 200
 
         torch_fp32_tensor = torch.from_dlpack(tensor)
-        self.assertEqual(torch_fp32_tensor.dtype, torch.float32)
-        self.assertEqual(
-            torch_fp32_tensor.data_ptr(), gpu_array.__cuda_array_interface__["data"][0]
+        assert torch_fp32_tensor.dtype == torch.float32
+        assert (
+            torch_fp32_tensor.data_ptr()
+            == gpu_array.__cuda_array_interface__["data"][0]
         )
-        self.assertEqual(torch_fp32_tensor.nbytes, 200)
+        assert torch_fp32_tensor.nbytes == 200
 
 
-class TensorTests(unittest.TestCase):
+class TestTensor:
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_cpu_to_gpu(self):
-        if cupy is None:
-            return
         cpu_array = numpy.random.rand(1, 3, 100, 100).astype(numpy.float32)
         cpu_tensor = tritonserver.Tensor.from_dlpack(cpu_array)
         gpu_tensor = cpu_tensor.to_device("gpu:0")
         gpu_array = cupy.from_dlpack(gpu_tensor)
 
-        self.assertEqual(gpu_array.device, cupy.cuda.Device(0))
+        assert gpu_array.device == cupy.cuda.Device(0)
 
         numpy.testing.assert_array_equal(cpu_array, gpu_array.get())
 
         memory_buffer = tritonserver.MemoryBuffer.from_dlpack(gpu_array)
 
-        self.assertEqual(
-            gpu_array.__cuda_array_interface__["data"][0], memory_buffer.data_ptr
-        )
+        assert gpu_array.__cuda_array_interface__["data"][0] == memory_buffer.data_ptr
 
     @pytest.mark.skipif(
         torch is None, reason="Skipping gpu memory, torch not installed"
     )
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_gpu_tensor_from_dl_pack(self):
-        if cupy is None or torch is None:
-            return
         cupy_array = cupy.ones([100]).astype(cupy.float64)
         tensor = tritonserver.Tensor.from_dlpack(cupy_array)
         torch_tensor = torch.from_dlpack(cupy_array)
 
-        self.assertEqual(torch_tensor.data_ptr(), tensor.data_ptr)
-        self.assertEqual(torch_tensor.nbytes, tensor.size)
-        self.assertEqual(torch_tensor.__dlpack_device__(), tensor.__dlpack_device__())
+        assert torch_tensor.data_ptr() == tensor.data_ptr
+        assert torch_tensor.nbytes == tensor.size
+        assert torch_tensor.__dlpack_device__() == tensor.__dlpack_device__()
 
     @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
     def test_tensor_from_numpy(self):
@@ -317,7 +302,7 @@ class TensorTests(unittest.TestCase):
         tensor = tritonserver.Tensor.from_dlpack(cpu_array)
         torch_tensor = torch.from_dlpack(tensor)
         numpy.testing.assert_array_equal(torch_tensor.numpy(), cpu_array)
-        self.assertEqual(torch_tensor.data_ptr(), cpu_array.ctypes.data)
+        assert torch_tensor.data_ptr() == cpu_array.ctypes.data
 
     async def _tensor_from_numpy(self):
         owner = numpy.ones(2**27)
@@ -358,11 +343,11 @@ class TensorTests(unittest.TestCase):
         assert len(tensor_objects) == 0, "Leaked Tensors"
 
     def test_cpu_memory_leak_async(self):
-        with TensorTests.object_collector():
+        with TestTensor.object_collector():
             asyncio.run(self._async_test_runs())
 
     def test_cpu_memory_leak_sync(self):
-        with TensorTests.object_collector():
+        with TestTensor.object_collector():
             for _ in range(100):
                 owner = numpy.ones(2**27)
                 tensor = tritonserver.Tensor.from_dlpack(owner)
@@ -373,7 +358,7 @@ class TensorTests(unittest.TestCase):
 
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_gpu_memory_leak(self):
-        with TensorTests.object_collector():
+        with TestTensor.object_collector():
             for _ in range(100):
                 owner = cupy.ones(2**27)
                 tensor = tritonserver.Tensor.from_dlpack(owner)
@@ -383,7 +368,7 @@ class TensorTests(unittest.TestCase):
                 del array
 
     def test_reference_counts(self):
-        with TensorTests.object_collector():
+        with TestTensor.object_collector():
             owner = numpy.ones(2**27)
             owner_data = owner.ctypes.data
             assert sys.getrefcount(owner) - 1 == 1, "Invalid Count"
@@ -410,39 +395,33 @@ class TensorTests(unittest.TestCase):
             del numpy_array_2
 
 
-class ServerTests(unittest.TestCase):
-    def setup_method(self, method):
-        self._server_options = copy.copy(server_options)
-        self._server_options.log_file = os.path.join(
-            test_logs_directory, method.__name__ + ".server.log"
-        )
-
+class TestServer:
     def test_not_started(self):
         server = tritonserver.Server()
-        with self.assertRaises(tritonserver.InvalidArgumentError):
+        with pytest.raises(tritonserver.InvalidArgumentError):
             server.ready()
 
     def test_invalid_option_type(self):
         server = tritonserver.Server(server_id=1)
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             server.start()
 
         server = tritonserver.Server(model_repository=1)
-        with self.assertRaises(TypeError):
+        with pytest.raises(TypeError):
             server.start()
 
     def test_invalid_repo(self):
-        with self.assertRaises(tritonserver.InternalError):
+        with pytest.raises(tritonserver.InternalError):
             tritonserver.Server(model_repository="foo").start()
 
-    def test_ready(self):
-        server = tritonserver.Server(self._server_options).start()
-        self.assertTrue(server.ready())
+    def test_ready(self, server_options):
+        server = tritonserver.Server(server_options).start()
+        assert server.ready()
 
-    def test_stop(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_stop(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         server.load(
             "test",
@@ -451,11 +430,7 @@ class ServerTests(unittest.TestCase):
                     {
                         "backend": "python",
                         "parameters": {"decoupled": {"string_value": "False"}},
-                        # Keep instance count low for fast startup/cleanup.
-                        # Alternatively can use KIND_CPU here, but keeping gpus/count explicit.
-                        "instance_group": [
-                            {"kind": "KIND_GPU", "gpus": [0], "count": 1}
-                        ],
+                        "instance_group": [{"kind": "KIND_CPU"}],
                     }
                 )
             },
@@ -474,22 +449,16 @@ class ServerTests(unittest.TestCase):
         server.stop()
 
     def test_model_repository_not_specified(self):
-        with self.assertRaises(tritonserver.InvalidArgumentError):
+        with pytest.raises(tritonserver.InvalidArgumentError):
             tritonserver.Server(model_repository=None).start()
 
 
-class InferenceTests(unittest.TestCase):
-    def setup_method(self, method):
-        self._server_options = copy.copy(server_options)
-        self._server_options.log_file = os.path.join(
-            test_logs_directory, method.__name__ + ".server.log"
-        )
-
+class TestInference:
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
-    def test_gpu_output(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_gpu_output(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         server.load(
             "test",
@@ -510,14 +479,14 @@ class InferenceTests(unittest.TestCase):
             output_memory_type="gpu",
         ):
             fp16_output = cupy.from_dlpack(response.outputs["fp16_output"])
-            self.assertEqual(fp16_input[0][0], fp16_output[0][0])
+            assert fp16_input[0][0] == fp16_output[0][0]
 
         for response in server.model("test").infer(
             inputs={"string_input": [["hello"]]},
             output_memory_type="gpu",
         ):
             text_output = response.outputs["string_output"].to_string_array()
-            self.assertEqual(text_output[0][0], "hello")
+            assert text_output[0][0] == "hello"
 
         for response in server.model("test").infer(
             inputs={"string_input": tritonserver.Tensor.from_string_array([["hello"]])},
@@ -525,12 +494,12 @@ class InferenceTests(unittest.TestCase):
         ):
             text_output = response.outputs["string_output"].to_string_array()
             text_output = response.outputs["string_output"].to_string_array()
-            self.assertEqual(text_output[0][0], "hello")
+            assert text_output[0][0] == "hello"
 
-    def test_basic_inference(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_basic_inference(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         server.load(
             "test",
@@ -573,10 +542,10 @@ class InferenceTests(unittest.TestCase):
                 )
                 numpy.testing.assert_array_equal(input_value, output_value)
 
-    def test_parameters(self):
-        server = tritonserver.Server(self._server_options).start(wait_until_ready=True)
+    def test_parameters(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-        self.assertTrue(server.ready())
+        assert server.ready()
 
         server.load(
             "test",
@@ -611,7 +580,7 @@ class InferenceTests(unittest.TestCase):
             )
             assert input_parameters == output_parameters
 
-        with self.assertRaises(tritonserver.InvalidArgumentError):
+        with pytest.raises(tritonserver.InvalidArgumentError):
             input_parameters = {
                 "invalid": {"test": 1},
             }
@@ -623,7 +592,7 @@ class InferenceTests(unittest.TestCase):
                 raise_on_error=True,
             )
 
-        with self.assertRaises(tritonserver.InvalidArgumentError):
+        with pytest.raises(tritonserver.InvalidArgumentError):
             input_parameters = {
                 "invalid": None,
             }
