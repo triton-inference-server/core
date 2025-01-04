@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -109,6 +109,11 @@ Metrics::Metrics()
                     "execution per-model.")
               .Register(*registry_)),
 
+      model_load_time_family_(prometheus::BuildGauge()
+                                  .Name("nv_model_load_duration_secs")
+                                  .Help("Model load time in seconds")
+                                  .Register(*registry_)),
+
       pinned_memory_pool_total_family_(
           prometheus::BuildGauge()
               .Name("nv_pinned_memory_pool_total_bytes")
@@ -142,6 +147,14 @@ Metrics::Metrics()
               .Name("nv_cache_miss_duration_per_model")
               .Help("Total cache miss (insert+lookup) duration per model, in "
                     "microseconds")
+              .Register(*registry_)),
+
+      // Histograms
+      // New histograms must be added to MetricReporterConfig.metric_map_
+      inf_first_response_histogram_ms_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_inference_first_response_histogram_ms")
+              .Help("Duration from request to first response in milliseconds")
               .Register(*registry_)),
 
       // Summaries

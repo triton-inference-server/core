@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -35,6 +35,7 @@
 
 #include "prometheus/counter.h"
 #include "prometheus/gauge.h"
+#include "prometheus/histogram.h"
 #include "prometheus/registry.h"
 #include "prometheus/serializer.h"
 #include "prometheus/summary.h"
@@ -214,6 +215,18 @@ class Metrics {
     return GetSingleton()->inf_pending_request_count_family_;
   }
 
+  static prometheus::Family<prometheus::Histogram>&
+  FamilyFirstResponseDuration()
+  {
+    return GetSingleton()->inf_first_response_histogram_ms_family_;
+  }
+
+  // Metric family of load time per model
+  static prometheus::Family<prometheus::Gauge>& FamilyModelLoadTime()
+  {
+    return GetSingleton()->model_load_time_family_;
+  }
+
   // Metric families of per-model response cache metrics
   // NOTE: These are used in infer_stats for perf_analyzer
   static prometheus::Family<prometheus::Counter>& FamilyCacheHitCount()
@@ -299,6 +312,7 @@ class Metrics {
   prometheus::Family<prometheus::Counter>&
       inf_compute_output_duration_us_family_;
   prometheus::Family<prometheus::Gauge>& inf_pending_request_count_family_;
+  prometheus::Family<prometheus::Gauge>& model_load_time_family_;
 
   prometheus::Family<prometheus::Gauge>& pinned_memory_pool_total_family_;
   prometheus::Family<prometheus::Gauge>& pinned_memory_pool_used_family_;
@@ -313,6 +327,10 @@ class Metrics {
   prometheus::Family<prometheus::Counter>& cache_hit_duration_us_model_family_;
   prometheus::Family<prometheus::Counter>& cache_num_misses_model_family_;
   prometheus::Family<prometheus::Counter>& cache_miss_duration_us_model_family_;
+
+  // Histograms
+  prometheus::Family<prometheus::Histogram>&
+      inf_first_response_histogram_ms_family_;
 
   // Summaries
   prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;

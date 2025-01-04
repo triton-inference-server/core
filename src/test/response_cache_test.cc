@@ -1,4 +1,4 @@
-// Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -46,7 +46,12 @@ InferenceResponseFactory::CreateResponse(
 {
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_));
+      response_delegator_
+#ifdef TRITON_ENABLE_METRICS
+      ,
+      responses_sent_, infer_start_ns_
+#endif  // TRITON_ENABLE_METRICS
+      ));
 
   return Status::Success;
 }
@@ -181,10 +186,19 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp,
     const std::function<
-        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
+        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator
+#ifdef TRITON_ENABLE_METRICS
+    ,
+    uint64_t responses_sent, uint64_t infer_start_ns
+#endif  // TRITON_ENABLE_METRICS
+    )
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
-      response_delegator_(delegator), null_response_(false)
+      response_delegator_(delegator),
+#ifdef TRITON_ENABLE_METRICS
+      responses_sent_(responses_sent), infer_start_ns_(infer_start_ns),
+#endif  // TRITON_ENABLE_METRICS
+      null_response_(false)
 {
   // Skip allocator logic / references in unit test
 }

@@ -621,6 +621,9 @@ class Server:
         self._server.stop()
         self._server = Server._UnstartedServer()
 
+    def _ptr(self):
+        return self._server._ptr()
+
     def unregister_model_repository(self, repository_path: str) -> None:
         """Unregister model repository
 

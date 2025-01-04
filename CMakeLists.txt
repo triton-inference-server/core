@@ -164,7 +164,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   option(TRITON_ENABLE_NVTX "Include NVTX support in server" OFF)
   option(TRITON_ENABLE_GPU "Enable GPU support in server" ON)
   option(TRITON_ENABLE_MALI_GPU "Enable Arm Mali GPU support in server" OFF)
-  set(TRITON_MIN_COMPUTE_CAPABILITY "6.0" CACHE STRING
+  set(TRITON_MIN_COMPUTE_CAPABILITY "7.5" CACHE STRING
       "The minimum CUDA compute capability supported by Triton" )
   set(TRITON_EXTRA_LIB_PATHS "" CACHE PATH "Extra library paths for Triton Server build")
 
@@ -221,15 +221,13 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
   # Some libs are installed to ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/{LIB}/lib64 instead
   # of ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/{LIB}/lib on Centos
   set (LIB_DIR "lib")
-  # /etc/os-release does not exist on Windows
-  if(EXISTS "/etc/os-release")
-    file(STRINGS /etc/os-release DISTRO REGEX "^NAME=")
-    string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" DISTRO "${DISTRO}")
-    message(STATUS "Distro Name: ${DISTRO}")
-    if(DISTRO MATCHES "CentOS.*")
+  if(LINUX)
+    file(STRINGS "/etc/os-release" DISTRO_ID_LIKE REGEX "ID_LIKE")
+    if(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
       set (LIB_DIR "lib64")
-    endif()
-  endif()
+    endif(${DISTRO_ID_LIKE} MATCHES "rhel|centos")
+  endif(LINUX)
+  set(TRITON_CORE_HEADERS_ONLY OFF)
 
   # Need to use ExternalProject for our builds so that we can get the
   # correct dependencies between Triton shared library components and
@@ -311,7 +309,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Dc-ares_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/c-ares/${LIB_DIR}/cmake/c-ares
       -Dabsl_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/absl/${LIB_DIR}/cmake/absl
       -Dre2_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/re2/${LIB_DIR}/cmake/re2
-      -Dnlohmann_json_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/nlohmann_json/${LIB_DIR}/cmake/nlohmann_json
+      -Dnlohmann_json_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/nlohmann_json/share/cmake/nlohmann_json
       -Dprometheus-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/prometheus-cpp/${LIB_DIR}/cmake/prometheus-cpp
       -Dgoogle_cloud_cpp_storage_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/google-cloud-cpp/${LIB_DIR}/cmake/google_cloud_cpp_storage
       -Dgoogle_cloud_cpp_rest_internal_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/google-cloud-cpp/${LIB_DIR}/cmake/google_cloud_cpp_rest_internal
@@ -324,6 +322,16 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-c-event-stream_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-event-stream/cmake
       -Daws-c-common_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-common/cmake
       -Daws-checksums_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-checksums/cmake
+      -Daws-crt-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-crt-cpp/cmake
+      -Daws-c-http_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-http/cmake
+      -Daws-c-io_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-io/cmake
+      -Ds2n_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/s2n/cmake
+      -Daws-c-cal_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-cal/cmake
+      -Daws-c-s3_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-s3/cmake
+      -Daws-c-auth_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-auth/cmake
+      -Daws-c-compression_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-compression/cmake
+      -Daws-c-mqtt_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-mqtt/cmake
+      -Daws-c-sdkutils_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-sdkutils/cmake
       -DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
       -DTRITON_REPO_ORGANIZATION:STRING=${TRITON_REPO_ORGANIZATION}
