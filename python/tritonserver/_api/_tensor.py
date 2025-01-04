@@ -655,6 +655,15 @@ class _ManagerCtx:
     def reference(self) -> ctypes.c_void_p:
         py_obj = ctypes.py_object(self)
         ctypes.pythonapi.Py_IncRef(py_obj)
+
+        # Note: Could not find a direct way to cast a python object
+        # to a c_void_p. The mechanism is to either use id(self) or
+        # cast as described here:
+        #
+        # https://groups.google.com/g/dev-python/c/QRRqVC7gkf4/m/zH7l1gTXBwAJ
+        #
+        # To avoid relying on the behavior of id() we use the casting mechanism
+
         return ctypes.POINTER(ctypes.c_void_p)(py_obj)[0]
 
     @staticmethod
