@@ -258,10 +258,11 @@ char InputByteSizeTest::input_data_string_
 
 TEST_F(InputByteSizeTest, ValidInputByteSize)
 {
+  const char* model_name = "savedmodel_zero_1_float32";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "pt_identity", -1 /* model_version */),
+          &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -269,8 +270,8 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       "setting request release callback");
 
   // Define input shape and data
-  std::vector<int64_t> shape{1, 8};
-  std::vector<float> input_data(8, 1);
+  std::vector<int64_t> shape{1, 16};
+  std::vector<float> input_data(16, 1);
   const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
 
   // Set input for the request
@@ -312,10 +313,11 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
 
 TEST_F(InputByteSizeTest, InputByteSizeMismatch)
 {
+  const char* model_name = "savedmodel_zero_1_float32";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "pt_identity", -1 /* model_version */),
+          &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -323,8 +325,8 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       "setting request release callback");
 
   // Define input shape and data
-  std::vector<int64_t> shape{1, 8};
-  std::vector<float> input_data(10, 1);
+  std::vector<int64_t> shape{1, 16};
+  std::vector<float> input_data(17, 1);
   const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
 
   // Set input for the request
@@ -353,8 +355,8 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
       "expect error with inference request",
-      "input byte size mismatch for input 'INPUT0' for model 'pt_identity'. "
-      "Expected 32, got 40");
+      "input byte size mismatch for input 'INPUT0' for model '" +
+          std::string{model_name} + "'. Expected 64, got 68");
 
   // Need to manually delete request, otherwise server will not shut down.
   FAIL_TEST_IF_ERR(
@@ -362,12 +364,69 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       "deleting inference request");
 }
 
-TEST_F(InputByteSizeTest, ValidStringInputByteSize)
+TEST_F(InputByteSizeTest, InputByteSizeLarge)
 {
+  const char* model_name = "savedmodel_zero_1_float32";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
+          &irequest_, server_, model_name, -1 /* model_version */),
+      "creating inference request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetReleaseCallback(
+          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
+      "setting request release callback");
+
+  // Define input shape and data
+  int64_t element_cnt = (1LL << 31) / sizeof(float);
+  std::vector<int64_t> shape{1, element_cnt};
+  std::vector<float> input_data(element_cnt, 1);
+  const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
+
+  // Set input for the request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAddInput(
+          irequest_, "INPUT0", TRITONSERVER_TYPE_FP32, shape.data(),
+          shape.size()),
+      "setting input for the request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAppendInputData(
+          irequest_, "INPUT0", input_data.data(), input0_byte_size,
+          TRITONSERVER_MEMORY_CPU, 0),
+      "assigning INPUT data");
+
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
+
+  // Set response callback
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetResponseCallback(
+          irequest_, allocator_, nullptr /* response_allocator_userp */,
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
+      "setting response callback");
+
+  // Run inference
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
+      "running inference");
+
+  // Get the inference response
+  response_ = future.get();
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseError(response_), "response status");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceResponseDelete(response_),
+      "deleting inference response");
+  ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+}
+
+TEST_F(InputByteSizeTest, ValidStringInputByteSize)
+{
+  const char* model_name = "savedmodel_zero_1_object";
+  // Create an inference request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(
+          &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -424,10 +483,11 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
 
 TEST_F(InputByteSizeTest, StringCountMismatch)
 {
+  const char* model_name = "savedmodel_zero_1_object";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
+          &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -457,7 +517,8 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
       "expect error with inference request",
-      "expected 3 string elements for inference input 'INPUT0', got 2");
+      "expected 3 string elements for inference input 'INPUT0' for model '" +
+          std::string{model_name} + "', got 2");
 
   // Need to manually delete request, otherwise server will not shut down.
   FAIL_TEST_IF_ERR(
@@ -467,7 +528,8 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
+          &irequest_, server_, "savedmodel_zero_1_object",
+          -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -495,7 +557,9 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
   FAIL_TEST_IF_SUCCESS(
       TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
       "expect error with inference request",
-      "expected 1 string elements for inference input 'INPUT0', got 2");
+      "unexpected number of string elements 2 for inference input 'INPUT0' for "
+      "model '" +
+          std::string{model_name} + "', expecting 1");
 
   // Need to manually delete request, otherwise server will not shut down.
   FAIL_TEST_IF_ERR(
@@ -505,10 +569,11 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
 
 TEST_F(InputByteSizeTest, StringSizeMisalign)
 {
+  const char* model_name = "savedmodel_zero_1_object";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
+          &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -542,9 +607,13 @@ TEST_F(InputByteSizeTest, StringSizeMisalign)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace
-      */), "expect error with inference request",
-      "element byte size indicator exceeds the end of the buffer");
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace*/),
+      "expect error with inference request",
+      "incomplete string length indicator for inference input 'INPUT0' for "
+      "model '" +
+          std::string{model_name} +
+          "', expecting 4 bytes but only 2 bytes available. Please make sure "
+          "the string length indicator is in one buffer.");
 
   // Need to manually delete request, otherwise server will not shut down.
   FAIL_TEST_IF_ERR(
@@ -573,7 +642,8 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
+          &irequest_, server_, "savedmodel_zero_1_object",
+          -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -629,7 +699,8 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "simple_identity", -1 /* model_version */),
+          &irequest_, server_, "savedmodel_zero_1_object",
+          -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(

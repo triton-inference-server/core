@@ -2107,6 +2107,11 @@ PYBIND11_MODULE(triton_bindings, m)
       .export_values();
   py::class_<PyServer>(m, "TRITONSERVER_Server")
       .def(py::init<PyServerOptions&>())
+      .def(
+          "_ptr",
+          [](PyServer& server) {
+            return reinterpret_cast<uintptr_t>(server.Ptr());
+          })
       .def("stop", &PyServer::Stop)
       .def("register_model_repository", &PyServer::RegisterModelRepository)
       .def("unregister_model_repository", &PyServer::UnregisterModelRepository)

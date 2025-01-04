@@ -85,6 +85,8 @@ constexpr char kInitialStateFolder[] = "initial_state";
 
 // Metric names
 constexpr char kPendingRequestMetric[] = "inf_pending_request_count";
+constexpr char kModelLoadTimeMetric[] = "model_load_time";
+constexpr char kFirstResponseHistogram[] = "first_response_histogram";
 
 constexpr uint64_t NANOS_PER_SECOND = 1000000000;
 constexpr uint64_t NANOS_PER_MILLIS = 1000000;

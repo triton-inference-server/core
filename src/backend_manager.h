@@ -1,4 +1,4 @@
-// Copyright 2020-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -127,7 +127,7 @@ class TritonBackend {
       const std::string& libpath, const TritonServerMessage& backend_config);
 
   void ClearHandles();
-  Status LoadBackendLibrary();
+  Status LoadBackendLibrary(const std::string& additional_dependency_dir_path);
 
   Status UpdateAttributes();
 

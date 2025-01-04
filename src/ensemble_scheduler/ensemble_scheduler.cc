@@ -1200,11 +1200,6 @@ EnsembleContext::CheckAndSetEnsembleOutput(
         ready = false;
         break;
       }
-      // check if the output is provided
-      else if (tensor[iteration_count].data_ == nullptr) {
-        ready = false;
-        break;
-      }
     }
   }
   if (!ready) {
@@ -1223,6 +1218,12 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     // Check if output is ready
     auto& tensor_data = tensor_data_[output_pair.first];
     auto& tensor = tensor_data.tensor_[iteration_count];
+
+    if (tensor.data_ == nullptr) {
+      LOG_VERBOSE(1) << "Composing models did not output tensor "
+                     << output_pair.first;
+      continue;
+    }
 
     auto shape = ReshapeTensorDims(
         output_pair.second, (lrequest->BatchSize() != 0),
@@ -1469,13 +1470,14 @@ EnsembleScheduler::EnsembleScheduler(
   }
 #endif  // TRITON_ENABLE_GPU
 
+  const bool is_decoupled = config.model_transaction_policy().decoupled();
 #ifdef TRITON_ENABLE_METRICS
   if (Metrics::Enabled()) {
     // Ensemble scheduler doesn't currently support response cache at top level.
     MetricModelReporter::Create(
         model_id, 1 /* model_version */, METRIC_REPORTER_ID_CPU,
-        false /* response_cache_enabled */, config.metric_tags(),
-        &metric_reporter_);
+        false /* response_cache_enabled */, is_decoupled, config.metric_tags(),
+        config.model_metrics(), &metric_reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -1485,7 +1487,7 @@ EnsembleScheduler::EnsembleScheduler(
   info_->ensemble_name_ = config.name();
 
   // This config field is filled internally for ensemble models
-  info_->is_decoupled_ = config.model_transaction_policy().decoupled();
+  info_->is_decoupled_ = is_decoupled;
 
   // field to check if response cache enabled in the ensemble model config.
   info_->is_cache_enabled_ =
