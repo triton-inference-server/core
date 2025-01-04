@@ -659,5 +659,5 @@ class _ManagerCtx:
 
     @staticmethod
     def release(reference: ctypes.c_void_p) -> None:
-        tensor_py_obj = ctypes.cast(reference, ctypes.py_object)
-        ctypes.pythonapi.Py_DecRef(tensor_py_obj)
+        py_obj = ctypes.cast(reference, ctypes.py_object)
+        ctypes.pythonapi.Py_DecRef(py_obj)
