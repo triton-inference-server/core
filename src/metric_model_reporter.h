@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -30,10 +30,15 @@
 
 #ifdef TRITON_ENABLE_METRICS
 #include "metrics.h"
+#include "model.h"
 #include "prometheus/registry.h"
 #endif  // TRITON_ENABLE_METRICS
 
 namespace triton { namespace core {
+
+#ifdef TRITON_ENABLE_METRICS
+struct ModelIdentifier;
+#endif  // TRITON_ENABLE_METRICS
 
 //
 // MetricReporterConfig
@@ -41,15 +46,25 @@ namespace triton { namespace core {
 struct MetricReporterConfig {
 #ifdef TRITON_ENABLE_METRICS
   // Parses Metrics::ConfigMap and sets fields if specified
-  void ParseConfig(bool response_cache_enabled);
+  void ParseConfig(
+      bool response_cache_enabled, bool is_decoupled,
+      const inference::ModelMetrics& model_metrics);
   // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
   // and overwrites quantiles_ field if successful.
   prometheus::Summary::Quantiles ParseQuantiles(std::string options);
 
   // Create and use Counters for per-model latency related metrics
   bool latency_counters_enabled_ = true;
+  // Create and use Histograms for per-model latency related metrics
+  bool latency_histograms_enabled_ = false;
   // Create and use Summaries for per-model latency related metrics
   bool latency_summaries_enabled_ = false;
+  // Default bucket boundaries used for each histogram metric. Each value
+  // represents a boundary. For example, {100, 500, 2000, 5000} are latencies.
+  // in milliseconds in first_response_histogram.
+  std::unordered_map<std::string, prometheus::Histogram::BucketBoundaries>
+      histogram_options_ = {{kFirstResponseHistogram, {100, 500, 2000, 5000}}};
+
   // Quantiles used for any summary metrics. Each pair of values represents
   // { quantile, error }. For example, {0.90, 0.01} means to compute the
   // 90th percentile with 1% error on either side, so the approximate 90th
@@ -60,6 +75,16 @@ struct MetricReporterConfig {
   // Whether this reporter's model has caching enabled or not.
   // This helps handle infer_stats aggregation for summaries on cache misses.
   bool cache_enabled_ = false;
+
+  bool is_decoupled_ = false;
+
+ private:
+  // Maps the metric family fullname to its lookup key. This field is required
+  // because the users are expected to configure metric configuration
+  // "ModelMetrics" with the full name displayed from metrics reporting while a
+  // different name is used internally. All new histograms must update the map.
+  const std::unordered_map<std::string, std::string> metric_map_ = {
+      {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram}};
 #endif  // TRITON_ENABLE_METRICS
 };
 
@@ -70,9 +95,12 @@ class MetricModelReporter {
  public:
 #ifdef TRITON_ENABLE_METRICS
   static Status Create(
-      const std::string& model_name, const int64_t model_version,
-      const int device, bool response_cache_enabled,
+      const triton::core::ModelIdentifier& model_id,
+      const int64_t model_version, const int device,
+      bool response_cache_enabled, bool is_decoupled,
+      // FIXME: [DLIS-7497] Merge model_tags with model_metrics
       const triton::common::MetricTagsMap& model_tags,
+      const inference::ModelMetrics& model_metrics,
       std::shared_ptr<MetricModelReporter>* metric_model_reporter);
 
   ~MetricModelReporter();
@@ -81,23 +109,30 @@ class MetricModelReporter {
   const MetricReporterConfig& Config();
   // Lookup counter metric by name, and increment it by value if it exists.
   void IncrementCounter(const std::string& name, double value);
+  // Overwrite gauge to value
+  void SetGauge(const std::string& name, double value);
   // Increase gauge by value.
   void IncrementGauge(const std::string& name, double value);
   // Decrease gauge by value.
   void DecrementGauge(const std::string& name, double value);
+  // Lookup histogram metric by name, and observe the value if it exists.
+  void ObserveHistogram(const std::string& name, double value);
   // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
 
+  static const std::map<FailureReason, std::string> failure_reasons_map;
+
  private:
   MetricModelReporter(
-      const std::string& model_name, const int64_t model_version,
-      const int device, bool response_cache_enabled,
-      const triton::common::MetricTagsMap& model_tags);
+      const ModelIdentifier& model_id, const int64_t model_version,
+      const int device, bool response_cache_enabled, bool is_decoupled,
+      const triton::common::MetricTagsMap& model_tags,
+      const inference::ModelMetrics& model_metrics);
 
   static void GetMetricLabels(
-      std::map<std::string, std::string>* labels, const std::string& model_name,
-      const int64_t model_version, const int device,
-      const triton::common::MetricTagsMap& model_tags);
+      std::map<std::string, std::string>* labels,
+      const ModelIdentifier& model_id, const int64_t model_version,
+      const int device, const triton::common::MetricTagsMap& model_tags);
 
   template <typename T, typename... Args>
   T* CreateMetric(
@@ -106,6 +141,7 @@ class MetricModelReporter {
 
   void InitializeCounters(const std::map<std::string, std::string>& labels);
   void InitializeGauges(const std::map<std::string, std::string>& labels);
+  void InitializeHistograms(const std::map<std::string, std::string>& labels);
   void InitializeSummaries(const std::map<std::string, std::string>& labels);
 
   // Lookup gauge metric by name. Return gauge if found, nullptr otherwise.
@@ -117,12 +153,15 @@ class MetricModelReporter {
       counter_families_;
   std::unordered_map<std::string, prometheus::Family<prometheus::Gauge>*>
       gauge_families_;
+  std::unordered_map<std::string, prometheus::Family<prometheus::Histogram>*>
+      histogram_families_;
   std::unordered_map<std::string, prometheus::Family<prometheus::Summary>*>
       summary_families_;
 
   // Metrics
   std::unordered_map<std::string, prometheus::Counter*> counters_;
   std::unordered_map<std::string, prometheus::Gauge*> gauges_;
+  std::unordered_map<std::string, prometheus::Histogram*> histograms_;
   std::unordered_map<std::string, prometheus::Summary*> summaries_;
 
   // Config

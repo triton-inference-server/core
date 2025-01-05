@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -182,10 +182,39 @@ class LocalizeRepoAgent : public TritonRepoAgent {
   }
 };
 
+/// Get the model config path to load for the model.
+const std::string
+GetModelConfigFullPath(
+    const std::string& model_dir_path, const std::string& custom_config_name)
+{
+  // "--model-config-name" is set. Select custom config from
+  // "<model_dir_path>/configs" folder if config file exists.
+  if (!custom_config_name.empty()) {
+    bool custom_config_exists = false;
+    const std::string custom_config_path = JoinPath(
+        {model_dir_path, kModelConfigFolder,
+         custom_config_name + kPbTxtExtension});
+
+    Status status = FileExists(custom_config_path, &custom_config_exists);
+    if (!status.IsOk()) {
+      LOG_ERROR << "Failed to get model configuration full path for '"
+                << model_dir_path << "': " << status.AsString();
+      return "";
+    }
+
+    if (custom_config_exists) {
+      return custom_config_path;
+    }
+  }
+  // "--model-config-name" is not set or custom config file does not exist.
+  return JoinPath({model_dir_path, kModelConfigPbTxt});
+}
+
 Status
 CreateAgentModelListWithLoadAction(
     const inference::ModelConfig& original_model_config,
     const std::string& original_model_path,
+    const std::string& model_config_name,
     std::shared_ptr<TritonRepoAgentModelList>* agent_model_list)
 {
   if (original_model_config.has_model_repository_agents()) {
@@ -218,7 +247,8 @@ CreateAgentModelListWithLoadAction(
       std::unique_ptr<TritonRepoAgentModel> agent_model;
       if (lagent_model_list->Size() != 0) {
         lagent_model_list->Back()->Location(&artifact_type, &location);
-        const auto config_path = JoinPath({location, kModelConfigPbTxt});
+        const auto config_path =
+            GetModelConfigFullPath(location, model_config_name);
         if (!ReadTextProto(config_path, &model_config).IsOk()) {
           model_config.Clear();
         }
@@ -237,7 +267,7 @@ CreateAgentModelListWithLoadAction(
 // Return the latest modification time in ns for all files/folders starting
 // from the path. The modification time will be 0 if there is an error.
 int64_t
-GetModifiedTime(const std::string& path)
+GetPathModifiedTime(const std::string& path)
 {
   // If there is an error in any step the fall-back default
   // modification time is 0. This means that in error cases 'path'
@@ -276,90 +306,182 @@ GetModifiedTime(const std::string& path)
 
   for (const auto& child : contents) {
     const auto full_path = JoinPath({path, child});
-    mtime = std::max(mtime, GetModifiedTime(full_path));
+    mtime = std::max(mtime, GetPathModifiedTime(full_path));
   }
 
   return mtime;
-}
-// Return the latest modification time in ns for '<config.pbtxt, model files>'
-// in a model directory path. The time for "config.pbtxt" will be 0 if not
-// found at "[model_dir_path]/config.pbtxt". The time for "model files" includes
-// the time for 'model_dir_path'.
-std::pair<int64_t, int64_t>
-GetDetailedModifiedTime(const std::string& model_dir_path)
-{
-  // Check if 'model_dir_path' is a directory.
-  bool is_dir;
-  Status status = IsDirectory(model_dir_path, &is_dir);
-  if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': " << status.AsString();
-    return std::make_pair(0, 0);
-  }
-  if (!is_dir) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': Model directory path is not a directory";
-    return std::make_pair(0, 0);
-  }
-
-  std::pair<int64_t, int64_t> mtime(0, 0);  // <config.pbtxt, model files>
-
-  // Populate 'model files' time to the model directory time
-  status = FileModificationTime(model_dir_path, &mtime.second);
-  if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': " << status.AsString();
-    return std::make_pair(0, 0);
-  }
-
-  // Get files/folders in model_dir_path.
-  std::set<std::string> contents;
-  status = GetDirectoryContents(model_dir_path, &contents);
-  if (!status.IsOk()) {
-    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
-              << "': " << status.AsString();
-    return std::make_pair(0, 0);
-  }
-  // Get latest modification time for each files/folders, and place it at the
-  // correct category.
-  const std::string model_config_full_path(
-      JoinPath({model_dir_path, kModelConfigPbTxt}));
-  for (const auto& child : contents) {
-    const auto full_path = JoinPath({model_dir_path, child});
-    if (full_path == model_config_full_path) {
-      // config.pbtxt
-      mtime.first = GetModifiedTime(full_path);
-    } else {
-      // model files
-      mtime.second = std::max(mtime.second, GetModifiedTime(full_path));
-    }
-  }
-
-  return mtime;
-}
-// Return true if any file in the 'model_dir_path' has been modified more
-// recently than 'last_ns', which represents last modified time for
-// '<config.pbtxt, model files>'. Update the 'last_ns' to the most-recent
-// modified time.
-bool
-IsModified(
-    const std::string& model_dir_path, std::pair<int64_t, int64_t>* last_ns)
-{
-  auto new_ns = GetDetailedModifiedTime(model_dir_path);
-  bool modified = std::max(new_ns.first, new_ns.second) >
-                  std::max(last_ns->first, last_ns->second);
-  last_ns->swap(new_ns);
-  return modified;
 }
 
 }  // namespace
 
+ModelTimestamp::ModelTimestamp(
+    const std::string& model_dir_path, const std::string& model_config_path)
+{
+  // DLIS-7221: Raise an exception when failed to create timestamp
+  bool init_success =
+      ModelDirectoryPathIsValid(model_dir_path) &&
+      ReadModelDirectoryTimestamp(model_dir_path, model_config_path) &&
+      ReadModelDirectoryContentTimestamps(model_dir_path, model_config_path);
+  if (!init_success) {
+    // Same as calling the default constructor. All timestamps are presumed to
+    // be 0 when comparing.
+    model_timestamps_.clear();
+    model_config_content_name_.clear();
+  }
+}
+
+bool
+ModelTimestamp::ModelDirectoryPathIsValid(const std::string& path) const
+{
+  bool is_dir;
+  Status status = IsDirectory(path, &is_dir);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to determine modification time for '" << path
+              << "': " << status.AsString();
+    return false;
+  }
+  if (!is_dir) {
+    LOG_ERROR << "Failed to determine modification time for '" << path
+              << "': Model directory path is not a directory";
+    return false;
+  }
+  return true;
+}
+
+bool
+ModelTimestamp::ReadModelDirectoryTimestamp(
+    const std::string& model_dir_path, const std::string& model_config_path)
+{
+  int64_t model_dir_time = 0;
+  Status status = FileModificationTime(model_dir_path, &model_dir_time);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+              << "': " << status.AsString();
+    return false;
+  }
+  model_timestamps_.emplace("", model_dir_time);
+
+  return true;
+}
+
+bool
+ModelTimestamp::ReadModelDirectoryContentTimestamps(
+    const std::string& model_dir_path, const std::string& model_config_path)
+{
+  std::set<std::string> dir_contents;
+  Status status = GetDirectoryContents(model_dir_path, &dir_contents);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to determine modification time for '" << model_dir_path
+              << "': " << status.AsString();
+    return false;
+  }
+  for (const auto& content_name : dir_contents) {
+    const auto content_path = JoinPath({model_dir_path, content_name});
+    bool is_model_config = model_config_path.rfind(content_path, 0) == 0;
+    if (is_model_config) {
+      if (!model_config_content_name_.empty()) {
+        LOG_ERROR << "Failed to determine modification time for '"
+                  << model_dir_path << "': Duplicate model config is detected";
+        return false;
+      }
+      model_config_content_name_ = content_name;
+    }
+    model_timestamps_.emplace(content_name, GetPathModifiedTime(content_path));
+  }
+
+  return true;
+}
+
+bool
+ModelTimestamp::IsModified(const ModelTimestamp& new_timestamp) const
+{
+  int64_t old_modified_time = GetModifiedTime();
+  int64_t new_modified_time = new_timestamp.GetModifiedTime();
+  return new_modified_time > old_modified_time;
+}
+
+bool
+ModelTimestamp::IsModelVersionModified(
+    const ModelTimestamp& new_timestamp, const int64_t version) const
+{
+  int64_t old_modified_time = std::max(
+      GetModelVersionModifiedTime(version),
+      GetNonModelConfigNorVersionNorDirModifiedTime());
+  int64_t new_modified_time = std::max(
+      new_timestamp.GetModelVersionModifiedTime(version),
+      new_timestamp.GetNonModelConfigNorVersionNorDirModifiedTime());
+  return new_modified_time > old_modified_time;
+}
+
+int64_t
+ModelTimestamp::GetModifiedTime() const
+{
+  int64_t modified_time = 0;
+  for (const auto& pair : model_timestamps_) {
+    const int64_t time = pair.second;
+    modified_time = std::max(modified_time, time);
+  }
+  return modified_time;
+}
+
+int64_t
+ModelTimestamp::GetModelVersionModifiedTime(const int64_t version) const
+{
+  int64_t modified_time = 0;
+  auto itr = model_timestamps_.find(std::to_string(version));
+  if (itr != model_timestamps_.end()) {
+    modified_time = itr->second;
+  }
+  return modified_time;
+}
+
+int64_t
+ModelTimestamp::GetNonModelConfigNorVersionNorDirModifiedTime() const
+{
+  // Get modified time excluding time from model config, model version
+  // directory(s) and model directory.
+  int64_t modified_time = 0;
+  for (const auto& pair : model_timestamps_) {
+    const std::string& content_name = pair.first;
+    bool found_non_digit_in_content_name = false;
+    for (const char& c : content_name) {
+      if (std::isdigit(c) == 0) {
+        found_non_digit_in_content_name = true;
+        break;
+      }
+    }
+    // All model version directory(s) will not 'found_non_digit_in_content_name'
+    // as they are all digit(s).
+    // Model directory name will not 'found_non_digit_in_content_name' as it is
+    // empty.
+    if (found_non_digit_in_content_name &&
+        content_name != model_config_content_name_) {
+      const int64_t time = pair.second;
+      modified_time = std::max(modified_time, time);
+    }
+  }
+  return modified_time;
+}
+
+void
+ModelTimestamp::SetModelConfigModifiedTime(const int64_t time_ns)
+{
+  if (model_config_content_name_.empty()) {
+    LOG_ERROR << "Failed to set config modification time: "
+                 "model_config_content_name_ is empty";
+    return;
+  }
+  model_timestamps_[model_config_content_name_] = time_ns;
+}
+
 ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
-    const bool polling_enabled, const bool model_control_enabled,
-    const double min_compute_capability, const bool enable_model_namespacing,
+    const std::string& model_config_name, const bool polling_enabled,
+    const bool model_control_enabled, const double min_compute_capability,
+    const bool enable_model_namespacing,
     std::unique_ptr<ModelLifeCycle> life_cycle)
-    : autofill_(autofill), polling_enabled_(polling_enabled),
+    : autofill_(autofill), model_config_name_(model_config_name),
+      polling_enabled_(polling_enabled),
       model_control_enabled_(model_control_enabled),
       min_compute_capability_(min_compute_capability),
       dependency_graph_(&global_map_),
@@ -385,7 +507,8 @@ ModelRepositoryManager::Create(
     InferenceServer* server, const std::string& server_version,
     const std::set<std::string>& repository_paths,
     const std::set<std::string>& startup_models, const bool strict_model_config,
-    const bool polling_enabled, const bool model_control_enabled,
+    const std::string& model_config_name, const bool polling_enabled,
+    const bool model_control_enabled,
     const ModelLifeCycleOptions& life_cycle_options,
     const bool enable_model_namespacing,
     std::unique_ptr<ModelRepositoryManager>* model_repository_manager)
@@ -414,9 +537,10 @@ ModelRepositoryManager::Create(
   // Not setting the smart pointer directly to simplify clean up
   std::unique_ptr<ModelRepositoryManager> local_manager(
       new ModelRepositoryManager(
-          repository_paths, !strict_model_config, polling_enabled,
-          model_control_enabled, life_cycle_options.min_compute_capability,
-          enable_model_namespacing, std::move(life_cycle)));
+          repository_paths, !strict_model_config, model_config_name,
+          polling_enabled, model_control_enabled,
+          life_cycle_options.min_compute_capability, enable_model_namespacing,
+          std::move(life_cycle)));
   *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
@@ -549,7 +673,7 @@ ModelRepositoryManager::LoadModelByDependency(
   // encapsulate the interaction:
   // Each iteration:
   //  - Check dependency graph for nodes that are ready for lifecycle changes:
-  //      - load if all dependencies are satisfied and the node is 'heathy'
+  //      - load if all dependencies are satisfied and the node is 'healthy'
   //      - unload otherwise (should revisit this, logically will only happen in
   //        ensemble, the ensemble is requested to be re-loaded, at this point
   //        it is too late to revert model changes so the ensemble will not be
@@ -589,7 +713,7 @@ ModelRepositoryManager::LoadModelByDependency(
       auto status = model_life_cycle_->AsyncLoad(
           valid_model->model_id_, itr->second->model_path_,
           valid_model->model_config_, itr->second->is_config_provided_,
-          itr->second->mtime_nsec_.second > itr->second->prev_mtime_ns_.second,
+          itr->second->prev_mtime_ns_, itr->second->mtime_nsec_,
           itr->second->agent_model_list_, [model_state](Status load_status) {
             model_state->status_ = load_status;
             model_state->ready_.set_value();
@@ -1298,10 +1422,11 @@ ModelRepositoryManager::Poll(
   // its state will fallback to the state before the polling.
   for (const auto& pair : model_to_path) {
     std::unique_ptr<ModelInfo> model_info;
+    const auto& model_name = pair.first.name_;
     // Load with parameters will be appiled to all models with the same
     // name (namespace can be different), unless namespace is specified
     // in the future.
-    const auto& mit = models.find(pair.first.name_);
+    const auto& mit = models.find(model_name);
     static std::vector<const InferenceParameter*> empty_params;
     auto status = InitializeModelInfo(
         pair.first, pair.second,
@@ -1370,7 +1495,7 @@ ModelRepositoryManager::InitializeModelInfo(
   if (iitr != infos_.end()) {
     linfo->prev_mtime_ns_ = iitr->second->mtime_nsec_;
   } else {
-    linfo->prev_mtime_ns_ = std::make_pair(0, 0);
+    linfo->prev_mtime_ns_ = ModelTimestamp();
   }
 
   // Set 'mtime_nsec_' and override 'model_path_' if current path is empty
@@ -1399,19 +1524,26 @@ ModelRepositoryManager::InitializeModelInfo(
     // For file override, set 'mtime_nsec_' to minimum value so that
     // the next load without override will trigger re-load to undo
     // the override while the local files may still be unchanged.
-    linfo->mtime_nsec_ = std::make_pair(0, 0);
+    linfo->mtime_nsec_ = ModelTimestamp();
     linfo->model_path_ = location;
+    linfo->model_config_path_ = JoinPath({location, kModelConfigPbTxt});
     linfo->agent_model_list_.reset(new TritonRepoAgentModelList());
     linfo->agent_model_list_->AddAgentModel(std::move(localize_agent_model));
   } else {
+    linfo->model_config_path_ =
+        GetModelConfigFullPath(linfo->model_path_, model_config_name_);
+    // Model is not loaded.
     if (iitr == infos_.end()) {
-      linfo->mtime_nsec_ = GetDetailedModifiedTime(linfo->model_path_);
+      linfo->mtime_nsec_ =
+          ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
     } else {
       // Check the current timestamps to determine if model actually has been
       // modified
       linfo->mtime_nsec_ = linfo->prev_mtime_ns_;
-      unmodified =
-          !IsModified(std::string(linfo->model_path_), &linfo->mtime_nsec_);
+      ModelTimestamp new_mtime_ns =
+          ModelTimestamp(linfo->model_path_, linfo->model_config_path_);
+      unmodified = !linfo->mtime_nsec_.IsModified(new_mtime_ns);
+      linfo->mtime_nsec_ = new_mtime_ns;
     }
   }
 
@@ -1426,9 +1558,9 @@ ModelRepositoryManager::InitializeModelInfo(
       // the override while the local files may still be unchanged.
       auto time_since_epoch =
           std::chrono::system_clock::now().time_since_epoch();
-      linfo->mtime_nsec_.first =
+      linfo->mtime_nsec_.SetModelConfigModifiedTime(
           std::chrono::duration_cast<std::chrono::nanoseconds>(time_since_epoch)
-              .count();
+              .count());
       unmodified = false;
 
       const std::string& override_config = override_parameter->ValueString();
@@ -1461,7 +1593,7 @@ ModelRepositoryManager::InitializeModelInfo(
   // this must be done before normalizing model config as agents might
   // redirect to use the model config at a different location
   if (!parsed_config) {
-    const auto config_path = JoinPath({linfo->model_path_, kModelConfigPbTxt});
+    const auto config_path = linfo->model_config_path_;
     bool model_config_exists = false;
     RETURN_IF_ERROR(FileExists(config_path, &model_config_exists));
     // model config can be missing if auto fill is set
@@ -1474,7 +1606,8 @@ ModelRepositoryManager::InitializeModelInfo(
   }
   if (parsed_config) {
     RETURN_IF_ERROR(CreateAgentModelListWithLoadAction(
-        linfo->model_config_, linfo->model_path_, &linfo->agent_model_list_));
+        linfo->model_config_, linfo->model_path_, model_config_name_,
+        &linfo->agent_model_list_));
     if (linfo->agent_model_list_ != nullptr) {
       // Get the latest repository path
       const char* location;

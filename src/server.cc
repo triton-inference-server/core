@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -201,14 +201,12 @@ InferenceServer::Init()
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
-
   PinnedMemoryManager::Options options(pinned_memory_pool_size_);
   status = PinnedMemoryManager::Create(options);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
-
 
 #ifdef TRITON_ENABLE_GPU
   // Set the default CUDA memory pool size for GPUs where it is not
@@ -244,13 +242,13 @@ InferenceServer::Init()
   }
 
 #endif  // TRITON_ENABLE_GPU
-
-  status = EnablePeerAccess(min_supported_compute_capability_);
-  if (!status.IsOk()) {
-    // failed to enable peer access is not critical, just inefficient.
-    LOG_WARNING << status.Message();
+  if (enable_peer_access_) {
+    status = EnablePeerAccess(min_supported_compute_capability_);
+    if (!status.IsOk()) {
+      // failed to enable peer access is not critical, just inefficient.
+      LOG_WARNING << status.Message();
+    }
   }
-
   // Create the model manager for the repository. Unless model control
   // is disabled, all models are eagerly loaded when the manager is created.
   bool polling_enabled = (model_control_mode_ == ModelControlMode::MODE_POLL);
@@ -261,8 +259,8 @@ InferenceServer::Init()
       host_policy_map_, model_load_thread_count_, model_load_retry_count_);
   status = ModelRepositoryManager::Create(
       this, version_, model_repository_paths_, startup_models_,
-      strict_model_config_, polling_enabled, model_control_enabled,
-      life_cycle_options, enable_model_namespacing_,
+      strict_model_config_, model_config_name_, polling_enabled,
+      model_control_enabled, life_cycle_options, enable_model_namespacing_,
       &model_repository_manager_);
   if (!status.IsOk()) {
     if (model_repository_manager_ == nullptr) {
@@ -603,8 +601,7 @@ InferenceServer::PrintBackendAndModelSummary()
     repoagent_record.emplace_back(repoagent_pair.second);
     repoagents_table.InsertRow(repoagent_record);
   }
-  std::string repoagents_table_string = repoagents_table.PrintTable();
-  LOG_INFO << repoagents_table_string;
+  LOG_TABLE_INFO(repoagents_table);
 
   // Backends Summary
   std::vector<std::string> backend_headers;
@@ -630,8 +627,8 @@ InferenceServer::PrintBackendAndModelSummary()
     }
     backends_table.InsertRow(backend_record);
   }
-  std::string backends_table_string = backends_table.PrintTable();
-  LOG_INFO << backends_table_string;
+
+  LOG_TABLE_INFO(backends_table);
 
   // Models Summary
   auto model_states = model_repository_manager_->ModelStates();
@@ -673,8 +670,8 @@ InferenceServer::PrintBackendAndModelSummary()
       }
     }
   }
-  std::string models_table_string = models_table.PrintTable();
-  LOG_INFO << models_table_string;
+
+  LOG_TABLE_INFO(models_table);
 
   return Status::Success;
 }

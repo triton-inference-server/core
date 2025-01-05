@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -61,6 +61,10 @@ class RequestTracker {
 
   std::unique_ptr<InferenceRequest>& Request() { return request_; }
 
+  InferenceStatsAggregator* StatsAggregator() { return stats_aggregator_; }
+
+  MetricModelReporter* MetricReporter() { return metric_reporter_; }
+
   InferenceStatsAggregator& ContextStatsAggregator()
   {
     return context_stats_aggregator_;
@@ -77,23 +81,26 @@ class RequestTracker {
     std::lock_guard<std::mutex> lk(mtx_);
     inflight_request_counter_--;
     if (inflight_request_counter_ == 0) {
+      if (request_ != nullptr) {
 #ifdef TRITON_ENABLE_STATS
-      const auto& infer_stats = context_stats_aggregator_.ImmutableInferStats();
-      request_->ReportStatisticsWithDuration(
-          metric_reporter_, status_.IsOk(), compute_start_ns_,
-          infer_stats.compute_input_duration_ns_,
-          infer_stats.compute_infer_duration_ns_,
-          infer_stats.compute_output_duration_ns_);
-      if (status_.IsOk()) {
-        stats_aggregator_->UpdateInferBatchStatsWithDuration(
-            metric_reporter_, std::max(1U, request_->BatchSize()),
+        const auto& infer_stats =
+            context_stats_aggregator_.ImmutableInferStats();
+        request_->ReportStatisticsWithDuration(
+            metric_reporter_, status_.IsOk(), compute_start_ns_,
             infer_stats.compute_input_duration_ns_,
             infer_stats.compute_infer_duration_ns_,
             infer_stats.compute_output_duration_ns_);
-      }
+        if (status_.IsOk()) {
+          stats_aggregator_->UpdateInferBatchStatsWithDuration(
+              metric_reporter_, std::max(1U, request_->BatchSize()),
+              infer_stats.compute_input_duration_ns_,
+              infer_stats.compute_infer_duration_ns_,
+              infer_stats.compute_output_duration_ns_);
+        }
 #endif
-      InferenceRequest::Release(
-          std::move(request_), TRITONSERVER_REQUEST_RELEASE_ALL);
+        InferenceRequest::Release(
+            std::move(request_), TRITONSERVER_REQUEST_RELEASE_ALL);
+      }
     }
     return (inflight_request_counter_ == 0);
   }
@@ -315,6 +322,9 @@ class EnsembleContext {
   Status CheckAndSetEnsembleOutput(
       const std::set<std::pair<std::string, IterationCount>>& updated_tensors,
       std::unique_ptr<InferenceResponse>* response);
+
+  void CacheEnsembleTopLevelRequest(
+      std::unique_ptr<InferenceResponse>& response);
 
   InferenceServer* is_;
 
@@ -639,8 +649,9 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
   if (response != nullptr) {
     RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_InferenceResponseError(response));
     uint32_t count;
+    bool parameter_override = false;
     InferenceRequest::SequenceId correlation_id = step_ptr->correlation_id_;
-    uint32_t flags = step_ptr->flags_;
+    uint32_t flags = 0;
     RETURN_IF_TRITONSERVER_ERROR(
         TRITONSERVER_InferenceResponseParameterCount(response, &count));
     for (uint32_t idx = 0; idx < count; idx++) {
@@ -654,10 +665,12 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
           case TRITONSERVER_PARAMETER_INT:
             correlation_id = InferenceRequest::SequenceId(
                 *reinterpret_cast<const uint64_t*>(vvalue));
+            parameter_override = true;
             break;
           case TRITONSERVER_PARAMETER_STRING:
             correlation_id = InferenceRequest::SequenceId(
                 std::string(*reinterpret_cast<const char* const*>(vvalue)));
+            parameter_override = true;
             break;
           default:
             RETURN_IF_TRITONSERVER_ERROR(TRITONSERVER_ErrorNew(
@@ -676,6 +689,7 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
           if (*reinterpret_cast<const bool*>(vvalue)) {
             flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_START;
           }
+          parameter_override = true;
         }
       } else if (!strcmp(name, "sequence_end")) {
         if (type != TRITONSERVER_PARAMETER_BOOL) {
@@ -687,6 +701,7 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
           if (*reinterpret_cast<const bool*>(vvalue)) {
             flags |= TRITONSERVER_REQUEST_FLAG_SEQUENCE_END;
           }
+          parameter_override = true;
         }
       }
     }
@@ -733,9 +748,16 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
         }
 
         auto& tensor_data = tensor_data_[it->second];
-        step_ptr->updated_tensors_.emplace(
-            it->second,
-            tensor_data.AddTensor(std::move(tensor), correlation_id, flags));
+        if (parameter_override) {
+          step_ptr->updated_tensors_.emplace(
+              it->second,
+              tensor_data.AddTensor(std::move(tensor), correlation_id, flags));
+        } else {
+          step_ptr->updated_tensors_.emplace(
+              it->second, tensor_data.AddTensor(
+                              std::move(tensor), step_ptr->correlation_id_,
+                              step_ptr->flags_));
+        }
 
         output_to_tensor.erase(it);
       } else {
@@ -1033,6 +1055,50 @@ EnsembleContext::ReshapeTensorDims(
   return res;
 }
 
+// Caching function
+void
+EnsembleContext::CacheEnsembleTopLevelRequest(
+    std::unique_ptr<InferenceResponse>& response)
+{
+  const std::string key = request_tracker_->Request()->CacheKey();
+  const bool is_key_set = request_tracker_->Request()->CacheKeyIsSet();
+
+#ifdef TRITON_ENABLE_STATS
+  const uint64_t lookup_end_ns =
+      request_tracker_->Request()->CacheLookupEndNs();
+  const uint64_t lookup_start_ns =
+      request_tracker_->Request()->CacheLookupStartNs();
+#endif
+
+  if (!is_key_set) {
+    LOG_ERROR << "Request cache key was not set correctly.";
+  }
+
+  auto cache = is_->CacheManager()->Cache();
+#ifdef TRITON_ENABLE_STATS
+  const uint64_t insert_start_ns = CaptureTimeNs();
+#endif
+  auto status = cache->Insert(response.get(), key);
+  if (!status.IsOk()) {
+    LOG_ERROR << "Failed to insert key [" << key
+              << "] into response cache: " << status.Message();
+  }
+
+#ifdef TRITON_ENABLE_STATS
+  const uint64_t insert_end_ns = CaptureTimeNs();
+  uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+  if (lookup_start_ns > lookup_end_ns) {
+    lookup_ns = 0;
+    LOG_ERROR << "Request lookup duration was not set correctly.";
+  }
+  uint64_t insert_ns = insert_end_ns - insert_start_ns;
+  uint64_t cache_miss_ns = lookup_ns + insert_ns;
+  request_tracker_->StatsAggregator()->UpdateSuccessCacheMiss(
+      request_tracker_->MetricReporter(), cache_miss_ns);
+#endif
+}
+
+
 Status
 EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
 {
@@ -1053,6 +1119,10 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                      ? TRITONSERVER_RESPONSE_COMPLETE_FINAL
                      : 0;
     if (response != nullptr) {
+      // Cache the request if caching is enabled.
+      if (info_->is_cache_enabled_) {
+        CacheEnsembleTopLevelRequest(response);
+      }
       InferenceResponse::Send(std::move(response), flags);
       response_sent_ = true;
     } else if (flags != 0) {
@@ -1069,7 +1139,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                 "more "
                 "ensemble steps can be made");
         InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_);
+            request_tracker_->Request(), ensemble_status_,
+            false /* release_requests */, FailureReason::OTHER);
       } else {
         request_tracker_->Request()->ResponseFactory()->SendFlags(
             TRITONSERVER_RESPONSE_COMPLETE_FINAL);
@@ -1082,7 +1153,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
           ensemble_status_);
     } else {
       InferenceRequest::RespondIfError(
-          request_tracker_->Request(), ensemble_status_);
+          request_tracker_->Request(), ensemble_status_,
+          false /* release_requests */, FailureReason::OTHER);
     }
   }
 
@@ -1128,11 +1200,6 @@ EnsembleContext::CheckAndSetEnsembleOutput(
         ready = false;
         break;
       }
-      // check if the output is provided
-      else if (tensor[iteration_count].data_ == nullptr) {
-        ready = false;
-        break;
-      }
     }
   }
   if (!ready) {
@@ -1151,6 +1218,12 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     // Check if output is ready
     auto& tensor_data = tensor_data_[output_pair.first];
     auto& tensor = tensor_data.tensor_[iteration_count];
+
+    if (tensor.data_ == nullptr) {
+      LOG_VERBOSE(1) << "Composing models did not output tensor "
+                     << output_pair.first;
+      continue;
+    }
 
     auto shape = ReshapeTensorDims(
         output_pair.second, (lrequest->BatchSize() != 0),
@@ -1311,11 +1384,27 @@ EnsembleContext::ScheduleSteps(
 Status
 EnsembleScheduler::Create(
     InferenceStatsAggregator* const stats_aggregator,
-    InferenceServer* const server, const inference::ModelConfig& config,
-    std::unique_ptr<Scheduler>* scheduler)
+    InferenceServer* const server, const ModelIdentifier& model_id,
+    const inference::ModelConfig& config, std::unique_ptr<Scheduler>* scheduler)
 {
-  scheduler->reset(new EnsembleScheduler(stats_aggregator, server, config));
+  scheduler->reset(
+      new EnsembleScheduler(stats_aggregator, server, model_id, config));
   return Status::Success;
+}
+
+
+void
+EnsembleScheduler::CacheLookUp(
+    std::unique_ptr<InferenceRequest>& request,
+    std::unique_ptr<InferenceResponse>& cached_response)
+{
+  auto cache = is_->CacheManager()->Cache();
+  bool is_lookup_success = CacheLookUpUtil(request, cached_response, cache);
+  if (is_lookup_success) {
+#ifdef TRITON_ENABLE_STATS
+    request->ReportStatisticsCacheHit(metric_reporter_.get());
+#endif
+  }
 }
 
 Status
@@ -1331,6 +1420,19 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   request->TraceInputTensors(
       TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT, "EnsembleScheduler Enqueue");
 #endif  // TRITON_ENABLE_TRACING
+
+  std::unique_ptr<InferenceResponse> cached_response;
+  if (info_->is_cache_enabled_) {
+    CacheLookUp(request, cached_response);
+  }
+
+  if (cached_response != nullptr) {
+    InferenceResponse::Send(
+        std::move(cached_response), TRITONSERVER_RESPONSE_COMPLETE_FINAL);
+    InferenceRequest::Release(
+        std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
+    return Status::Success;
+  }
 
   // Add additional callback to keep track of in-flight count
   ++inflight_count_;
@@ -1353,7 +1455,8 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
 
 EnsembleScheduler::EnsembleScheduler(
     InferenceStatsAggregator* const stats_aggregator,
-    InferenceServer* const server, const inference::ModelConfig& config)
+    InferenceServer* const server, const ModelIdentifier& model_id,
+    const inference::ModelConfig& config)
     : stats_aggregator_(stats_aggregator), is_(server), stream_(nullptr),
       inflight_count_(0)
 {
@@ -1367,13 +1470,14 @@ EnsembleScheduler::EnsembleScheduler(
   }
 #endif  // TRITON_ENABLE_GPU
 
+  const bool is_decoupled = config.model_transaction_policy().decoupled();
 #ifdef TRITON_ENABLE_METRICS
   if (Metrics::Enabled()) {
     // Ensemble scheduler doesn't currently support response cache at top level.
     MetricModelReporter::Create(
-        config.name(), 1, METRIC_REPORTER_ID_CPU,
-        false /* response_cache_enabled */, config.metric_tags(),
-        &metric_reporter_);
+        model_id, 1 /* model_version */, METRIC_REPORTER_ID_CPU,
+        false /* response_cache_enabled */, is_decoupled, config.metric_tags(),
+        config.model_metrics(), &metric_reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
 
@@ -1383,7 +1487,11 @@ EnsembleScheduler::EnsembleScheduler(
   info_->ensemble_name_ = config.name();
 
   // This config field is filled internally for ensemble models
-  info_->is_decoupled_ = config.model_transaction_policy().decoupled();
+  info_->is_decoupled_ = is_decoupled;
+
+  // field to check if response cache enabled in the ensemble model config.
+  info_->is_cache_enabled_ =
+      config.response_cache().enable() && is_->ResponseCacheEnabled();
 
   for (const auto& input : config.input()) {
     info_->tensor_to_step_.emplace(input.name(), std::set<size_t>());

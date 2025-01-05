@@ -113,7 +113,7 @@ DLPACK_TO_TRITON_DTYPE: dict[
     "DLPack data type",
     "Triton server data type",
     {
-        (_dlpack.DLDataTypeCode.kDLBool, 1): DataType.BOOL,
+        (_dlpack.DLDataTypeCode.kDLBool, 8): DataType.BOOL,
         (_dlpack.DLDataTypeCode.kDLInt, 8): DataType.INT8,
         (
             _dlpack.DLDataTypeCode.kDLInt,
@@ -176,6 +176,7 @@ NUMPY_TO_TRITON_DTYPE: dict[type, DataType] = CustomKeyErrorDict(
     "Triton server data type",
     {
         bool: DataType.BOOL,
+        numpy.bool_: DataType.BOOL,
         numpy.int8: DataType.INT8,
         numpy.int16: DataType.INT16,
         numpy.int32: DataType.INT32,
@@ -199,6 +200,7 @@ TRITON_TO_NUMPY_DTYPE: dict[DataType, type] = CustomKeyErrorDict(
     {
         **{value: key for key, value in NUMPY_TO_TRITON_DTYPE.items()},
         **{DataType.BYTES: numpy.object_},
+        **{DataType.BOOL: numpy.bool_},
     },
 )
 

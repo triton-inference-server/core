@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -42,7 +42,12 @@ InferenceResponseFactory::CreateResponse(
 {
   response->reset(new InferenceResponse(
       model_, id_, allocator_, alloc_userp_, response_fn_, response_userp_,
-      response_delegator_));
+      response_delegator_
+#ifdef TRITON_ENABLE_METRICS
+      ,
+      responses_sent_, infer_start_ns_
+#endif  // TRITON_ENABLE_METRICS
+      ));
 #ifdef TRITON_ENABLE_TRACING
   (*response)->SetTrace(trace_);
 #endif  // TRITON_ENABLE_TRACING
@@ -72,10 +77,21 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp,
     const std::function<
-        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator)
+        void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>& delegator
+#ifdef TRITON_ENABLE_METRICS
+    ,
+    std::shared_ptr<std::atomic<uint64_t>> responses_sent,
+    uint64_t infer_start_ns
+#endif  // TRITON_ENABLE_METRICS
+    )
     : model_(model), id_(id), allocator_(allocator), alloc_userp_(alloc_userp),
       response_fn_(response_fn), response_userp_(response_userp),
-      response_delegator_(delegator), null_response_(false)
+      response_delegator_(delegator),
+#ifdef TRITON_ENABLE_METRICS
+      responses_sent_(std::move(responses_sent)),
+      infer_start_ns_(infer_start_ns),
+#endif  // TRITON_ENABLE_METRICS
+      null_response_(false)
 {
   // If the allocator has a start_fn then invoke it.
   TRITONSERVER_ResponseAllocatorStartFn_t start_fn = allocator_->StartFn();
@@ -93,6 +109,9 @@ InferenceResponse::InferenceResponse(
     TRITONSERVER_InferenceResponseCompleteFn_t response_fn,
     void* response_userp)
     : response_fn_(response_fn), response_userp_(response_userp),
+#ifdef TRITON_ENABLE_METRICS
+      responses_sent_(nullptr), infer_start_ns_(0),
+#endif  // TRITON_ENABLE_METRICS
       null_response_(true)
 {
 }
@@ -214,6 +233,10 @@ InferenceResponse::Send(
       TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT, "InferenceResponse Send");
 #endif  // TRITON_ENABLE_TRACING
 
+#ifdef TRITON_ENABLE_METRICS
+  response->UpdateResponseMetrics();
+#endif  // TRITON_ENABLE_METRICS
+
   if (response->response_delegator_ != nullptr) {
     auto ldelegator = std::move(response->response_delegator_);
     ldelegator(std::move(response), flags);
@@ -281,6 +304,25 @@ InferenceResponse::TraceOutputTensors(
   return Status::Success;
 }
 #endif  // TRITON_ENABLE_TRACING
+
+#ifdef TRITON_ENABLE_METRICS
+void
+InferenceResponse::UpdateResponseMetrics() const
+{
+  // Report inference to first response duration.
+  if (model_ != nullptr && responses_sent_ != nullptr &&
+      responses_sent_->fetch_add(1, std::memory_order_relaxed) == 0) {
+    auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                      std::chrono::steady_clock::now().time_since_epoch())
+                      .count();
+    if (auto reporter = model_->MetricReporter()) {
+      reporter->ObserveHistogram(
+          kFirstResponseHistogram,
+          (now_ns - infer_start_ns_) / NANOS_PER_MILLIS);
+    }
+  }
+}
+#endif  // TRITON_ENABLE_METRICS
 
 //
 // InferenceResponse::Output

@@ -82,6 +82,8 @@ class InferenceRequest {
   // Input tensor
   class Input {
    public:
+    enum class TensorType { TENSOR, SHAPE_TENSOR, NON_LINEAR };
+
     Input();
     Input(
         const std::string& name, const inference::DataType datatype,
@@ -134,10 +136,22 @@ class InferenceRequest {
     }
 
     // Whether or not the input is a tensorrt shape tensor
-    bool IsShapeTensor() const { return is_shape_tensor_; }
+    bool IsShapeTensor() const
+    {
+      return tensor_type_ == TensorType::SHAPE_TENSOR;
+    }
+
+    // Specifies whether the input uses a non-linear IO format
+    bool IsNonLinearFormatIo() const
+    {
+      return tensor_type_ == TensorType::NON_LINEAR;
+    }
 
     // Set the input to be treated as a shape tensor.
-    Status SetIsShapeTensor(const bool is_shape_tensor);
+    Status SetIsShapeTensor();
+
+    // Set the input uses a non-linear IO format
+    Status SetIsNonLinearFormatIo();
 
     // The data for this input.
     const std::shared_ptr<Memory>& Data() const { return data_; }
@@ -240,7 +254,7 @@ class InferenceRequest {
     std::vector<int64_t> original_shape_;
     std::vector<int64_t> shape_;
     std::vector<int64_t> shape_with_batch_dim_;
-    bool is_shape_tensor_;
+    TensorType tensor_type_;
     std::shared_ptr<Memory> data_;
 
     bool has_host_policy_specific_data_;
@@ -590,7 +604,8 @@ class InferenceRequest {
   // 'release_request' is true 'request' is returned as nullptr.
   static void RespondIfError(
       std::unique_ptr<InferenceRequest>& request, const Status& status,
-      const bool release_request = false);
+      const bool release_request = false,
+      FailureReason reason = FailureReason::OTHER);
 
   // Send an error response to a set of 'requests'. If 'status' is
   // Success then no responses are sent and the requests are not
@@ -603,7 +618,8 @@ class InferenceRequest {
   // returned with all nullptrs.
   static void RespondIfError(
       std::vector<std::unique_ptr<InferenceRequest>>& requests,
-      const Status& status, const bool release_requests = false);
+      const Status& status, const bool release_requests = false,
+      FailureReason reason = FailureReason::OTHER);
 
   // Release the request. Call the release callback and transfer
   // ownership of the request to the callback. On return 'request' is
@@ -672,6 +688,16 @@ class InferenceRequest {
       MetricModelReporter* metric_reporter, bool success,
       const uint64_t compute_start_ns, const uint64_t compute_input_end_ns,
       const uint64_t compute_output_start_ns, const uint64_t compute_end_ns);
+
+  // Report the error statistics to stats collectors associated with the
+  // request.
+  // FIXME: A separate function may not be necessary here, but is being used
+  // cautiously in case of unforeseen issues such as possibly capturing a trace
+  // twice. This should be revisited and better tested to see if the
+  // ReportStatistics function can be used as-is for the newly captured failure
+  // cases.
+  void ReportErrorStatistics(
+      MetricModelReporter* metric_reporter, FailureReason reason);
 
   // Report the statistics to stats collectors associated with the request.
   // Duration and timestamps provide two granularities for stats collectors.
@@ -746,6 +772,11 @@ class InferenceRequest {
 
   // Helper for validating Inputs
   Status ValidateRequestInputs();
+
+  Status ValidateBytesInputs(
+      const std::string& input_id, const Input& input,
+      const std::string& model_name,
+      TRITONSERVER_MemoryType* buffer_memory_type) const;
 
   // Helpers for pending request metrics
   void IncrementPendingRequestCount();

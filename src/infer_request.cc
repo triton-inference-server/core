@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <string>
 
 #include "constants.h"
 #include "model.h"
@@ -420,10 +421,25 @@ InferenceRequest::Run(std::unique_ptr<InferenceRequest>& request)
   return status;
 }
 
+FailureReason
+stringToFailureReason(const std::string& error_type)
+{
+  if (error_type == "REJECTED") {
+    return FailureReason::REJECTED;
+  }
+  if (error_type == "CANCELED") {
+    return FailureReason::CANCELED;
+  }
+  if (error_type == "BACKEND") {
+    return FailureReason::BACKEND;
+  }
+  return FailureReason::OTHER;
+}
+
 void
 InferenceRequest::RespondIfError(
     std::unique_ptr<InferenceRequest>& request, const Status& status,
-    const bool release_request)
+    const bool release_request, FailureReason reason)
 {
   if (status.IsOk()) {
     return;
@@ -441,27 +457,16 @@ InferenceRequest::RespondIfError(
       InferenceResponse::SendWithStatus(
           std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL, status),
       (request->LogRequest() + "failed to send error response").c_str());
-
+#ifdef TRITON_ENABLE_STATS
+  request->ReportErrorStatistics(
+      request->model_raw_->MetricReporter().get(), reason);
+#endif
   // If releasing the request then invoke the release callback which
   // gives ownership to the callback. So can't access 'request' after
   // this point.
   if (release_request) {
     InferenceRequest::Release(
         std::move(request), TRITONSERVER_REQUEST_RELEASE_ALL);
-  }
-}
-
-void
-InferenceRequest::RespondIfError(
-    std::vector<std::unique_ptr<InferenceRequest>>& requests,
-    const Status& status, const bool release_requests)
-{
-  if (status.IsOk()) {
-    return;
-  }
-
-  for (auto& request : requests) {
-    RespondIfError(request, status, release_requests);
   }
 }
 
@@ -905,6 +910,7 @@ Status
 InferenceRequest::Normalize()
 {
   const inference::ModelConfig& model_config = model_raw_->Config();
+  const std::string& model_name = ModelName();
 
   // Fill metadata for raw input
   if (!raw_input_name_.empty()) {
@@ -917,7 +923,7 @@ InferenceRequest::Normalize()
               std::to_string(original_inputs_.size()) +
               ") to be deduced but got " +
               std::to_string(model_config.input_size()) + " inputs in '" +
-              ModelName() + "' model configuration");
+              model_name + "' model configuration");
     }
     auto it = original_inputs_.begin();
     if (raw_input_name_ != it->first) {
@@ -1010,6 +1016,17 @@ InferenceRequest::Normalize()
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
       *input.MutableShape() = input.OriginalShape();
+
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
+      if (input_config->is_shape_tensor()) {
+        // For a shape tensor, mark that the input is a shape tensor.
+        input.SetIsShapeTensor();
+      } else if (input_config->is_non_linear_format_io()) {
+        // If a tensor uses a non-linear IO format, indicate that the input uses
+        // a non-linear IO format.
+        input.SetIsNonLinearFormatIo();
+      }
     }
   } else {
     // Model does support Triton-style batching so each input tensor
@@ -1019,15 +1036,19 @@ InferenceRequest::Normalize()
     batch_size_ = 0;
     for (auto& pr : original_inputs_) {
       auto& input = pr.second;
+      const inference::ModelInput* input_config;
+      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
 
       // For a shape tensor, keep the tensor's shape as it is and mark
       // that the input is a shape tensor.
-      const inference::ModelInput* input_config;
-      RETURN_IF_ERROR(model_raw_->GetInput(input.Name(), &input_config));
       if (input_config->is_shape_tensor()) {
         *input.MutableShape() = input.OriginalShape();
-        input.SetIsShapeTensor(true);
+        input.SetIsShapeTensor();
         continue;
+      } else if (input_config->is_non_linear_format_io()) {
+        // If a tensor uses a non-linear IO format, indicate that the input uses
+        // a non-linear IO format.
+        input.SetIsNonLinearFormatIo();
       }
 
       if (input.OriginalShape().size() == 0) {
@@ -1035,7 +1056,7 @@ InferenceRequest::Normalize()
             Status::Code::INVALID_ARG,
             LogRequest() + "input '" + input.Name() +
                 "' has no shape but model requires batch dimension for '" +
-                ModelName() + "'");
+                model_name + "'");
       }
 
       if (batch_size_ == 0) {
@@ -1044,7 +1065,7 @@ InferenceRequest::Normalize()
         return Status(
             Status::Code::INVALID_ARG,
             LogRequest() + "input '" + input.Name() +
-                "' batch size does not match other inputs for '" + ModelName() +
+                "' batch size does not match other inputs for '" + model_name +
                 "'");
       }
 
@@ -1060,7 +1081,7 @@ InferenceRequest::Normalize()
         Status::Code::INVALID_ARG,
         LogRequest() + "inference request batch-size must be <= " +
             std::to_string(model_config.max_batch_size()) + " for '" +
-            ModelName() + "'");
+            model_name + "'");
   }
 
   // Verify that each input shape is valid for the model, make
@@ -1069,16 +1090,17 @@ InferenceRequest::Normalize()
     const inference::ModelInput* input_config;
     RETURN_IF_ERROR(model_raw_->GetInput(pr.second.Name(), &input_config));
 
+    auto& input_name = pr.first;
     auto& input = pr.second;
     auto shape = input.MutableShape();
 
     if (input.DType() != input_config->data_type()) {
       return Status(
           Status::Code::INVALID_ARG,
-          LogRequest() + "inference input '" + pr.first + "' data-type is '" +
+          LogRequest() + "inference input '" + input_name + "' data-type is '" +
               std::string(
                   triton::common::DataTypeToProtocolString(input.DType())) +
-              "', but model '" + ModelName() + "' expects '" +
+              "', but model '" + model_name + "' expects '" +
               std::string(triton::common::DataTypeToProtocolString(
                   input_config->data_type())) +
               "'");
@@ -1098,7 +1120,7 @@ InferenceRequest::Normalize()
                 Status::Code::INVALID_ARG,
                 LogRequest() +
                     "All input dimensions should be specified for input '" +
-                    pr.first + "' for model '" + ModelName() + "', got " +
+                    input_name + "' for model '" + model_name + "', got " +
                     triton::common::DimsListToString(input.OriginalShape()));
           } else if (
               (config_dims[i] != triton::common::WILDCARD_DIM) &&
@@ -1127,8 +1149,8 @@ InferenceRequest::Normalize()
         }
         return Status(
             Status::Code::INVALID_ARG,
-            LogRequest() + "unexpected shape for input '" + pr.first +
-                "' for model '" + ModelName() + "'. Expected " +
+            LogRequest() + "unexpected shape for input '" + input_name +
+                "' for model '" + model_name + "'. Expected " +
                 triton::common::DimsListToString(full_dims) + ", got " +
                 triton::common::DimsListToString(input.OriginalShape()) + ". " +
                 implicit_batch_note);
@@ -1169,8 +1191,43 @@ InferenceRequest::Normalize()
         input.MutableShapeWithBatchDim()->push_back(d);
       }
     }
-  }
+    // Matching incoming request's shape and byte size to make sure the
+    // payload contains correct number of elements.
+    // Note: Since we're using normalized input.ShapeWithBatchDim() here,
+    // make sure that all the normalization is before the check.
+    {
+      const auto& data_type = input.DType();
 
+      // Non-linear IO format input byte size validation will be handled in the
+      // TensorRT backend.
+      if (!input.IsNonLinearFormatIo()) {
+        TRITONSERVER_MemoryType input_memory_type;
+        if (data_type == inference::DataType::TYPE_STRING) {
+          RETURN_IF_ERROR(ValidateBytesInputs(
+              input_name, input, model_name, &input_memory_type));
+        } else {
+          // Shape tensor with dynamic batching does not introduce a new
+          // dimension to the tensor but adds an additional value to the 1-D
+          // array.
+          const std::vector<int64_t>& input_dims =
+              input.IsShapeTensor() ? input.OriginalShape()
+                                    : input.ShapeWithBatchDim();
+          int64_t expected_byte_size =
+              triton::common::GetByteSize(data_type, input_dims);
+          const size_t& byte_size = input.Data()->TotalByteSize();
+          if ((byte_size > LLONG_MAX) ||
+              (static_cast<int64_t>(byte_size) != expected_byte_size)) {
+            return Status(
+                Status::Code::INVALID_ARG,
+                LogRequest() + "input byte size mismatch for input '" +
+                    input_name + "' for model '" + model_name + "'. Expected " +
+                    std::to_string(expected_byte_size) + ", got " +
+                    std::to_string(byte_size));
+          }
+        }
+      }
+    }
+  }
   return Status::Success;
 }
 
@@ -1235,7 +1292,134 @@ InferenceRequest::ValidateRequestInputs()
   return Status::Success;
 }
 
+Status
+InferenceRequest::ValidateBytesInputs(
+    const std::string& input_name, const Input& input,
+    const std::string& model_name,
+    TRITONSERVER_MemoryType* buffer_memory_type) const
+{
+  const auto& input_dims = input.ShapeWithBatchDim();
+
+  int64_t element_count = triton::common::GetElementCount(input_dims);
+  int64_t element_checked = 0;
+  size_t remaining_element_size = 0;
+
+  size_t buffer_next_idx = 0;
+  const size_t buffer_count = input.DataBufferCount();
+
+  const char* buffer = nullptr;
+  size_t remaining_buffer_size = 0;
+  int64_t buffer_memory_id;
+
+  // Validate elements until all buffers have been fully processed.
+  while (remaining_buffer_size || buffer_next_idx < buffer_count) {
+    // Get the next buffer if not currently processing one.
+    if (!remaining_buffer_size) {
+      // Reset remaining buffer size and pointers for next buffer.
+      RETURN_IF_ERROR(input.DataBuffer(
+          buffer_next_idx++, (const void**)(&buffer), &remaining_buffer_size,
+          buffer_memory_type, &buffer_memory_id));
+
+      // GPU tensors are validated at platform backends to avoid additional
+      // data copying. Check "ValidateStringBuffer" in backend_common.cc.
+      if (*buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
+        return Status::Success;
+      }
+    }
+
+    // Get the next element if not currently processing one.
+    if (!remaining_element_size) {
+      // Triton expects STRING type to be in special format
+      // (prepend 4 bytes to specify string length), so need to add the
+      // first 4 bytes for each element to find expected byte size.
+      constexpr size_t kElementSizeIndicator = sizeof(uint32_t);
+
+      // FIXME: Assume the string element's byte size indicator is not spread
+      // across buffer boundaries for simplicity.
+      if (remaining_buffer_size < kElementSizeIndicator) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            LogRequest() +
+                "incomplete string length indicator for inference input '" +
+                input_name + "' for model '" + model_name + "', expecting " +
+                std::to_string(sizeof(uint32_t)) + " bytes but only " +
+                std::to_string(remaining_buffer_size) +
+                " bytes available. Please make sure the string length "
+                "indicator is in one buffer.");
+      }
+
+      // Start the next element and reset the remaining element size.
+      remaining_element_size = *(reinterpret_cast<const uint32_t*>(buffer));
+      element_checked++;
+
+      // Early stop
+      if (element_checked > element_count) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            LogRequest() + "unexpected number of string elements " +
+                std::to_string(element_checked) + " for inference input '" +
+                input_name + "' for model '" + model_name + "', expecting " +
+                std::to_string(element_count));
+      }
+
+      // Advance pointer and remainder by the indicator size.
+      buffer += kElementSizeIndicator;
+      remaining_buffer_size -= kElementSizeIndicator;
+    }
+
+    // If the remaining buffer fits it: consume the rest of the element, proceed
+    // to the next element.
+    if (remaining_buffer_size >= remaining_element_size) {
+      buffer += remaining_element_size;
+      remaining_buffer_size -= remaining_element_size;
+      remaining_element_size = 0;
+    }
+    // Otherwise the remaining element is larger: consume the rest of the
+    // buffer, proceed to the next buffer.
+    else {
+      remaining_element_size -= remaining_buffer_size;
+      remaining_buffer_size = 0;
+    }
+  }
+
+  // Validate the number of processed buffers exactly match expectations.
+  if (buffer_next_idx != buffer_count) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        LogRequest() + "expected " + std::to_string(buffer_count) +
+            " buffers for inference input '" + input_name + "' for model '" +
+            model_name + "', got " + std::to_string(buffer_next_idx));
+  }
+
+  // Validate the number of processed elements exactly match expectations.
+  if (element_checked != element_count) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        LogRequest() + "expected " + std::to_string(element_count) +
+            " string elements for inference input '" + input_name +
+            "' for model '" + model_name + "', got " +
+            std::to_string(element_checked));
+  }
+
+  return Status::Success;
+}
+
 #ifdef TRITON_ENABLE_STATS
+
+void
+InferenceRequest::ReportErrorStatistics(
+    MetricModelReporter* metric_reporter, FailureReason reason)
+{
+  INFER_STATS_DECL_TIMESTAMP(request_end_ns);
+  model_raw_->MutableStatsAggregator()->UpdateFailure(
+      metric_reporter, request_start_ns_, request_end_ns, reason);
+  if (secondary_stats_aggregator_ != nullptr) {
+    secondary_stats_aggregator_->UpdateFailure(
+        nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
+        reason);
+  }
+}
+
 void
 InferenceRequest::ReportStatistics(
     MetricModelReporter* metric_reporter, bool success,
@@ -1272,10 +1456,12 @@ InferenceRequest::ReportStatistics(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns);
+        metric_reporter, request_start_ns_, request_end_ns,
+        FailureReason::BACKEND);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
-          nullptr /* metric_reporter */, request_start_ns_, request_end_ns);
+          nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
+          FailureReason::BACKEND);
     }
   }
 }
@@ -1308,10 +1494,12 @@ InferenceRequest::ReportStatisticsWithDuration(
     }
   } else {
     model_raw_->MutableStatsAggregator()->UpdateFailure(
-        metric_reporter, request_start_ns_, request_end_ns);
+        metric_reporter, request_start_ns_, request_end_ns,
+        FailureReason::OTHER);
     if (secondary_stats_aggregator_ != nullptr) {
       secondary_stats_aggregator_->UpdateFailure(
-          nullptr /* metric_reporter */, request_start_ns_, request_end_ns);
+          nullptr /* metric_reporter */, request_start_ns_, request_end_ns,
+          FailureReason::OTHER);
     }
   }
 }
@@ -1348,7 +1536,7 @@ InferenceRequest::ReportStatisticsCacheHit(MetricModelReporter* metric_reporter)
 // Input
 //
 InferenceRequest::Input::Input()
-    : is_shape_tensor_(false), data_(new MemoryReference),
+    : tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
 }
@@ -1357,8 +1545,9 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count)
     : name_(name), datatype_(datatype),
-      original_shape_(shape, shape + dim_count), is_shape_tensor_(false),
-      data_(new MemoryReference), has_host_policy_specific_data_(false)
+      original_shape_(shape, shape + dim_count),
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
+      has_host_policy_specific_data_(false)
 {
 }
 
@@ -1366,7 +1555,7 @@ InferenceRequest::Input::Input(
     const std::string& name, const inference::DataType datatype,
     const std::vector<int64_t>& shape)
     : name_(name), datatype_(datatype), original_shape_(shape),
-      is_shape_tensor_(false), data_(new MemoryReference),
+      tensor_type_(TensorType::TENSOR), data_(new MemoryReference),
       has_host_policy_specific_data_(false)
 {
 }
@@ -1382,9 +1571,16 @@ InferenceRequest::Input::SetMetadata(
 }
 
 Status
-InferenceRequest::Input::SetIsShapeTensor(const bool is_shape_tensor)
+InferenceRequest::Input::SetIsShapeTensor()
 {
-  is_shape_tensor_ = is_shape_tensor;
+  tensor_type_ = TensorType::SHAPE_TENSOR;
+  return Status::Success;
+}
+
+Status
+InferenceRequest::Input::SetIsNonLinearFormatIo()
+{
+  tensor_type_ = TensorType::NON_LINEAR;
   return Status::Success;
 }
 
@@ -1715,5 +1911,4 @@ operator!=(
 {
   return !(lhs == rhs);
 }
-
 }}  // namespace triton::core

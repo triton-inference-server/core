@@ -64,6 +64,7 @@ struct TRITONSERVER_Server;
 struct TRITONSERVER_ServerOptions;
 struct TRITONSERVER_Metric;
 struct TRITONSERVER_MetricFamily;
+struct TRITONSERVER_MetricArgs;
 
 ///
 /// TRITONSERVER API Version
@@ -91,7 +92,7 @@ struct TRITONSERVER_MetricFamily;
 ///   }
 ///
 #define TRITONSERVER_API_VERSION_MAJOR 1
-#define TRITONSERVER_API_VERSION_MINOR 29
+#define TRITONSERVER_API_VERSION_MINOR 34
 
 /// Get the TRITONBACKEND API version supported by the Triton shared
 /// library. This value can be compared against the
@@ -259,13 +260,31 @@ typedef enum TRITONSERVER_loglevel_enum {
   TRITONSERVER_LOG_VERBOSE
 } TRITONSERVER_LogLevel;
 
+/// Logging Formats
 ///
-/// Format of logging.
+/// The TRITONSERVER API offers two logging formats. The formats have
+/// a common set of fields but differ in how the timestamp for a log
+/// entry is represented. Messages are serialized according to JSON
+/// encoding rules by default. This behavior can be disabled by
+/// setting the environment variable TRITON_SERVER_ESCAPE_LOG_MESSAGES
+/// to "0".
 ///
-/// TRITONSERVER_LOG_DEFAULT: the log severity (L) and timestamp will be
-/// logged as "LMMDD hh:mm:ss.ssssss".
 ///
-/// TRITONSERVER_LOG_ISO8601: the log format will be "YYYY-MM-DDThh:mm:ssZ L".
+/// 1. TRITONSERVER_LOG_DEFAULT
+///
+/// <level><month><day><hour>:<min>:<sec>.<usec> <pid> <file>:<line>] <msg>
+///
+/// Example:
+///
+/// I0520 20:03:25.829575 3355 model_lifecycle.cc:441] "AsyncLoad() 'simple'"
+///
+/// 2. TRITONSERVER_LOG_ISO8601
+///
+/// <year>-<month>-<day>T<hour>:<min>:<sec>Z <level> <pid> <file>:<line>] <msg>
+///
+/// Example:
+///
+/// 2024-05-20T20:03:26Z I 3415 model_lifecycle.cc:441] "AsyncLoad() 'simple'"
 ///
 typedef enum TRITONSERVER_logformat_enum {
   TRITONSERVER_LOG_DEFAULT,
@@ -714,7 +733,8 @@ typedef enum tritonserver_traceactivity_enum {
   TRITONSERVER_TRACE_REQUEST_END = 6,
   TRITONSERVER_TRACE_TENSOR_QUEUE_INPUT = 7,
   TRITONSERVER_TRACE_TENSOR_BACKEND_INPUT = 8,
-  TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT = 9
+  TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT = 9,
+  TRITONSERVER_TRACE_CUSTOM_ACTIVITY = 10
 } TRITONSERVER_InferenceTraceActivity;
 
 /// Get the string representation of a trace activity. The returned
@@ -820,6 +840,18 @@ TRITONSERVER_InferenceTraceTensorNew(
     TRITONSERVER_InferenceTraceTensorActivityFn_t tensor_activity_fn,
     TRITONSERVER_InferenceTraceReleaseFn_t release_fn, void* trace_userp);
 
+/// Report a trace activity. All the traces reported using this API will be
+/// using TRITONSERVER_TRACE_CUSTOM_ACTIVITY type.
+///
+/// \param trace The trace object.
+/// \param timestamp The timestamp associated with the trace activity.
+/// \param name The trace activity name.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceReportActivity(
+    struct TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
+    const char* activity_name);
+
 /// Delete a trace object.
 ///
 /// \param trace The trace object.
@@ -902,7 +934,6 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(
     struct TRITONSERVER_InferenceTrace* trace, const char* trace_context);
-
 
 /// Get TRITONSERVER_InferenceTrace context.
 ///
@@ -1828,6 +1859,16 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetStrictModelConfig(
     struct TRITONSERVER_ServerOptions* options, bool strict);
 
+/// Set the custom model configuration name to load for all models.
+/// Fall back to default config file if empty.
+///
+/// \param options The server options object.
+/// \param config_name The name of the config file to load for all models.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelConfigName(
+    struct TRITONSERVER_ServerOptions* options, const char* model_config_name);
+
 /// Set the rate limit mode in a server options.
 ///
 ///   TRITONSERVER_RATE_LIMIT_EXEC_COUNT: The rate limiting prioritizes the
@@ -1897,9 +1938,9 @@ TRITONSERVER_ServerOptionsSetCudaMemoryPoolByteSize(
 /// \param gpu_device The GPU device to set the CUDA virtual address space size
 /// \param size The size of the CUDA virtual address space.
 /// \return a TRITONSERVER_Error indicating success or failure.
-TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetCudaVirtualAddressSize(
-    TRITONSERVER_ServerOptions* options, int gpu_device,
+    struct TRITONSERVER_ServerOptions* options, int gpu_device,
     size_t cuda_virtual_address_size);
 
 /// Deprecated. See TRITONSERVER_ServerOptionsSetCacheConfig instead.
@@ -2027,6 +2068,18 @@ TRITONSERVER_ServerOptionsSetModelLoadRetryCount(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetModelNamespacing(
     struct TRITONSERVER_ServerOptions* options, bool enable_namespace);
+
+/// Enable peer access to allow GPU device to directly access the memory of
+/// another GPU device. Note that even when this option is set to True, Triton
+/// will only try to enable peer access and might fail to enable it if the
+/// underlying system doesn't support peer access.
+///
+/// \param options The server options object.
+/// \param enable_peer_access Whether to enable peer access or not.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetEnablePeerAccess(
+    struct TRITONSERVER_ServerOptions* options, bool enable_peer_access);
 
 /// Provide a log output file.
 ///
@@ -2257,6 +2310,17 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerDelete(
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerStop(
     struct TRITONSERVER_Server* server);
+
+/// Set the exit timeout on the server object. This value overrides the value
+/// initially set through server options and provides a mechanism to update the
+/// exit timeout while the serving is running.
+///
+/// \param server The inference server object.
+/// \param timeout The exit timeout, in seconds.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerSetExitTimeout(
+    struct TRITONSERVER_Server* server, unsigned int timeout);
 
 /// Register a new model repository. Not available in polling mode.
 ///
@@ -2552,7 +2616,8 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerInferAsync(
 ///
 typedef enum TRITONSERVER_metrickind_enum {
   TRITONSERVER_METRIC_KIND_COUNTER,
-  TRITONSERVER_METRIC_KIND_GAUGE
+  TRITONSERVER_METRIC_KIND_GAUGE,
+  TRITONSERVER_METRIC_KIND_HISTOGRAM
 } TRITONSERVER_MetricKind;
 
 /// Create a new metric family object. The caller takes ownership of the
@@ -2581,6 +2646,44 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricFamilyNew(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_MetricFamilyDelete(struct TRITONSERVER_MetricFamily* family);
 
+/// Get the TRITONSERVER_MetricKind of the metric family.
+///
+/// \param family The metric family object to query.
+/// \param kind Returns the TRITONSERVER_MetricKind of metric.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_GetMetricFamilyKind(
+    struct TRITONSERVER_MetricFamily* family, TRITONSERVER_MetricKind* kind);
+
+/// Create a new metric args object. The caller takes ownership of the
+/// TRITONSERVER_MetricArgs object and must call TRITONSERVER_MetricArgsDelete
+/// to release the object.
+///
+/// \param args Returns the new metric args object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsNew(
+    struct TRITONSERVER_MetricArgs** args);
+
+/// Set metric args with histogram metric parameter.
+///
+/// \param args The metric args object to set.
+/// \param buckets The array of bucket boundaries for the expected range of
+/// observed values.
+///
+/// \param buckets_count The number of bucket boundaries.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_MetricArgsSetHistogram(
+    struct TRITONSERVER_MetricArgs* args, const double* buckets,
+    const uint64_t buckets_count);
+
+/// Delete a metric args object.
+///
+/// \param args The metric args object.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricArgsDelete(
+    struct TRITONSERVER_MetricArgs* args);
+
 /// Create a new metric object. The caller takes ownership of the
 /// TRITONSERVER_Metric object and must call
 /// TRITONSERVER_MetricDelete to release the object. The caller is also
@@ -2597,6 +2700,28 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNew(
     struct TRITONSERVER_Metric** metric,
     struct TRITONSERVER_MetricFamily* family,
     const struct TRITONSERVER_Parameter** labels, const uint64_t label_count);
+
+/// Create a new metric object. The caller takes ownership of the
+/// TRITONSERVER_Metric object and must call
+/// TRITONSERVER_MetricDelete to release the object. The caller is also
+/// responsible for ownership of the labels passed in.
+/// Each label can be deleted immediately after creating the metric with
+/// TRITONSERVER_ParameterDelete if not re-using the labels.
+/// Metric args can be deleted immediately after creating the metric with
+/// TRITONSERVER_MetricArgsDelete if not re-using the metric args.
+///
+/// \param metric Returns the new metric object.
+/// \param family The metric family to add this new metric to.
+/// \param labels The array of labels to associate with this new metric.
+/// \param label_count The number of labels.
+/// \param args Metric args that store additional arguments to construct
+/// particular metric types, e.g. histogram.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricNewWithArgs(
+    struct TRITONSERVER_Metric** metric,
+    struct TRITONSERVER_MetricFamily* family,
+    const struct TRITONSERVER_Parameter** labels, const uint64_t label_count,
+    const struct TRITONSERVER_MetricArgs* args);
 
 /// Delete a metric object.
 /// All TRITONSERVER_Metric* objects should be deleted BEFORE their
@@ -2642,7 +2767,17 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricIncrement(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricSet(
     struct TRITONSERVER_Metric* metric, double value);
 
-/// Get the TRITONSERVER_MetricKind of metric and its corresponding family.
+/// Sample an observation and count it to the appropriate bucket of a metric.
+/// Supports metrics of kind TRITONSERVER_METRIC_KIND_HISTOGRAM and returns
+/// TRITONSERVER_ERROR_UNSUPPORTED for unsupported TRITONSERVER_MetricKind.
+///
+/// \param metric The metric object to update.
+/// \param value The amount for metric to sample observation.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricObserve(
+    struct TRITONSERVER_Metric* metric, double value);
+
+/// Get the TRITONSERVER_MetricKind of metric of its corresponding family.
 ///
 /// \param metric The metric object to query.
 /// \param kind Returns the TRITONSERVER_MetricKind of metric.

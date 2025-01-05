@@ -1,4 +1,4 @@
-// Copyright 2022-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -31,6 +31,7 @@
 #include <map>
 #include <mutex>
 
+#include "backend_model.h"
 #include "infer_parameter.h"
 #include "model.h"
 #include "model_config.pb.h"
@@ -123,10 +124,10 @@ class TritonRepoAgentModelList {
     // Special handling for the current model lifecycle implementation,
     // the repo agent may be asked to perform UNLOAD action multiple times,
     // and the requests after the first should be ignored.
-    const bool first_unload =
+    const bool duplicate_unload =
         (action_type == TRITONREPOAGENT_ACTION_UNLOAD) &&
-        (last_action_type_ != TRITONREPOAGENT_ACTION_UNLOAD);
-    if (!first_unload) {
+        (last_action_type_ == TRITONREPOAGENT_ACTION_UNLOAD);
+    if (duplicate_unload) {
       return Status::Success;
     }
 
@@ -162,6 +163,7 @@ class TritonRepoAgentModelList {
 };
 
 class InferenceServer;
+class ModelTimestamp;
 
 class ModelLifeCycle {
  public:
@@ -183,7 +185,8 @@ class ModelLifeCycle {
   Status AsyncLoad(
       const ModelIdentifier& model_id, const std::string& model_path,
       const inference::ModelConfig& model_config, const bool is_config_provided,
-      const bool is_model_file_updated,
+      const ModelTimestamp& prev_timestamp,
+      const ModelTimestamp& curr_timestamp,
       const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
       std::function<void(Status)>&& OnComplete);
 
@@ -311,6 +314,13 @@ class ModelLifeCycle {
       ModelInfo* model_info, const bool is_update,
       const std::function<void(Status)>& OnComplete,
       std::shared_ptr<LoadTracker> load_tracker);
+  // Calculate time to load model
+  void CalculateAndReportLoadTime(
+      uint64_t load_start_ns_, std::unique_ptr<Model>* model);
+  // Report Load time per model metrics
+  void ReportModelLoadTime(
+      std::shared_ptr<MetricModelReporter> reporter,
+      const std::chrono::duration<double>& time_to_load);
   // Helper function for 'OnLoadComplete()' to finish final operations after
   // loading **all** model versions.
   void OnLoadFinal(

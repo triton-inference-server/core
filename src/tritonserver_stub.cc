@@ -378,6 +378,10 @@ TRITONSERVER_ServerOptionsSetStrictModelConfig()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetModelConfigName()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetRateLimiterMode()
 {
 }
@@ -440,6 +444,10 @@ TRITONSERVER_ServerOptionsSetModelLoadRetryCount()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetModelNamespacing()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetEnablePeerAccess()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -556,6 +564,10 @@ TRITONSERVER_ServerDelete()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerStop()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerSetExitTimeout()
 {
 }
 TRITONAPI_DECLSPEC void
@@ -1064,7 +1076,32 @@ TRITONSERVER_MetricFamilyDelete()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONSERVER_GetMetricFamilyKind()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricArgsNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricArgsSetHistogram()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricArgsDelete()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONSERVER_MetricNew()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricNewWithArgs()
 {
 }
 
@@ -1089,6 +1126,11 @@ TRITONSERVER_MetricSet()
 }
 
 TRITONAPI_DECLSPEC void
+TRITONSERVER_MetricObserve()
+{
+}
+
+TRITONAPI_DECLSPEC void
 TRITONSERVER_GetMetricKind()
 {
 }
@@ -1100,6 +1142,11 @@ TRITONSERVER_ServerOptionsSetMetricsConfig()
 
 TRITONAPI_DECLSPEC void
 TRITONBACKEND_BackendAttributeAddPreferredInstanceGroup()
+{
+}
+
+TRITONAPI_DECLSPEC void
+TRITONSERVER_InferenceTraceReportActivity()
 {
 }
 

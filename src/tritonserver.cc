@@ -212,6 +212,12 @@ class TritonServerOptions {
   const std::set<std::string>& StartupModels() const { return models_; }
   void SetStartupModel(const char* m) { models_.insert(m); }
 
+  const std::string& ModelConfigName() const { return model_config_name_; }
+  void SetModelConfigName(const std::string& name)
+  {
+    model_config_name_ = name;
+  }
+
   bool ExitOnError() const { return exit_on_error_; }
   void SetExitOnError(bool b) { exit_on_error_ = b; }
 
@@ -284,10 +290,14 @@ class TritonServerOptions {
   void SetModelLoadRetryCount(unsigned int c) { model_load_retry_count_ = c; }
 
   bool ModelNamespacingEnabled() { return enable_model_namespacing_; }
+  bool PeerAccessEnabled() { return enable_peer_access_; }
+
   void SetModelNamespacingEnabled(const bool e)
   {
     enable_model_namespacing_ = e;
   }
+
+  void SetEnablePeerAccess(const bool e) { enable_peer_access_ = e; }
 
   bool Metrics() const { return metrics_; }
   void SetMetrics(bool b) { metrics_ = b; }
@@ -348,6 +358,7 @@ class TritonServerOptions {
   std::set<std::string> models_;
   bool exit_on_error_;
   bool strict_model_config_;
+  std::string model_config_name_;
   bool strict_readiness_;
   tc::RateLimitMode rate_limit_mode_;
   tc::RateLimiter::ResourceMap rate_limit_resource_map_;
@@ -361,6 +372,7 @@ class TritonServerOptions {
   unsigned int model_load_thread_count_;
   unsigned int model_load_retry_count_;
   bool enable_model_namespacing_;
+  bool enable_peer_access_;
   std::map<int, uint64_t> cuda_memory_pool_size_;
   double min_compute_capability_;
   std::string backend_dir_;
@@ -378,12 +390,12 @@ class TritonServerOptions {
 TritonServerOptions::TritonServerOptions()
     : server_id_("triton"),
       model_control_mode_(tc::ModelControlMode::MODE_POLL),
-      exit_on_error_(true), strict_model_config_(true), strict_readiness_(true),
-      rate_limit_mode_(tc::RateLimitMode::RL_OFF), metrics_(true),
-      gpu_metrics_(true), cpu_metrics_(true), metrics_interval_(2000),
-      exit_timeout_(30), pinned_memory_pool_size_(1 << 28),
-      buffer_manager_thread_count_(0), model_load_thread_count_(4),
-      enable_model_namespacing_(false),
+      exit_on_error_(true), strict_model_config_(true), model_config_name_(""),
+      strict_readiness_(true), rate_limit_mode_(tc::RateLimitMode::RL_OFF),
+      metrics_(true), gpu_metrics_(true), cpu_metrics_(true),
+      metrics_interval_(2000), exit_timeout_(30),
+      pinned_memory_pool_size_(1 << 28), buffer_manager_thread_count_(0),
+      model_load_thread_count_(4), enable_model_namespacing_(false),
 #ifdef TRITON_ENABLE_GPU
       min_compute_capability_(TRITON_MIN_COMPUTE_CAPABILITY),
 #else
@@ -621,6 +633,8 @@ TRITONSERVER_ParameterTypeString(TRITONSERVER_ParameterType paramtype)
       return "INT";
     case TRITONSERVER_PARAMETER_BOOL:
       return "BOOL";
+    case TRITONSERVER_PARAMETER_DOUBLE:
+      return "DOUBLE";
     case TRITONSERVER_PARAMETER_BYTES:
       return "BYTES";
     default:
@@ -643,6 +657,10 @@ TRITONSERVER_ParameterNew(
     case TRITONSERVER_PARAMETER_INT:
       lparam.reset(new tc::InferenceParameter(
           name, *reinterpret_cast<const int64_t*>(value)));
+      break;
+    case TRITONSERVER_PARAMETER_DOUBLE:
+      lparam.reset(new tc::InferenceParameter(
+          name, *reinterpret_cast<const double*>(value)));
       break;
     case TRITONSERVER_PARAMETER_BOOL:
       lparam.reset(new tc::InferenceParameter(
@@ -932,6 +950,8 @@ TRITONSERVER_InferenceTraceActivityString(
       return "TENSOR_BACKEND_INPUT";
     case TRITONSERVER_TRACE_TENSOR_BACKEND_OUTPUT:
       return "TENSOR_BACKEND_OUTPUT";
+    case TRITONSERVER_TRACE_CUSTOM_ACTIVITY:
+      return "CUSTOM_ACTIVITY";
   }
 
   return "<unknown>";
@@ -1097,6 +1117,23 @@ TRITONSERVER_InferenceTraceSpawnChildTrace(
 #endif  // TRITON_ENABLE_TRACING
 }
 
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_InferenceTraceReportActivity(
+    TRITONSERVER_InferenceTrace* trace, uint64_t timestamp,
+    const char* activity_name)
+{
+#ifdef TRITON_ENABLE_TRACING
+  tc::InferenceTrace* ltrace = reinterpret_cast<tc::InferenceTrace*>(trace);
+  if (trace != nullptr) {
+    ltrace->Report(
+        TRITONSERVER_TRACE_CUSTOM_ACTIVITY, timestamp, activity_name);
+  }
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "inference tracing not supported");
+#endif  // TRITON_ENABLE_TRACING
+}
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_InferenceTraceSetContext(
@@ -1206,6 +1243,16 @@ TRITONSERVER_ServerOptionsSetStartupModel(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   loptions->SetStartupModel(model_name);
+  return nullptr;  // Success
+}
+
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetModelConfigName(
+    struct TRITONSERVER_ServerOptions* options, const char* model_config_name)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetModelConfigName(model_config_name);
   return nullptr;  // Success
 }
 
@@ -1406,6 +1453,16 @@ TRITONSERVER_ServerOptionsSetModelNamespacing(
   TritonServerOptions* loptions =
       reinterpret_cast<TritonServerOptions*>(options);
   loptions->SetModelNamespacingEnabled(enable_namespace);
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetEnablePeerAccess(
+    TRITONSERVER_ServerOptions* options, bool enable_peer_access)
+{
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+  loptions->SetEnablePeerAccess(enable_peer_access);
   return nullptr;  // Success
 }
 
@@ -2378,6 +2435,7 @@ TRITONSERVER_ServerNew(
   lserver->SetStartupModels(loptions->StartupModels());
   bool strict_model_config = loptions->StrictModelConfig();
   lserver->SetStrictModelConfigEnabled(strict_model_config);
+  lserver->SetModelConfigName(loptions->ModelConfigName());
   lserver->SetRateLimiterMode(loptions->RateLimiterMode());
   lserver->SetRateLimiterResources(loptions->RateLimiterResources());
   lserver->SetPinnedMemoryPoolByteSize(loptions->PinnedMemoryPoolByteSize());
@@ -2398,6 +2456,7 @@ TRITONSERVER_ServerNew(
   lserver->SetModelLoadThreadCount(loptions->ModelLoadThreadCount());
   lserver->SetModelLoadRetryCount(loptions->ModelLoadRetryCount());
   lserver->SetModelNamespacingEnabled(loptions->ModelNamespacingEnabled());
+  lserver->SetEnablePeerAccess(loptions->PeerAccessEnabled());
 
   // SetBackendCmdlineConfig must be called after all AddBackendConfig calls
   // have completed.
@@ -2499,6 +2558,8 @@ TRITONSERVER_ServerNew(
   options_table.InsertRow(std::vector<std::string>{
       "strict_model_config",
       std::to_string(lserver->StrictModelConfigEnabled())});
+  options_table.InsertRow(std::vector<std::string>{
+      "model_config_name", lserver->ModelConfigName()});
   std::string rate_limit = RateLimitModeToString(lserver->RateLimiterMode());
   options_table.InsertRow(std::vector<std::string>{"rate_limit", rate_limit});
   i = 0;
@@ -2534,8 +2595,7 @@ TRITONSERVER_ServerNew(
   options_table.InsertRow(std::vector<std::string>{
       "cache_enabled", std::to_string(lserver->ResponseCacheEnabled())});
 
-  std::string options_table_string = options_table.PrintTable();
-  LOG_INFO << options_table_string;
+  LOG_TABLE_INFO(options_table);
 
   if (!status.IsOk()) {
     if (loptions->ExitOnError()) {
@@ -2568,6 +2628,17 @@ TRITONSERVER_ServerStop(TRITONSERVER_Server* server)
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
   if (lserver != nullptr) {
     RETURN_IF_STATUS_ERROR(lserver->Stop());
+  }
+  return nullptr;  // Success
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerSetExitTimeout(
+    TRITONSERVER_Server* server, unsigned int timeout)
+{
+  tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
+  if (lserver != nullptr) {
+    lserver->SetExitTimeoutSeconds(timeout);
   }
   return nullptr;  // Success
 }
@@ -3294,6 +3365,61 @@ TRITONSERVER_MetricFamilyDelete(TRITONSERVER_MetricFamily* family)
 #endif  // TRITON_ENABLE_METRICS
 }
 
+TRITONSERVER_Error*
+TRITONSERVER_GetMetricFamilyKind(
+    TRITONSERVER_MetricFamily* family, TRITONSERVER_MetricKind* kind)
+{
+#ifdef TRITON_ENABLE_METRICS
+  *kind = reinterpret_cast<tc::MetricFamily*>(family)->Kind();
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricArgsNew(TRITONSERVER_MetricArgs** args)
+{
+#ifdef TRITON_ENABLE_METRICS
+  tc::TritonServerMetricArgs* largs = new tc::TritonServerMetricArgs();
+  *args = reinterpret_cast<TRITONSERVER_MetricArgs*>(largs);
+  return nullptr;  // Success
+#else
+  *args = nullptr;
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricArgsSetHistogram(
+    TRITONSERVER_MetricArgs* args, const double* buckets,
+    const uint64_t buckets_count)
+{
+#ifdef TRITON_ENABLE_METRICS
+  auto largs = reinterpret_cast<tc::TritonServerMetricArgs*>(args);
+  largs->SetHistogramArgs(buckets, buckets_count);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricArgsDelete(TRITONSERVER_MetricArgs* args)
+{
+#ifdef TRITON_ENABLE_METRICS
+  auto largs = reinterpret_cast<tc::TritonServerMetricArgs*>(args);
+  delete largs;
+  return nullptr;  // success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
 //
 // TRITONSERVER_Metric
 //
@@ -3303,6 +3429,24 @@ TRITONSERVER_MetricNew(
     const TRITONSERVER_Parameter** labels, const uint64_t label_count)
 {
 #ifdef TRITON_ENABLE_METRICS
+  return TRITONSERVER_MetricNewWithArgs(
+      metric, family, labels, label_count, nullptr);
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+//
+// TRITONSERVER_MetricGeneric
+//
+TRITONSERVER_Error*
+TRITONSERVER_MetricNewWithArgs(
+    TRITONSERVER_Metric** metric, TRITONSERVER_MetricFamily* family,
+    const TRITONSERVER_Parameter** labels, const uint64_t label_count,
+    const TRITONSERVER_MetricArgs* args)
+{
+#ifdef TRITON_ENABLE_METRICS
   std::vector<const tc::InferenceParameter*> labels_vec;
   for (size_t i = 0; i < label_count; i++) {
     labels_vec.emplace_back(
@@ -3310,8 +3454,9 @@ TRITONSERVER_MetricNew(
   }
 
   try {
-    *metric = reinterpret_cast<TRITONSERVER_Metric*>(
-        new tc::Metric(family, labels_vec));
+    *metric = reinterpret_cast<TRITONSERVER_Metric*>(new tc::Metric(
+        family, labels_vec,
+        reinterpret_cast<const tc::TritonServerMetricArgs*>(args)));
   }
   catch (std::invalid_argument const& ex) {
     // Catch invalid kinds passed to constructor
@@ -3373,6 +3518,17 @@ TRITONSERVER_MetricSet(TRITONSERVER_Metric* metric, double value)
 {
 #ifdef TRITON_ENABLE_METRICS
   return reinterpret_cast<tc::Metric*>(metric)->Set(value);
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+}
+
+TRITONSERVER_Error*
+TRITONSERVER_MetricObserve(TRITONSERVER_Metric* metric, double value)
+{
+#ifdef TRITON_ENABLE_METRICS
+  return reinterpret_cast<tc::Metric*>(metric)->Observe(value);
 #else
   return TRITONSERVER_ErrorNew(
       TRITONSERVER_ERROR_UNSUPPORTED, "metrics not supported");

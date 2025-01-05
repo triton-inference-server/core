@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -213,6 +213,14 @@ class PyParameter : public PyWrapper<struct TRITONSERVER_Parameter> {
   PyParameter(const char* name, int64_t val)
       : PyWrapper(
             TRITONSERVER_ParameterNew(name, TRITONSERVER_PARAMETER_INT, &val),
+            true)
+  {
+  }
+
+  PyParameter(const char* name, double val)
+      : PyWrapper(
+            TRITONSERVER_ParameterNew(
+                name, TRITONSERVER_PARAMETER_DOUBLE, &val),
             true)
   {
   }
@@ -822,6 +830,9 @@ class PyInferenceResponse
       case TRITONSERVER_PARAMETER_BOOL:
         py_value = py::bool_(*reinterpret_cast<const bool*>(value));
         break;
+      case TRITONSERVER_PARAMETER_DOUBLE:
+        py_value = py::float_(*reinterpret_cast<const double*>(value));
+        break;
       default:
         throw UnsupportedError(
             std::string("Unexpected type '") +
@@ -1159,6 +1170,11 @@ class PyInferenceRequest
     ThrowIfError(TRITONSERVER_InferenceRequestSetBoolParameter(
         triton_object_, key.c_str(), value));
   }
+  void SetDoubleParameter(const std::string& key, double value)
+  {
+    ThrowIfError(TRITONSERVER_InferenceRequestSetDoubleParameter(
+        triton_object_, key.c_str(), value));
+  }
   void Cancel()
   {
     ThrowIfError(TRITONSERVER_InferenceRequestCancel(triton_object_));
@@ -1303,6 +1319,12 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
         triton_object_, enable_namespace));
   }
 
+  void SetEnablePeerAccess(bool enable_peer_access)
+  {
+    ThrowIfError(TRITONSERVER_ServerOptionsSetEnablePeerAccess(
+        triton_object_, enable_peer_access));
+  }
+
   void SetLogFile(const std::string& file)
   {
     ThrowIfError(
@@ -1412,7 +1434,18 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
     owned_ = true;
   }
 
-  void Stop() const { ThrowIfError(TRITONSERVER_ServerStop(triton_object_)); }
+  void Stop() const
+  {
+    // ServerStop is blocking for the duration of the server exit timeout, so
+    // ensure to release the GIL. This can allow request release callbacks
+    // to be interleaved while server is waiting for live requests/models
+    // to complete. Without releasing GIL, this function may acquire the GIL
+    // first and block the Triton request from being released/freed, thus
+    // blocking the server's shutdown in a circular manner thinking a model is
+    // still alive.
+    py::gil_scoped_release release;
+    ThrowIfError(TRITONSERVER_ServerStop(triton_object_));
+  }
 
   void RegisterModelRepository(
       const std::string& repository_path,
@@ -1756,6 +1789,7 @@ PYBIND11_MODULE(triton_bindings, m)
   py::enum_<TRITONSERVER_ParameterType>(m, "TRITONSERVER_ParameterType")
       .value("STRING", TRITONSERVER_PARAMETER_STRING)
       .value("INT", TRITONSERVER_PARAMETER_INT)
+      .value("DOUBLE", TRITONSERVER_PARAMETER_DOUBLE)
       .value("BOOL", TRITONSERVER_PARAMETER_BOOL)
       .value("BYTES", TRITONSERVER_PARAMETER_BYTES);
   // helper functions
@@ -1969,6 +2003,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_string_parameter", &PyInferenceRequest::SetStringParameter)
       .def("set_int_parameter", &PyInferenceRequest::SetIntParameter)
       .def("set_bool_parameter", &PyInferenceRequest::SetBoolParameter)
+      .def("set_double_parameter", &PyInferenceRequest::SetDoubleParameter)
       .def("cancel", &PyInferenceRequest::Cancel);
 
   // TRITONSERVER_InferenceResponse
@@ -2037,6 +2072,7 @@ PYBIND11_MODULE(triton_bindings, m)
           "set_model_load_retry_count",
           &PyServerOptions::SetModelLoadRetryCount)
       .def("set_model_namespacing", &PyServerOptions::SetModelNamespacing)
+      .def("set_enable_peer_access", &PyServerOptions::SetEnablePeerAccess)
       .def("set_log_file", &PyServerOptions::SetLogFile)
       .def("set_log_info", &PyServerOptions::SetLogInfo)
       .def("set_log_warn", &PyServerOptions::SetLogWarn)
@@ -2071,6 +2107,11 @@ PYBIND11_MODULE(triton_bindings, m)
       .export_values();
   py::class_<PyServer>(m, "TRITONSERVER_Server")
       .def(py::init<PyServerOptions&>())
+      .def(
+          "_ptr",
+          [](PyServer& server) {
+            return reinterpret_cast<uintptr_t>(server.Ptr());
+          })
       .def("stop", &PyServer::Stop)
       .def("register_model_repository", &PyServer::RegisterModelRepository)
       .def("unregister_model_repository", &PyServer::UnregisterModelRepository)

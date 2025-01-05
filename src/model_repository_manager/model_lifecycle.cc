@@ -1,4 +1,4 @@
-// Copyright 2022-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -36,6 +36,7 @@
 #include "backend_model.h"
 #include "constants.h"
 #include "filesystem/api.h"
+#include "metrics.h"
 #include "model.h"
 #include "model_config_utils.h"
 #include "repo_agent.h"
@@ -92,7 +93,10 @@ VersionsToLoad(
   RETURN_IF_ERROR(GetDirectorySubdirs(model_path, &subdirs));
   std::set<int64_t, std::greater<int64_t>> existing_versions;
   for (const auto& subdir : subdirs) {
-    if (subdir == kWarmupDataFolder || subdir == kInitialStateFolder) {
+    static const std::vector skip_dirs{
+        kWarmupDataFolder, kInitialStateFolder, kModelConfigFolder};
+    if (std::find(skip_dirs.begin(), skip_dirs.end(), subdir) !=
+        skip_dirs.end()) {
       continue;
     }
     if ((subdir.length() > 1) && (subdir.front() == '0')) {
@@ -431,7 +435,7 @@ Status
 ModelLifeCycle::AsyncLoad(
     const ModelIdentifier& model_id, const std::string& model_path,
     const inference::ModelConfig& model_config, const bool is_config_provided,
-    const bool is_model_file_updated,
+    const ModelTimestamp& prev_timestamp, const ModelTimestamp& curr_timestamp,
     const std::shared_ptr<TritonRepoAgentModelList>& agent_model_list,
     std::function<void(Status)>&& OnComplete)
 {
@@ -485,8 +489,9 @@ ModelLifeCycle::AsyncLoad(
       if (serving_model->state_ == ModelReadyState::READY) {
         // The model is currently being served. Check if the model load could
         // be completed with a simple config update.
-        if (!is_model_file_updated && !serving_model->is_ensemble_ &&
-            EquivalentInNonInstanceGroupConfig(
+        if (!serving_model->is_ensemble_ &&
+            !prev_timestamp.IsModelVersionModified(curr_timestamp, version) &&
+            !ConfigChangeRequiresReload(
                 serving_model->model_config_, model_config)) {
           // Update the model
           model_info = serving_model.get();
@@ -555,16 +560,27 @@ ModelLifeCycle::CreateModel(
   // backend.
   if (!model_config.backend().empty()) {
     std::unique_ptr<TritonModel> model;
+#ifdef TRITON_ENABLE_METRICS
+    const uint64_t model_load_ns =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch())
+            .count();
+#endif  // TRITON_ENABLE_METRICS
     status = TritonModel::Create(
         server_, model_info->model_path_, options_.backend_cmdline_config_map,
-        options_.host_policy_map, version, model_config, is_config_provided,
-        &model);
+        options_.host_policy_map, model_id, version, model_config,
+        is_config_provided, &model);
     is.reset(model.release());
+    if (status.IsOk()) {
+#ifdef TRITON_ENABLE_METRICS
+      CalculateAndReportLoadTime(model_load_ns, &is);
+#endif  // TRITON_ENABLE_METRICS
+    }
   } else {
 #ifdef TRITON_ENABLE_ENSEMBLE
     if (model_info->is_ensemble_) {
       status = EnsembleModel::Create(
-          server_, model_info->model_path_, version, model_config,
+          server_, model_info->model_path_, model_id, version, model_config,
           is_config_provided, options_.min_compute_capability, &is);
       // Complete label provider with label information from involved models
       // Must be done here because involved models may not be able to
@@ -795,10 +811,8 @@ ModelLifeCycle::OnLoadFinal(
     // Mark current versions ready and track info in foreground
     for (auto& loaded : load_tracker->load_set_) {
       std::lock_guard<std::mutex> curr_info_lk(loaded.second->mtx_);
-
       loaded.second->state_ = ModelReadyState::READY;
       loaded.second->state_reason_.clear();
-
       auto bit = background_models_.find((uintptr_t)loaded.second);
       // Check if the version model is loaded in background, if so,
       // replace and unload the current serving version
@@ -841,6 +855,37 @@ ModelLifeCycle::OnLoadFinal(
             ? Status(Status::Code::INVALID_ARG, load_tracker->reason_)
             : Status::Success);
   }
+}
+
+void
+ModelLifeCycle::CalculateAndReportLoadTime(
+    uint64_t load_start_ns_, std::unique_ptr<Model>* model)
+{
+#ifdef TRITON_ENABLE_METRICS
+  auto reporter = (*model)->MetricReporter();
+  const uint64_t now_ns =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now().time_since_epoch())
+          .count();
+  uint64_t time_to_load_ns = now_ns - load_start_ns_;
+  std::chrono::duration<double> time_to_load =
+      std::chrono::duration_cast<std::chrono::duration<double>>(
+          std::chrono::nanoseconds(time_to_load_ns));
+  ReportModelLoadTime(reporter, time_to_load);
+#endif  // TRITON_ENABLE_METRICS
+}
+
+void
+ModelLifeCycle::ReportModelLoadTime(
+    std::shared_ptr<MetricModelReporter> reporter,
+    const std::chrono::duration<double>& time_to_load)
+{
+#ifdef TRITON_ENABLE_METRICS
+  if (reporter) {
+    double load_time_in_seconds = time_to_load.count();
+    reporter->SetGauge(kModelLoadTimeMetric, load_time_in_seconds);
+  }
+#endif  // TRITON_ENABLE_METRICS
 }
 
 }}  // namespace triton::core

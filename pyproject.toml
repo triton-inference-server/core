@@ -24,6 +24,54 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+[project]
+name = "tritonserver"
+authors = [{ name = "NVIDIA Inc.", email = "sw-dl-triton@nvidia.com" }]
+description = "Triton Inference Server In-Process Python API"
+license = { file = "LICENSE.txt" }
+dynamic = ["version"]
+dependencies = ["numpy<2"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Information Technology",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.12",
+    "Environment :: Console",
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+tritonserver = ["_c/triton_bindings.*.so"]
+
+[build-system]
+requires = [
+    "setuptools==75.3.0",
+    "wheel==0.44.0",
+    # For stubgen:
+    "mypy==1.11.0",
+    "numpy<2",
+]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+GPU = ["cupy-cuda12x"]
+test = ["pytest"]
+all = ["tritonserver[GPU]", "tritonserver[test]"]
+
+
 [tool.codespell]
 # note: pre-commit passes explicit lists of files here, which this skip file list doesn't override -
 # this is only to allow you to run codespell interactively

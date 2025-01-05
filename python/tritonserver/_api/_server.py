@@ -137,7 +137,7 @@ class Options:
         List of models to load at startup. Only relevant with ModelControlMode.EXPLICIT.
         See :c:func:`TRITONSERVER_ServerOptionsSetStartupModel`
 
-    strict_model_config : bool, default True
+    strict_model_config : bool, default False
         Enable or disable strict model configuration.
         See :c:func:`TRITONSERVER_ServerOptionsSetStrictModelConfig`
 
@@ -200,6 +200,10 @@ class Options:
     model_namespacing : bool, default False
         Enable or disable model namespacing.
         See :c:func:`TRITONSERVER_ServerOptionsSetModelNamespacing`
+
+    enable_peer_access : bool, default True
+        Enable or disable GPU peer access.
+        See :c:func:`TRITONSERVER_ServerOptionsSetEnablePeerAccess`
 
     log_file : Optional[str], default None
         Path to the log file. If None, logs are written to stdout.
@@ -275,7 +279,7 @@ class Options:
     server_id: str = "triton"
     model_control_mode: ModelControlMode = ModelControlMode.NONE
     startup_models: list[str] = field(default_factory=list[str])
-    strict_model_config: bool = True
+    strict_model_config: bool = False
 
     rate_limiter_mode: RateLimitMode = RateLimitMode.OFF
     rate_limiter_resources: list[RateLimiterResource] = field(
@@ -300,6 +304,7 @@ class Options:
     model_load_thread_count: uint = 4
     model_load_retry_count: uint = 0
     model_namespacing: bool = False
+    enable_peer_access: bool = True
 
     log_file: Optional[str] = None
     log_info: bool = False
@@ -381,6 +386,7 @@ class Options:
         options.set_model_load_thread_count(self.model_load_thread_count)
         options.set_model_load_retry_count(self.model_load_retry_count)
         options.set_model_namespacing(self.model_namespacing)
+        options.set_enable_peer_access(self.enable_peer_access)
 
         if self.log_file:
             options.set_log_file(self.log_file)
@@ -507,14 +513,14 @@ class Server:
 
         Options(server_id='triton', model_repository='/workspace/models',
         model_control_mode=<TRITONSERVER_ModelControlMode.NONE: 0>,
-        startup_models=[], strict_model_config=True,
+        startup_models=[], strict_model_config=False,
         rate_limiter_mode=<TRITONSERVER_RateLimitMode.OFF: 0>,
         rate_limiter_resources=[], pinned_memory_pool_size=268435456,
         cuda_memory_pool_sizes={}, cache_config={},
         cache_directory='/opt/tritonserver/caches',
         min_supported_compute_capability=6.0, exit_on_error=True,
         strict_readiness=True, exit_timeout=30, buffer_manager_thread_count=0,
-        model_load_thread_count=4, model_namespacing=False, log_file=None,
+        model_load_thread_count=4, model_namespacing=False, enable_peer_access=True, log_file=None,
         log_info=False, log_warn=False, log_error=False,
         log_format=<TRITONSERVER_LogFormat.DEFAULT: 0>, log_verbose=False,
         metrics=True, gpu_metrics=True, cpu_metrics=True,
@@ -614,6 +620,9 @@ class Server:
 
         self._server.stop()
         self._server = Server._UnstartedServer()
+
+    def _ptr(self):
+        return self._server._ptr()
 
     def unregister_model_repository(self, repository_path: str) -> None:
         """Unregister model repository

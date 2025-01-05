@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -49,6 +49,39 @@ enum ActionType { NO_ACTION, LOAD, UNLOAD };
 /// Predefined reason strings
 #define MODEL_READY_REASON_DUPLICATE "model appears in two or more repositories"
 
+// Information about timestamps in model directory.
+class ModelTimestamp {
+ public:
+  ModelTimestamp() {}
+  ModelTimestamp(
+      const std::string& model_dir_path, const std::string& model_config_path);
+
+  bool IsModified(const ModelTimestamp& new_timestamp) const;
+  bool IsModelVersionModified(
+      const ModelTimestamp& new_timestamp, const int64_t version) const;
+
+  void SetModelConfigModifiedTime(const int64_t time_ns);
+
+ private:
+  bool ModelDirectoryPathIsValid(const std::string& path) const;
+  bool ReadModelDirectoryTimestamp(
+      const std::string& model_dir_path, const std::string& model_config_path);
+  bool ReadModelDirectoryContentTimestamps(
+      const std::string& model_dir_path, const std::string& model_config_path);
+
+  int64_t GetModifiedTime() const;
+  int64_t GetModelVersionModifiedTime(const int64_t version) const;
+  int64_t GetNonModelConfigNorVersionNorDirModifiedTime() const;
+
+  // Timestamps of all contents in the model directory, i.e.
+  // - "<model_config_content_name_>": ns timestamp of model config (directory)
+  // -                            "1": ns timestamp of model version 1
+  // -                             "": ns timestamp of the model directory
+  std::unordered_map<std::string, int64_t> model_timestamps_;
+  // If empty, model config is not detected on the model directory.
+  std::string model_config_content_name_;
+};
+
 /// An object to manage the model repository active in the server.
 class ModelRepositoryManager {
  public:
@@ -77,26 +110,20 @@ class ModelRepositoryManager {
   // Information about the model.
   struct ModelInfo {
     ModelInfo(
-        const std::pair<int64_t, int64_t>& mtime_nsec,
-        const std::pair<int64_t, int64_t>& prev_mtime_ns,
-        const std::string& model_path)
+        const ModelTimestamp& mtime_nsec, const ModelTimestamp& prev_mtime_ns,
+        const std::string& model_path, const std::string& model_config_path)
         : mtime_nsec_(mtime_nsec), prev_mtime_ns_(prev_mtime_ns),
           explicitly_load_(true), model_path_(model_path),
-          is_config_provided_(false)
+          model_config_path_(model_config_path), is_config_provided_(false)
     {
     }
-    ModelInfo()
-        : mtime_nsec_(0, 0), prev_mtime_ns_(0, 0), explicitly_load_(true),
-          is_config_provided_(false)
-    {
-    }
-    // Current last modified time in ns, for '<config.pbtxt, model files>'
-    std::pair<int64_t, int64_t> mtime_nsec_;
-    // Previous last modified time in ns, for '<config.pbtxt, model files>'
-    std::pair<int64_t, int64_t> prev_mtime_ns_;
+    ModelInfo() : explicitly_load_(true), is_config_provided_(false) {}
+    ModelTimestamp mtime_nsec_;
+    ModelTimestamp prev_mtime_ns_;
     bool explicitly_load_;
     inference::ModelConfig model_config_;
     std::string model_path_;
+    std::string model_config_path_;
     // Temporary location to hold agent model list before creating the model
     // the ownership must transfer to ModelLifeCycle to ensure
     // the agent model life cycle is handled properly.
@@ -391,6 +418,8 @@ class ModelRepositoryManager {
   /// and the models in the model repository will not be loaded at startup.
   /// Otherwise, LoadUnloadModel() is not allowed and the models will be loaded.
   /// Cannot be set to true if polling_enabled is true.
+  /// \param model_config_name Custom model config name to load for all models.
+  /// Fall back to default config file if empty.
   /// \param life_cycle_options The options to configure ModelLifeCycle.
   /// \param model_repository_manager Return the model repository manager.
   /// \return The error status.
@@ -398,8 +427,8 @@ class ModelRepositoryManager {
       InferenceServer* server, const std::string& server_version,
       const std::set<std::string>& repository_paths,
       const std::set<std::string>& startup_models,
-      const bool strict_model_config, const bool polling_enabled,
-      const bool model_control_enabled,
+      const bool strict_model_config, const std::string& model_config_name,
+      const bool polling_enabled, const bool model_control_enabled,
       const ModelLifeCycleOptions& life_cycle_options,
       const bool enable_model_namespacing,
       std::unique_ptr<ModelRepositoryManager>* model_repository_manager);
@@ -410,7 +439,8 @@ class ModelRepositoryManager {
   Status PollAndUpdate();
 
   /// Load or unload a specified model.
-  /// \param models The models and the parameters to be loaded or unloaded
+  /// \param models The models and the parameters to be loaded or unloaded.
+  /// Expect the number of models to be exactly one.
   /// \param type The type action to be performed. If the action is LOAD and
   /// the model has been loaded, the model will be re-loaded.
   /// \return error status. Return "NOT_FOUND" if it tries to load
@@ -509,8 +539,9 @@ class ModelRepositoryManager {
 
   ModelRepositoryManager(
       const std::set<std::string>& repository_paths, const bool autofill,
-      const bool polling_enabled, const bool model_control_enabled,
-      const double min_compute_capability, const bool enable_model_namespacing,
+      const std::string& model_config_name, const bool polling_enabled,
+      const bool model_control_enabled, const double min_compute_capability,
+      const bool enable_model_namespacing,
       std::unique_ptr<ModelLifeCycle> life_cycle);
 
   /// The internal function that are called in Create() and PollAndUpdate().
@@ -614,6 +645,7 @@ class ModelRepositoryManager {
       const std::vector<const InferenceParameter*>& model_params);
 
   const bool autofill_;
+  const std::string model_config_name_;
   const bool polling_enabled_;
   const bool model_control_enabled_;
   const double min_compute_capability_;

@@ -61,8 +61,9 @@ TritonModel::Create(
     InferenceServer* server, const std::string& model_path,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map,
-    const int64_t version, inference::ModelConfig model_config,
-    const bool is_config_provided, std::unique_ptr<TritonModel>* model)
+    const ModelIdentifier& model_id, const int64_t version,
+    inference::ModelConfig model_config, const bool is_config_provided,
+    std::unique_ptr<TritonModel>* model)
 {
   model->reset();
 
@@ -143,8 +144,8 @@ TritonModel::Create(
 
   // Create and initialize the model.
   std::unique_ptr<TritonModel> local_model(new TritonModel(
-      server, localized_model_dir, backend, min_compute_capability, version,
-      model_config, auto_complete_config, backend_cmdline_config_map,
+      server, localized_model_dir, backend, min_compute_capability, model_id,
+      version, model_config, auto_complete_config, backend_cmdline_config_map,
       host_policy_map));
 
   TritonModel* raw_local_model = local_model.get();
@@ -929,12 +930,14 @@ TritonModel::TritonModel(
     InferenceServer* server,
     const std::shared_ptr<LocalizedPath>& localized_model_dir,
     const std::shared_ptr<TritonBackend>& backend,
-    const double min_compute_capability, const int64_t version,
-    const inference::ModelConfig& config, const bool auto_complete_config,
+    const double min_compute_capability, const ModelIdentifier& model_id,
+    const int64_t version, const inference::ModelConfig& config,
+    const bool auto_complete_config,
     const triton::common::BackendCmdlineConfigMap& backend_cmdline_config_map,
     const triton::common::HostPolicyCmdlineConfigMap& host_policy_map)
     : Model(
-          min_compute_capability, localized_model_dir->Path(), version, config),
+          min_compute_capability, localized_model_dir->Path(), model_id,
+          version, config),
       server_(server), min_compute_capability_(min_compute_capability),
       auto_complete_config_(auto_complete_config),
       backend_cmdline_config_map_(backend_cmdline_config_map),
@@ -1546,6 +1549,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetStringParameter(
     TRITONBACKEND_Response* response, const char* name, const char* value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1555,6 +1563,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetIntParameter(
     TRITONBACKEND_Response* response, const char* name, const int64_t value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1564,6 +1577,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetBoolParameter(
     TRITONBACKEND_Response* response, const char* name, const bool value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1573,6 +1591,11 @@ TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONBACKEND_ResponseSetDoubleParameter(
     TRITONBACKEND_Response* response, const char* name, const double value)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   RETURN_TRITONSERVER_ERROR_IF_ERROR(tr->AddParameter(name, value));
   return nullptr;  // success
@@ -1584,6 +1607,11 @@ TRITONBACKEND_ResponseOutput(
     const char* name, const TRITONSERVER_DataType datatype,
     const int64_t* shape, const uint32_t dims_count)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   *output = nullptr;
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
   std::vector<int64_t> lshape(shape, shape + dims_count);
@@ -1599,6 +1627,11 @@ TRITONBACKEND_ResponseSend(
     TRITONBACKEND_Response* response, const uint32_t send_flags,
     TRITONSERVER_Error* error)
 {
+  if (!response) {
+    return TRITONSERVER_ErrorNew(
+        TRITONSERVER_ERROR_INVALID_ARG, "response was nullptr");
+  }
+
   InferenceResponse* tr = reinterpret_cast<InferenceResponse*>(response);
 
   std::unique_ptr<InferenceResponse> utr(tr);

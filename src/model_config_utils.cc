@@ -302,14 +302,19 @@ ValidateIOShape(
         Status::Code::INVALID_ARG, message_prefix + "must specify 'name'");
   }
 
+  std::string message_prefix_with_name =
+      message_prefix + std::string("'" + io.name() + "' ");
+
   if (io.data_type() == inference::DataType::TYPE_INVALID) {
     return Status(
-        Status::Code::INVALID_ARG, "model output must specify 'data_type'");
+        Status::Code::INVALID_ARG,
+        message_prefix_with_name + "must specify 'data_type'");
   }
 
   if (io.dims_size() == 0) {
     return Status(
-        Status::Code::INVALID_ARG, message_prefix + "must specify 'dims'");
+        Status::Code::INVALID_ARG,
+        message_prefix_with_name + "must specify 'dims'");
   }
 
   // If the configuration is non-batching, then no input or output
@@ -319,7 +324,7 @@ ValidateIOShape(
       (max_batch_size == 0)) {
     return Status(
         Status::Code::INVALID_ARG,
-        message_prefix +
+        message_prefix_with_name +
             "cannot have empty reshape for non-batching model as scalar "
             "tensors are not supported");
   }
@@ -329,7 +334,7 @@ ValidateIOShape(
     if ((dim < 1) && (dim != triton::common::WILDCARD_DIM)) {
       return Status(
           Status::Code::INVALID_ARG,
-          message_prefix + "dimension must be integer >= 1, or " +
+          message_prefix_with_name + "dimension must be integer >= 1, or " +
               std::to_string(triton::common::WILDCARD_DIM) +
               " to indicate a variable-size dimension");
     }
@@ -341,7 +346,8 @@ ValidateIOShape(
       if ((dim < 1) && (dim != triton::common::WILDCARD_DIM)) {
         return Status(
             Status::Code::INVALID_ARG,
-            message_prefix + "reshape dimensions must be integer >= 1, or " +
+            message_prefix_with_name +
+                "reshape dimensions must be integer >= 1, or " +
                 std::to_string(triton::common::WILDCARD_DIM) +
                 " to indicate a variable-size dimension");
       }
@@ -359,7 +365,7 @@ ValidateIOShape(
         ((reshape_size != 0) || (dims_size != 1))) {
       return Status(
           Status::Code::INVALID_ARG,
-          message_prefix + "has different size for dims and reshape");
+          message_prefix_with_name + "has different size for dims and reshape");
     }
 
     // shape contains variable-size dimension, in this case we compare if
@@ -394,7 +400,7 @@ ValidateIOShape(
       if (dim_element_cnts.size() != reshape_element_cnts.size()) {
         return Status(
             Status::Code::INVALID_ARG,
-            message_prefix +
+            message_prefix_with_name +
                 "has different number of variable-size dimensions for dims "
                 "and reshape");
       }
@@ -402,7 +408,8 @@ ValidateIOShape(
         if (dim_element_cnts[idx] != reshape_element_cnts[idx]) {
           return Status(
               Status::Code::INVALID_ARG,
-              message_prefix + "has different size for dims and reshape");
+              message_prefix_with_name +
+                  "has different size for dims and reshape");
         }
       }
     }
@@ -410,6 +417,71 @@ ValidateIOShape(
 
   return Status::Success;
 }
+
+/// Validate that Non-linear format inputs or outputs are specified correctly
+/// in a model configuration.
+template <class ModelIO>
+Status
+ValidateNonLinearFormatIO(
+    const ModelIO& io, const std::string& platform, bool is_input)
+{
+  if (!io.is_non_linear_format_io()) {
+    // Nothing to validate as the tensor is not non-linear format.
+    return Status::Success;
+  }
+
+  if (platform != kTensorRTPlanPlatform) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Non-linear IO format is only supported for the TensorRT platform");
+  }
+
+  if (io.dims_size() != 3) {
+    std::string io_type = is_input ? "input" : "output";
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Non-linear IO format " + io_type + " requires 3 dims");
+  }
+
+  return Status::Success;
+}
+
+#ifdef TRITON_ENABLE_METRICS
+
+// Helper function to validate that model_metrics contains all required data.
+Status
+ValidateModelMetrics(const inference::ModelMetrics& model_metrics)
+{
+  for (const auto& metric_control : model_metrics.metric_control()) {
+    if (!metric_control.has_metric_identifier()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "metric control must specify 'metric_identifier'");
+    }
+
+    if (metric_control.metric_identifier().family().empty()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "metric identifier must specify non-empty 'family'");
+    }
+
+    if (!metric_control.has_histogram_options()) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "metric control must specify 'histogram_options'");
+    }
+
+    if (metric_control.histogram_options().buckets_size() == 0) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "histogram options must specify non-empty 'buckets'");
+    }
+  }
+
+  return Status::Success;
+}
+
+#endif  // TRITON_ENABLE_METRICS
 
 }  // namespace
 
@@ -677,8 +749,8 @@ GetNormalizedModelConfig(
   // to auto-complete.
   RETURN_IF_ERROR(
       AutoCompleteBackendFields(model_name, std::string(path), config));
-  LOG_VERBOSE(1) << "Server side auto-completed config: "
-                 << config->DebugString();
+
+  LOG_PROTOBUF_VERBOSE(1, "Server side auto-completed config: ", (*config));
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
 
@@ -1556,7 +1628,7 @@ ValidateModelConfig(
     }
   }
 
-  // If ensemble scheduling is specified, validate it.  Otherwise,
+  // If ensemble scheduling is specified, validate it. Otherwise,
   // must validate platform and instance_group
   if (config.has_ensemble_scheduling()) {
 #ifdef TRITON_ENABLE_ENSEMBLE
@@ -1585,6 +1657,14 @@ ValidateModelConfig(
             " cache.");
   }
 
+  // If model_metric is specified, validate it.
+  if (config.has_model_metrics()) {
+#ifdef TRITON_ENABLE_METRICS
+    RETURN_IF_ERROR(ValidateModelMetrics(config.model_metrics()));
+#else
+    return Status(Status::Code::INVALID_ARG, "metrics not supported");
+#endif  // TRITON_ENABLE_METRICS
+  }
   return Status::Success;
 }
 
@@ -1725,6 +1805,8 @@ ValidateModelInput(
         "shape tensors are only supported for TensorRT platform");
   }
 
+  RETURN_IF_ERROR(ValidateNonLinearFormatIO(io, platform, true /* is_input*/));
+
   return Status::Success;
 }
 
@@ -1760,6 +1842,8 @@ ValidateModelOutput(
         Status::Code::INVALID_ARG,
         "shape tensors are only supported for TensorRT platform");
   }
+
+  RETURN_IF_ERROR(ValidateNonLinearFormatIO(io, platform, false /* is_input*/));
 
   return Status::Success;
 }
@@ -2393,14 +2477,16 @@ TritonToDataType(const TRITONSERVER_DataType dtype)
 }
 
 bool
-EquivalentInNonInstanceGroupConfig(
+ConfigChangeRequiresReload(
     const inference::ModelConfig& old_config,
     const inference::ModelConfig& new_config)
 {
   ::google::protobuf::util::MessageDifferencer pb_diff;
   pb_diff.IgnoreField(
       old_config.descriptor()->FindFieldByLowercaseName("instance_group"));
-  return pb_diff.Compare(old_config, new_config);
+  pb_diff.IgnoreField(
+      old_config.descriptor()->FindFieldByLowercaseName("version_policy"));
+  return !pb_diff.Compare(old_config, new_config);
 }
 
 bool

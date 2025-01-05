@@ -1,4 +1,4 @@
-// Copyright 2018-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -66,12 +66,16 @@ constexpr char kEnsemblePlatform[] = "ensemble";
 
 constexpr char kTensorRTExecutionAccelerator[] = "tensorrt";
 constexpr char kOpenVINOExecutionAccelerator[] = "openvino";
+constexpr char kCUDAExecutionAccelerator[] = "cuda";
 constexpr char kGPUIOExecutionAccelerator[] = "gpu_io";
 constexpr char kAutoMixedPrecisionExecutionAccelerator[] =
     "auto_mixed_precision";
 
 constexpr char kModelConfigPbTxt[] = "config.pbtxt";
+constexpr char kPbTxtExtension[] = ".pbtxt";
+constexpr char kModelConfigFolder[] = "configs";
 
+constexpr char kMetricsLabelModelNamespace[] = "namespace";
 constexpr char kMetricsLabelModelName[] = "model";
 constexpr char kMetricsLabelModelVersion[] = "version";
 constexpr char kMetricsLabelGpuUuid[] = "gpu_uuid";
@@ -81,6 +85,8 @@ constexpr char kInitialStateFolder[] = "initial_state";
 
 // Metric names
 constexpr char kPendingRequestMetric[] = "inf_pending_request_count";
+constexpr char kModelLoadTimeMetric[] = "model_load_time";
+constexpr char kFirstResponseHistogram[] = "first_response_histogram";
 
 constexpr uint64_t NANOS_PER_SECOND = 1000000000;
 constexpr uint64_t NANOS_PER_MILLIS = 1000000;
