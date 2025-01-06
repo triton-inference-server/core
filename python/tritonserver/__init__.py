@@ -55,6 +55,7 @@ from tritonserver._api._model import Model as Model
 from tritonserver._api._model import ModelBatchFlag as ModelBatchFlag
 from tritonserver._api._model import ModelTxnPropertyFlag as ModelTxnPropertyFlag
 from tritonserver._api._request import InferenceRequest as InferenceRequest
+from tritonserver._api._response import InferenceResponse as InferenceResponse
 from tritonserver._api._server import InstanceGroupKind as InstanceGroupKind
 from tritonserver._api._server import LogFormat as LogFormat
 from tritonserver._api._server import Metric as Metric
