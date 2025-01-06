@@ -217,23 +217,8 @@ class Tensor:
 
         self._sync_on_requested_stream(stream)
 
-        dl_managed_tensor = Tensor._create_managed_tensor()
-        dl_managed_tensor.dl_tensor.data = self.data_ptr
-        dl_managed_tensor.dl_tensor.device = DLDevice(
-            TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
-            self.memory_type_id,
-        )
+        dl_managed_tensor = self._create_managed_tensor()
 
-        dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
-        dl_managed_tensor.dl_tensor.ndim = len(self.shape)
-        dl_managed_tensor.dl_tensor.shape = (ctypes.c_int64 * len(self.shape))(
-            *self.shape
-        )
-        dl_managed_tensor.dl_tensor.strides = ctypes.POINTER(ctypes.c_int64)()
-        dl_managed_tensor.dl_tensor.byte_offset = 0
-        dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
-
-        self._set_dlpack_manager_ctx(dl_managed_tensor)
         pycapsule = ctypes.pythonapi.PyCapsule_New(
             ctypes.byref(dl_managed_tensor),
             c_str_dltensor,
@@ -600,26 +585,39 @@ class Tensor:
             size=obj.itemsize * obj.size,
             owner=obj,
         )
-
         return Tensor(data_type, shape, memory_buffer)
 
-    @staticmethod
-    def _create_managed_tensor():
+    def _create_managed_tensor(self) -> DLManagedTensor:
+        # Allocates space for a managed tensor object
+        # and fills in the fields
+        #
+        # To ensure the lifetime of the managed tensor we create a
+        # context object that includes a newly created shape array and a
+        # reference to self
+
         size = ctypes.c_size_t(ctypes.sizeof(DLManagedTensor))
         address = ctypes.pythonapi.PyMem_RawMalloc(size)
-        return DLManagedTensor.from_address(address)
+        dl_managed_tensor = DLManagedTensor.from_address(address)
+        dl_managed_tensor.dl_tensor.data = self.data_ptr
+        dl_managed_tensor.dl_tensor.device = DLDevice(
+            TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE[self.memory_type],
+            self.memory_type_id,
+        )
+        dl_managed_tensor.dl_tensor.dtype = TRITON_TO_DLPACK_DTYPE[self.data_type]
+        dl_managed_tensor.dl_tensor.ndim = len(self.shape)
+        manager_ctx = _ManagerCtx(self)
+        dl_managed_tensor.dl_tensor.shape = manager_ctx.shape
+        dl_managed_tensor.dl_tensor.strides = manager_ctx.strides
+        dl_managed_tensor.dl_tensor.byte_offset = 0
+        dl_managed_tensor.deleter = Tensor._managed_tensor_deleter
+        dl_managed_tensor.manager_ctx = manager_ctx.reference()
+        return dl_managed_tensor
 
     @staticmethod
     @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
     def _managed_tensor_deleter(handle: int) -> None:
         dl_managed_tensor = DLManagedTensor.from_address(handle)
-        tensor_obj_ptr = ctypes.cast(
-            dl_managed_tensor.manager_ctx, ctypes.POINTER(ctypes.py_object)
-        )
-        tensor_obj = tensor_obj_ptr.contents
-        ctypes.pythonapi.Py_DecRef(tensor_obj)
-        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        ctypes.pythonapi.Py_DecRef(shape_obj)
+        _ManagerCtx.release(dl_managed_tensor.manager_ctx)
         ctypes.pythonapi.PyMem_RawFree(handle)
 
     @staticmethod
@@ -639,14 +637,36 @@ class Tensor:
             print(f"Exception occurred while deleting capsule: {e}")
             raise e
 
-    def _set_dlpack_manager_ctx(self, dl_managed_tensor):
-        tensor_obj = ctypes.py_object(self)
-        tensor_obj_ptr = ctypes.pointer(tensor_obj)
-        dl_managed_tensor.manager_ctx = ctypes.cast(tensor_obj_ptr, ctypes.c_void_p)
-        shape_obj = ctypes.py_object(dl_managed_tensor.dl_tensor.shape)
-        ctypes.pythonapi.Py_IncRef(tensor_obj)
-        ctypes.pythonapi.Py_IncRef(shape_obj)
-
     _from_converters: ClassVar[dict[type, Callable[[Any], Tensor]]] = dict(
         {numpy.ndarray: _from_numpy, numpy.generic: _from_numpy, list: _from_list},
     )
+
+
+class _ManagerCtx:
+    # To ensure the lifetime of the managed tensor we create a
+    # context object that includes a newly created shape array and a
+    # reference to self
+
+    def __init__(self, tensor: Tensor) -> None:
+        self._tensor = tensor
+        self.shape = (ctypes.c_int64 * len(tensor.shape))(*tensor.shape)
+        self.strides = ctypes.POINTER(ctypes.c_int64)()
+
+    def reference(self) -> ctypes.c_void_p:
+        py_obj = ctypes.py_object(self)
+        ctypes.pythonapi.Py_IncRef(py_obj)
+
+        # Note: Could not find a direct way to cast a python object
+        # to a c_void_p. The mechanism is to either use id(self) or
+        # cast as described here:
+        #
+        # https://groups.google.com/g/dev-python/c/QRRqVC7gkf4/m/zH7l1gTXBwAJ
+        #
+        # To avoid relying on the behavior of id() we use the casting mechanism
+
+        return ctypes.POINTER(ctypes.c_void_p)(py_obj)[0]
+
+    @staticmethod
+    def release(reference: ctypes.c_void_p) -> None:
+        py_obj = ctypes.cast(reference, ctypes.py_object)
+        ctypes.pythonapi.Py_DecRef(py_obj)

@@ -24,9 +24,17 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import asyncio
+import copy
+import gc
 import json
 import os
 import shutil
+import sys
+import time
+import unittest
+from collections import Counter
+from contextlib import contextmanager
 
 import numpy
 import pytest
@@ -295,6 +303,96 @@ class TestTensor:
         torch_tensor = torch.from_dlpack(tensor)
         numpy.testing.assert_array_equal(torch_tensor.numpy(), cpu_array)
         assert torch_tensor.data_ptr() == cpu_array.ctypes.data
+
+    async def _tensor_from_numpy(self):
+        owner = numpy.ones(2**27)
+        tensor = tritonserver.Tensor.from_dlpack(owner)
+        array = numpy.from_dlpack(tensor)
+        del owner
+        del tensor
+        del array
+        await asyncio.sleep(0.1)
+
+    async def _async_test_runs(self):
+        tasks = []
+        for _ in range(100):
+            tasks.append(asyncio.create_task(self._tensor_from_numpy()))
+        try:
+            await asyncio.wait(tasks)
+        except Exception as e:
+            print(e)
+
+    @staticmethod
+    @contextmanager
+    def object_collector():
+        gc.collect()
+        objects_before = gc.get_objects()
+        yield
+        objects_after = gc.get_objects()
+        new_objects = [type(x) for x in objects_after[len(objects_before) :]]
+        tensor_objects = [
+            x for x in objects_after if isinstance(x, tritonserver.Tensor)
+        ]
+        if tensor_objects:
+            print("Tensor objects")
+            print(len(tensor_objects))
+            print(type(tensor_objects[-1].memory_buffer.owner))
+            print(
+                f"\nTotal Collected Objects ({len(new_objects)}) {Counter(new_objects)}"
+            )
+        assert len(tensor_objects) == 0, "Leaked Tensors"
+
+    def test_cpu_memory_leak_async(self):
+        with TestTensor.object_collector():
+            asyncio.run(self._async_test_runs())
+
+    def test_cpu_memory_leak_sync(self):
+        with TestTensor.object_collector():
+            for _ in range(100):
+                owner = numpy.ones(2**27)
+                tensor = tritonserver.Tensor.from_dlpack(owner)
+                array = numpy.from_dlpack(tensor)
+                del owner
+                del tensor
+                del array
+
+    @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
+    def test_gpu_memory_leak(self):
+        with TestTensor.object_collector():
+            for _ in range(100):
+                owner = cupy.ones(2**27)
+                tensor = tritonserver.Tensor.from_dlpack(owner)
+                array = cupy.from_dlpack(tensor)
+                del owner
+                del tensor
+                del array
+
+    def test_reference_counts(self):
+        with TestTensor.object_collector():
+            owner = numpy.ones(2**27)
+            owner_data = owner.ctypes.data
+            assert sys.getrefcount(owner) - 1 == 1, "Invalid Count"
+
+            tensor = tritonserver.Tensor.from_dlpack(owner)
+            assert sys.getrefcount(owner) - 1 == 2, "Invalid Count"
+            assert sys.getrefcount(tensor) - 1 == 1, "Invalid Count"
+            del owner
+
+            numpy_array = numpy.from_dlpack(tensor)
+            assert owner_data == numpy_array.ctypes.data
+            assert sys.getrefcount(tensor) - 1 == 2, "Invalid Count"
+            assert sys.getrefcount(numpy_array) - 1 == 1, "Invalid Count"
+
+            tensor.shape = [2, 2**26]
+
+            assert numpy_array.shape == (2**27,), "Invalid Shape"
+
+            numpy_array_2 = numpy.from_dlpack(tensor)
+            del tensor
+            assert owner_data == numpy_array.ctypes.data
+            assert numpy_array_2.shape == (2, 2**26)
+            del numpy_array
+            del numpy_array_2
 
 
 class TestServer:
