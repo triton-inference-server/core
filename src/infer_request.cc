@@ -1228,11 +1228,16 @@ InferenceRequest::Normalize()
       }
     }
   }
+
+  if (model_config.has_sequence_batching()) {
+    RETURN_IF_ERROR(ValidateOverrideInputs());
+  }
+
   return Status::Success;
 }
 
 Status
-InferenceRequest::ValidateRequestInputs()
+InferenceRequest::ValidateRequestInputs() const
 {
   const inference::ModelConfig& model_config = model_raw_->Config();
   if ((original_inputs_.size() > (size_t)model_config.input_size()) ||
@@ -1399,6 +1404,59 @@ InferenceRequest::ValidateBytesInputs(
             " string elements for inference input '" + input_name +
             "' for model '" + model_name + "', got " +
             std::to_string(element_checked));
+  }
+
+  return Status::Success;
+}
+
+Status
+InferenceRequest::ValidateOverrideInputs() const
+{
+  const inference::ModelConfig& model_config = model_raw_->Config();
+  const std::string& model_name = ModelName();
+  std::string correlation_id_tensor_name;
+  inference::DataType correlation_id_datatype;
+
+  RETURN_IF_ERROR(GetTypedSequenceControlProperties(
+      model_config.sequence_batching(), model_config.name(),
+      inference::ModelSequenceBatching::Control::CONTROL_SEQUENCE_CORRID,
+      false /* required */, &correlation_id_tensor_name,
+      &correlation_id_datatype));
+
+  // Make sure request correlation ID type matches model configuration.
+  if (!correlation_id_tensor_name.empty()) {
+    const auto& correlation_id = CorrelationId();
+    bool dtypes_match = true;
+    std::string request_corrid_datatype;
+    if ((correlation_id.Type() ==
+         InferenceRequest::SequenceId::DataType::STRING) &&
+        (correlation_id_datatype != inference::DataType::TYPE_STRING)) {
+      dtypes_match = false;
+      request_corrid_datatype = triton::common::DataTypeToProtocolString(
+          inference::DataType::TYPE_STRING);
+    } else if (
+        (correlation_id.Type() ==
+         InferenceRequest::SequenceId::DataType::UINT64) &&
+        ((correlation_id_datatype != inference::DataType::TYPE_UINT64) &&
+         (correlation_id_datatype != inference::DataType::TYPE_INT64) &&
+         (correlation_id_datatype != inference::DataType::TYPE_UINT32) &&
+         (correlation_id_datatype != inference::DataType::TYPE_INT32))) {
+      dtypes_match = false;
+      request_corrid_datatype = triton::common::DataTypeToProtocolString(
+          inference::DataType::TYPE_UINT64);
+    }
+
+    if (!dtypes_match) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          LogRequest() + "sequence batching control '" +
+              correlation_id_tensor_name + "' data-type is '" +
+              request_corrid_datatype + "', but model '" + model_name +
+              "' expects '" +
+              std::string(triton::common::DataTypeToProtocolString(
+                  correlation_id_datatype)) +
+              "'");
+    }
   }
 
   return Status::Success;

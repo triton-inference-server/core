@@ -771,12 +771,14 @@ class InferenceRequest {
   Status Normalize();
 
   // Helper for validating Inputs
-  Status ValidateRequestInputs();
+  Status ValidateRequestInputs() const;
 
   Status ValidateBytesInputs(
       const std::string& input_id, const Input& input,
       const std::string& model_name,
       TRITONSERVER_MemoryType* buffer_memory_type) const;
+
+  Status ValidateOverrideInputs() const;
 
   // Helpers for pending request metrics
   void IncrementPendingRequestCount();
