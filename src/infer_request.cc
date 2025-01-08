@@ -1230,7 +1230,7 @@ InferenceRequest::Normalize()
   }
 
   if (model_config.has_sequence_batching()) {
-    RETURN_IF_ERROR(ValidateOverrideInputs());
+    RETURN_IF_ERROR(ValidateCorrelationId());
   }
 
   return Status::Success;
@@ -1410,7 +1410,7 @@ InferenceRequest::ValidateBytesInputs(
 }
 
 Status
-InferenceRequest::ValidateOverrideInputs() const
+InferenceRequest::ValidateCorrelationId() const
 {
   const inference::ModelConfig& model_config = model_raw_->Config();
   const std::string& model_name = ModelName();

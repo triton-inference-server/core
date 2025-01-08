@@ -778,7 +778,7 @@ class InferenceRequest {
       const std::string& model_name,
       TRITONSERVER_MemoryType* buffer_memory_type) const;
 
-  Status ValidateOverrideInputs() const;
+  Status ValidateCorrelationId() const;
 
   // Helpers for pending request metrics
   void IncrementPendingRequestCount();
