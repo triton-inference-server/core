@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -92,7 +92,6 @@ constexpr uint64_t NANOS_PER_SECOND = 1000000000;
 constexpr uint64_t NANOS_PER_MILLIS = 1000000;
 constexpr int MAX_GRPC_MESSAGE_SIZE = INT32_MAX;
 constexpr uint64_t SEQUENCE_IDLE_DEFAULT_MICROSECONDS = 1000 * 1000;
-constexpr size_t STRING_CORRELATION_ID_MAX_LENGTH_BYTES = 128;
 constexpr size_t CUDA_IPC_STRUCT_SIZE = 64;
 
 #ifdef TRITON_ENABLE_METRICS

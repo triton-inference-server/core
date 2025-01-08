@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1343,9 +1343,9 @@ SequenceBatch::SetControlTensors(
     auto& seq_corr_id = seq_slot_corrid_override_;
     size_t size_p = triton::common::GetDataTypeByteSize(seq_corr_id->DType());
     if (seq_corr_id->DType() == inference::DataType::TYPE_STRING) {
-      // 4 bytes for length of string plus pre-defined max string correlation id
-      // length in bytes
-      size_p = 4 + triton::core::STRING_CORRELATION_ID_MAX_LENGTH_BYTES;
+      // 4 bytes for length of string plus string correlation id length in
+      // bytes.
+      size_p = 4 + corrid.StringValue().length();
     }
 
     TRITONSERVER_MemoryType memory_type;
