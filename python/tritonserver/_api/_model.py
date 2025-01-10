@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -29,13 +29,14 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent
 import json
 import queue
 from typing import TYPE_CHECKING, Any, Optional
 
 from tritonserver._api._allocators import ResponseAllocator
-from tritonserver._api._request import InferenceRequest, AsyncInferenceRequest
-from tritonserver._api._response import AsyncResponseIterator, ResponseIterator, AsyncInferenceResponse
+from tritonserver._api._request import InferenceRequest
+from tritonserver._api._response import InferenceResponse
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
@@ -136,19 +137,13 @@ class Model:
         if "model" in kwargs:
             kwargs.pop("model")
         return InferenceRequest(model=self, **kwargs)
-    
-    def create_async_request(self, **kwargs: Unpack[AsyncInferenceRequest]) -> AsyncInferenceRequest:
-        if "model" in kwargs:
-            kwargs.pop("model")
-        return AsyncInferenceRequest(model=self, **kwargs)
 
-    '''
     def async_infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
         raise_on_error: bool = True,
         **kwargs: Unpack[InferenceRequest],
-    ) -> AsyncResponseIterator:
+    ) -> AsyncIterable:
         """Send an inference request to the model for execution
 
         Sends an inference request to the model. Responses are
@@ -173,7 +168,7 @@ class Model:
 
         Returns
         -------
-        AsyncResponseIterator
+        AsyncIterable
             asyncio compatible iterator
 
         Raises
@@ -186,79 +181,53 @@ class Model:
         if inference_request is None:
             inference_request = InferenceRequest(model=self, **kwargs)
 
-        if (inference_request.response_queue is not None) and (
-            not isinstance(inference_request.response_queue, asyncio.Queue)
-        ):
-            raise InvalidArgumentError(
-                "asyncio.Queue must be used for async response iterator"
-            )
-
-        request = inference_request._create_tritonserver_inference_request()
-
-        response_iterator = AsyncResponseIterator(
-            self,
-            request,
-            inference_request.response_queue,
-            raise_on_error,
-        )
-
-        response_allocator = ResponseAllocator(
-            inference_request.output_memory_allocator,
-            inference_request.output_memory_type,
-        ).create_tritonserver_response_allocator()
-
-        request.set_response_callback(
-            response_allocator, None, response_iterator._response_callback, None
-        )
-
-        self._server.infer_async(request)
-        return response_iterator
-    '''
-
-    def async_infer(
-        self,
-        inference_request: Optional[AsyncInferenceRequest] = None,
-        raise_on_error: bool = True,
-        **kwargs: Unpack[AsyncInferenceRequest],
-    ) -> AsyncIterable:
-        if inference_request is None:
-            inference_request = AsyncInferenceRequest(model=self, **kwargs)
-        
+        # The 'request' is referencing pointers managed by the 'inference_request', so
+        # the 'inference_request' needs to be kept alive as long as the 'request' is
+        # alive.
         request = inference_request._create_tritonserver_inference_request()
 
         self._server.infer_async(request)
 
-        class AsyncResponseGenerator:
-            def __init__(self, model, request, keep_alive_obj = None):
+        class AsyncResponseIterator:
+            def __init__(self, model, request, inference_request):
                 self._model = model
                 self._request = request
-                self._keep_alive_obj = keep_alive_obj
+                self._inference_request = inference_request
                 self._complete = False
-            
+
             def __aiter__(self):
                 return self
-            
+
             async def __anext__(self):
                 if self._complete:
                     raise StopAsyncIteration
+
+                # The binding could be improved by returning an awaitable object, but it
+                # is easier for now to pass in an async future object to be set by the
+                # binding when fetching responses.
                 future = asyncio.get_running_loop().create_future()
                 self._request.get_next_response(future)
                 response, flags = await future
-                response = AsyncInferenceResponse._from_tritonserver_inference_response(
-                    self._model, self._request, response, flags
+
+                response = InferenceResponse._from_tritonserver_inference_response(
+                    self._model,
+                    self._request,
+                    response,
+                    flags,
+                    self._inference_request.output_memory_type,
                 )
                 self._complete = response.final
 
                 return response
-        
-        return AsyncResponseGenerator(self, request, keep_alive_obj=inference_request)
+
+        return AsyncResponseIterator(self, request, inference_request)
 
     def infer(
         self,
         inference_request: Optional[InferenceRequest] = None,
         raise_on_error: bool = True,
         **kwargs: Unpack[InferenceRequest],
-    ) -> ResponseIterator:
+    ) -> Iterable:
         """Send an inference request to the model for execution
 
         Sends an inference request to the model. Responses are
@@ -283,7 +252,7 @@ class Model:
 
         Returns
         -------
-        ResponseIterator
+        Iterable
             Response iterator
 
         Raises
@@ -320,31 +289,46 @@ class Model:
         if inference_request is None:
             inference_request = InferenceRequest(model=self, **kwargs)
 
-        if (inference_request.response_queue is not None) and (
-            not isinstance(inference_request.response_queue, queue.SimpleQueue)
-        ):
-            raise InvalidArgumentError(
-                "queue.SimpleQueue must be used for response iterator"
-            )
-
+        # The 'request' is referencing pointers managed by the 'inference_request', so
+        # the 'inference_request' needs to be kept alive as long as the 'request' is
+        # alive.
         request = inference_request._create_tritonserver_inference_request()
-        response_iterator = ResponseIterator(
-            self,
-            request,
-            inference_request.response_queue,
-            raise_on_error,
-        )
-        response_allocator = ResponseAllocator(
-            inference_request.output_memory_allocator,
-            inference_request.output_memory_type,
-        ).create_tritonserver_response_allocator()
-
-        request.set_response_callback(
-            response_allocator, None, response_iterator._response_callback, None
-        )
 
         self._server.infer_async(request)
-        return response_iterator
+
+        class ResponseIterator:
+            def __init__(self, model, request, inference_request):
+                self._model = model
+                self._request = request
+                self._inference_request = inference_request
+                self._complete = False
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                if self._complete:
+                    raise StopIteration
+
+                # The binding could be improved by releasing the GIL and block, but it
+                # is easier for now to pass in an future object to be set by the binding
+                # when fetching responses.
+                future = concurrent.futures.Future()
+                self._request.get_next_response(future)
+                response, flags = future.result()
+
+                response = InferenceResponse._from_tritonserver_inference_response(
+                    self._model,
+                    self._request,
+                    response,
+                    flags,
+                    self._inference_request.output_memory_type,
+                )
+                self._complete = response.final
+
+                return response
+
+        return ResponseIterator(self, request, inference_request)
 
     def metadata(self) -> dict[str, Any]:
         """Returns medatadata about a model and its inputs and outputs
