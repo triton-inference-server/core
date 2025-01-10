@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -60,44 +60,18 @@ class LocalFileSystem : public FileSystem {
   Status MakeTemporaryDirectory(
       std::string dir_path, std::string* temp_dir) override;
   Status DeletePath(const std::string& path) override;
-
- private:
-  inline std::string GetOSValidPath(const std::string& path);
 };
-
-//! Converts incoming utf-8 path to an OS valid path
-//!
-//! On Linux there is not much to do but make sure correct slashes are used
-//! On Windows we need to take care of the long paths and handle them correctly
-//! to avoid legacy issues with MAX_PATH
-//!
-//! More details:
-//! https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry
-//!
-inline std::string
-LocalFileSystem::GetOSValidPath(const std::string& path)
-{
-  std::string l_path(path);
-#ifdef _WIN32
-  // On Windows long paths must be marked correctly otherwise, due to backwards
-  // compatibility, all paths are limited to MAX_PATH length
-  static constexpr const char* kWindowsLongPathPrefix = "\\\\?\\";
-  if (l_path.size() >= MAX_PATH) {
-    // Must be prefixed with "\\?\" to be considered long path
-    if (l_path.substr(0, 4) != (kWindowsLongPathPrefix)) {
-      // Long path but not "tagged" correctly
-      l_path = (kWindowsLongPathPrefix) + l_path;
-    }
-  }
-  std::replace(l_path.begin(), l_path.end(), '/', '\\');
-#endif
-  return l_path;
-}
 
 Status
 LocalFileSystem::FileExists(const std::string& path, bool* exists)
 {
-  *exists = (access(GetOSValidPath(path).c_str(), F_OK) == 0);
+#ifdef _WIN32
+  std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
+  *exists = (_waccess(wpath.c_str(), F_OK) == 0);
+#else
+  *exists = (access(path.c_str(), F_OK) == 0);
+#endif  // _WIN32
+
   return Status::Success;
 }
 
@@ -106,11 +80,18 @@ LocalFileSystem::IsDirectory(const std::string& path, bool* is_dir)
 {
   *is_dir = false;
 
-  struct stat st;
-  if (stat(GetOSValidPath(path).c_str(), &st) != 0) {
+#ifdef _WIN32
+  std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
+  struct _stat64i32 st;
+  if (_wstat64i32(wpath.c_str(), &st) != 0) {
     return Status(Status::Code::INTERNAL, "failed to stat file " + path);
   }
-
+#else
+  struct stat st;
+  if (stat(path.c_str(), &st) != 0) {
+    return Status(Status::Code::INTERNAL, "failed to stat file " + path);
+  }
+#endif  // _WIN32
   *is_dir = S_ISDIR(st.st_mode);
   return Status::Success;
 }
@@ -119,15 +100,20 @@ Status
 LocalFileSystem::FileModificationTime(
     const std::string& path, int64_t* mtime_ns)
 {
-  struct stat st;
-  if (stat(GetOSValidPath(path).c_str(), &st) != 0) {
+#ifdef _WIN32
+  std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
+
+  struct _stat64i32 st;
+  if (_wstat64i32(wpath.c_str(), &st) != 0) {
     return Status(Status::Code::INTERNAL, "failed to stat file " + path);
   }
-
-#ifdef _WIN32
   // In Windows, st_mtime is in time_t
   *mtime_ns = std::max(st.st_mtime, st.st_ctime);
 #else
+  struct stat st;
+  if (stat(path.c_str(), &st) != 0) {
+    return Status(Status::Code::INTERNAL, "failed to stat file " + path);
+  }
   *mtime_ns =
       std::max(TIMESPEC_TO_NANOS(st.st_mtim), TIMESPEC_TO_NANOS(st.st_ctim));
 #endif
@@ -139,20 +125,23 @@ LocalFileSystem::GetDirectoryContents(
     const std::string& path, std::set<std::string>* contents)
 {
 #ifdef _WIN32
-  WIN32_FIND_DATA entry;
+  WIN32_FIND_DATAW entry;
   // Append "*" to obtain all files under 'path'
-  HANDLE dir = FindFirstFile(JoinPath({path, "*"}).c_str(), &entry);
+  std::string jointPath = JoinPath({path, "*"});
+  std::wstring wpath = LocalizedPath::GetWindowsValidPath(jointPath);
+
+  HANDLE dir = FindFirstFileW(wpath.c_str(), &entry);
   if (dir == INVALID_HANDLE_VALUE) {
     return Status(Status::Code::INTERNAL, "failed to open directory " + path);
   }
-  if ((strcmp(entry.cFileName, ".") != 0) &&
-      (strcmp(entry.cFileName, "..") != 0)) {
-    contents->insert(entry.cFileName);
+  if ((wcscmp(entry.cFileName, L".") != 0) &&
+      (wcscmp(entry.cFileName, L"..") != 0)) {
+    contents->insert(LocalizedPath::Wstring2String(entry.cFileName));
   }
-  while (FindNextFile(dir, &entry)) {
-    if ((strcmp(entry.cFileName, ".") != 0) &&
-        (strcmp(entry.cFileName, "..") != 0)) {
-      contents->insert(entry.cFileName);
+  while (FindNextFileW(dir, &entry)) {
+    if ((wcscmp(entry.cFileName, L".") != 0) &&
+        (wcscmp(entry.cFileName, L"..") != 0)) {
+      contents->insert(LocalizedPath::Wstring2String(entry.cFileName));
     }
   }
 
@@ -219,7 +208,13 @@ LocalFileSystem::GetDirectoryFiles(
 Status
 LocalFileSystem::ReadTextFile(const std::string& path, std::string* contents)
 {
-  std::ifstream in(GetOSValidPath(path), std::ios::in | std::ios::binary);
+#ifdef _WIN32
+  std::wstring valid_path = LocalizedPath::GetWindowsValidPath(path);
+#else
+  std::string valid_path(path);
+#endif
+
+  std::ifstream in(valid_path, std::ios::in | std::ios::binary);
   if (!in) {
     return Status(
         Status::Code::INTERNAL,
@@ -249,6 +244,12 @@ Status
 LocalFileSystem::WriteTextFile(
     const std::string& path, const std::string& contents)
 {
+#ifdef _WIN32
+  std::wstring valid_path = LocalizedPath::GetWindowsValidPath(path);
+#else
+  std::string valid_path(path);
+#endif
+
   std::ofstream out(path, std::ios::out | std::ios::binary);
   if (!out) {
     return Status(
@@ -266,7 +267,13 @@ Status
 LocalFileSystem::WriteBinaryFile(
     const std::string& path, const char* contents, const size_t content_len)
 {
-  std::ofstream out(path, std::ios::out | std::ios::binary);
+#ifdef _WIN32
+  std::wstring valid_path = LocalizedPath::GetWindowsValidPath(path);
+#else
+  std::string valid_path(path);
+#endif
+
+  std::ofstream out(valid_path, std::ios::out | std::ios::binary);
   if (!out) {
     return Status(
         Status::Code::INTERNAL, "failed to open binary file for write " + path +
@@ -282,7 +289,8 @@ Status
 LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
 {
 #ifdef _WIN32
-  if (mkdir(dir.c_str()) == -1)
+  std::wstring wdir = LocalizedPath::GetWindowsValidPath(dir);
+  if (_wmkdir(wdir.c_str()) == -1)
 #else
   if (mkdir(dir.c_str(), S_IRWXU) == -1)
 #endif
@@ -293,7 +301,7 @@ LocalFileSystem::MakeDirectory(const std::string& dir, const bool recursive)
       RETURN_IF_ERROR(MakeDirectory(DirName(dir), recursive));
       // Retry the creation
 #ifdef _WIN32
-      if (mkdir(dir.c_str()) == -1)
+      if (_wmkdir(wdir.c_str()) == -1)
 #else
       if (mkdir(dir.c_str(), S_IRWXU) == -1)
 #endif
@@ -317,8 +325,8 @@ LocalFileSystem::MakeTemporaryDirectory(
     std::string dir_path, std::string* temp_dir)
 {
 #ifdef _WIN32
-  char temp_path[MAX_PATH + 1];
-  size_t temp_path_length = GetTempPath(MAX_PATH + 1, temp_path);
+  wchar_t temp_path[MAX_PATH + 1];
+  size_t temp_path_length = GetTempPathW(MAX_PATH + 1, temp_path);
   if (temp_path_length == 0) {
     return Status(
         Status::Code::INTERNAL,
@@ -336,13 +344,14 @@ LocalFileSystem::MakeTemporaryDirectory(
   std::lock_guard<std::mutex> lk(mtx);
   // Construct a std::string as filled 'temp_path' is not C string,
   // and so that we can reuse 'temp_path' to hold the temp file name.
-  std::string temp_path_str(temp_path, temp_path_length);
-  if (GetTempFileName(temp_path_str.c_str(), "folder", 0, temp_path) == 0) {
+  std::wstring temp_path_str(temp_path, temp_path_length);
+  if (GetTempFileNameW(temp_path_str.c_str(), L"folder", 0, temp_path) == 0) {
     return Status(Status::Code::INTERNAL, "Failed to create local temp folder");
   }
-  *temp_dir = temp_path;
-  DeleteFile(temp_dir->c_str());
-  if (CreateDirectory(temp_dir->c_str(), NULL) == 0) {
+  std::wstring wstr_temp_path = temp_path;
+  *temp_dir = LocalizedPath::Wstring2String(wstr_temp_path);
+  DeleteFileW(wstr_temp_path.c_str());
+  if (CreateDirectoryW(wstr_temp_path.c_str(), NULL) == 0) {
     return Status(
         Status::Code::INTERNAL,
         "Failed to create local temp folder: " + *temp_dir);
@@ -375,9 +384,19 @@ LocalFileSystem::DeletePath(const std::string& path)
     for (const auto& content : contents) {
       RETURN_IF_ERROR(DeletePath(JoinPath({path, content})));
     }
+#ifdef _WIN32
+    std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
+    _wrmdir(wpath.c_str());
+#else
     rmdir(path.c_str());
+#endif  // _WIN32
   } else {
+#ifdef _WIN32
+    std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
+    _wremove(wpath.c_str());
+#else
     remove(path.c_str());
+#endif  // _WIN32
   }
   return Status::Success;
 }
