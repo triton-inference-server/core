@@ -44,11 +44,7 @@ from tritonserver._api._allocators import MemoryBuffer
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._logging import LogMessage
 from tritonserver._api._tensor import Tensor
-from tritonserver._c.triton_bindings import (
-    InternalError,
-    TritonError,
-    TRITONSERVER_InferenceRequest,
-)
+from tritonserver._c.triton_bindings import InternalError, TritonError
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import (
@@ -103,14 +99,12 @@ class InferenceResponse:
     @staticmethod
     def _from_tritonserver_inference_response(
         model: _model.Model,
-        request: TRITONSERVER_InferenceRequest,
         response,
         flags: TRITONSERVER_ResponseCompleteFlag,
         output_memory_type: Optional[DeviceOrMemoryType] = None,
     ):
         result = InferenceResponse(
             model,
-            request.id,
             final=(flags == TRITONSERVER_ResponseCompleteFlag.FINAL),
         )
 

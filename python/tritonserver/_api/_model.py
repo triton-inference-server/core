@@ -211,7 +211,6 @@ class Model:
 
                 response = InferenceResponse._from_tritonserver_inference_response(
                     self._model,
-                    self._request,
                     response,
                     flags,
                     self._inference_request.output_memory_type,
@@ -319,7 +318,6 @@ class Model:
 
                 response = InferenceResponse._from_tritonserver_inference_response(
                     self._model,
-                    self._request,
                     response,
                     flags,
                     self._inference_request.output_memory_type,

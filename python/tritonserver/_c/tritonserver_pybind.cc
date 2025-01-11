@@ -893,6 +893,8 @@ class PyInferenceRequest
     }
   }
 
+  void Release() { owned_ = false; }
+
   void SetReleaseCallback()
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -902,10 +904,9 @@ class PyInferenceRequest
       struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
       void* userp)
   {
-    // This wrapper object will be kept alive for the entire inference process,
-    // so this wrapper will not attempt to destruct the Triton request object
-    // during inference. Thus, it is ok for now to not update the 'owned' flag
-    // after passing the Triton request to the core and before it is released.
+    // This function may be called after the request is deallocated, so the
+    // request object should not be attempted to be accessed.
+    ThrowIfError(TRITONSERVER_InferenceRequestDelete(request));
   }
 
   void SetResponseAllocator()
@@ -1159,7 +1160,7 @@ class PyInferenceRequest
   }
 
   // Response management
-  void GetNextResponse(py::object& py_future)
+  void GetNextResponse(const py::object& py_future)
   {
     std::lock_guard lock(response_mu_);
 
@@ -1167,8 +1168,7 @@ class PyInferenceRequest
       if (response_future_.get() != nullptr) {
         throw AlreadyExistsError("cannot call GetNextResponse concurrently");
       }
-      response_future_.reset(new py::object());
-      *response_future_ = py_future;
+      response_future_.reset(new py::object(py_future));
     } else {
       std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>&
           py_response = responses_.front();
@@ -1186,7 +1186,7 @@ class PyInferenceRequest
       managed_ptr.reset(new PyInferenceResponse(response, true /* owned */));
     }
     std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t> py_response(
-        managed_ptr, flags);
+        std::move(managed_ptr), std::move(flags));
     {
       std::lock_guard lock(response_mu_);
       if (response_future_.get() == nullptr) {
@@ -1196,13 +1196,14 @@ class PyInferenceRequest
     }
     {
       py::gil_scoped_acquire gil;
-      PyFutureSetResult(*response_future_, py_response);
-      response_future_.reset(nullptr);
+      std::unique_ptr<py::object> response_future_local(nullptr);
+      response_future_.swap(response_future_local);
+      PyFutureSetResult(*response_future_local, py_response);
     }
   }
 
   void PyFutureSetResult(
-      py::object& py_future,
+      const py::object& py_future,
       std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>&
           py_response)
   {
@@ -1634,16 +1635,25 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   void InferAsync(
       const std::shared_ptr<PyInferenceRequest>& request, PyTrace& trace)
   {
+    request->SetReleaseCallback();
+    request->SetResponseAllocator();
+    request->SetResponseCallback();
     ThrowIfError(TRITONSERVER_ServerInferAsync(
         triton_object_, request->Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
+    request->Release();
     trace.Release();
   }
 
   void InferAsync(const std::shared_ptr<PyInferenceRequest>& request)
   {
+    request->SetReleaseCallback();
+    request->SetResponseAllocator();
+    request->SetResponseCallback();
     ThrowIfError(
         TRITONSERVER_ServerInferAsync(triton_object_, request->Ptr(), nullptr));
+    // Ownership of the internal C object is transferred.
+    request->Release();
   }
 };
 
@@ -1710,10 +1720,6 @@ PyInferenceRequest::PyInferenceRequest(
   ThrowIfError(TRITONSERVER_InferenceRequestNew(
       &triton_object_, server.Ptr(), model_name.c_str(), model_version));
   owned_ = true;
-
-  SetReleaseCallback();
-  SetResponseAllocator();
-  SetResponseCallback();
 }
 
 // [FIXME] module name?
