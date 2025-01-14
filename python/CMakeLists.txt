@@ -50,13 +50,16 @@ add_custom_command(
     "${CMAKE_CURRENT_SOURCE_DIR}/build_wheel.py"
     --dest-dir "${CMAKE_CURRENT_BINARY_DIR}/generic"
     --binding-path $<TARGET_FILE:python-bindings>
-  DEPENDS ${WHEEL_DEPENDS}
+  DEPENDS
+    ${WHEEL_DEPENDS}
+    python-bindings
 )
 
 add_custom_target(
   generic-server-wheel ALL
   DEPENDS
     "${wheel_stamp_file}"
+    python-bindings
 )
 
 
