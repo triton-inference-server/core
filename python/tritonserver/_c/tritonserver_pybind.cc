@@ -870,6 +870,7 @@ class PyServer;
 class PyInferenceRequest
     : public PyWrapper<struct TRITONSERVER_InferenceRequest> {
  public:
+  DESTRUCTOR_WITH_LOG(PyInferenceRequest, TRITONSERVER_InferenceRequestDelete);
   // Defer definition until PyServer is defined
   PyInferenceRequest(
       PyServer& server, const std::string& model_name,
@@ -879,45 +880,38 @@ class PyInferenceRequest
       : PyWrapper(r, owned)
   {
   }
-  ~PyInferenceRequest()
-  {
-    // Delete response allocator
-    if (allocator_) {
-      ThrowIfError(TRITONSERVER_ResponseAllocatorDelete(allocator_));
-      allocator_ = nullptr;
-    }
-    // Delete request
-    if (owned_ && triton_object_) {
-      ThrowIfError(TRITONSERVER_InferenceRequestDelete(triton_object_));
-      triton_object_ = nullptr;
-    }
-  }
 
-  void Release() { owned_ = false; }
-
-  void SetReleaseCallback()
+  void SetReleaseCallback(const std::shared_ptr<PyInferenceRequest>& request)
   {
+    // The request wrapper needs to be kept alive until the release callback is
+    // invoked, so the Triton request can be deleted after the core/backend is
+    // done with it.
+    std::unique_ptr<std::shared_ptr<PyInferenceRequest>> request_ptr(
+        new std::shared_ptr<PyInferenceRequest>(request));
     ThrowIfError(TRITONSERVER_InferenceRequestSetReleaseCallback(
-        triton_object_, ReleaseCallback, nullptr /* request_release_userp */));
+        triton_object_, ReleaseCallback,
+        reinterpret_cast<void*>(
+            request_ptr.release()) /* request_release_userp */));
   }
   static void ReleaseCallback(
       struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
       void* userp)
   {
-    // This function may be called after the request is deallocated, so the
-    // request object should not be attempted to be accessed.
-    ThrowIfError(TRITONSERVER_InferenceRequestDelete(request));
+    std::unique_ptr<std::shared_ptr<PyInferenceRequest>> request_ptr(
+        reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp));
   }
 
   void SetResponseAllocator()
   {
+    struct TRITONSERVER_ResponseAllocator* allocator_raw = nullptr;
     ThrowIfError(TRITONSERVER_ResponseAllocatorNew(
-        &allocator_, ResponseAllocatorAllocFn, ResponseAllocatorReleaseFn,
+        &allocator_raw, ResponseAllocatorAllocFn, ResponseAllocatorReleaseFn,
         nullptr /* start_fn */));
+    allocator_.reset(allocator_raw, TRITONSERVER_ResponseAllocatorDelete);
     ThrowIfError(TRITONSERVER_ResponseAllocatorSetQueryFunction(
-        allocator_, ResponseAllocatorQueryFn));
+        allocator_.get(), ResponseAllocatorQueryFn));
     ThrowIfError(TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
-        allocator_, ResponseAllocatorBufferAttributesFn));
+        allocator_.get(), ResponseAllocatorBufferAttributesFn));
   }
   static TRITONSERVER_Error* ResponseAllocatorQueryFn(
       struct TRITONSERVER_ResponseAllocator* allocator, void* userp,
@@ -949,6 +943,15 @@ class PyInferenceRequest
     *buffer = malloc(byte_size * sizeof(uint8_t));
     *actual_memory_type = TRITONSERVER_MEMORY_CPU;
     *actual_memory_type_id = 0;
+    // The response allocator needs to be kept alive until the allocated memory
+    // is released via the release function.
+    std::unique_ptr<std::shared_ptr<struct TRITONSERVER_ResponseAllocator>>
+        allocator_ptr(
+            new std::shared_ptr<struct TRITONSERVER_ResponseAllocator>(
+                *reinterpret_cast<
+                    std::shared_ptr<struct TRITONSERVER_ResponseAllocator>*>(
+                    userp)));
+    *buffer_userp = reinterpret_cast<void*>(allocator_ptr.release());
     return nullptr;
   }
   static TRITONSERVER_Error* ResponseAllocatorReleaseFn(
@@ -956,26 +959,41 @@ class PyInferenceRequest
       void* buffer_userp, size_t byte_size, TRITONSERVER_MemoryType memory_type,
       int64_t memory_type_id)
   {
-    // This function may be called after the request is deallocated, which the
-    // response allocator is presumed to be deallocated, i.e. a response is
-    // deallocated after the request is deallocated, so the 'allocator' or the
-    // request object should not be attempted to be accessed.
     free(buffer);
+    // Release ownership of the response allocator.
+    std::unique_ptr<std::shared_ptr<struct TRITONSERVER_ResponseAllocator>>
+        allocator_ptr(reinterpret_cast<
+                      std::shared_ptr<struct TRITONSERVER_ResponseAllocator>*>(
+            buffer_userp));
     return nullptr;
   }
 
   void SetResponseCallback()
   {
+    // The response allocator needs to be kept alive until all the allocated
+    // response memories are released, then the response allocator can be
+    // deleted, which can happen after the request wrapper is deleted.
+    // The caller is responsible for keeping the request wrapper alive until
+    // response complete final is received via GetNextResponse().
     ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
-        triton_object_, allocator_, nullptr /* response_allocator_userp */,
-        ResponseCallback, this /* response_userp */));
+        triton_object_, allocator_.get(),
+        reinterpret_cast<void*>(&allocator_) /* response_allocator_userp */,
+        ResponseCallback, reinterpret_cast<void*>(this) /* response_userp */));
   }
   static void ResponseCallback(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
   {
-    reinterpret_cast<PyInferenceRequest*>(userp)->AddNextResponse(
-        response, flags);
+    PyInferenceRequest* request = reinterpret_cast<PyInferenceRequest*>(userp);
+    request->AddNextResponse(response, flags);
+    // It is assumed that new response memory will not be allocated after the
+    // backend sends response complete final, so release ownership of the
+    // response allocator passed to the allocate function, but this will not
+    // delete the allocator until all allocated memories are released via the
+    // release function.
+    if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
+      request->allocator_.reset();
+    }
   }
 
   // Trivial setters / getters
@@ -1218,7 +1236,7 @@ class PyInferenceRequest
     }
   }
 
-  struct TRITONSERVER_ResponseAllocator* allocator_{nullptr};
+  std::shared_ptr<struct TRITONSERVER_ResponseAllocator> allocator_;
 
   std::mutex response_mu_;
   std::unique_ptr<py::object> response_future_;
@@ -1635,25 +1653,22 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   void InferAsync(
       const std::shared_ptr<PyInferenceRequest>& request, PyTrace& trace)
   {
-    request->SetReleaseCallback();
+    request->SetReleaseCallback(request);
     request->SetResponseAllocator();
     request->SetResponseCallback();
     ThrowIfError(TRITONSERVER_ServerInferAsync(
         triton_object_, request->Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
-    request->Release();
     trace.Release();
   }
 
   void InferAsync(const std::shared_ptr<PyInferenceRequest>& request)
   {
-    request->SetReleaseCallback();
+    request->SetReleaseCallback(request);
     request->SetResponseAllocator();
     request->SetResponseCallback();
     ThrowIfError(
         TRITONSERVER_ServerInferAsync(triton_object_, request->Ptr(), nullptr));
-    // Ownership of the internal C object is transferred.
-    request->Release();
   }
 };
 
