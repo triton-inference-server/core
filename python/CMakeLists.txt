@@ -41,25 +41,24 @@ set(WHEEL_DEPENDS
       python-bindings
 )
 
-set(wheel_stamp_file "stamp.whl")
+
 
 add_custom_command(
-  OUTPUT "${wheel_stamp_file}"
+  OUTPUT stamp.whl
   COMMAND python3
   ARGS
     "${CMAKE_CURRENT_SOURCE_DIR}/build_wheel.py"
     --dest-dir "${CMAKE_CURRENT_BINARY_DIR}/generic"
     --binding-path $<TARGET_FILE:python-bindings>
-  DEPENDS
-    ${WHEEL_DEPENDS}
+  DEPENDS_EXPLICIT_ONLY
     python-bindings
 )
 
 add_custom_target(
   generic-server-wheel ALL
   DEPENDS
-    "${wheel_stamp_file}"
     python-bindings
+    stamp.whl
 )
 
 
