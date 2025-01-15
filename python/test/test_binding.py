@@ -1,4 +1,4 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -24,6 +24,8 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import concurrent
+import ctypes
 import gc
 import json
 import os
@@ -39,56 +41,6 @@ from tritonserver import _c as triton_bindings
 # Callback functions used in inference pipeline
 # 'user_object' is a per-request counter of how many times the
 # callback is invoked
-def g_alloc_fn(
-    allocator, tensor_name, byte_size, memory_type, memory_type_id, user_object
-):
-    if "alloc" not in user_object:
-        user_object["alloc"] = 0
-    user_object["alloc"] += 1
-    buffer = numpy.empty(byte_size, numpy.byte)
-    return (buffer.ctypes.data, buffer, triton_bindings.TRITONSERVER_MemoryType.CPU, 0)
-
-
-def g_release_fn(
-    allocator, buffer, buffer_user_object, byte_size, memory_type, memory_type_id
-):
-    # No-op, buffer ('buffer_user_object') will be garbage collected
-    # only sanity check that the objects are expected
-    if (not isinstance(buffer_user_object, numpy.ndarray)) or (
-        buffer_user_object.ctypes.data != buffer
-    ):
-        raise Exception("Misaligned parameters in allocator release callback")
-    pass
-
-
-def g_start_fn(allocator, user_object):
-    if "start" not in user_object:
-        user_object["start"] = 0
-    user_object["start"] += 1
-    pass
-
-
-def g_query_fn(
-    allocator, user_object, tensor_name, byte_size, memory_type, memory_type_id
-):
-    if "query" not in user_object:
-        user_object["query"] = 0
-    user_object["query"] += 1
-    return (triton_bindings.TRITONSERVER_MemoryType.CPU, 0)
-
-
-def g_buffer_fn(
-    allocator, tensor_name, buffer_attribute, user_object, buffer_user_object
-):
-    if "buffer" not in user_object:
-        user_object["buffer"] = 0
-    user_object["buffer"] += 1
-    buffer_attribute.memory_type = triton_bindings.TRITONSERVER_MemoryType.CPU
-    buffer_attribute.memory_type_id = 0
-    buffer_attribute.byte_size = buffer_user_object.size
-    return buffer_attribute
-
-
 def g_timestamp_fn(trace, activity, timestamp_ns, user_object):
     if trace.id not in user_object:
         user_object[trace.id] = []
@@ -147,17 +99,6 @@ def g_trace_release_fn(trace, user_object):
     if trace.id not in user_object:
         raise Exception("Releasing unseen trace")
     user_object["signal_queue"].put("TRACE_RELEASED")
-
-
-def g_response_fn(response, flags, user_object):
-    user_object.put((flags, response))
-
-
-def g_request_fn(request, flags, user_object):
-    if flags != 1:
-        raise Exception("Unexpected request release flag")
-    # counter of "inflight" requests
-    user_object.put(request)
 
 
 # Python model file string to fastly deploy test model, depends on
@@ -276,41 +217,28 @@ class TestBindings:
         return triton_bindings.TRITONSERVER_Server(options)
 
     def _prepare_inference_request(self, server):
-        allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
-            g_alloc_fn, g_release_fn, g_start_fn
-        )
-        allocator.set_buffer_attributes_function(g_buffer_fn)
-        allocator.set_query_function(g_query_fn)
-
-        request_counter = queue.Queue()
-        response_queue = queue.Queue()
-        allocator_counter = {}
         request = triton_bindings.TRITONSERVER_InferenceRequest(
             server, self._model_name, -1
         )
         request.id = "req_0"
-        request.set_release_callback(g_request_fn, request_counter)
-        request.set_response_callback(
-            allocator, allocator_counter, g_response_fn, response_queue
-        )
 
-        input = numpy.ones([4], dtype=numpy.float32)
-        input_buffer = input.ctypes.data
+        input_ = numpy.ones([4], dtype=numpy.float32)
+        input_buffer = input_.ctypes.data
         ba = triton_bindings.TRITONSERVER_BufferAttributes()
         ba.memory_type = triton_bindings.TRITONSERVER_MemoryType.CPU
         ba.memory_type_id = 0
-        ba.byte_size = input.itemsize * input.size
+        ba.byte_size = input_.itemsize * input_.size
 
         request.add_input(
-            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input_.shape
         )
         request.add_input(
-            "INPUT1", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+            "INPUT1", triton_bindings.TRITONSERVER_DataType.FP32, input_.shape
         )
         request.append_input_data_with_buffer_attributes("INPUT0", input_buffer, ba)
         request.append_input_data_with_buffer_attributes("INPUT1", input_buffer, ba)
 
-        return request, allocator, response_queue, request_counter
+        return request, input_
 
     @pytest.mark.parametrize(
         "ex_type",
@@ -666,18 +594,17 @@ class TestBindings:
 
         # Send and wait for inference, not care about result.
         server = self._start_polling_server()
-        (
-            request,
-            allocator,
-            response_queue,
-            request_counter,
-        ) = self._prepare_inference_request(server)
+        request, input_ = self._prepare_inference_request(server)
         server.infer_async(request, trace)
 
         # [FIXME] WAR due to trace lifecycle is tied to response in Triton core,
         # trace reference should drop on response send..
-        res = response_queue.get(block=True, timeout=10)
+        future = concurrent.futures.Future()
+        request.get_next_response(future)
+        res, flags = future.result(timeout=10)
+        assert flags == int(triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL)
         del res
+        del future
         gc.collect()
 
         _ = trace_dict["signal_queue"].get(block=True, timeout=10)
@@ -722,7 +649,6 @@ class TestBindings:
         # check if dict is empty to ensure the activity are logged in correct
         # amount.
         assert not (bool(expected_activities))
-        request_counter.get()
 
     def test_options(self):
         options = triton_bindings.TRITONSERVER_ServerOptions()
@@ -966,36 +892,23 @@ class TestBindings:
         server = self._start_polling_server()
 
         # prepare for infer
-        allocator = triton_bindings.TRITONSERVER_ResponseAllocator(
-            g_alloc_fn, g_release_fn, g_start_fn
-        )
-        allocator.set_buffer_attributes_function(g_buffer_fn)
-        allocator.set_query_function(g_query_fn)
-
-        request_counter = queue.Queue()
-        response_queue = queue.Queue()
-        allocator_counter = {}
         request = triton_bindings.TRITONSERVER_InferenceRequest(
             server, self._model_name, -1
         )
         request.id = "req_0"
-        request.set_release_callback(g_request_fn, request_counter)
-        request.set_response_callback(
-            allocator, allocator_counter, g_response_fn, response_queue
-        )
 
-        input = numpy.ones([4], dtype=numpy.float32)
-        input_buffer = input.ctypes.data
+        input_ = numpy.ones([4], dtype=numpy.float32)
+        input_buffer = input_.ctypes.data
         ba = triton_bindings.TRITONSERVER_BufferAttributes()
         ba.memory_type = triton_bindings.TRITONSERVER_MemoryType.CPU
         ba.memory_type_id = 0
-        ba.byte_size = input.itemsize * input.size
+        ba.byte_size = input_.itemsize * input_.size
 
         request.add_input(
-            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+            "INPUT0", triton_bindings.TRITONSERVER_DataType.FP32, input_.shape
         )
         request.add_input(
-            "INPUT1", triton_bindings.TRITONSERVER_DataType.FP32, input.shape
+            "INPUT1", triton_bindings.TRITONSERVER_DataType.FP32, input_.shape
         )
         request.append_input_data_with_buffer_attributes("INPUT0", input_buffer, ba)
         request.append_input_data_with_buffer_attributes("INPUT1", input_buffer, ba)
@@ -1004,7 +917,9 @@ class TestBindings:
         server.infer_async(request)
 
         # Expect every response to be returned in 10 seconds
-        flags, res = response_queue.get(block=True, timeout=10)
+        future = concurrent.futures.Future()
+        request.get_next_response(future)
+        res, flags = future.result(timeout=10)
         assert flags == int(triton_bindings.TRITONSERVER_ResponseCompleteFlag.FINAL)
         # expect no error
         res.throw_if_response_error()
@@ -1019,8 +934,8 @@ class TestBindings:
         # read output tensor
         assert res.output_count == 2
         for out, expected_name, expected_data in [
-            (res.output(0), "OUTPUT0", input + input),
-            (res.output(1), "OUTPUT1", input - input),
+            (res.output(0), "OUTPUT0", input_ + input_),
+            (res.output(1), "OUTPUT1", input_ - input_),
         ]:
             (
                 name,
@@ -1030,12 +945,13 @@ class TestBindings:
                 byte_size,
                 memory_type,
                 memory_type_id,
-                numpy_buffer,
             ) = out
+            ctypes_buffer = ctypes.create_string_buffer(byte_size)
+            ctypes.memmove(ctypes_buffer, out_buffer, byte_size)
+            numpy_buffer = numpy.frombuffer(ctypes_buffer, dtype=numpy.byte)
             assert name == expected_name
             assert data_type == triton_bindings.TRITONSERVER_DataType.FP32
             assert shape == expected_data.shape
-            assert out_buffer == numpy_buffer.ctypes.data
             # buffer attribute used for input doesn't necessarily to
             # match output buffer attributes, this is just knowing the detail.
             assert byte_size == ba.byte_size
@@ -1051,15 +967,7 @@ class TestBindings:
         # [FIXME] keep alive behavior is not established between response
         # and server, so must explicitly handle the destruction order for now.
         del res
-
-        # sanity check on user objects
-        assert allocator_counter["start"] == 1
-        assert allocator_counter["alloc"] == 2
-        # Knowing implementation detail that the backend doesn't use query API
-        assert "query" not in allocator_counter
-        assert allocator_counter["buffer"] == 2
-        # Expect request to be released in 10 seconds
-        request = request_counter.get(block=True, timeout=10)
+        del future
 
     def test_server_explicit(self):
         self._create_model_repository()
