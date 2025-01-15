@@ -104,10 +104,11 @@ class TestAllocators:
 
         assert server.ready()
 
-        allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-
-        del tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-
+        # The memory allocator is internal to the binding, and before GPU memory support
+        # is added, it will always fallback to CPU memory regardless of the memory
+        # preferred by the backend.
+        # TODO: Revisit this test when GPU memory support is added, i.e. the backend
+        #       prefers GPU memory, but the system only has CPU memory.
         server.load(
             "test",
             {
@@ -135,76 +136,14 @@ class TestAllocators:
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             assert fp16_input[0][0] == fp16_output[0][0]
 
-        tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU] = allocator
-
-    @pytest.mark.skip(reason="Skipping test, infer no longer use allocator")
-    def test_memory_allocator_exception(self, server_options):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
-
-        assert server.ready()
-
-        server.load(
-            "test",
-            {
-                "config": json.dumps(
-                    {
-                        "backend": "python",
-                        "parameters": {"decoupled": {"string_value": "False"}},
-                    }
-                )
-            },
-        )
-
-        with pytest.raises(tritonserver.InternalError):
-            for response in server.model("test").infer(
-                inputs={
-                    "string_input": tritonserver.Tensor.from_string_array([["hello"]])
-                },
-                output_memory_type="gpu",
-                output_memory_allocator=TestAllocators.MockMemoryAllocator(),
-            ):
-                pass
-
-    @pytest.mark.skip(reason="Skipping test, infer no longer use allocator")
+    @pytest.mark.skip(
+        reason="Skipping test, internal allocator not support setting memory type"
+    )
     def test_unsupported_memory_type(self, server_options):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
-
-        assert server.ready()
-
-        server.load(
-            "test",
-            {
-                "config": json.dumps(
-                    {
-                        "backend": "python",
-                        "parameters": {"decoupled": {"string_value": "False"}},
-                    }
-                )
-            },
-        )
-
-        if tritonserver.MemoryType.GPU in tritonserver.default_memory_allocators:
-            allocator = tritonserver.default_memory_allocators[
-                tritonserver.MemoryType.GPU
-            ]
-
-            del tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-        else:
-            allocator = None
-
-        with pytest.raises(tritonserver.InvalidArgumentError):
-            for response in server.model("test").infer(
-                inputs={
-                    "string_input": tritonserver.Tensor.from_string_array([["hello"]])
-                },
-                output_memory_type="gpu",
-            ):
-                pass
-
-        if allocator is not None:
-            tritonserver.default_memory_allocators[
-                tritonserver.MemoryType.GPU
-            ] = allocator
+        # TODO: Revisit this test when GPU memory support is added, i.e. the request
+        #       specifies output to be in GPU memory, but the system only has CPU
+        #       memory, which an exception should be raised during inference.
+        pass
 
     @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
     def test_allocate_on_cpu_and_reshape(self):
@@ -420,8 +359,9 @@ class TestServer:
         server = tritonserver.Server(server_options).start()
         assert server.ready()
 
-    @pytest.mark.skip(
-        reason="Skipping test, some request/response object may not be released which may cause server stop to fail"
+    @pytest.mark.xfail(
+        run=False,
+        reason="Some request/response object may not be released which may cause server stop to fail",
     )
     def test_stop(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
