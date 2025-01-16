@@ -24,7 +24,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifdef TRITON_ENABLE_ENSEMBLE
+#ifndef TRITON_ENABLE_ENSEMBLE
 
 #include "ensemble_scheduler.h"
 
@@ -1188,8 +1188,8 @@ EnsembleContext::CheckAndSetEnsembleOutput(
   std::chrono::steady_clock::time_point begin_CopyBuffer;
   std::chrono::steady_clock::time_point end_3;
   std::chrono::steady_clock::time_point begin_3;
-  std::chrono::steady_clock::time_point end_4;
-  std::chrono::steady_clock::time_point begin_4;
+  std::chrono::steady_clock::time_point end_erase;
+  std::chrono::steady_clock::time_point begin_erase;
 
   begin_1 = std::chrono::steady_clock::now();
   IterationCount iteration_count = 0;
