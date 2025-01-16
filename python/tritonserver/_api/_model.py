@@ -29,14 +29,12 @@
 from __future__ import annotations
 
 import asyncio
-import concurrent
 import json
 import queue
 from typing import TYPE_CHECKING, Any, Optional
 
-from tritonserver._api._allocators import ResponseAllocator
 from tritonserver._api._request import InferenceRequest
-from tritonserver._api._response import InferenceResponse
+from tritonserver._api._response import AsyncResponseIterator, ResponseIterator
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
@@ -129,9 +127,7 @@ class Model:
         _server=<tritonserver._c.triton_bindings.TRITONSERVER_Server
         object at 0x7f5827156bf0>, request_id=None, flags=0,
         correlation_id=None, priority=0, timeout=0, inputs={},
-        parameters={}, output_memory_type=None,
-        output_memory_allocator=None, response_queue=None,
-        _serialized_inputs={})
+        parameters={}, output_memory_type=None, _serialized_inputs={})
 
         """
         if "model" in kwargs:
@@ -143,7 +139,7 @@ class Model:
         inference_request: Optional[InferenceRequest] = None,
         raise_on_error: bool = True,
         **kwargs: Unpack[InferenceRequest],
-    ) -> AsyncIterable:
+    ) -> AsyncResponseIterator:
         """Send an inference request to the model for execution
 
         Sends an inference request to the model. Responses are
@@ -168,7 +164,7 @@ class Model:
 
         Returns
         -------
-        AsyncIterable
+        AsyncResponseIterator
             asyncio compatible iterator
 
         Raises
@@ -185,40 +181,7 @@ class Model:
         # the 'inference_request' needs to be kept alive as long as the 'request' is
         # alive.
         request = inference_request._create_tritonserver_inference_request()
-
         self._server.infer_async(request)
-
-        class AsyncResponseIterator:
-            def __init__(self, model, request, inference_request):
-                self._model = model
-                self._request = request
-                self._inference_request = inference_request
-                self._complete = False
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                if self._complete:
-                    raise StopAsyncIteration
-
-                # The binding could be improved by returning an awaitable object, but it
-                # is easier for now to pass in an async future object to be set by the
-                # binding when fetching responses.
-                future = asyncio.get_running_loop().create_future()
-                self._request.get_next_response(future)
-                response, flags = await future
-
-                response = InferenceResponse._from_tritonserver_inference_response(
-                    self._model,
-                    response,
-                    flags,
-                    self._inference_request.output_memory_type,
-                )
-                self._complete = response.final
-
-                return response
-
         return AsyncResponseIterator(self, request, inference_request)
 
     def infer(
@@ -226,7 +189,7 @@ class Model:
         inference_request: Optional[InferenceRequest] = None,
         raise_on_error: bool = True,
         **kwargs: Unpack[InferenceRequest],
-    ) -> Iterable:
+    ) -> ResponseIterator:
         """Send an inference request to the model for execution
 
         Sends an inference request to the model. Responses are
@@ -251,7 +214,7 @@ class Model:
 
         Returns
         -------
-        Iterable
+        ResponseIterator
             Response iterator
 
         Raises
@@ -292,40 +255,7 @@ class Model:
         # the 'inference_request' needs to be kept alive as long as the 'request' is
         # alive.
         request = inference_request._create_tritonserver_inference_request()
-
         self._server.infer_async(request)
-
-        class ResponseIterator:
-            def __init__(self, model, request, inference_request):
-                self._model = model
-                self._request = request
-                self._inference_request = inference_request
-                self._complete = False
-
-            def __iter__(self):
-                return self
-
-            def __next__(self):
-                if self._complete:
-                    raise StopIteration
-
-                # The binding could be improved by releasing the GIL and block, but it
-                # is easier for now to pass in an future object to be set by the binding
-                # when fetching responses.
-                future = concurrent.futures.Future()
-                self._request.get_next_response(future)
-                response, flags = future.result()
-
-                response = InferenceResponse._from_tritonserver_inference_response(
-                    self._model,
-                    response,
-                    flags,
-                    self._inference_request.output_memory_type,
-                )
-                self._complete = response.final
-
-                return response
-
         return ResponseIterator(self, request, inference_request)
 
     def metadata(self) -> dict[str, Any]:

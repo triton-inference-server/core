@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent
 import inspect
 import queue
 from dataclasses import asdict, dataclass, field
@@ -40,11 +41,15 @@ from tritonserver._api import _model
 if TYPE_CHECKING:
     from tritonserver._api._model import Model
 
-from tritonserver._api._allocators import MemoryBuffer
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._logging import LogMessage
+from tritonserver._api._memorybuffer import MemoryBuffer
 from tritonserver._api._tensor import Tensor
-from tritonserver._c.triton_bindings import InternalError, TritonError
+from tritonserver._c.triton_bindings import (
+    InternalError,
+    InvalidArgumentError,
+    TritonError,
+)
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import (
@@ -146,8 +151,6 @@ class InferenceResponse:
                     owner=response,
                 )
                 tensor = Tensor(data_type, shape, memory_buffer)
-                if output_memory_type is not None:
-                    tensor = tensor.to_device(output_memory_type)
                 outputs[name] = tensor
             result.outputs = outputs
         except Exception as e:
@@ -155,7 +158,83 @@ class InferenceResponse:
             error.args += (result,)
             result.error = error
 
+        # TODO: Allocate the requested output memory type directly in C++.
+        if output_memory_type is not None:
+            try:
+                outputs = {}
+                for name, tensor in result.outputs.items():
+                    outputs[name] = tensor.to_device(output_memory_type)
+                result.outputs = outputs
+            except Exception as e:
+                raise InvalidArgumentError(
+                    f"Memory type {output_memory_type} not supported: {e}"
+                )
+
         # TODO: support classification
         # values["classification_label"] = response.output_classification_label()
 
         return result
+
+
+class AsyncResponseIterator:
+    def __init__(self, model, request, inference_request):
+        self._model = model
+        self._request = request
+        self._inference_request = inference_request
+        self._complete = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._complete:
+            raise StopAsyncIteration
+
+        # The binding could be improved by returning an awaitable object, but it is
+        # easier for now to pass in an async future object to be set by the binding when
+        # fetching responses.
+        future = asyncio.get_running_loop().create_future()
+        self._request.get_next_response(future)
+        response, flags = await future
+
+        response = InferenceResponse._from_tritonserver_inference_response(
+            self._model,
+            response,
+            flags,
+            self._inference_request.output_memory_type,
+        )
+        self._complete = response.final
+
+        return response
+
+
+class ResponseIterator:
+    def __init__(self, model, request, inference_request):
+        self._model = model
+        self._request = request
+        self._inference_request = inference_request
+        self._complete = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._complete:
+            raise StopIteration
+
+        # The binding could be improved by releasing the GIL and block, but it is easier
+        # for now to pass in an future object to be set by the binding when fetching
+        # responses.
+        future = concurrent.futures.Future()
+        self._request.get_next_response(future)
+        response, flags = future.result()
+
+        response = InferenceResponse._from_tritonserver_inference_response(
+            self._model,
+            response,
+            flags,
+            self._inference_request.output_memory_type,
+        )
+        self._complete = response.final
+
+        return response

@@ -32,7 +32,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Sequence
 
 import numpy
-from tritonserver._api._allocators import MemoryBuffer
 from tritonserver._api._datautils import (
     NUMPY_TO_TRITON_DTYPE,
     TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE,
@@ -46,6 +45,7 @@ from tritonserver._api._dlpack import (
     DLManagedTensor,
     c_str_dltensor,
 )
+from tritonserver._api._memorybuffer import MemoryBuffer
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
     TRITONSERVER_BufferAttributes,

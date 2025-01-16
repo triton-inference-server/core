@@ -38,7 +38,7 @@ import numpy
 from tritonserver._c import InvalidArgumentError
 from tritonserver._c import TRITONSERVER_DataType as DataType
 from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
-from tritonserver._c import TRITONSERVER_ResponseAllocator, UnsupportedError
+from tritonserver._c import UnsupportedError
 
 from . import _dlpack
 
