@@ -1378,7 +1378,7 @@ EnsembleContext::CheckAndSetEnsembleOutput(
                    end_3 - begin_3)
                    .count()
             << "[µs]" << std::endl;
-  std::cout << "part4 = "
+  std::cout << "Erase = "
             << std::chrono::duration_cast<std::chrono::microseconds>(
                    end_erase - begin_erase)
                    .count()
