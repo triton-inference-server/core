@@ -28,6 +28,7 @@
 
 #include "ensemble_scheduler.h"
 
+#include <chrono>
 #include <mutex>
 
 #include "cuda_utils.h"
@@ -803,7 +804,7 @@ EnsembleContext::PrepareSteps(
     }
 
     if (ensemble_status_.IsOk()) {
-      StepList res;
+      // StepList res;
       std::set<std::pair<std::string, IterationCount>> updated_tensors;
       ensemble_status_ = UpdateEnsembleState(completed_step, &updated_tensors);
       if (ensemble_status_.IsOk()) {
@@ -1175,6 +1176,22 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     const std::set<std::pair<std::string, IterationCount>>& updated_tensors,
     std::unique_ptr<InferenceResponse>* response)
 {
+  std::chrono::steady_clock::time_point end_1;
+  std::chrono::steady_clock::time_point begin_1;
+  std::chrono::steady_clock::time_point end_CreateResponse;
+  std::chrono::steady_clock::time_point begin_CreateResponse;
+  std::chrono::steady_clock::time_point end_2;
+  std::chrono::steady_clock::time_point begin_2;
+  std::chrono::steady_clock::time_point end_AllocateDataBuffer;
+  std::chrono::steady_clock::time_point begin_AllocateDataBuffer;
+  std::chrono::steady_clock::time_point end_CopyBuffer;
+  std::chrono::steady_clock::time_point begin_CopyBuffer;
+  std::chrono::steady_clock::time_point end_3;
+  std::chrono::steady_clock::time_point begin_3;
+  std::chrono::steady_clock::time_point end_4;
+  std::chrono::steady_clock::time_point begin_4;
+
+  begin_1 = std::chrono::steady_clock::now();
   IterationCount iteration_count = 0;
   // Check if updated tensor is one of the ensemble output and if all outputs
   // have tensor of the same iteration count
@@ -1206,12 +1223,16 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     // Do not create response if the actual response is not ready.
     return Status::Success;
   }
+  end_1 = std::chrono::steady_clock::now();
 
+  begin_CreateResponse = std::chrono::steady_clock::now();
   RETURN_IF_ERROR(lrequest->ResponseFactory()->CreateResponse(response));
 
   bool cuda_async_copy = false;
   std::map<TensorData*, size_t*> releasing_tensors;
+  end_CreateResponse = std::chrono::steady_clock::now();
   for (const auto& output_pair : info_->ensemble_output_shape_) {
+    begin_2 = std::chrono::steady_clock::now();
     if (requested_outputs.find(output_pair.first) == requested_outputs.end()) {
       continue;
     }
@@ -1239,11 +1260,15 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     size_t content_size;
     tensor.data_->Data()->BufferAt(
         0, &content_size, &dst_memory_type, &dst_memory_type_id);
+    end_2 = std::chrono::steady_clock::now();
 
+    begin_AllocateDataBuffer = std::chrono::steady_clock::now();
     void* buffer;
     RETURN_IF_ERROR(output->AllocateDataBuffer(
         &buffer, content_size, &dst_memory_type, &dst_memory_type_id));
 
+    end_AllocateDataBuffer = std::chrono::steady_clock::now();
+    begin_CopyBuffer = std::chrono::steady_clock::now();
     // Done with this output if 'expected_byte_size' is 0
     if (content_size == 0) {
       continue;
@@ -1273,7 +1298,9 @@ EnsembleContext::CheckAndSetEnsembleOutput(
       content = tensor.data_->Data()->BufferAt(
           content_idx, &content_size, &src_memory_type, &src_memory_type_id);
     }
+    end_CopyBuffer = std::chrono::steady_clock::now();
 
+    begin_3 = std::chrono::steady_clock::now();
     releasing_tensors.emplace(&tensor_data, &tensor.remaining_reference_count_);
 
     if (tensor.parameter_override_) {
@@ -1300,8 +1327,10 @@ EnsembleContext::CheckAndSetEnsembleOutput(
           "sequence_end",
           (tensor.flags_ & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0);
     }
+    end_3 = std::chrono::steady_clock::now();
   }
 
+  begin_4 = std::chrono::steady_clock::now();
   if (cuda_async_copy) {
 #ifdef TRITON_ENABLE_GPU
     cudaStreamSynchronize(stream_);
@@ -1311,13 +1340,55 @@ EnsembleContext::CheckAndSetEnsembleOutput(
         "unexpected CUDA copy flag set while GPU is not supported");
 #endif  // TRITON_ENABLE_GPU
   }
-
   // Prune the tensor if it is not needed by other steps
   for (auto& releasing_pair : releasing_tensors) {
     if ((--(*releasing_pair.second)) == 0) {
       releasing_pair.first->tensor_.erase(iteration_count);
     }
   }
+  end_4 = std::chrono::steady_clock::now();
+
+  std::cout << "part1 = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_1 - begin_1)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "CreateResponse = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_CreateResponse - begin_CreateResponse)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "part2 = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_2 - begin_2)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "AllocateDataBuffer = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_AllocateDataBuffer - begin_AllocateDataBuffer)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "CopyBuffer = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_CopyBuffer - begin_CopyBuffer)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "part3 = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_3 - begin_3)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "part4 = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_4 - begin_4)
+                   .count()
+            << "[µs]" << std::endl;
+  std::cout << "CheckAndSetEnsembleOutput = "
+            << std::chrono::duration_cast<std::chrono::microseconds>(
+                   end_4 - begin_1)
+                   .count()
+            << "[µs]" << std::endl;
+
 
   return Status::Success;
 }
