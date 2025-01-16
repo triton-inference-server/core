@@ -1330,7 +1330,7 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     end_3 = std::chrono::steady_clock::now();
   }
 
-  begin_4 = std::chrono::steady_clock::now();
+  begin_erase = std::chrono::steady_clock::now();
   if (cuda_async_copy) {
 #ifdef TRITON_ENABLE_GPU
     cudaStreamSynchronize(stream_);
@@ -1346,7 +1346,7 @@ EnsembleContext::CheckAndSetEnsembleOutput(
       releasing_pair.first->tensor_.erase(iteration_count);
     }
   }
-  end_4 = std::chrono::steady_clock::now();
+  end_erase = std::chrono::steady_clock::now();
 
   std::cout << "part1 = "
             << std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1380,12 +1380,12 @@ EnsembleContext::CheckAndSetEnsembleOutput(
             << "[µs]" << std::endl;
   std::cout << "part4 = "
             << std::chrono::duration_cast<std::chrono::microseconds>(
-                   end_4 - begin_4)
+                   end_erase - begin_erase)
                    .count()
             << "[µs]" << std::endl;
   std::cout << "CheckAndSetEnsembleOutput = "
             << std::chrono::duration_cast<std::chrono::microseconds>(
-                   end_4 - begin_1)
+                   end_erase - begin_1)
                    .count()
             << "[µs]" << std::endl;
 
