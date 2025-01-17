@@ -90,14 +90,7 @@ class TestModels:
         request = tritonserver.InferenceRequest(server.model("test"))
 
 
-class TestAllocators:
-    class MockMemoryAllocator(tritonserver.MemoryAllocator):
-        def __init__(self):
-            pass
-
-        def allocate(self, *args, **kwargs):
-            raise Exception("foo")
-
+class TestOutputMemory:
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_memory_fallback_to_cpu(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
@@ -136,76 +129,34 @@ class TestAllocators:
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             assert fp16_input[0][0] == fp16_output[0][0]
 
-    @pytest.mark.skip(
-        reason="Skipping test, internal allocator not support setting memory type"
-    )
     def test_unsupported_memory_type(self, server_options):
         # TODO: Revisit this test when GPU memory support is added, i.e. the request
         #       specifies output to be in GPU memory, but the system only has CPU
         #       memory, which an exception should be raised during inference.
-        pass
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
-    @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
-    def test_allocate_on_cpu_and_reshape(self):
-        allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.CPU]
+        assert server.ready()
 
-        memory_buffer = allocator.allocate(
-            memory_type=tritonserver.MemoryType.CPU, memory_type_id=0, size=200
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
         )
 
-        cpu_array = memory_buffer.owner
-
-        assert memory_buffer.size == 200
-
-        fp32_size = int(memory_buffer.size / 4)
-
-        tensor = tritonserver.Tensor(
-            tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer
-        )
-
-        cpu_fp32_array = numpy.from_dlpack(tensor)
-        assert cpu_array.ctypes.data == cpu_fp32_array.ctypes.data
-        assert cpu_fp32_array.dtype == numpy.float32
-        assert cpu_fp32_array.nbytes == 200
-
-    @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
-    @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
-    def test_allocate_on_gpu_and_reshape(self):
-        allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-
-        memory_buffer = allocator.allocate(
-            memory_type=tritonserver.MemoryType.GPU, memory_type_id=0, size=200
-        )
-
-        gpu_array = memory_buffer.owner
-
-        gpu_array = cupy.empty([10, 20], dtype=cupy.uint8)
-        memory_buffer = tritonserver.MemoryBuffer.from_dlpack(gpu_array)
-
-        assert memory_buffer.size == 200
-
-        fp32_size = int(memory_buffer.size / 4)
-
-        tensor = tritonserver.Tensor(
-            tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer
-        )
-
-        gpu_fp32_array = cupy.from_dlpack(tensor)
-        assert (
-            gpu_array.__cuda_array_interface__["data"][0]
-            == gpu_fp32_array.__cuda_array_interface__["data"][0]
-        )
-
-        assert gpu_fp32_array.dtype == cupy.float32
-        assert gpu_fp32_array.nbytes == 200
-
-        torch_fp32_tensor = torch.from_dlpack(tensor)
-        assert torch_fp32_tensor.dtype == torch.float32
-        assert (
-            torch_fp32_tensor.data_ptr()
-            == gpu_array.__cuda_array_interface__["data"][0]
-        )
-        assert torch_fp32_tensor.nbytes == 200
+        with pytest.raises(tritonserver.InvalidArgumentError):
+            for response in server.model("test").infer(
+                inputs={
+                    "string_input": tritonserver.Tensor.from_string_array([["hello"]])
+                },
+                output_memory_type="unsupported",
+            ):
+                pass
 
 
 class TestTensor:
