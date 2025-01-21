@@ -844,6 +844,7 @@ Metrics::InitializeDcgmMetrics()
       pci_bus_id_to_gpu_labels;
   std::map<std::string, std::string> pci_bus_id_to_device_name;
   dcgmDeviceAttributes_t gpu_attributes[DCGM_MAX_NUM_DEVICES];
+  std::map<std::string, std::string> gpu_labels;
   for (int i = 0; i < dcgm_gpu_count; i++) {
     gpu_attributes[i].version = dcgmDeviceAttributes_version;
     dcgmerr = dcgmGetDeviceAttributes(
@@ -858,7 +859,6 @@ Metrics::InitializeDcgmMetrics()
       pci_bus_id_to_dcgm_id[pciBusId] = i;
       pci_bus_id_to_device_name[pciBusId] =
           std::string(gpu_attributes[i].identifiers.deviceName);
-      std::map<std::string, std::string> gpu_labels;
       gpu_labels.insert(std::map<std::string, std::string>::value_type(
           kMetricsLabelGpuUuid,
           std::string(gpu_attributes[i].identifiers.uuid)));
@@ -890,6 +890,8 @@ Metrics::InitializeDcgmMetrics()
       LOG_INFO << "Collecting metrics for GPU " << i << ": "
                << pci_bus_id_to_device_name[pci_bus_id];
       auto& gpu_labels = pci_bus_id_to_gpu_labels[pci_bus_id];
+      gpu_labels.insert(std::map<std::string, std::string>::value_type(
+          kMetricsLabelGpuDeviceId, kMetricsLabelGpuDeviceIdPrefix + i));
       gpu_utilization_.push_back(&gpu_utilization_family_.Add(gpu_labels));
       gpu_memory_total_.push_back(&gpu_memory_total_family_.Add(gpu_labels));
       gpu_memory_used_.push_back(&gpu_memory_used_family_.Add(gpu_labels));
