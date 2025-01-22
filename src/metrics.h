@@ -43,7 +43,7 @@
 #include "status.h"
 
 #ifdef TRITON_ENABLE_METRICS_GPU
-#include <dcgm_agent.h>
+#include <datacenter-gpu-manager-4/dcgm_agent.h>
 #endif  // TRITON_ENABLE_METRICS_GPU
 
 namespace triton { namespace core {
