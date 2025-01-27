@@ -1171,13 +1171,21 @@ class PyInferenceRequest
   // Response management
   void GetNextResponse(const py::object& py_future)
   {
+    // Called exclusively from Python, so GIL is always held.
     std::lock_guard lock(response_mu_);
 
+    // There are two cases:
+    // 1. The backend is faster than the frontend:
+    //      There will be response(s) queued at 'responses_' deque, so pop the
+    //      response from the deque and set it to the 'py_future' object.
+    // 2. The backend is slower than the frontend:
+    //      The 'responses_' deque will be empty, so track the 'py_future' in
+    //      this request object until the 'AddNextResponse()' is called.
     if (responses_.empty()) {
-      if (response_future_.get() != nullptr) {
+      if (response_future_.ptr() != nullptr) {
         throw AlreadyExistsError("cannot call GetNextResponse concurrently");
       }
-      response_future_.reset(new py::object(py_future));
+      response_future_ = py_future;
     } else {
       std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>&
           py_response = responses_.front();
@@ -1190,24 +1198,38 @@ class PyInferenceRequest
   void AddNextResponse(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags)
   {
+    // Pair the 'response' and 'flags' so they can be easily moved around.
     std::shared_ptr<PyInferenceResponse> managed_ptr(nullptr);
     if (response != nullptr) {
       managed_ptr.reset(new PyInferenceResponse(response, true /* owned */));
     }
     std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t> py_response(
         std::move(managed_ptr), std::move(flags));
+
+    // There are two cases:
+    // 1. The backend is faster than the frontend:
+    //      The 'response_future_' will be empty since the frontend is not
+    //      waiting on a response, so add the 'py_response' to the 'responses_'
+    //      deque.
+    // 2. The backend is slower than the frontend:
+    //      The 'response_future_' will be set since the frontend is waiting on
+    //      a response, so set the 'py_response' to the awaiting
+    //      'response_future_'.
     {
       std::lock_guard lock(response_mu_);
-      if (response_future_.get() == nullptr) {
+      if (response_future_.ptr() == nullptr) {
         responses_.push_back(std::move(py_response));
         return;
       }
     }
+    // There is no need to hold the 'response_mu_' after knowing the frontend is
+    // waiting, given there should be no concurrent calls into
+    // 'GetNextResponse', the frontend will wait until a result is set for the
+    // 'response_future_'.
     {
       py::gil_scoped_acquire gil;
-      std::unique_ptr<py::object> response_future_local(nullptr);
-      response_future_.swap(response_future_local);
-      PyFutureSetResult(*response_future_local, py_response);
+      py::object response_future_local(std::move(response_future_));
+      PyFutureSetResult(response_future_local, py_response);
     }
   }
 
@@ -1228,7 +1250,7 @@ class PyInferenceRequest
   }
 
   std::mutex response_mu_;
-  std::unique_ptr<py::object> response_future_;
+  py::object response_future_;
   std::deque<std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>>
       responses_;
 
