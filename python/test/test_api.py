@@ -130,9 +130,9 @@ class TestOutputMemory:
             assert fp16_input[0][0] == fp16_output[0][0]
 
     def test_unsupported_memory_type(self, server_options):
-        # TODO: Revisit this test when GPU memory support is added, i.e. the request
-        #       specifies output to be in GPU memory, but the system only has CPU
-        #       memory, which an exception should be raised during inference.
+        # TODO: [DLIS-7824] Revisit this test when GPU memory support is added, i.e. the
+        #       request specifies output to be in GPU memory, but the system only has
+        #       CPU memory, which an exception should be raised during inference.
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
         assert server.ready()

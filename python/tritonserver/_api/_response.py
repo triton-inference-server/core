@@ -158,7 +158,7 @@ class InferenceResponse:
             error.args += (result,)
             result.error = error
 
-        # TODO: Allocate the requested output memory type directly in C++.
+        # TODO: [DLIS-7824] Allocate the requested output memory type directly in C++.
         if output_memory_type is not None:
             try:
                 outputs = {}
