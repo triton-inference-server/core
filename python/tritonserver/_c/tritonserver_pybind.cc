@@ -844,7 +844,6 @@ class PyInferenceResponse
     ThrowIfError(TRITONSERVER_InferenceResponseOutput(
         triton_object_, index, &name, &datatype, &shape, &dim_count, &base,
         &byte_size, &memory_type, &memory_type_id, &userp));
-    // The base pointer is deallocated when the response is deallocated.
     return {
         name,
         datatype,
