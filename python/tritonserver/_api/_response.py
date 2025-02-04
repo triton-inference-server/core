@@ -44,11 +44,13 @@ if TYPE_CHECKING:
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._logging import LogMessage
 from tritonserver._api._memorybuffer import DeviceOrMemoryType, MemoryBuffer
+from tritonserver._api._request import InferenceRequest
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
     InvalidArgumentError,
     TritonError,
+    TRITONSERVER_InferenceRequest,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
@@ -100,12 +102,14 @@ class InferenceResponse:
     @staticmethod
     def _from_tritonserver_inference_response(
         model: _model.Model,
+        request: TRITONSERVER_InferenceRequest,
+        inference_request: InferenceRequest,
         response,
         flags: TRITONSERVER_ResponseCompleteFlag,
-        output_memory_type: Optional[DeviceOrMemoryType] = None,
     ):
         result = InferenceResponse(
             model,
+            request.id,
             final=(flags == TRITONSERVER_ResponseCompleteFlag.FINAL),
         )
 
@@ -155,15 +159,17 @@ class InferenceResponse:
             result.error = error
 
         # TODO: [DLIS-7824] Allocate the requested output memory type directly in C++.
-        if output_memory_type is not None:
+        if inference_request.output_memory_type is not None:
             try:
                 outputs = {}
                 for name, tensor in result.outputs.items():
-                    outputs[name] = tensor.to_device(output_memory_type)
+                    outputs[name] = tensor.to_device(
+                        inference_request.output_memory_type
+                    )
                 result.outputs = outputs
             except Exception as e:
                 raise InvalidArgumentError(
-                    f"Memory type {output_memory_type} not supported: {e}"
+                    f"Memory type {inference_request.output_memory_type} not supported: {e}"
                 )
 
         # TODO: support classification
@@ -195,9 +201,10 @@ class AsyncResponseIterator:
 
         response = InferenceResponse._from_tritonserver_inference_response(
             self._model,
+            self._request,
+            self._inference_request,
             response,
             flags,
-            self._inference_request.output_memory_type,
         )
         self._complete = response.final
 
@@ -227,9 +234,10 @@ class ResponseIterator:
 
         response = InferenceResponse._from_tritonserver_inference_response(
             self._model,
+            self._request,
+            self._inference_request,
             response,
             flags,
-            self._inference_request.output_memory_type,
         )
         self._complete = response.final
 
