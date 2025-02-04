@@ -885,19 +885,19 @@ class PyInferenceRequest
     // The request wrapper needs to be kept alive until the release callback is
     // invoked, so the Triton request can be deleted after the core/backend is
     // done with it.
-    std::unique_ptr<std::shared_ptr<PyInferenceRequest>> request_ptr(
-        new std::shared_ptr<PyInferenceRequest>(request));
+    std::shared_ptr<PyInferenceRequest>* request_ptr =
+        new std::shared_ptr<PyInferenceRequest>(request);
     ThrowIfError(TRITONSERVER_InferenceRequestSetReleaseCallback(
         triton_object_, ReleaseCallback,
-        reinterpret_cast<void*>(
-            request_ptr.release()) /* request_release_userp */));
+        reinterpret_cast<void*>(request_ptr) /* request_release_userp */));
   }
   static void ReleaseCallback(
       struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
       void* userp)
   {
-    std::unique_ptr<std::shared_ptr<PyInferenceRequest>> request_ptr(
-        reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp));
+    std::shared_ptr<PyInferenceRequest>* request_ptr =
+        reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp);
+    delete request_ptr;
   }
 
   struct ResponseAllocatorDeleter {
