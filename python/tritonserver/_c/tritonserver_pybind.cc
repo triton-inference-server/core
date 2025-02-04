@@ -942,11 +942,14 @@ class PyInferenceRequest
       struct TRITONSERVER_BufferAttributes* buffer_attributes, void* userp,
       void* buffer_userp)
   {
-    ThrowIfError(TRITONSERVER_BufferAttributesSetMemoryType(
-        buffer_attributes, TRITONSERVER_MEMORY_CPU));
-    ThrowIfError(TRITONSERVER_BufferAttributesSetMemoryTypeId(
-        buffer_attributes, 0 /* memory_type_id */));
-    return nullptr;
+    TRITONSERVER_Error* err = TRITONSERVER_BufferAttributesSetMemoryType(
+        buffer_attributes, TRITONSERVER_MEMORY_CPU);
+    if (err != nullptr) {
+      return err;
+    }
+    err = TRITONSERVER_BufferAttributesSetMemoryTypeId(
+        buffer_attributes, 0 /* memory_type_id */);
+    return err;
   }
   static TRITONSERVER_Error* ResponseAllocatorAllocFn(
       struct TRITONSERVER_ResponseAllocator* allocator, const char* tensor_name,
