@@ -968,6 +968,9 @@ class PyInferenceRequest
       void* buffer_userp, size_t byte_size, TRITONSERVER_MemoryType memory_type,
       int64_t memory_type_id)
   {
+    if (memory_type != TRITONSERVER_MEMORY_CPU || memory_type_id != 0) {
+      throw InvalidArgumentError("invalid memory type or id to be released");
+    }
     free(buffer);
     return nullptr;
   }
