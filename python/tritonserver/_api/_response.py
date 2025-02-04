@@ -210,6 +210,9 @@ class AsyncResponseIterator:
 
         return response
 
+    def cancel(self):
+        self._request.cancel()
+
 
 class ResponseIterator:
     def __init__(self, model, request, inference_request):
@@ -242,3 +245,6 @@ class ResponseIterator:
         self._complete = response.final
 
         return response
+
+    def cancel(self):
+        self._request.cancel()
