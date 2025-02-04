@@ -45,7 +45,7 @@ from tritonserver._api._dlpack import (
     DLManagedTensor,
     c_str_dltensor,
 )
-from tritonserver._api._memorybuffer import MemoryBuffer
+from tritonserver._api._memorybuffer import DeviceOrMemoryType, MemoryBuffer
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
     TRITONSERVER_BufferAttributes,
@@ -53,10 +53,6 @@ from tritonserver._c.triton_bindings import (
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import UnsupportedError
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
-)
 
 try:
     import cupy

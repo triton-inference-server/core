@@ -36,16 +36,13 @@ from typing import Any, Optional
 from tritonserver._api import _model
 from tritonserver._api._datautils import CustomKeyErrorDict
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
+from tritonserver._api._memorybuffer import DeviceOrMemoryType
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_InferenceRequest
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
-)
 
 
 @dataclass

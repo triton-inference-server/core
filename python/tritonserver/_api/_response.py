@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._logging import LogMessage
-from tritonserver._api._memorybuffer import MemoryBuffer
+from tritonserver._api._memorybuffer import DeviceOrMemoryType, MemoryBuffer
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
@@ -55,10 +55,6 @@ from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryTyp
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ResponseCompleteFlag,
     TRITONSERVER_Server,
-)
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
 )
 
 

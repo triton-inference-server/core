@@ -35,6 +35,7 @@ from types import ModuleType
 from typing import Any, Callable, ClassVar, Optional, Sequence, Type
 
 import numpy
+from tritonserver._api._memorybuffer import DeviceOrMemoryType
 from tritonserver._c import InvalidArgumentError
 from tritonserver._c import TRITONSERVER_DataType as DataType
 from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
@@ -46,10 +47,6 @@ try:
     import cupy
 except ImportError:
     cupy = None
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[_dlpack.DLDeviceType, int] | str
-)
 
 
 class CustomKeyErrorDict(dict):
