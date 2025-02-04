@@ -32,6 +32,7 @@ import os
 import shutil
 import sys
 import time
+import tracemalloc
 import unittest
 from collections import Counter
 from contextlib import contextmanager
@@ -499,3 +500,54 @@ class TestInference:
                 output_memory_type="cpu",
                 raise_on_error=True,
             )
+
+
+class TestMemoryLeak:
+    @staticmethod
+    @contextmanager
+    def _leak_detector(min_mem_inc, max_mem_inc):
+        gc.collect()
+        tracemalloc.start()
+        current, peak = tracemalloc.get_traced_memory()
+        yield
+        new_current, new_peak = tracemalloc.get_traced_memory()
+        mem_inc = new_current - current
+        assert mem_inc >= min_mem_inc
+        assert mem_inc < max_mem_inc
+        tracemalloc.stop()
+
+    # max_infer_repeat / min_infer_repeat >> max_mem_inc / min_mem_inc, so the memory
+    # increase is not proportional to the increase in inference requests.
+    @pytest.mark.parametrize("infer_repeat", [200, 500, 1000, 8000])
+    def test_inference_leak(self, server_options, infer_repeat):
+        min_mem_inc, max_mem_inc = 10000, 90000
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+        with TestMemoryLeak._leak_detector(min_mem_inc, max_mem_inc):
+            for i in range(infer_repeat):
+                inputs = {
+                    "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+                    "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+                }
+                for response in server.model("test").infer(
+                    inputs=inputs,
+                    output_memory_type="cpu",
+                    raise_on_error=True,
+                ):
+                    for input_name, input_value in inputs.items():
+                        output_value = response.outputs[
+                            input_name.replace("input", "output")
+                        ]
+                        output_value = numpy.from_dlpack(output_value)
+                        numpy.testing.assert_array_equal(input_value, output_value)
