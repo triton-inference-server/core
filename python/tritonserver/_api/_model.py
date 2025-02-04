@@ -177,9 +177,6 @@ class Model:
         if inference_request is None:
             inference_request = InferenceRequest(model=self, **kwargs)
 
-        # The 'request' is referencing pointers managed by the 'inference_request', so
-        # the 'inference_request' needs to be kept alive as long as the 'request' is
-        # alive.
         request = inference_request._create_tritonserver_inference_request()
         self._server.infer_async(request)
         return AsyncResponseIterator(self, request, inference_request)
@@ -251,9 +248,6 @@ class Model:
         if inference_request is None:
             inference_request = InferenceRequest(model=self, **kwargs)
 
-        # The 'request' is referencing pointers managed by the 'inference_request', so
-        # the 'inference_request' needs to be kept alive as long as the 'request' is
-        # alive.
         request = inference_request._create_tritonserver_inference_request()
         self._server.infer_async(request)
         return ResponseIterator(self, request, inference_request)
