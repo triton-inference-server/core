@@ -32,16 +32,17 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy
-from tritonserver._api._datautils import DLPackObject
 from tritonserver._api._dlpack import DLDeviceType
-from tritonserver._c.triton_bindings import (
-    InvalidArgumentError,
-    TRITONSERVER_BufferAttributes,
-)
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 
 DeviceOrMemoryType = (
     tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
+)
+
+from tritonserver._api._datautils import DLPackObject
+from tritonserver._c.triton_bindings import (
+    InvalidArgumentError,
+    TRITONSERVER_BufferAttributes,
 )
 
 
