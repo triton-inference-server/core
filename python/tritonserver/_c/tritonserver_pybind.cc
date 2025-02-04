@@ -1176,16 +1176,16 @@ class PyInferenceRequest
   // Response management
   void GetNextResponse(const py::object& py_future)
   {
-    // Called exclusively from Python, so GIL is always held.
+    // Called exclusively from Python, so pybind11 will ensure GIL is held.
     std::lock_guard lock(response_mu_);
 
     // There are two cases:
-    // 1. The backend is faster than the frontend:
-    //      There will be response(s) queued at 'responses_' deque, so pop the
-    //      response from the deque and set it to the 'py_future' object.
-    // 2. The backend is slower than the frontend:
+    // 1. GetNextResponse() is called before responses are generated:
     //      The 'responses_' deque will be empty, so track the 'py_future' in
-    //      this request object until the 'AddNextResponse()' is called.
+    //      this request object until the AddNextResponse() is called.
+    // 2. Responses are generated and queued before GetNextResponse() is called:
+    //      Responses are queued at 'responses_' deque, so pop a response from
+    //      the deque and set it to the 'py_future' object.
     if (responses_.empty()) {
       if (response_future_.ptr() != nullptr) {
         throw AlreadyExistsError("cannot call GetNextResponse concurrently");
@@ -1212,14 +1212,8 @@ class PyInferenceRequest
         std::move(managed_ptr), std::move(flags));
 
     // There are two cases:
-    // 1. The backend is faster than the frontend:
-    //      The 'response_future_' will be empty since the frontend is not
-    //      waiting on a response, so add the 'py_response' to the 'responses_'
-    //      deque.
-    // 2. The backend is slower than the frontend:
-    //      The 'response_future_' will be set since the frontend is waiting on
-    //      a response, so set the 'py_response' to the awaiting
-    //      'response_future_'.
+    // 1. GetNextResponse() hasn't been called and the future is not set.
+    // 2. GetNextResponse() has been called and the future is set.
     {
       std::lock_guard lock(response_mu_);
       if (response_future_.ptr() == nullptr) {
@@ -1228,9 +1222,10 @@ class PyInferenceRequest
       }
     }
     // There is no need to hold the 'response_mu_' after knowing the frontend is
-    // waiting, given there should be no concurrent calls into
-    // 'GetNextResponse', the frontend will wait until a result is set for the
-    // 'response_future_'.
+    // waiting, given the frontend does not call GetNextResponse() concurrently,
+    // the frontend will wait until a result is set for the ruture.
+    // GIL must be held when the 'response_future_local' goes out of scope which
+    // decrements the future reference count, and during PyFutureSetResult().
     {
       py::gil_scoped_acquire gil;
       py::object response_future_local(std::move(response_future_));
