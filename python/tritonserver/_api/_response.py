@@ -179,10 +179,11 @@ class InferenceResponse:
 
 
 class AsyncResponseIterator:
-    def __init__(self, model, request, inference_request):
+    def __init__(self, model, request, inference_request, raise_on_error=False):
         self._model = model
         self._request = request
         self._inference_request = inference_request
+        self._raise_on_error = raise_on_error
         self._complete = False
 
     def __aiter__(self):
@@ -208,6 +209,9 @@ class AsyncResponseIterator:
         )
         self._complete = response.final
 
+        if response.error is not None and self._raise_on_error:
+            raise response.error
+
         return response
 
     def cancel(self):
@@ -215,10 +219,11 @@ class AsyncResponseIterator:
 
 
 class ResponseIterator:
-    def __init__(self, model, request, inference_request):
+    def __init__(self, model, request, inference_request, raise_on_error=False):
         self._model = model
         self._request = request
         self._inference_request = inference_request
+        self._raise_on_error = raise_on_error
         self._complete = False
 
     def __iter__(self):
@@ -243,6 +248,9 @@ class ResponseIterator:
             flags,
         )
         self._complete = response.final
+
+        if response.error is not None and self._raise_on_error:
+            raise response.error
 
         return response
 
