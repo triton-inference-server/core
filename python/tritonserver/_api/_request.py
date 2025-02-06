@@ -82,6 +82,12 @@ class InferenceRequest:
         fallback. Memory type can be given as a string, MemoryType,
         tuple [MemoryType, memory_type__id], or tuple[DLDeviceType,
         device_id].
+    response_queue : Optional[Union[queue.SimpleQueue, asyncio.Queue]], default None
+        Queue for asynchronous handling of inference responses. If
+        provided Inference responses will be added to the queue in
+        addition to the response iterator. Must be queue.SimpleQueue
+        for non asyncio requests and asyncio.Queue for asyncio
+        requests.
 
     Examples
     --------
@@ -116,6 +122,7 @@ class InferenceRequest:
     inputs: dict[str, Tensor | Any] = field(default_factory=dict)
     parameters: dict[str, str | int | bool | float] = field(default_factory=dict)
     output_memory_type: Optional[DeviceOrMemoryType] = None
+    response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
     _serialized_inputs: dict[str, Tensor] = field(init=False, default_factory=dict)
     _server: TRITONSERVER_Server = field(init=False)
 

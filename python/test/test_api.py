@@ -29,6 +29,7 @@ import copy
 import gc
 import json
 import os
+import queue
 import shutil
 import sys
 import time
@@ -438,6 +439,150 @@ class TestInference:
                     response.outputs[input_name.replace("input", "output")]
                 )
                 numpy.testing.assert_array_equal(input_value, output_value)
+
+    @pytest.mark.asyncio
+    async def test_basic_async_inference(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
+        async for response in server.model("test").async_infer(
+            inputs=inputs,
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            for input_name, input_value in inputs.items():
+                output_value = response.outputs[input_name.replace("input", "output")]
+                output_value = numpy.from_dlpack(output_value)
+                numpy.testing.assert_array_equal(input_value, output_value)
+
+        # test normal bool
+        inputs = {"bool_input": [[True, False, False, True]]}
+        async for response in server.model("test").async_infer(
+            inputs=inputs,
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_value, output_value)
+
+    def test_inference_with_response_queue(self, server_options):
+        # start server
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+        # send 2 requests concurrently
+        concurrent_infer = 2
+        response_queue = queue.SimpleQueue()
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
+        response_iterators = []
+        for i in range(concurrent_infer):
+            response_iterator = server.model("test").infer(
+                inputs=inputs,
+                response_queue=response_queue,
+                raise_on_error=True,
+            )
+            response_iterators.append(response_iterator)
+        # response_queue should be populated with responses from the concurrent requests
+        # without iterating the iterators
+        for i in range(concurrent_infer):
+            response = response_queue.get(timeout=1)
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_value, output_value)
+        # check the iterators are working
+        for response_iterator in response_iterators:
+            for response in response_iterator:
+                for input_name, input_value in inputs.items():
+                    output_value = numpy.from_dlpack(
+                        response.outputs[input_name.replace("input", "output")]
+                    )
+                    numpy.testing.assert_array_equal(input_value, output_value)
+        # finally make sure no unwanted items are put into the queue
+        assert response_queue.empty()
+
+    @pytest.mark.asyncio
+    async def test_async_inference_with_response_queue(self, server_options):
+        # start server
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+        # send 2 requests concurrently
+        concurrent_infer = 2
+        response_queue = asyncio.Queue()
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
+        response_iterators = []
+        for i in range(concurrent_infer):
+            response_iterator = server.model("test").async_infer(
+                inputs=inputs,
+                response_queue=response_queue,
+                raise_on_error=True,
+            )
+            response_iterators.append(response_iterator)
+        # response_queue should be populated with responses from the concurrent requests
+        # without iterating the iterators
+        for i in range(concurrent_infer):
+            response = await response_queue.get()
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_value, output_value)
+        # check the iterators are working
+        for response_iterator in response_iterators:
+            async for response in response_iterator:
+                for input_name, input_value in inputs.items():
+                    output_value = numpy.from_dlpack(
+                        response.outputs[input_name.replace("input", "output")]
+                    )
+                    numpy.testing.assert_array_equal(input_value, output_value)
+        # finally make sure no unwanted items are put into the queue
+        assert response_queue.empty()
 
     def test_parameters(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)

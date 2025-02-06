@@ -32,6 +32,7 @@ import asyncio
 import concurrent
 import inspect
 import queue
+import threading
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Optional
 
@@ -179,20 +180,33 @@ class InferenceResponse:
 
 
 class AsyncResponseIterator:
-    def __init__(self, model, request, inference_request, raise_on_error=False):
+    def __init__(
+        self, model, request, inference_request, raise_on_error=False, loop=None
+    ):
         self._model = model
         self._request = request
         self._inference_request = inference_request
         self._raise_on_error = raise_on_error
         self._complete = False
 
-    def __aiter__(self):
-        return self
+        self._iterator_queue = None
+        self._user_queue = self._inference_request.response_queue
+        if self._user_queue is not None:
+            self._iterator_queue = asyncio.Queue()
+            self._continue_fetch_future = asyncio.run_coroutine_threadsafe(
+                self._continue_fetch(),
+                asyncio.get_running_loop() if loop is None else loop,
+            )
 
-    async def __anext__(self):
-        if self._complete:
-            raise StopAsyncIteration
+    async def _continue_fetch(self):
+        complete = False
+        while not complete:
+            response = await self._get_next_response()
+            self._iterator_queue.put_nowait(response)
+            self._user_queue.put_nowait(response)
+            complete = response.final
 
+    async def _get_next_response(self):
         # The binding could be improved by returning an awaitable object, but it is
         # easier for now to pass in an async future object to be set by the binding when
         # fetching responses.
@@ -207,8 +221,21 @@ class AsyncResponseIterator:
             response,
             flags,
         )
-        self._complete = response.final
+        return response
 
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._complete:
+            raise StopAsyncIteration
+
+        if self._iterator_queue is None:
+            response = await self._get_next_response()
+        else:
+            response = await self._iterator_queue.get()
+
+        self._complete = response.final
         if response.error is not None and self._raise_on_error:
             raise response.error
 
@@ -226,13 +253,22 @@ class ResponseIterator:
         self._raise_on_error = raise_on_error
         self._complete = False
 
-    def __iter__(self):
-        return self
+        self._iterator_queue = None
+        self._user_queue = self._inference_request.response_queue
+        if self._user_queue is not None:
+            self._iterator_queue = queue.SimpleQueue()
+            self._continue_fetch_thread = threading.Thread(target=self._continue_fetch)
+            self._continue_fetch_thread.start()
 
-    def __next__(self):
-        if self._complete:
-            raise StopIteration
+    def _continue_fetch(self):
+        complete = False
+        while not complete:
+            response = self._get_next_response()
+            self._iterator_queue.put_nowait(response)
+            self._user_queue.put_nowait(response)
+            complete = response.final
 
+    def _get_next_response(self):
         # The binding could be improved by releasing the GIL and block, but it is easier
         # for now to pass in an future object to be set by the binding when fetching
         # responses.
@@ -247,8 +283,21 @@ class ResponseIterator:
             response,
             flags,
         )
-        self._complete = response.final
+        return response
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._complete:
+            raise StopIteration
+
+        if self._iterator_queue is None:
+            response = self._get_next_response()
+        else:
+            response = self._iterator_queue.get()
+
+        self._complete = response.final
         if response.error is not None and self._raise_on_error:
             raise response.error
 
