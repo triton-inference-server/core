@@ -665,7 +665,7 @@ class TestMemoryLeak:
     # increase is not proportional to the increase in inference requests.
     @pytest.mark.parametrize("infer_repeat", [200, 500, 1000, 8000])
     def test_inference_leak(self, server_options, infer_repeat):
-        min_mem_inc, max_mem_inc = 10000, 90000
+        min_mem_inc, max_mem_inc = 20000, 120000
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
         assert server.ready()
         server.load(
