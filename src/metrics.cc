@@ -38,7 +38,6 @@
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <cuda_runtime_api.h>
-#include <dcgm_agent.h>
 
 #include <cstring>
 #include <set>
