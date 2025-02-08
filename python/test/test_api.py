@@ -650,22 +650,22 @@ class TestInference:
 class TestMemoryLeak:
     @staticmethod
     @contextmanager
-    def _leak_detector(min_mem_inc, max_mem_inc):
+    def _leak_detector(min_mem_inc_bytes, max_mem_inc_bytes):
         gc.collect()
         tracemalloc.start()
         current, peak = tracemalloc.get_traced_memory()
         yield
         new_current, new_peak = tracemalloc.get_traced_memory()
-        mem_inc = new_current - current
-        assert mem_inc >= min_mem_inc
-        assert mem_inc < max_mem_inc
+        mem_inc_bytes = new_current - current
+        assert mem_inc_bytes >= min_mem_inc_bytes
+        assert mem_inc_bytes < max_mem_inc_bytes
         tracemalloc.stop()
 
-    # max_infer_repeat / min_infer_repeat >> max_mem_inc / min_mem_inc, so the memory
-    # increase is not proportional to the increase in inference requests.
+    # max_infer_repeat / min_infer_repeat >> max_mem_inc_bytes / min_mem_inc_bytes, so
+    # the memory increase is not proportional to the increase in inference requests.
     @pytest.mark.parametrize("infer_repeat", [200, 500, 1000, 8000])
     def test_inference_leak(self, server_options, infer_repeat):
-        min_mem_inc, max_mem_inc = 20000, 120000
+        min_mem_inc_bytes, max_mem_inc_bytes = 20000, 120000
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
         assert server.ready()
         server.load(
@@ -679,7 +679,7 @@ class TestMemoryLeak:
                 )
             },
         )
-        with TestMemoryLeak._leak_detector(min_mem_inc, max_mem_inc):
+        with TestMemoryLeak._leak_detector(min_mem_inc_bytes, max_mem_inc_bytes):
             for i in range(infer_repeat):
                 inputs = {
                     "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
