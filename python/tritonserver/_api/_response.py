@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -29,293 +29,36 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent
 import inspect
 import queue
+import threading
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Optional
 
+import numpy
 from tritonserver._api import _model
 
 if TYPE_CHECKING:
     from tritonserver._api._model import Model
 
+from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
 from tritonserver._api._logging import LogMessage
+from tritonserver._api._memorybuffer import DeviceOrMemoryType, MemoryBuffer
+from tritonserver._api._request import InferenceRequest
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import (
     InternalError,
+    InvalidArgumentError,
     TritonError,
     TRITONSERVER_InferenceRequest,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
+from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ResponseCompleteFlag,
     TRITONSERVER_Server,
 )
-
-
-class AsyncResponseIterator:
-
-    """Asyncio compatible response iterator
-
-    Response iterators are returned from model inference methods and
-    allow users to process inference responses in the order they were
-    received for a request.
-
-    """
-
-    def __init__(
-        self,
-        model: _model.Model,
-        request: TRITONSERVER_InferenceRequest,
-        user_queue: Optional[asyncio.Queue] = None,
-        raise_on_error: bool = False,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
-    ) -> None:
-        """Initialize AsyncResponseIterator
-
-        AsyncResponseIterator objects are obtained from Model inference
-        methods and not instantiated directly. See `Model` documentation.
-
-        Parameters
-        ----------
-        model : Model
-            model associated with inference request
-        request : TRITONSERVER_InferenceRequest
-            Underlying C binding TRITONSERVER_InferenceRequest
-            object. Private.
-        user_queue : Optional[asyncio.Queue]
-            Optional user queue for responses in addition to internal
-            iterator queue.
-        raise_on_error : bool
-            if True response errors will be raised as exceptions.
-        loop : Optional[asyncio.AbstractEventLoop]
-            asyncio loop object
-
-        """
-
-        if loop is None:
-            loop = asyncio.get_running_loop()
-        self._loop = loop
-        self._queue = asyncio.Queue()
-        self._user_queue = user_queue
-        self._complete = False
-        self._request = request
-        self._model = model
-        self._raise_on_error = raise_on_error
-
-    def __aiter__(self) -> AsyncResponseIterator:
-        """Return async iterator. For use with async for loops.
-
-        Returns
-        -------
-        AsyncResponseIterator
-
-        Examples
-        --------
-
-        responses = server.model("test").async_infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
-        async for response in responses:
-            print(nummpy.from_dlpack(response.outputs["fp16_output"]))
-
-
-        """
-
-        return self
-
-    async def __anext__(self):
-        """Returns the next response received for a request
-
-        Returns the next response received for a request as an
-        awaitable object.
-
-        Raises
-        ------
-        response.error
-            If raise_on_error is set to True, response errors are
-            raised as exceptions
-        StopAsyncIteration
-            Indicates all responses for a request have been received.
-            Final responses may or may not include outputs and must be
-            checked.
-
-        """
-
-        if self._complete:
-            raise StopAsyncIteration
-        response = await self._queue.get()
-        self._complete = response.final
-        if response.error is not None and self._raise_on_error:
-            raise response.error
-        return response
-
-    def cancel(self) -> None:
-        """Cancel an inflight request
-
-        Cancels an in-flight request. Cancellation is handled on a
-        best effort basis and may not prevent execution of a request
-        if it is already started or completed.
-
-        See c:func:`TRITONSERVER_ServerInferenceRequestCancel`
-
-        Examples
-        --------
-
-        responses = server.model("test").infer(inputs={"text_input":["hello"]})
-
-        responses.cancel()
-
-        """
-
-        if self._request is not None:
-            self._request.cancel()
-
-    def _response_callback(self, response, flags, unused):
-        try:
-            if self._request is None:
-                raise InternalError("Response received after final response flag")
-
-            response = InferenceResponse._from_tritonserver_inference_response(
-                self._model, self._request, response, flags
-            )
-            asyncio.run_coroutine_threadsafe(self._queue.put(response), self._loop)
-            if self._user_queue is not None:
-                asyncio.run_coroutine_threadsafe(
-                    self._user_queue.put(response), self._loop
-                )
-            if flags == TRITONSERVER_ResponseCompleteFlag.FINAL:
-                del self._request
-                self._request = None
-        except Exception as e:
-            message = f"Catastrophic failure in response callback: {e}"
-            LogMessage(LogLevel.ERROR, message)
-            # catastrophic failure
-            raise e from None
-
-
-class ResponseIterator:
-    """Response iterator
-
-    Response iterators are returned from model inference methods and
-    allow users to process inference responses in the order they were
-    received for a request.
-
-    """
-
-    def __init__(
-        self,
-        model: Model,
-        request: TRITONSERVER_InferenceRequest,
-        user_queue: Optional[queue.SimpleQueue] = None,
-        raise_on_error: bool = False,
-    ):
-        """Initialize ResponseIterator
-
-        ResponseIterator objects are obtained from Model inference
-        methods and not instantiated directly. See `Model` documentation.
-
-        Parameters
-        ----------
-        model : Model
-            model associated with inference request
-        request : TRITONSERVER_InferenceRequest
-            Underlying C binding TRITONSERVER_InferenceRequest
-            object. Private.
-        user_queue : Optional[asyncio.Queue]
-            Optional user queue for responses in addition to internal
-            iterator queue.
-        raise_on_error : bool
-            if True response errors will be raised as exceptions.
-
-        """
-
-        self._queue = queue.SimpleQueue()
-        self._user_queue = user_queue
-        self._complete = False
-        self._request = request
-        self._model = model
-        self._raise_on_error = raise_on_error
-
-    def __iter__(self) -> ResponseIterator:
-        """Return response iterator.
-
-        Returns
-        -------
-        ResponseIterator
-
-        Examples
-        --------
-
-        responses = server.model("test").infer(inputs={"fp16_input":numpy.array([[1]],dtype=numpy.float16)})
-        for response in responses:
-           print(nummpy.from_dlpack(response.outputs["fp16_output"]))
-
-
-        """
-
-        return self
-
-    def __next__(self):
-        """Returns the next response received for a request
-
-        Raises
-        ------
-        response.error
-            If raise_on_error is set to True, response errors are
-            raised as exceptions
-        StopIteration
-            Indicates all responses for a request have been received.
-            Final responses may or may not include outputs and must be
-            checked.
-
-        """
-
-        if self._complete:
-            raise StopIteration
-        response = self._queue.get()
-        self._complete = response.final
-        if response.error is not None and self._raise_on_error:
-            raise response.error
-        return response
-
-    def cancel(self):
-        """Cancel an inflight request
-
-        Cancels an in-flight request. Cancellation is handled on a
-        best effort basis and may not prevent execution of a request
-        if it is already started or completed.
-
-        See c:func:`TRITONSERVER_ServerInferenceRequestCancel`
-
-        Examples
-        --------
-
-        responses = server.model("test").infer(inputs={"text_input":["hello"]})
-
-        responses.cancel()
-
-        """
-        if self._request is not None:
-            self._request.cancel()
-
-    def _response_callback(self, response, flags, unused):
-        try:
-            if self._request is None:
-                raise InternalError("Response received after final response flag")
-
-            response = InferenceResponse._from_tritonserver_inference_response(
-                self._model, self._request, response, flags
-            )
-            self._queue.put(response)
-            if self._user_queue is not None:
-                self._user_queue.put(response)
-            if flags == TRITONSERVER_ResponseCompleteFlag.FINAL:
-                del self._request
-                self._request = None
-        except Exception as e:
-            message = f"Catastrophic failure in response callback: {e}"
-            LogMessage(LogLevel.ERROR, message)
-            # catastrophic failure
-            raise e from None
 
 
 @dataclass
@@ -361,6 +104,7 @@ class InferenceResponse:
     def _from_tritonserver_inference_response(
         model: _model.Model,
         request: TRITONSERVER_InferenceRequest,
+        inference_request: InferenceRequest,
         response,
         flags: TRITONSERVER_ResponseCompleteFlag,
     ):
@@ -395,14 +139,19 @@ class InferenceResponse:
                     name,
                     data_type,
                     shape,
-                    _data_ptr,
-                    _byte_size,
-                    _memory_type,
-                    _memory_type_id,
-                    memory_buffer,
+                    data_ptr,
+                    byte_size,
+                    memory_type,
+                    memory_type_id,
                 ) = response.output(output_index)
+                memory_buffer = MemoryBuffer(
+                    data_ptr=data_ptr,
+                    memory_type=memory_type,
+                    memory_type_id=memory_type_id,
+                    size=byte_size,
+                    owner=response,
+                )
                 tensor = Tensor(data_type, shape, memory_buffer)
-
                 outputs[name] = tensor
             result.outputs = outputs
         except Exception as e:
@@ -410,7 +159,149 @@ class InferenceResponse:
             error.args += (result,)
             result.error = error
 
+        # TODO: [DLIS-7824] Allocate the requested output memory type directly in C++.
+        if inference_request.output_memory_type is not None:
+            try:
+                outputs = {}
+                for name, tensor in result.outputs.items():
+                    outputs[name] = tensor.to_device(
+                        inference_request.output_memory_type
+                    )
+                result.outputs = outputs
+            except Exception as e:
+                raise InvalidArgumentError(
+                    f"Memory type {inference_request.output_memory_type} not supported: {e}"
+                )
+
         # TODO: support classification
         # values["classification_label"] = response.output_classification_label()
 
         return result
+
+
+class AsyncResponseIterator:
+    def __init__(
+        self, model, request, inference_request, raise_on_error=False, loop=None
+    ):
+        self._model = model
+        self._request = request
+        self._inference_request = inference_request
+        self._raise_on_error = raise_on_error
+        self._complete = False
+
+        self._iterator_queue = None
+        self._user_queue = self._inference_request.response_queue
+        if self._user_queue is not None:
+            self._iterator_queue = asyncio.Queue()
+            self._continue_fetch_future = asyncio.run_coroutine_threadsafe(
+                self._continue_fetch(),
+                asyncio.get_running_loop() if loop is None else loop,
+            )
+
+    async def _continue_fetch(self):
+        complete = False
+        while not complete:
+            response = await self._get_next_response()
+            self._iterator_queue.put_nowait(response)
+            self._user_queue.put_nowait(response)
+            complete = response.final
+
+    async def _get_next_response(self):
+        # The binding could be improved by returning an awaitable object, but it is
+        # easier for now to pass in an async future object to be set by the binding when
+        # fetching responses.
+        future = asyncio.get_running_loop().create_future()
+        self._request.get_next_response(future)
+        response, flags = await future
+
+        response = InferenceResponse._from_tritonserver_inference_response(
+            self._model,
+            self._request,
+            self._inference_request,
+            response,
+            flags,
+        )
+        return response
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._complete:
+            raise StopAsyncIteration
+
+        if self._iterator_queue is None:
+            response = await self._get_next_response()
+        else:
+            response = await self._iterator_queue.get()
+
+        self._complete = response.final
+        if response.error is not None and self._raise_on_error:
+            raise response.error
+
+        return response
+
+    def cancel(self):
+        self._request.cancel()
+
+
+class ResponseIterator:
+    def __init__(self, model, request, inference_request, raise_on_error=False):
+        self._model = model
+        self._request = request
+        self._inference_request = inference_request
+        self._raise_on_error = raise_on_error
+        self._complete = False
+
+        self._iterator_queue = None
+        self._user_queue = self._inference_request.response_queue
+        if self._user_queue is not None:
+            self._iterator_queue = queue.SimpleQueue()
+            self._continue_fetch_thread = threading.Thread(target=self._continue_fetch)
+            self._continue_fetch_thread.start()
+
+    def _continue_fetch(self):
+        complete = False
+        while not complete:
+            response = self._get_next_response()
+            self._iterator_queue.put_nowait(response)
+            self._user_queue.put_nowait(response)
+            complete = response.final
+
+    def _get_next_response(self):
+        # The binding could be improved by releasing the GIL and block, but it is easier
+        # for now to pass in an future object to be set by the binding when fetching
+        # responses.
+        future = concurrent.futures.Future()
+        self._request.get_next_response(future)
+        response, flags = future.result()
+
+        response = InferenceResponse._from_tritonserver_inference_response(
+            self._model,
+            self._request,
+            self._inference_request,
+            response,
+            flags,
+        )
+        return response
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._complete:
+            raise StopIteration
+
+        if self._iterator_queue is None:
+            response = self._get_next_response()
+        else:
+            response = self._iterator_queue.get()
+
+        self._complete = response.final
+        if response.error is not None and self._raise_on_error:
+            raise response.error
+
+        return response
+
+    def cancel(self):
+        self._request.cancel()

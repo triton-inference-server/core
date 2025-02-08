@@ -1,4 +1,4 @@
-// Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -31,6 +31,7 @@
 #include <triton/core/tritonserver.h>
 
 #include <iostream>
+#include <mutex>
 
 // This binding is merely used to map Triton C API into Python equivalent,
 // and therefore, the naming will be the same as the one used in corresponding
@@ -751,36 +752,11 @@ class PyInferenceResponse
   DESTRUCTOR_WITH_LOG(
       PyInferenceResponse, TRITONSERVER_InferenceResponseDelete);
 
-  using CompleteFn = std::function<void(py::object, uint32_t, py::object)>;
-  struct CallbackResource {
-    CallbackResource(
-        CompleteFn c, PyResponseAllocator::CallbackResource* a,
-        const py::object& u)
-        : complete_fn(c), allocator_resource(a), user_object(u)
-    {
-    }
-    CompleteFn complete_fn;
-    // During 'TRITONSERVER_InferenceRequestSetResponseCallback', a
-    // PyResponseAllocator::CallbackResource is allocated and passed as
-    // 'response_allocator_userp', which is used during any output buffer
-    // allocation of the requests. However, unlike other 'userp', there is no
-    // dedicated release callback to signal that the allocator resource may be
-    // released. So we deduce the point of time is deduced based on the
-    // following: 'TRITONSERVER_InferenceResponseCompleteFn_t' invoked with
-    // 'TRITONSERVER_RESPONSE_COMPLETE_FINAL' flag indicates there is no more
-    // responses to be generated and so does output allocation, therefore
-    // 'allocator_resource' may be released as part of releasing
-    // 'PyInferenceResponse::CallbackResource'
-    PyResponseAllocator::CallbackResource* allocator_resource;
-    py::object user_object;
-  };
-
   explicit PyInferenceResponse(
       struct TRITONSERVER_InferenceResponse* response, bool owned)
       : PyWrapper(response, owned)
   {
   }
-
 
   void ThrowIfResponseError()
   {
@@ -853,7 +829,7 @@ class PyInferenceResponse
 
   std::tuple<
       std::string, TRITONSERVER_DataType, py::array_t<int64_t>, uintptr_t,
-      size_t, TRITONSERVER_MemoryType, int64_t, py::object>
+      size_t, TRITONSERVER_MemoryType, int64_t>
   Output(uint32_t index)
   {
     const char* name = nullptr;
@@ -875,9 +851,7 @@ class PyInferenceResponse
         reinterpret_cast<uintptr_t>(base),
         byte_size,
         memory_type,
-        memory_type_id,
-        reinterpret_cast<PyResponseAllocator::CallbackResource*>(userp)
-            ->user_object};
+        memory_type_id};
   }
 
   std::string OutputClassificationLabel(uint32_t index, size_t class_index)
@@ -896,107 +870,126 @@ class PyInferenceRequest
     : public PyWrapper<struct TRITONSERVER_InferenceRequest> {
  public:
   DESTRUCTOR_WITH_LOG(PyInferenceRequest, TRITONSERVER_InferenceRequestDelete);
-
-  using ReleaseFn = std::function<void(
-      std::shared_ptr<PyInferenceRequest>, uint32_t, py::object)>;
-
   // Defer definition until PyServer is defined
   PyInferenceRequest(
       PyServer& server, const std::string& model_name,
       const int64_t model_version);
-
   explicit PyInferenceRequest(
       struct TRITONSERVER_InferenceRequest* r, const bool owned)
       : PyWrapper(r, owned)
   {
   }
 
-
-  // Use internally when interacting with C APIs that takes ownership,
-  // this function will also release the ownership of the callback resource
-  // because once the ownership is transferred, the callback resource
-  // will be accessed in the callback pipeline and should not be tied to the
-  // PyWrapper's lifecycle. The callback resource will be released in the
-  // Triton C callback wrapper.
-  struct TRITONSERVER_InferenceRequest* Release()
+  void SetReleaseCallback(const std::shared_ptr<PyInferenceRequest>& request)
   {
-    // Note that Release() doesn't change ownership as the
-    // same PyInferenceRequest will be passed along the life cycle.
-    allocator_callback_resource_.release();
-    response_callback_resource_.release();
-    return triton_object_;
-  }
-
-  struct CallbackResource {
-    CallbackResource(ReleaseFn r, const py::object& uo)
-        : release_fn(r), user_object(uo)
-    {
-    }
-    ReleaseFn release_fn;
-    py::object user_object;
-    // Unsafe handling to ensure the same PyInferenceRequest object
-    // goes through the request release cycle. This is due to
-    // a 'keep_alive' relationship is built between 'PyInferenceRequest'
-    // and 'PyServer': a request is associated with a server and the server
-    // should be kept alive until all associated requests is properly released.
-    // And here we exploit the 'keep_alive' utility in PyBind to guarantee so.
-    // See PyServer::InferAsync on how this field is set to avoid potential
-    // circular inclusion.
-    std::shared_ptr<PyInferenceRequest> request;
-  };
-
-
-  void SetReleaseCallback(ReleaseFn release, const py::object& user_object)
-  {
-    request_callback_resource_.reset(
-        new CallbackResource(release, user_object));
+    // The request wrapper needs to be kept alive until the release callback is
+    // invoked, so the Triton request can be deleted after the core/backend is
+    // done with it.
+    std::shared_ptr<PyInferenceRequest>* request_ptr =
+        new std::shared_ptr<PyInferenceRequest>(request);
     ThrowIfError(TRITONSERVER_InferenceRequestSetReleaseCallback(
-        triton_object_, PyTritonRequestReleaseCallback,
-        request_callback_resource_.get()));
+        triton_object_, ReleaseCallback,
+        reinterpret_cast<void*>(request_ptr) /* request_release_userp */));
   }
-
-  static void PyTritonRequestReleaseCallback(
+  static void ReleaseCallback(
       struct TRITONSERVER_InferenceRequest* request, const uint32_t flags,
       void* userp)
   {
-    py::gil_scoped_acquire gil;
-    auto cr = reinterpret_cast<CallbackResource*>(userp);
-    cr->release_fn(cr->request, flags, cr->user_object);
-    delete cr;
+    std::shared_ptr<PyInferenceRequest>* request_ptr =
+        reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp);
+    delete request_ptr;
   }
 
-  void SetResponseCallback(
-      const py::object& allocator, const py::object& allocater_user_object,
-      PyInferenceResponse::CompleteFn response,
-      const py::object& response_user_object)
+  struct ResponseAllocatorDeleter {
+    void operator()(struct TRITONSERVER_ResponseAllocator* allocator) const
+    {
+      if (allocator != nullptr) {
+        ThrowIfError(TRITONSERVER_ResponseAllocatorDelete(allocator));
+      }
+    };
+  };
+  void SetResponseAllocator()
   {
-    allocator_callback_resource_.reset(
-        new PyResponseAllocator::CallbackResource(
-            allocator, allocater_user_object));
-    response_callback_resource_.reset(new PyInferenceResponse::CallbackResource(
-        response, allocator_callback_resource_.get(), response_user_object));
-    ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
-        triton_object_, allocator.cast<PyResponseAllocator*>()->Ptr(),
-        allocator_callback_resource_.get(), PyTritonResponseCompleteCallback,
-        response_callback_resource_.get()));
+    // The response allocator is shared among all instances of this class, so it
+    // needs to be initialized once and once only.
+    // TODO: Why 'numpy.ones(2**27)' gets stuck when the response allocator is
+    //       static initialized?
+    static std::once_flag allocator_init_once;
+    std::call_once(allocator_init_once, [this]() {
+      struct TRITONSERVER_ResponseAllocator* allocator_raw = nullptr;
+      ThrowIfError(TRITONSERVER_ResponseAllocatorNew(
+          &allocator_raw, ResponseAllocatorAllocFn, ResponseAllocatorReleaseFn,
+          nullptr /* start_fn */));
+      allocator_.reset(allocator_raw);
+      ThrowIfError(TRITONSERVER_ResponseAllocatorSetQueryFunction(
+          allocator_.get(), ResponseAllocatorQueryFn));
+      ThrowIfError(TRITONSERVER_ResponseAllocatorSetBufferAttributesFunction(
+          allocator_.get(), ResponseAllocatorBufferAttributesFn));
+    });
   }
-  static void PyTritonResponseCompleteCallback(
+  static TRITONSERVER_Error* ResponseAllocatorQueryFn(
+      struct TRITONSERVER_ResponseAllocator* allocator, void* userp,
+      const char* tensor_name, size_t* byte_size,
+      TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id)
+  {
+    // TODO: Support GPU memory.
+    *memory_type = TRITONSERVER_MEMORY_CPU;
+    *memory_type_id = 0;
+    return nullptr;
+  }
+  static TRITONSERVER_Error* ResponseAllocatorBufferAttributesFn(
+      struct TRITONSERVER_ResponseAllocator* allocator, const char* tensor_name,
+      struct TRITONSERVER_BufferAttributes* buffer_attributes, void* userp,
+      void* buffer_userp)
+  {
+    TRITONSERVER_Error* err = TRITONSERVER_BufferAttributesSetMemoryType(
+        buffer_attributes, TRITONSERVER_MEMORY_CPU);
+    if (err != nullptr) {
+      return err;
+    }
+    err = TRITONSERVER_BufferAttributesSetMemoryTypeId(
+        buffer_attributes, 0 /* memory_type_id */);
+    return err;
+  }
+  static TRITONSERVER_Error* ResponseAllocatorAllocFn(
+      struct TRITONSERVER_ResponseAllocator* allocator, const char* tensor_name,
+      size_t byte_size, TRITONSERVER_MemoryType memory_type,
+      int64_t memory_type_id, void* userp, void** buffer, void** buffer_userp,
+      TRITONSERVER_MemoryType* actual_memory_type,
+      int64_t* actual_memory_type_id)
+  {
+    *buffer = malloc(byte_size * sizeof(uint8_t));
+    *actual_memory_type = TRITONSERVER_MEMORY_CPU;
+    *actual_memory_type_id = 0;
+    return nullptr;
+  }
+  static TRITONSERVER_Error* ResponseAllocatorReleaseFn(
+      struct TRITONSERVER_ResponseAllocator* allocator, void* buffer,
+      void* buffer_userp, size_t byte_size, TRITONSERVER_MemoryType memory_type,
+      int64_t memory_type_id)
+  {
+    if (memory_type != TRITONSERVER_MEMORY_CPU || memory_type_id != 0) {
+      throw InvalidArgumentError("invalid memory type or id to be released");
+    }
+    free(buffer);
+    return nullptr;
+  }
+
+  void SetResponseCallback()
+  {
+    // The caller is responsible for keeping the request wrapper alive until
+    // response complete final is received via GetNextResponse().
+    ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
+        triton_object_, allocator_.get(),
+        nullptr /* response_allocator_userp */, ResponseCallback,
+        reinterpret_cast<void*>(this) /* response_userp */));
+  }
+  static void ResponseCallback(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
   {
-    py::gil_scoped_acquire gil;
-    auto managed_pt =
-        std::make_shared<PyInferenceResponse>(response, true /* owned */);
-    auto cr = reinterpret_cast<PyInferenceResponse::CallbackResource*>(userp);
-    if (response == nullptr) {
-      cr->complete_fn(py::none(), flags, cr->user_object);
-    } else {
-      cr->complete_fn(py::cast(managed_pt), flags, cr->user_object);
-    }
-    if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
-      delete cr->allocator_resource;
-      delete cr;
-    }
+    reinterpret_cast<PyInferenceRequest*>(userp)->AddNextResponse(
+        response, flags);
   }
 
   // Trivial setters / getters
@@ -1016,7 +1009,6 @@ class PyInferenceRequest
   {
     ThrowIfError(TRITONSERVER_InferenceRequestSetFlags(triton_object_, flags));
   }
-
   uint32_t Flags()
   {
     uint32_t val = 0;
@@ -1175,21 +1167,104 @@ class PyInferenceRequest
     ThrowIfError(TRITONSERVER_InferenceRequestSetDoubleParameter(
         triton_object_, key.c_str(), value));
   }
+
   void Cancel()
   {
     ThrowIfError(TRITONSERVER_InferenceRequestCancel(triton_object_));
   }
 
+  // Response management
+  void GetNextResponse(const py::object& py_future)
+  {
+    // Called exclusively from Python, so pybind11 will ensure GIL is held.
+    std::lock_guard lock(response_mu_);
 
- public:
-  std::unique_ptr<CallbackResource> request_callback_resource_{nullptr};
+    // There are two cases:
+    // 1. GetNextResponse() is called before responses are generated:
+    //      The 'responses_' deque will be empty, so track the 'py_future' in
+    //      this request object until the AddNextResponse() is called.
+    // 2. Responses are generated and queued before GetNextResponse() is called:
+    //      Responses are queued at 'responses_' deque, so pop a response from
+    //      the deque and set it to the 'py_future' object.
+    if (responses_.empty()) {
+      if (response_future_.ptr() != nullptr) {
+        throw AlreadyExistsError("cannot call GetNextResponse concurrently");
+      }
+      response_future_ = py_future;
+    } else {
+      std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>&
+          py_response = responses_.front();
+      PyFutureSetResult(py_future, py_response);
+      responses_.pop_front();
+    }
+  }
 
  private:
-  std::unique_ptr<PyResponseAllocator::CallbackResource>
-      allocator_callback_resource_{nullptr};
-  std::unique_ptr<PyInferenceResponse::CallbackResource>
-      response_callback_resource_{nullptr};
+  void AddNextResponse(
+      struct TRITONSERVER_InferenceResponse* response, const uint32_t flags)
+  {
+    // Pair the 'response' and 'flags' so they can be easily moved around.
+    std::shared_ptr<PyInferenceResponse> managed_ptr(nullptr);
+    if (response != nullptr) {
+      managed_ptr.reset(new PyInferenceResponse(response, true /* owned */));
+    }
+    std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t> py_response(
+        std::move(managed_ptr), std::move(flags));
+
+    // There are two cases:
+    // 1. GetNextResponse() hasn't been called and the future is not set.
+    // 2. GetNextResponse() has been called and the future is set.
+    {
+      std::lock_guard lock(response_mu_);
+      if (response_future_.ptr() == nullptr) {
+        responses_.push_back(std::move(py_response));
+        return;
+      }
+    }
+    // There is no need to hold the 'response_mu_' after knowing the frontend is
+    // waiting, given the frontend does not call GetNextResponse() concurrently,
+    // the frontend will wait until a result is set for the ruture.
+    // GIL must be held when the 'response_future_local' goes out of scope which
+    // decrements the future reference count, and during PyFutureSetResult().
+    {
+      py::gil_scoped_acquire gil;
+      py::object response_future_local(std::move(response_future_));
+      PyFutureSetResult(response_future_local, py_response);
+    }
+  }
+
+  void PyFutureSetResult(
+      const py::object& py_future,
+      std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>&
+          py_response)
+  {
+    py::tuple py_res = py::make_tuple(
+        (py_response.first.get() ? py::cast(py_response.first) : py::none()),
+        py_response.second);
+    if (py::hasattr(py_future, "get_loop")) {
+      py_future.attr("get_loop")().attr("call_soon_threadsafe")(
+          py_future.attr("set_result"), std::move(py_res));
+    } else {
+      py_future.attr("set_result")(std::move(py_res));
+    }
+  }
+
+  std::mutex response_mu_;
+  py::object response_future_;
+  std::deque<std::pair<std::shared_ptr<PyInferenceResponse>, const uint32_t>>
+      responses_;
+
+  static std::unique_ptr<
+      struct TRITONSERVER_ResponseAllocator, ResponseAllocatorDeleter>
+      allocator_;
 };
+std::unique_ptr<
+    struct TRITONSERVER_ResponseAllocator,
+    PyInferenceRequest::ResponseAllocatorDeleter>
+    PyInferenceRequest::allocator_ = std::unique_ptr<
+        struct TRITONSERVER_ResponseAllocator,
+        PyInferenceRequest::ResponseAllocatorDeleter>(
+        nullptr, PyInferenceRequest::ResponseAllocatorDeleter());
 
 class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
  public:
@@ -1600,56 +1675,22 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   void InferAsync(
       const std::shared_ptr<PyInferenceRequest>& request, PyTrace& trace)
   {
-    // Extra handling to avoid circular inclusion:
-    //   request -> request_callback_resource_ -> request
-    // 1. extract 'request_callback_resource_' out and provide
-    //    scoped handler to place resource back to request if not released,
-    //    TRITONSERVER_ServerInferAsync failed in other words.
-    // 2. add 'request' into resource so request release callback can access it.
-    // 3. call TRITONSERVER_ServerInferAsync.
-    // 4. release the extracted resource if TRITONSERVER_ServerInferAsync
-    //    returns.
-    static auto resource_handler =
-        [](PyInferenceRequest::CallbackResource* cr) {
-          if (cr != nullptr) {
-            cr->request->request_callback_resource_.reset(cr);
-            cr->request.reset();
-          }
-        };
-    std::unique_ptr<
-        PyInferenceRequest::CallbackResource, decltype(resource_handler)>
-        scoped_rh(
-            request->request_callback_resource_.release(), resource_handler);
-    scoped_rh->request = request;
-
+    request->SetReleaseCallback(request);
+    request->SetResponseAllocator();
+    request->SetResponseCallback();
     ThrowIfError(TRITONSERVER_ServerInferAsync(
         triton_object_, request->Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
-    scoped_rh.release();
-    request->Release();
     trace.Release();
   }
 
   void InferAsync(const std::shared_ptr<PyInferenceRequest>& request)
   {
-    static auto resource_handler =
-        [](PyInferenceRequest::CallbackResource* cr) {
-          if (cr != nullptr) {
-            cr->request->request_callback_resource_.reset(cr);
-            cr->request.reset();
-          }
-        };
-    std::unique_ptr<
-        PyInferenceRequest::CallbackResource, decltype(resource_handler)>
-        scoped_rh(
-            request->request_callback_resource_.release(), resource_handler);
-    scoped_rh->request = request;
-
+    request->SetReleaseCallback(request);
+    request->SetResponseAllocator();
+    request->SetResponseCallback();
     ThrowIfError(
         TRITONSERVER_ServerInferAsync(triton_object_, request->Ptr(), nullptr));
-    // Ownership of the internal C object is transferred.
-    scoped_rh.release();
-    request->Release();
   }
 };
 
@@ -1962,8 +2003,6 @@ PYBIND11_MODULE(triton_bindings, m)
       .def(
           py::init<PyServer&, const std::string&, int64_t>(),
           py::keep_alive<1, 2>())
-      .def("set_release_callback", &PyInferenceRequest::SetReleaseCallback)
-      .def("set_response_callback", &PyInferenceRequest::SetResponseCallback)
       .def_property("id", &PyInferenceRequest::Id, &PyInferenceRequest::SetId)
       .def_property(
           "flags", &PyInferenceRequest::Flags, &PyInferenceRequest::SetFlags)
@@ -2004,7 +2043,8 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_int_parameter", &PyInferenceRequest::SetIntParameter)
       .def("set_bool_parameter", &PyInferenceRequest::SetBoolParameter)
       .def("set_double_parameter", &PyInferenceRequest::SetDoubleParameter)
-      .def("cancel", &PyInferenceRequest::Cancel);
+      .def("cancel", &PyInferenceRequest::Cancel)
+      .def("get_next_response", &PyInferenceRequest::GetNextResponse);
 
   // TRITONSERVER_InferenceResponse
   py::enum_<TRITONSERVER_ResponseCompleteFlag>(

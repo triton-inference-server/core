@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -32,7 +32,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, ClassVar, Sequence
 
 import numpy
-from tritonserver._api._allocators import MemoryBuffer
 from tritonserver._api._datautils import (
     NUMPY_TO_TRITON_DTYPE,
     TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE,
@@ -46,6 +45,7 @@ from tritonserver._api._dlpack import (
     DLManagedTensor,
     c_str_dltensor,
 )
+from tritonserver._api._memorybuffer import DeviceOrMemoryType, MemoryBuffer
 from tritonserver._c.triton_bindings import (
     InvalidArgumentError,
     TRITONSERVER_BufferAttributes,
@@ -53,10 +53,6 @@ from tritonserver._c.triton_bindings import (
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import UnsupportedError
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
-)
 
 try:
     import cupy
@@ -509,16 +505,32 @@ class Tensor:
         if self.memory_type == MemoryType.CPU_PINNED and memory_type == MemoryType.CPU:
             return self
         if cupy is not None:
+            # DLPack does not support bytes type.
+            original_data_type = self.data_type
+            original_shape = self.shape
+            if self.data_type == DataType.BYTES:
+                self.data_type = DataType.UINT8
+                self.shape = [self.size]
+
             if self.memory_type in (MemoryType.CPU, MemoryType.CPU_PINNED):
                 ndarray = numpy.from_dlpack(self)
             else:
                 ndarray = cupy.from_dlpack(self)
 
+            self.data_type = original_data_type
+            self.shape = original_shape
+
             if memory_type == MemoryType.CPU:
-                return Tensor.from_dlpack(cupy.asnumpy(ndarray))
+                new_tensor = Tensor.from_dlpack(cupy.asnumpy(ndarray))
+                new_tensor.data_type = self.data_type
+                new_tensor.shape = self.shape
+                return new_tensor
             if memory_type == MemoryType.GPU:
                 with cupy.cuda.Device(memory_type_id):
-                    return Tensor.from_dlpack(cupy.asarray(ndarray))
+                    new_tensor = Tensor.from_dlpack(cupy.asarray(ndarray))
+                new_tensor.data_type = self.data_type
+                new_tensor.shape = self.shape
+                return new_tensor
 
         raise UnsupportedError(
             f"Conversion from {(self.memory_type,self.memory_type_id)} to {(memory_type, memory_type_id)} not supported."
