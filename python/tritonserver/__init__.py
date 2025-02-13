@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -44,13 +44,9 @@ considered private.
 
 from importlib.metadata import PackageNotFoundError, version
 
-from tritonserver._api._allocators import MemoryAllocator as MemoryAllocator
-from tritonserver._api._allocators import MemoryBuffer as MemoryBuffer
-from tritonserver._api._allocators import MemoryType as MemoryType
-from tritonserver._api._allocators import (
-    default_memory_allocators as default_memory_allocators,
-)
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
+from tritonserver._api._memorybuffer import MemoryBuffer as MemoryBuffer
+from tritonserver._api._memorybuffer import MemoryType as MemoryType
 from tritonserver._api._model import Model as Model
 from tritonserver._api._model import ModelBatchFlag as ModelBatchFlag
 from tritonserver._api._model import ModelTxnPropertyFlag as ModelTxnPropertyFlag

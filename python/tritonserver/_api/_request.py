@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -34,19 +34,15 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from tritonserver._api import _model
-from tritonserver._api._allocators import MemoryAllocator
 from tritonserver._api._datautils import CustomKeyErrorDict
 from tritonserver._api._dlpack import DLDeviceType as DLDeviceType
+from tritonserver._api._memorybuffer import DeviceOrMemoryType
 from tritonserver._api._tensor import Tensor
 from tritonserver._c.triton_bindings import InvalidArgumentError
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_InferenceRequest
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
 from tritonserver._c.triton_bindings import TRITONSERVER_Server
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[DLDeviceType, int] | str
-)
 
 
 @dataclass
@@ -86,12 +82,6 @@ class InferenceRequest:
         fallback. Memory type can be given as a string, MemoryType,
         tuple [MemoryType, memory_type__id], or tuple[DLDeviceType,
         device_id].
-    output_memory_allocator : Optional[MemoryAllocator], default None
-        Memory allocator to use for inference response output. If not
-        provided default allocators will be used to allocate
-        MemoryType.GPU or MemoryType.CPU memory as set in
-        output_memory_type or as requested by backend / model
-        preference.
     response_queue : Optional[Union[queue.SimpleQueue, asyncio.Queue]], default None
         Queue for asynchronous handling of inference responses. If
         provided Inference responses will be added to the queue in
@@ -132,7 +122,6 @@ class InferenceRequest:
     inputs: dict[str, Tensor | Any] = field(default_factory=dict)
     parameters: dict[str, str | int | bool | float] = field(default_factory=dict)
     output_memory_type: Optional[DeviceOrMemoryType] = None
-    output_memory_allocator: Optional[MemoryAllocator] = None
     response_queue: Optional[queue.SimpleQueue | asyncio.Queue] = None
     _serialized_inputs: dict[str, Tensor] = field(init=False, default_factory=dict)
     _server: TRITONSERVER_Server = field(init=False)
@@ -193,7 +182,5 @@ class InferenceRequest:
         self._add_inputs(request)
 
         self._set_parameters(request)
-
-        request.set_release_callback(self._release_request, None)
 
         return request

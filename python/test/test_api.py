@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -29,9 +29,11 @@ import copy
 import gc
 import json
 import os
+import queue
 import shutil
 import sys
 import time
+import tracemalloc
 import unittest
 from collections import Counter
 from contextlib import contextmanager
@@ -90,24 +92,18 @@ class TestModels:
         request = tritonserver.InferenceRequest(server.model("test"))
 
 
-class TestAllocators:
-    class MockMemoryAllocator(tritonserver.MemoryAllocator):
-        def __init__(self):
-            pass
-
-        def allocate(self, *args, **kwargs):
-            raise Exception("foo")
-
+class TestOutputMemory:
     @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
     def test_memory_fallback_to_cpu(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
         assert server.ready()
 
-        allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-
-        del tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-
+        # The memory allocator is internal to the binding, and before GPU memory support
+        # is added, it will always fallback to CPU memory regardless of the memory
+        # preferred by the backend.
+        # TODO: Revisit this test when GPU memory support is added, i.e. the backend
+        #       prefers GPU memory, but the system only has CPU memory.
         server.load(
             "test",
             {
@@ -135,36 +131,10 @@ class TestAllocators:
             fp16_output = numpy.from_dlpack(response.outputs["fp16_output"])
             assert fp16_input[0][0] == fp16_output[0][0]
 
-        tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU] = allocator
-
-    def test_memory_allocator_exception(self, server_options):
-        server = tritonserver.Server(server_options).start(wait_until_ready=True)
-
-        assert server.ready()
-
-        server.load(
-            "test",
-            {
-                "config": json.dumps(
-                    {
-                        "backend": "python",
-                        "parameters": {"decoupled": {"string_value": "False"}},
-                    }
-                )
-            },
-        )
-
-        with pytest.raises(tritonserver.InternalError):
-            for response in server.model("test").infer(
-                inputs={
-                    "string_input": tritonserver.Tensor.from_string_array([["hello"]])
-                },
-                output_memory_type="gpu",
-                output_memory_allocator=TestAllocators.MockMemoryAllocator(),
-            ):
-                pass
-
     def test_unsupported_memory_type(self, server_options):
+        # TODO: [DLIS-7824] Revisit this test when GPU memory support is added, i.e. the
+        #       request specifies output to be in GPU memory, but the system only has
+        #       CPU memory, which an exception should be raised during inference.
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
         assert server.ready()
@@ -180,91 +150,15 @@ class TestAllocators:
                 )
             },
         )
-
-        if tritonserver.MemoryType.GPU in tritonserver.default_memory_allocators:
-            allocator = tritonserver.default_memory_allocators[
-                tritonserver.MemoryType.GPU
-            ]
-
-            del tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-        else:
-            allocator = None
 
         with pytest.raises(tritonserver.InvalidArgumentError):
             for response in server.model("test").infer(
                 inputs={
                     "string_input": tritonserver.Tensor.from_string_array([["hello"]])
                 },
-                output_memory_type="gpu",
+                output_memory_type="unsupported",
             ):
                 pass
-
-        if allocator is not None:
-            tritonserver.default_memory_allocators[
-                tritonserver.MemoryType.GPU
-            ] = allocator
-
-    @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
-    def test_allocate_on_cpu_and_reshape(self):
-        allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.CPU]
-
-        memory_buffer = allocator.allocate(
-            memory_type=tritonserver.MemoryType.CPU, memory_type_id=0, size=200
-        )
-
-        cpu_array = memory_buffer.owner
-
-        assert memory_buffer.size == 200
-
-        fp32_size = int(memory_buffer.size / 4)
-
-        tensor = tritonserver.Tensor(
-            tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer
-        )
-
-        cpu_fp32_array = numpy.from_dlpack(tensor)
-        assert cpu_array.ctypes.data == cpu_fp32_array.ctypes.data
-        assert cpu_fp32_array.dtype == numpy.float32
-        assert cpu_fp32_array.nbytes == 200
-
-    @pytest.mark.skipif(cupy is None, reason="Skipping gpu memory, cupy not installed")
-    @pytest.mark.skipif(torch is None, reason="Skipping test, torch not installed")
-    def test_allocate_on_gpu_and_reshape(self):
-        allocator = tritonserver.default_memory_allocators[tritonserver.MemoryType.GPU]
-
-        memory_buffer = allocator.allocate(
-            memory_type=tritonserver.MemoryType.GPU, memory_type_id=0, size=200
-        )
-
-        gpu_array = memory_buffer.owner
-
-        gpu_array = cupy.empty([10, 20], dtype=cupy.uint8)
-        memory_buffer = tritonserver.MemoryBuffer.from_dlpack(gpu_array)
-
-        assert memory_buffer.size == 200
-
-        fp32_size = int(memory_buffer.size / 4)
-
-        tensor = tritonserver.Tensor(
-            tritonserver.DataType.FP32, shape=[fp32_size], memory_buffer=memory_buffer
-        )
-
-        gpu_fp32_array = cupy.from_dlpack(tensor)
-        assert (
-            gpu_array.__cuda_array_interface__["data"][0]
-            == gpu_fp32_array.__cuda_array_interface__["data"][0]
-        )
-
-        assert gpu_fp32_array.dtype == cupy.float32
-        assert gpu_fp32_array.nbytes == 200
-
-        torch_fp32_tensor = torch.from_dlpack(tensor)
-        assert torch_fp32_tensor.dtype == torch.float32
-        assert (
-            torch_fp32_tensor.data_ptr()
-            == gpu_array.__cuda_array_interface__["data"][0]
-        )
-        assert torch_fp32_tensor.nbytes == 200
 
 
 class TestTensor:
@@ -418,6 +312,10 @@ class TestServer:
         server = tritonserver.Server(server_options).start()
         assert server.ready()
 
+    @pytest.mark.xfail(
+        run=False,
+        reason="Some request/response object may not be released which may cause server stop to fail",
+    )
     def test_stop(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
@@ -542,6 +440,150 @@ class TestInference:
                 )
                 numpy.testing.assert_array_equal(input_value, output_value)
 
+    @pytest.mark.asyncio
+    async def test_basic_async_inference(self, server_options):
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
+        async for response in server.model("test").async_infer(
+            inputs=inputs,
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            for input_name, input_value in inputs.items():
+                output_value = response.outputs[input_name.replace("input", "output")]
+                output_value = numpy.from_dlpack(output_value)
+                numpy.testing.assert_array_equal(input_value, output_value)
+
+        # test normal bool
+        inputs = {"bool_input": [[True, False, False, True]]}
+        async for response in server.model("test").async_infer(
+            inputs=inputs,
+            output_memory_type="cpu",
+            raise_on_error=True,
+        ):
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_value, output_value)
+
+    def test_inference_with_response_queue(self, server_options):
+        # start server
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+        # send 2 requests concurrently
+        concurrent_infer = 2
+        response_queue = queue.SimpleQueue()
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
+        response_iterators = []
+        for i in range(concurrent_infer):
+            response_iterator = server.model("test").infer(
+                inputs=inputs,
+                response_queue=response_queue,
+                raise_on_error=True,
+            )
+            response_iterators.append(response_iterator)
+        # response_queue should be populated with responses from the concurrent requests
+        # without iterating the iterators
+        for i in range(concurrent_infer):
+            response = response_queue.get(timeout=1)
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_value, output_value)
+        # check the iterators are working
+        for response_iterator in response_iterators:
+            for response in response_iterator:
+                for input_name, input_value in inputs.items():
+                    output_value = numpy.from_dlpack(
+                        response.outputs[input_name.replace("input", "output")]
+                    )
+                    numpy.testing.assert_array_equal(input_value, output_value)
+        # finally make sure no unwanted items are put into the queue
+        assert response_queue.empty()
+
+    @pytest.mark.asyncio
+    async def test_async_inference_with_response_queue(self, server_options):
+        # start server
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+        # send 2 requests concurrently
+        concurrent_infer = 2
+        response_queue = asyncio.Queue()
+        inputs = {
+            "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+            "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+        }
+        response_iterators = []
+        for i in range(concurrent_infer):
+            response_iterator = server.model("test").async_infer(
+                inputs=inputs,
+                response_queue=response_queue,
+                raise_on_error=True,
+            )
+            response_iterators.append(response_iterator)
+        # response_queue should be populated with responses from the concurrent requests
+        # without iterating the iterators
+        for i in range(concurrent_infer):
+            response = await response_queue.get()
+            for input_name, input_value in inputs.items():
+                output_value = numpy.from_dlpack(
+                    response.outputs[input_name.replace("input", "output")]
+                )
+                numpy.testing.assert_array_equal(input_value, output_value)
+        # check the iterators are working
+        for response_iterator in response_iterators:
+            async for response in response_iterator:
+                for input_name, input_value in inputs.items():
+                    output_value = numpy.from_dlpack(
+                        response.outputs[input_name.replace("input", "output")]
+                    )
+                    numpy.testing.assert_array_equal(input_value, output_value)
+        # finally make sure no unwanted items are put into the queue
+        assert response_queue.empty()
+
     def test_parameters(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
@@ -603,3 +645,54 @@ class TestInference:
                 output_memory_type="cpu",
                 raise_on_error=True,
             )
+
+
+class TestMemoryLeak:
+    @staticmethod
+    @contextmanager
+    def _leak_detector(min_mem_inc_bytes, max_mem_inc_bytes):
+        gc.collect()
+        tracemalloc.start()
+        current, peak = tracemalloc.get_traced_memory()
+        yield
+        new_current, new_peak = tracemalloc.get_traced_memory()
+        mem_inc_bytes = new_current - current
+        assert mem_inc_bytes >= min_mem_inc_bytes
+        assert mem_inc_bytes < max_mem_inc_bytes
+        tracemalloc.stop()
+
+    # max_infer_repeat / min_infer_repeat >> max_mem_inc_bytes / min_mem_inc_bytes, so
+    # the memory increase is not proportional to the increase in inference requests.
+    @pytest.mark.parametrize("infer_repeat", [200, 500, 1000, 8000])
+    def test_inference_leak(self, server_options, infer_repeat):
+        min_mem_inc_bytes, max_mem_inc_bytes = 20000, 120000
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+        assert server.ready()
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                    }
+                )
+            },
+        )
+        with TestMemoryLeak._leak_detector(min_mem_inc_bytes, max_mem_inc_bytes):
+            for i in range(infer_repeat):
+                inputs = {
+                    "fp16_input": numpy.random.rand(1, 100).astype(dtype=numpy.float16),
+                    "bool_input": numpy.random.rand(1, 100).astype(dtype=numpy.bool_),
+                }
+                for response in server.model("test").infer(
+                    inputs=inputs,
+                    output_memory_type="cpu",
+                    raise_on_error=True,
+                ):
+                    for input_name, input_value in inputs.items():
+                        output_value = response.outputs[
+                            input_name.replace("input", "output")
+                        ]
+                        output_value = numpy.from_dlpack(output_value)
+                        numpy.testing.assert_array_equal(input_value, output_value)

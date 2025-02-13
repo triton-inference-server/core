@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -35,10 +35,11 @@ from types import ModuleType
 from typing import Any, Callable, ClassVar, Optional, Sequence, Type
 
 import numpy
+from tritonserver._api._memorybuffer import DeviceOrMemoryType
 from tritonserver._c import InvalidArgumentError
 from tritonserver._c import TRITONSERVER_DataType as DataType
 from tritonserver._c import TRITONSERVER_MemoryType as MemoryType
-from tritonserver._c import TRITONSERVER_ResponseAllocator, UnsupportedError
+from tritonserver._c import UnsupportedError
 
 from . import _dlpack
 
@@ -46,10 +47,6 @@ try:
     import cupy
 except ImportError:
     cupy = None
-
-DeviceOrMemoryType = (
-    tuple[MemoryType, int] | MemoryType | tuple[_dlpack.DLDeviceType, int] | str
-)
 
 
 class CustomKeyErrorDict(dict):

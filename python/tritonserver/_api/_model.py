@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -33,7 +33,6 @@ import json
 import queue
 from typing import TYPE_CHECKING, Any, Optional
 
-from tritonserver._api._allocators import ResponseAllocator
 from tritonserver._api._request import InferenceRequest
 from tritonserver._api._response import AsyncResponseIterator, ResponseIterator
 from tritonserver._c.triton_bindings import InvalidArgumentError
@@ -128,9 +127,7 @@ class Model:
         _server=<tritonserver._c.triton_bindings.TRITONSERVER_Server
         object at 0x7f5827156bf0>, request_id=None, flags=0,
         correlation_id=None, priority=0, timeout=0, inputs={},
-        parameters={}, output_memory_type=None,
-        output_memory_allocator=None, response_queue=None,
-        _serialized_inputs={})
+        parameters={}, output_memory_type=None, _serialized_inputs={})
 
         """
         if "model" in kwargs:
@@ -180,33 +177,9 @@ class Model:
         if inference_request is None:
             inference_request = InferenceRequest(model=self, **kwargs)
 
-        if (inference_request.response_queue is not None) and (
-            not isinstance(inference_request.response_queue, asyncio.Queue)
-        ):
-            raise InvalidArgumentError(
-                "asyncio.Queue must be used for async response iterator"
-            )
-
         request = inference_request._create_tritonserver_inference_request()
-
-        response_iterator = AsyncResponseIterator(
-            self,
-            request,
-            inference_request.response_queue,
-            raise_on_error,
-        )
-
-        response_allocator = ResponseAllocator(
-            inference_request.output_memory_allocator,
-            inference_request.output_memory_type,
-        ).create_tritonserver_response_allocator()
-
-        request.set_response_callback(
-            response_allocator, None, response_iterator._response_callback, None
-        )
-
         self._server.infer_async(request)
-        return response_iterator
+        return AsyncResponseIterator(self, request, inference_request)
 
     def infer(
         self,
@@ -275,31 +248,9 @@ class Model:
         if inference_request is None:
             inference_request = InferenceRequest(model=self, **kwargs)
 
-        if (inference_request.response_queue is not None) and (
-            not isinstance(inference_request.response_queue, queue.SimpleQueue)
-        ):
-            raise InvalidArgumentError(
-                "queue.SimpleQueue must be used for response iterator"
-            )
-
         request = inference_request._create_tritonserver_inference_request()
-        response_iterator = ResponseIterator(
-            self,
-            request,
-            inference_request.response_queue,
-            raise_on_error,
-        )
-        response_allocator = ResponseAllocator(
-            inference_request.output_memory_allocator,
-            inference_request.output_memory_type,
-        ).create_tritonserver_response_allocator()
-
-        request.set_response_callback(
-            response_allocator, None, response_iterator._response_callback, None
-        )
-
         self._server.infer_async(request)
-        return response_iterator
+        return ResponseIterator(self, request, inference_request)
 
     def metadata(self) -> dict[str, Any]:
         """Returns medatadata about a model and its inputs and outputs
