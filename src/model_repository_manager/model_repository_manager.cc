@@ -238,9 +238,11 @@ CreateAgentModelListWithLoadAction(
     for (const auto& agent_config :
          original_model_config.model_repository_agents().agents()) {
       std::shared_ptr<TritonRepoAgent> agent;
+      LOG_INFO << "---- Calling TritonRepoAgentManager::CreateAgent() -----";
       RETURN_IF_ERROR(
           TritonRepoAgentManager::CreateAgent(agent_config.name(), &agent));
       TritonRepoAgent::Parameters agent_params;
+      LOG_INFO << "---- Done TritonRepoAgentManager::CreateAgent() -----";
       for (const auto& parameter : agent_config.parameters()) {
         agent_params.emplace_back(parameter.first, parameter.second);
       }

@@ -122,6 +122,7 @@ InferenceServer::InferenceServer()
 Status
 InferenceServer::Init()
 {
+  LOG_INFO << "---- Inside InferenceServer::Init() -----";
   Status status;
 
   ready_state_ = ServerReadyState::SERVER_INITIALIZING;
@@ -139,25 +140,31 @@ InferenceServer::Init()
         Status::Code::INVALID_ARG, "--repoagent-directory can not be empty");
   }
 
+  LOG_INFO << "---- Calling TritonRepoAgentManager::SetGlobalSearchPath() -----";
   status = TritonRepoAgentManager::SetGlobalSearchPath(repoagent_dir_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
+  LOG_INFO << "---- Done TritonRepoAgentManager::SetGlobalSearchPath() -----";
 
+  LOG_INFO << "---- Calling TritonBackendManager::Create() -----";
   // BackendManager
   status = TritonBackendManager::Create(&backend_manager_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
+  LOG_INFO << "---- Done TritonBackendManager::Create() -----";
 
+  LOG_INFO << "---- Calling TritonBackendManager::Create() -----";
   // CacheManager
   status = TritonCacheManager::Create(&cache_manager_, cache_dir_);
   if (!status.IsOk()) {
     ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
     return status;
   }
+  LOG_INFO << "---- Done TritonCacheManager::Create() -----";
 
   // Only a single global cache is supported at this time.
   if (cache_config_map_.size() > 1) {
@@ -277,6 +284,7 @@ InferenceServer::Init()
     PrintBackendAndModelSummary();
   }
 
+  LOG_INFO << "---- Done InferenceServer::Init() -----";
   return status;
 }
 
@@ -585,6 +593,7 @@ InferenceServer::UnloadModel(
 Status
 InferenceServer::PrintBackendAndModelSummary()
 {
+  LOG_INFO << "---- Inside InferenceServer::PrintBackendAndModelSummary() -----";
   // Repository Agents Summary
   std::vector<std::string> repoagent_headers;
   repoagent_headers.emplace_back("Repository Agent");
@@ -592,8 +601,10 @@ InferenceServer::PrintBackendAndModelSummary()
 
   triton::common::TablePrinter repoagents_table(repoagent_headers);
 
+  LOG_INFO << "---- Calling TritonRepoAgentManager::AgentState() -----";
   std::unique_ptr<std::unordered_map<std::string, std::string>> repoagent_state;
   RETURN_IF_ERROR(TritonRepoAgentManager::AgentState(&repoagent_state));
+  LOG_INFO << "---- Done TritonRepoAgentManager::AgentState() call -----";
 
   for (const auto& repoagent_pair : *repoagent_state) {
     std::vector<std::string> repoagent_record;
@@ -613,7 +624,10 @@ InferenceServer::PrintBackendAndModelSummary()
 
   std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>
       backend_state;
+
+  LOG_INFO << "---- Calling backend_manager_->BackendState() -----";
   RETURN_IF_ERROR(backend_manager_->BackendState(&backend_state));
+  LOG_INFO << "---- Done backend_manager_->BackendState() -----";
 
   for (const auto& backend_pair : *backend_state) {
     std::vector<std::string> backend_record;
@@ -631,7 +645,9 @@ InferenceServer::PrintBackendAndModelSummary()
   LOG_TABLE_INFO(backends_table);
 
   // Models Summary
+  LOG_INFO << "---- Calling model_repository_manager_->ModelStates() -----";
   auto model_states = model_repository_manager_->ModelStates();
+  LOG_INFO << "---- Done model_repository_manager_->ModelStates() -----";
 
   std::vector<std::string> model_headers;
   model_headers.emplace_back("Model");
@@ -672,6 +688,7 @@ InferenceServer::PrintBackendAndModelSummary()
   }
 
   LOG_TABLE_INFO(models_table);
+  LOG_INFO << "---- Done InferenceServer::PrintBackendAndModelSummary() -----";
 
   return Status::Success;
 }

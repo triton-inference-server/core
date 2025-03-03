@@ -377,6 +377,7 @@ TritonBackendManager::BackendState(
         backend_state)
 {
   std::lock_guard<std::mutex> lock(mu_);
+  LOG_INFO << "---- Inside TritonBackendManager->BackendState() - aquired lock -----";
 
   std::unique_ptr<std::unordered_map<std::string, std::vector<std::string>>>
       backend_state_map(
