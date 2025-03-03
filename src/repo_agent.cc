@@ -367,6 +367,7 @@ TritonRepoAgentManager::SetGlobalSearchPath(const std::string& path)
 {
   auto& singleton_manager = Singleton();
   std::lock_guard<std::mutex> lock(singleton_manager.mu_);
+  LOG_INFO << "---- Inside TritonRepoAgentManager::SetGlobalSearchPath() - aquired mutex lock -----";
   singleton_manager.global_search_path_ = path;
   return Status::Success;
 }
@@ -377,6 +378,7 @@ TritonRepoAgentManager::CreateAgent(
 {
   auto& singleton_manager = Singleton();
   std::lock_guard<std::mutex> lock(singleton_manager.mu_);
+  LOG_INFO << "---- Inside TritonRepoAgentManager::CreateAgent() - aquired mutex lock -----";
 
   // Get the path to the agent shared library. Search path is global
   // agent directory.  FIXME expose global path as Triton option
@@ -428,6 +430,7 @@ TritonRepoAgentManager::AgentState(
 {
   auto& singleton_manager = Singleton();
   std::lock_guard<std::mutex> lock(singleton_manager.mu_);
+  LOG_INFO << "---- Inside TritonRepoAgentManager::AgentState() - aquired mutex lock -----";
 
   std::unique_ptr<std::unordered_map<std::string, std::string>> agent_state_map(
       new std::unordered_map<std::string, std::string>);

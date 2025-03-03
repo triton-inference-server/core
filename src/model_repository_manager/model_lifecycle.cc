@@ -276,6 +276,7 @@ ModelLifeCycle::ModelStates()
 {
   LOG_VERBOSE(2) << "ModelStates()";
   std::lock_guard<std::mutex> map_lock(map_mtx_);
+  LOG_INFO << "---- Inside ModelLifeCycle::ModelStates() -----";
   ModelStateMap model_states;
   for (auto& model_version : map_) {
     VersionStateMap version_map;
