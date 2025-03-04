@@ -613,7 +613,7 @@ InferenceServer::PrintBackendAndModelSummary()
     repoagents_table.InsertRow(repoagent_record);
   }
   LOG_INFO << "---- Done For loop repoagent_state -----";
-  LOG_TABLE_INFO(repoagents_table);
+  //LOG_TABLE_INFO(repoagents_table);
 
   // Backends Summary
   std::vector<std::string> backend_headers;
@@ -643,7 +643,7 @@ InferenceServer::PrintBackendAndModelSummary()
     backends_table.InsertRow(backend_record);
   }
 
-  LOG_TABLE_INFO(backends_table);
+  //LOG_TABLE_INFO(backends_table);
 
   // Models Summary
   LOG_INFO << "---- Calling model_repository_manager_->ModelStates() -----";
@@ -688,7 +688,7 @@ InferenceServer::PrintBackendAndModelSummary()
     }
   }
 
-  LOG_TABLE_INFO(models_table);
+  //LOG_TABLE_INFO(models_table);
   LOG_INFO << "---- Done InferenceServer::PrintBackendAndModelSummary() -----";
 
   return Status::Success;
