@@ -277,11 +277,11 @@ InferenceServer::Init()
       // failure is due to a model not loading correctly so we just
       // continue if not exiting on error.
       ready_state_ = ServerReadyState::SERVER_READY;
-      PrintBackendAndModelSummary();
+      //PrintBackendAndModelSummary();
     }
   } else {
     ready_state_ = ServerReadyState::SERVER_READY;
-    PrintBackendAndModelSummary();
+    //PrintBackendAndModelSummary();
   }
 
   LOG_INFO << "---- Done InferenceServer::Init() -----";
