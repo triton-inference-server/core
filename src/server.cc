@@ -612,6 +612,7 @@ InferenceServer::PrintBackendAndModelSummary()
     repoagent_record.emplace_back(repoagent_pair.second);
     repoagents_table.InsertRow(repoagent_record);
   }
+  LOG_INFO << "---- Done For loop repoagent_state -----";
   LOG_TABLE_INFO(repoagents_table);
 
   // Backends Summary
