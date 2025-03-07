@@ -65,13 +65,13 @@ class SharedLibrary {
   Status GetEntrypoint(
       void* handle, const std::string& name, const bool optional, void** befn);
 
-  // Add an additional dependency directory to PATH.
+  // Add an additional dependency directory to load search.
   Status AddAdditionalDependencyDir(
-      const std::string& additional_path, std::wstring& original_path);
+      const std::string& additional_path, void* additionalDirRef);
 
-  // Restore PATH to its original configuration. Should be used in
+  // Restore libray search to original tree. To be used in
   // conjunction with AddAdditionalDependencyDir.
-  Status RemoveAdditionalDependencyDir(const std::wstring& original_path);
+  Status RemoveAdditionalDependencyDir(void* additionalDirRef);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);
