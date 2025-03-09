@@ -282,7 +282,7 @@ SharedLibrary::RemoveAdditionalDependencyDir(void* additionalDirRef)
   if (additionalDirRef == nullptr) {
     return Status(
         Status::Code::INTERNAL,
-        "failed to remove a non to its original configuration ");
+        "failed to remove a non-existant additional directory ");
   }
 
   if(RemoveDllDirectory(additionalDirRef))
