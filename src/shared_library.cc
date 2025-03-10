@@ -60,7 +60,8 @@ SharedLibrary::~SharedLibrary()
 }
 
 Status
-SharedLibrary::AddLibraryDirectory(const std::string& path, void* directory_cookie)
+SharedLibrary::AddLibraryDirectory(
+    const std::string& path, void* directory_cookie)
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "AddLibraryDirectory: path = " << path;
@@ -274,8 +275,8 @@ SharedLibrary::AddAdditionalDependencyDir(
 
   LOG_VERBOSE(1) << "Adding additional directories to search for dependencies: "
                  << std::string(additional_path.begin(), additional_path.end());
-  for(auto it = additional_paths_list.begin();
-      it != additional_paths_list.end(); it++) {
+  for (auto it = additional_paths_list.begin();
+       it != additional_paths_list.end(); it++) {
     void* additional_dir_cookie;
     RETURN_IF_ERROR(AddLibraryDirectory(*it, additional_dir_cookie));
     additional_directory_cookies.push_back(additional_dir_cookie);
@@ -291,7 +292,8 @@ SharedLibrary::AddAdditionalDependencyDir(
 }
 
 Status
-SharedLibrary::RemoveAdditionalDependencyDir(std::vector<void*> additional_directory_cookies)
+SharedLibrary::RemoveAdditionalDependencyDir(
+    std::vector<void*> additional_directory_cookies)
 {
 #ifdef _WIN32
   for (auto it = additional_directory_cookies.begin();
