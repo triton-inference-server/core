@@ -27,6 +27,7 @@
 #include "backend_manager.h"
 
 #include <algorithm>
+#include <vector>
 
 #include "backend_memory_manager.h"
 #include "server_message.h"
@@ -192,16 +193,16 @@ TritonBackend::LoadBackendLibrary(
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
-    void* addDepDirCookie;
+    std::vector<void*> additional_directory_cookies;
     if (!additional_dependency_dir_path.empty()) {
       RETURN_IF_ERROR(slib->AddAdditionalDependencyDir(
-          additional_dependency_dir_path, addDepDirCookie));
+          additional_dependency_dir_path, additional_directory_cookies));
     }
 
     RETURN_IF_ERROR(slib->OpenLibraryHandle(libpath_, &dlhandle_));
 
     if (!additional_dependency_dir_path.empty()) {
-      RETURN_IF_ERROR(slib->RemoveAdditionalDependencyDir(addDepDirCookie));
+      RETURN_IF_ERROR(slib->RemoveAdditionalDependencyDir(additional_directory_cookies));
     }
 
     // Backend initialize and finalize functions, optional

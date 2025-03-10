@@ -60,12 +60,14 @@ SharedLibrary::~SharedLibrary()
 }
 
 Status
-SharedLibrary::SetLibraryDirectory(const std::string& path)
+SharedLibrary::AddLibraryDirectory(const std::string& path, void* directory_cookie)
 {
 #ifdef _WIN32
-  LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
+  LOG_VERBOSE(1) << "AddLibraryDirectory: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  if (!SetDllDirectoryW(wpath.c_str())) {
+  void* cookie;
+  cookie = AddDllDirectory(wpath.c_str());
+  if (cookie == nullptr) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -77,7 +79,7 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 
     return Status(
         Status::Code::NOT_FOUND,
-        "unable to set dll path " + path + ": " + errstr);
+        "unable to add dll path " + path + ": " + errstr);
   }
 #endif
 
@@ -85,11 +87,11 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 }
 
 Status
-SharedLibrary::ResetLibraryDirectory()
+SharedLibrary::RemoveLibraryDirectory(void* directory_cookie)
 {
 #ifdef _WIN32
-  LOG_VERBOSE(1) << "ResetLibraryDirectory";
-  if (!SetDllDirectoryW(NULL)) {
+  LOG_VERBOSE(1) << "RemoveLibraryDirectory";
+  if (!RemoveDllDirectory(directory_cookie)) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -100,7 +102,7 @@ SharedLibrary::ResetLibraryDirectory()
     LocalFree(err_buffer);
 
     return Status(
-        Status::Code::NOT_FOUND, "unable to reset dll path: " + errstr);
+        Status::Code::NOT_FOUND, "unable to remove dll path: " + errstr);
   }
 #endif
 
@@ -126,7 +128,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // Need to put shared library directory on the DLL path so that any
   // dependencies of the shared library are found
   const std::string library_dir = DirName(path);
-  RETURN_IF_ERROR(SetLibraryDirectory(library_dir));
+  void* directory_cookie;
+  RETURN_IF_ERROR(AddLibraryDirectory(library_dir, directory_cookie));
 
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
@@ -138,7 +141,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
-  RETURN_IF_ERROR(ResetLibraryDirectory());
+  RETURN_IF_ERROR(RemoveLibraryDirectory(directory_cookie));
 
   if (*handle == nullptr) {
     LPSTR err_buffer = nullptr;
@@ -248,7 +251,7 @@ SharedLibrary::GetEntrypoint(
 
 Status
 SharedLibrary::AddAdditionalDependencyDir(
-    const std::string& additional_path, void* additionalDirRef)
+    const std::string& additional_path, std::vector<void*> additional_directory_cookies)
 {
 #ifdef _WIN32
   if (additional_path.back() != ';') {
@@ -258,12 +261,24 @@ SharedLibrary::AddAdditionalDependencyDir(
         "Each additional path provided should terminate with a ';'.");
   }
 
-  const std::wstring wPath(additional_path.begin(), additional_path.end());
+  std::vector<std::string> additional_paths_list;
+    size_t pos = 0;
+    std::string token;
+    while ((pos = additional_path.find(';', pos)) != std::string::npos) {
+        token = additional_path.substr(0, pos);
+        additional_paths_list.push_back(token);
+        pos++;
+    }
 
-  LOG_VERBOSE(1) << "Adding additional directory to search for dependencies: "
+
+  LOG_VERBOSE(1) << "Adding additional directories to search for dependencies: "
                  << std::string(additional_path.begin(), additional_path.end());
-
-  additionalDirRef = AddDllDirectory(wPath.c_str());
+  for(auto it = additional_paths_list.begin(); it != additional_paths_list.end(); it++)
+  {
+    void* additional_dir_cookie;
+    RETURN_IF_ERROR(AddLibraryDirectory(*it, additional_dir_cookie));
+    additional_directory_cookies.push_back(additional_dir_cookie);
+  }
 
 #else
   LOG_WARNING
@@ -275,25 +290,28 @@ SharedLibrary::AddAdditionalDependencyDir(
 }
 
 Status
-SharedLibrary::RemoveAdditionalDependencyDir(void* additionalDirRef)
+SharedLibrary::RemoveAdditionalDependencyDir(std::vector<void*> additional_directory_cookies)
 {
 #ifdef _WIN32
-  if (additionalDirRef == nullptr) {
-    return Status(
-        Status::Code::INTERNAL,
-        "failed to remove a non-existent additional directory ");
-  }
-
-  if (RemoveDllDirectory(additionalDirRef)) {
-    if (LOG_VERBOSE_IS_ON(1)) {
-      LOG_VERBOSE(1) << "Removed an additional directory.";
+  for (auto it = additional_directory_cookies.begin(); it != additional_directory_cookies.end(); it++)
+  {
+    if (*it == nullptr) {
+      return Status(
+          Status::Code::INTERNAL,
+          "failed to remove a non-existent additional directory ");
     }
-  } else {
-    if (LOG_VERBOSE_IS_ON(1)) {
-      LOG_VERBOSE(1) << "Failed to remove additional directory.";
+  
+    if (RemoveDllDirectory(*it)) {
+      if (LOG_VERBOSE_IS_ON(1)) {
+        LOG_VERBOSE(1) << "Removed an additional directory.";
+      }
+    } else {
+      if (LOG_VERBOSE_IS_ON(1)) {
+        LOG_VERBOSE(1) << "Failed to remove additional directory.";
+      }
+      return Status(
+          Status::Code::INTERNAL, "unable to remove dependency directory");
     }
-    return Status(
-        Status::Code::INTERNAL, "unable to remove dependency directory");
   }
 #endif
   return Status::Success;
