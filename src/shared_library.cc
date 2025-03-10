@@ -133,8 +133,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
   *handle = LoadLibraryExW(
-    wpath.c_str(), NULL,
-    LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS);
+      wpath.c_str(), NULL,
+      LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS);
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
@@ -293,7 +293,7 @@ SharedLibrary::RemoveAdditionalDependencyDir(void* additionalDirRef)
       LOG_VERBOSE(1) << "Failed to remove additional directory.";
     }
     return Status(
-      Status::Code::INTERNAL, "unable to remove dependency directory");
+        Status::Code::INTERNAL, "unable to remove dependency directory");
   }
 #endif
   return Status::Success;
