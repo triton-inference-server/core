@@ -303,7 +303,7 @@ SharedLibrary::RemoveAdditionalDependencyDir(
           Status::Code::INTERNAL,
           "failed to remove a non-existent additional directory ");
     }
-  
+
     if (RemoveDllDirectory(*it)) {
       if (LOG_VERBOSE_IS_ON(1)) {
         LOG_VERBOSE(1) << "Removed an additional directory.";
