@@ -68,11 +68,13 @@ class SharedLibrary {
 
   // Add an additional dependency directory to load search.
   Status AddAdditionalDependencyDir(
-      const std::string& additional_path, std::vector<void*> additional_directory_cookies);
+      const std::string& additional_path,
+      std::vector<void*> additional_directory_cookies);
 
   // Restore library search to original tree. To be used in
   // conjunction with AddAdditionalDependencyDir.
-  Status RemoveAdditionalDependencyDir(std::vector<void*> additional_directory_cookies);
+  Status RemoveAdditionalDependencyDir(
+      std::vector<void*> additional_directory_cookies);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);

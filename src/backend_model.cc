@@ -164,7 +164,8 @@ TritonModel::Create(
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
     void* directory_cookie;
-    RETURN_IF_ERROR(slib->AddLibraryDirectory(backend->Directory(), directory_cookie));
+    RETURN_IF_ERROR(
+        slib->AddLibraryDirectory(backend->Directory(), directory_cookie));
 #endif
 
     TRITONSERVER_Error* err = backend->ModelInitFn()(
