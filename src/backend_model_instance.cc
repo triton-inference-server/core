@@ -300,14 +300,15 @@ TritonModelInstance::ConstructAndInitializeInstance(
 #ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->SetLibraryDirectory(model->Backend()->Directory()));
+    void* directory_cookie;
+    RETURN_IF_ERROR(slib->AddLibraryDirectory(model->Backend()->Directory(), directory_cookie));
 #endif
 
     TRITONSERVER_Error* err =
         model->Backend()->ModelInstanceInitFn()(triton_instance);
 
 #ifdef _WIN32
-    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+    RETURN_IF_ERROR(slib->RemoveLibraryDirectory(directory_cookie));
 #endif
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
