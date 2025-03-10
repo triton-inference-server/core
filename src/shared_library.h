@@ -69,7 +69,7 @@ class SharedLibrary {
   Status AddAdditionalDependencyDir(
       const std::string& additional_path, void* additionalDirRef);
 
-  // Restore libray search to original tree. To be used in
+  // Restore library search to original tree. To be used in
   // conjunction with AddAdditionalDependencyDir.
   Status RemoveAdditionalDependencyDir(void* additionalDirRef);
 
