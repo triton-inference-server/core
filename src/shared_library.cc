@@ -66,9 +66,8 @@ SharedLibrary::AddLibraryDirectory(
 #ifdef _WIN32
   LOG_VERBOSE(1) << "AddLibraryDirectory: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  void* cookie;
-  cookie = AddDllDirectory(wpath.c_str());
-  if (cookie == nullptr) {
+  directory_cookie = AddDllDirectory(wpath.c_str());
+  if (directory_cookie == nullptr) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
