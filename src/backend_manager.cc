@@ -97,7 +97,7 @@ TritonBackend::Create(
   if (local_backend->backend_init_fn_ != nullptr) {
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    void* directory_cookie;
+    void* directory_cookie = nullptr;
     RETURN_IF_ERROR(
         slib->AddLibraryDirectory(local_backend->dir_, directory_cookie));
 

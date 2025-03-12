@@ -163,7 +163,7 @@ TritonModel::Create(
 #ifdef _WIN32
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    void* directory_cookie;
+    void* directory_cookie = nullptr;
     RETURN_IF_ERROR(
         slib->AddLibraryDirectory(backend->Directory(), directory_cookie));
 #endif

@@ -128,7 +128,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // Need to put shared library directory on the DLL path so that any
   // dependencies of the shared library are found
   const std::string library_dir = DirName(path);
-  void* directory_cookie;
+  void* directory_cookie = nullptr;
   RETURN_IF_ERROR(AddLibraryDirectory(library_dir, directory_cookie));
 
   // HMODULE is typedef of void*
