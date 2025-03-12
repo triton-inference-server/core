@@ -99,7 +99,7 @@ TritonBackend::Create(
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
     void* directory_cookie = nullptr;
     RETURN_IF_ERROR(
-        slib->AddLibraryDirectory(local_backend->dir_, directory_cookie));
+        slib->AddLibraryDirectory(local_backend->dir_, &directory_cookie));
 
     TRITONSERVER_Error* err = local_backend->backend_init_fn_(
         reinterpret_cast<TRITONBACKEND_Backend*>(local_backend.get()));

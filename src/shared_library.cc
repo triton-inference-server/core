@@ -61,12 +61,12 @@ SharedLibrary::~SharedLibrary()
 
 Status
 SharedLibrary::AddLibraryDirectory(
-    const std::string& path, void* directory_cookie)
+    const std::string& path, void** directory_cookie)
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "AddLibraryDirectory: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  directory_cookie = AddDllDirectory(wpath.c_str());
+  *directory_cookie = AddDllDirectory(wpath.c_str());
   if (directory_cookie == nullptr) {
     LPSTR err_buffer = nullptr;
     size_t size = FormatMessageA(
@@ -276,8 +276,8 @@ SharedLibrary::AddAdditionalDependencyDir(
                  << std::string(additional_path.begin(), additional_path.end());
   for (auto it = additional_paths_list.begin();
        it != additional_paths_list.end(); it++) {
-    void* additional_dir_cookie;
-    RETURN_IF_ERROR(AddLibraryDirectory(*it, additional_dir_cookie));
+    void* additional_dir_cookie = nullptr;
+    RETURN_IF_ERROR(AddLibraryDirectory(*it, &additional_dir_cookie));
     additional_directory_cookies.push_back(additional_dir_cookie);
   }
 

@@ -51,7 +51,7 @@ class SharedLibrary {
 
   // Configuration so that dependent libraries will be searched for in
   // 'path' during OpenLibraryHandle.
-  Status AddLibraryDirectory(const std::string& path, void* directory_cookie);
+  Status AddLibraryDirectory(const std::string& path, void** directory_cookie);
 
   // Removes a library directory set by AddLibraryDirectory.
   Status RemoveLibraryDirectory(void* directory_cookie);
