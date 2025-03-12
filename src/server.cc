@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -117,6 +117,12 @@ InferenceServer::InferenceServer()
 #endif  // TRITON_ENABLE_GPU
 
   inflight_request_counter_ = 0;
+
+#ifdef TRITON_ENABLE_ENSEMBLE
+  // TODO: Need to scale the thread pool size smarter, e.g. based on the
+  // instance_group count of composing models.
+  ensemble_cb_pool_.reset(new triton::common::ThreadPool(16u));
+#endif
 }
 
 Status
