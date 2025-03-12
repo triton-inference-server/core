@@ -302,7 +302,7 @@ TritonModelInstance::ConstructAndInitializeInstance(
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
     void* directory_cookie = nullptr;
     RETURN_IF_ERROR(slib->AddLibraryDirectory(
-        model->Backend()->Directory(), directory_cookie));
+        model->Backend()->Directory(), &directory_cookie));
 #endif
 
     TRITONSERVER_Error* err =

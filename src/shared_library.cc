@@ -129,7 +129,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // dependencies of the shared library are found
   const std::string library_dir = DirName(path);
   void* directory_cookie = nullptr;
-  RETURN_IF_ERROR(AddLibraryDirectory(library_dir, directory_cookie));
+  RETURN_IF_ERROR(AddLibraryDirectory(library_dir, &directory_cookie));
 
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types

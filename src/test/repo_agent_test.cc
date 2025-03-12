@@ -199,7 +199,7 @@ SharedLibrary::Acquire(std::unique_ptr<SharedLibrary>* slib)
 SharedLibrary::~SharedLibrary() {}
 Status
 SharedLibrary::AddLibraryDirectory(
-    const std::string& path, void* directory_cookie)
+    const std::string& path, void** directory_cookie)
 {
   return Status::Success;
 }
