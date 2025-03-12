@@ -614,6 +614,7 @@ EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
   auto request_tracker = reinterpret_cast<RequestTracker*>(userp);
+  auto pool = request_tracker->Scheduler()->CallbackPool();
   auto fn = [request, flags, request_tracker]() {
     if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
       LOG_TRITONSERVER_ERROR(
@@ -625,12 +626,11 @@ EnsembleContext::RequestComplete(
     }
   };
 
-  // Attempt to enqueue the callback. If all workers are busy, run the callback
-  // immediately
-  bool enqueued =
-      request_tracker->Scheduler()->CallbackPool()->EnqueueIfCapacityAvailable(
-          fn);
-  if (!enqueued) {
+  // Attempt to enqueue the callback. If all workers are busy and queue is at
+  // capacity, execute the callback immediately.
+  if (pool->QueueSize() < pool->Size()) {
+    pool->Enqueue(fn);
+  } else {
     fn();
   }
 }
@@ -640,6 +640,7 @@ EnsembleContext::ResponseComplete(
     TRITONSERVER_InferenceResponse* response, const uint32_t flags, void* userp)
 {
   auto step_raw_ptr = reinterpret_cast<Step*>(userp);
+  auto pool = step_raw_ptr->ctx_->Scheduler()->CallbackPool();
   auto fn = [response, flags, step_raw_ptr]() {
     auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
     step_ptr->response_flags_ = flags;
@@ -652,12 +653,11 @@ EnsembleContext::ResponseComplete(
     }
   };
 
-  // Attempt to enqueue the callback. If all workers are busy, run the callback
-  // immediately
-  bool enqueued = step_raw_ptr->ctx_->Scheduler()
-                      ->CallbackPool()
-                      ->EnqueueIfCapacityAvailable(fn);
-  if (!enqueued) {
+  // Attempt to enqueue the callback. If all workers are busy and queue is at
+  // capacity, execute the callback immediately.
+  if (pool->QueueSize() < pool->Size()) {
+    pool->Enqueue(fn);
+  } else {
     fn();
   }
 }
