@@ -267,7 +267,7 @@ SharedLibrary::AddAdditionalDependencyDir(
   size_t pos_end = 0;
   std::string token;
   while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
-    token = additional_path.substr(pos, pos_end);
+    token = additional_path.substr(pos, pos_end-pos);
     additional_paths_list.push_back(token);
     pos = pos_end + 1;
   }
