@@ -69,7 +69,7 @@ class SharedLibrary {
   // Add an additional dependency directory to load search.
   Status AddAdditionalDependencyDir(
       const std::string& additional_path,
-      std::vector<void*> additional_directory_cookies);
+      std::vector<void*>& additional_directory_cookies);
 
   // Restore library search to original tree. To be used in
   // conjunction with AddAdditionalDependencyDir.

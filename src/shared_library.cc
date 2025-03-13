@@ -252,7 +252,7 @@ SharedLibrary::GetEntrypoint(
 Status
 SharedLibrary::AddAdditionalDependencyDir(
     const std::string& additional_path,
-    std::vector<void*> additional_directory_cookies)
+    std::vector<void*>& additional_directory_cookies)
 {
 #ifdef _WIN32
   if (additional_path.back() != ';') {
