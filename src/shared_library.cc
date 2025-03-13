@@ -264,11 +264,12 @@ SharedLibrary::AddAdditionalDependencyDir(
 
   std::vector<std::string> additional_paths_list;
   size_t pos = 0;
+  size_t pos_end = 0;
   std::string token;
-  while ((pos = additional_path.find(';', pos)) != std::string::npos) {
-    token = additional_path.substr(0, pos);
+  while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
+    token = additional_path.substr(pos, pos_end);
     additional_paths_list.push_back(token);
-    pos++;
+    pos = pos_end + 1;
   }
 
 
