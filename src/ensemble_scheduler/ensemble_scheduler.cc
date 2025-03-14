@@ -52,11 +52,12 @@ class RequestTracker {
   explicit RequestTracker(
       std::unique_ptr<InferenceRequest>&& request, uint64_t compute_start_ns,
       MetricModelReporter* metric_reporter,
-      InferenceStatsAggregator* stats_aggregator, EnsembleScheduler* scheduler)
+      InferenceStatsAggregator* stats_aggregator,
+      triton::common::ThreadPool* callback_pool)
       : inflight_request_counter_(1), request_(std::move(request)),
         compute_start_ns_(compute_start_ns), metric_reporter_(metric_reporter),
         stats_aggregator_(stats_aggregator), status_(Status::Success),
-        scheduler_(scheduler)
+        callback_pool_(callback_pool)
   {
   }
 
@@ -71,7 +72,7 @@ class RequestTracker {
     return context_stats_aggregator_;
   }
 
-  EnsembleScheduler* Scheduler() const { return scheduler_; }
+  triton::common::ThreadPool* CallbackPool() const { return callback_pool_; }
 
   void IncrementCounter()
   {
@@ -123,7 +124,7 @@ class RequestTracker {
   InferenceStatsAggregator* stats_aggregator_;
   InferenceStatsAggregator context_stats_aggregator_;
   Status status_;
-  EnsembleScheduler* scheduler_;
+  triton::common::ThreadPool* const callback_pool_;
 };
 
 // Step is used as 'userp' and keeps ensemble context alive
@@ -241,7 +242,7 @@ class EnsembleContext {
       MetricModelReporter* metric_reporter,
       InferenceStatsAggregator* stats_aggregator, InferenceServer* is,
       EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
-      cudaStream_t stream, EnsembleScheduler* scheduler);
+      cudaStream_t stream, triton::common::ThreadPool* callback_pool);
 
   // Perform transition on 'context' state given the information of
   // 'completed_step'
@@ -330,7 +331,7 @@ class EnsembleContext {
   void CacheEnsembleTopLevelRequest(
       std::unique_ptr<InferenceResponse>& response);
 
-  EnsembleScheduler* Scheduler() const { return scheduler_; }
+  triton::common::ThreadPool* CallbackPool() const { return callback_pool_; }
 
   InferenceServer* is_;
 
@@ -382,23 +383,25 @@ class EnsembleContext {
       decltype(&TRITONSERVER_ResponseAllocatorDelete)>
       allocator_;
 
-  EnsembleScheduler* scheduler_;
+  // The thread pool used to execute ensemble callbacks and reduce e2e latency.
+  // The thread pool is managed by InferenceServer.
+  triton::common::ThreadPool* const callback_pool_;
 };
 
 EnsembleContext::EnsembleContext(
     MetricModelReporter* metric_reporter,
     InferenceStatsAggregator* stats_aggregator, InferenceServer* is,
     EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
-    cudaStream_t stream, EnsembleScheduler* scheduler)
+    cudaStream_t stream, triton::common::ThreadPool* callback_pool)
     : is_(is), info_(info), stream_(stream), inflight_step_counter_(0),
       allocator_(nullptr, TRITONSERVER_ResponseAllocatorDelete),
-      scheduler_(scheduler)
+      callback_pool_(callback_pool)
 {
   uint64_t compute_start_ns = 0;
   INFER_STATS_SET_TIMESTAMP(compute_start_ns);
   request_tracker_ = new RequestTracker(
       std::move(request), compute_start_ns, metric_reporter, stats_aggregator,
-      scheduler_);
+      callback_pool);
 
   auto& lrequest = request_tracker_->Request();
 
@@ -614,7 +617,7 @@ EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
   auto request_tracker = reinterpret_cast<RequestTracker*>(userp);
-  auto pool = request_tracker->Scheduler()->CallbackPool();
+  auto pool = request_tracker->CallbackPool();
   auto fn = [request, flags, request_tracker]() {
     if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
       LOG_TRITONSERVER_ERROR(
@@ -640,7 +643,7 @@ EnsembleContext::ResponseComplete(
     TRITONSERVER_InferenceResponse* response, const uint32_t flags, void* userp)
 {
   auto step_raw_ptr = reinterpret_cast<Step*>(userp);
-  auto pool = step_raw_ptr->ctx_->Scheduler()->CallbackPool();
+  auto pool = step_raw_ptr->ctx_->CallbackPool();
   auto fn = [response, flags, step_raw_ptr]() {
     auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
     step_ptr->response_flags_ = flags;
@@ -1481,7 +1484,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   RETURN_IF_ERROR(request->SetState(InferenceRequest::State::EXECUTING));
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
-      stream_, this));
+      stream_, callback_pool_));
   EnsembleContext::Proceed(context);
   return Status::Success;
 }
