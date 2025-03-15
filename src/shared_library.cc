@@ -291,7 +291,7 @@ SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
 Status
 SharedLibrary::AddAdditionalDependencyDirs()
 {
-  LOG_VERBOSE(1) << "Adding "<< mAdditionalDependencyDirs.size()
+  LOG_VERBOSE(1) << "Adding " << mAdditionalDependencyDirs.size()
                  << " additional directories to search for dependencies";
   for (auto it = mAdditionalDependencyDirs.begin();
        it != mAdditionalDependencyDirs.end(); it++) {
