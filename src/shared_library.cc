@@ -136,7 +136,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
 
-  
+
   RETURN_IF_ERROR(AddAdditionalDependencyDirs());
 
   uint32_t load_flags = 0x00000000;
