@@ -137,15 +137,15 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
 
   
-  RETURN_IF_ERROR(slib->AddAdditionalDependencyDirs());
+  RETURN_IF_ERROR(AddAdditionalDependencyDirs());
 
-  int32 load_flags = 0x00000000;
+  uint32_t load_flags = 0x00000000;
   if (!mAdditionalDirHandles.empty()) {
     load_flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS;
   }
   *handle = LoadLibraryExW(wpath.c_str(), NULL, load_flags);
 
-  RETURN_IF_ERROR(slib->RemoveAdditionalDependencyDirs());
+  RETURN_IF_ERROR(RemoveAdditionalDependencyDirs());
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
