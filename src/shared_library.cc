@@ -268,7 +268,7 @@ Status SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_
         "Each additional path provided should terminate with a ';'.");
   }
   
-  size_t pos, pos_end = 0;
+  size_t pos = 0, pos_end = 0;
   std::string token;
   while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
     token = additional_path.substr(pos, pos_end-pos);
@@ -288,8 +288,7 @@ Status SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_
 #ifdef _WIN32
 Status SharedLibrary::AddAdditionalDependencyDirs()
 {
-  LOG_VERBOSE(1) << "Adding additional directories to search for dependencies: "
-                 << std::string(mAdditionalDependencyDirs.begin(), mAdditionalDependencyDirs.end());
+  LOG_VERBOSE(1) << "Adding "<< mAdditionalDependencyDirs.size() <<" additional directories to search for dependencies";
   for (auto it = mAdditionalDependencyDirs.begin();
        it != mAdditionalDependencyDirs.end(); it++) {
     void* additional_dir_cookie = nullptr;
