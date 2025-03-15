@@ -269,7 +269,7 @@ SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
         "backend config parameter \"additional-dependency-dirs\" is malformed. "
         "Each additional path provided should terminate with a ';'.");
   }
-  
+
   size_t pos = 0, pos_end = 0;
   std::string token;
   while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
