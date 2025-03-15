@@ -70,15 +70,15 @@ class SharedLibrary {
   Status SetAdditionalDependencyDirs(const std::string& additional_path);
 
 #ifdef _WIN32
-private:
-  Status SharedLibrary::AddAdditionalDependencyDirs(); 
+ private:
+  Status SharedLibrary::AddAdditionalDependencyDirs();
   Status SharedLibrary::RemoveAdditionalDependencyDirs();
 
   std::vector<std::string> mAdditionalDependencyDirs;
   std::vector<void*> mAdditionalDirHandles;
 #endif
 
-private:
+ private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);
   explicit SharedLibrary() = default;
 };

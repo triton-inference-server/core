@@ -196,8 +196,8 @@ TritonBackend::LoadBackendLibrary(
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
     if (!additional_dependency_dir_path.empty()) {
-      RETURN_IF_ERROR(slib->SetAdditionalDependencyDirs(
-          additional_dependency_dir_path));
+      RETURN_IF_ERROR(
+          slib->SetAdditionalDependencyDirs(additional_dependency_dir_path));
     }
 
     RETURN_IF_ERROR(slib->OpenLibraryHandle(libpath_, &dlhandle_));

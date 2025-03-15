@@ -141,7 +141,8 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 
   uint32_t load_flags = 0x00000000;
   if (!mAdditionalDirHandles.empty()) {
-    load_flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS;
+    load_flags = 
+        LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS;
   }
   *handle = LoadLibraryExW(wpath.c_str(), NULL, load_flags);
 
@@ -258,7 +259,8 @@ SharedLibrary::GetEntrypoint(
 }
 
 
-Status SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
+Status
+SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
 {
 #ifdef _WIN32
   if (additional_path.back() != ';') {
@@ -271,7 +273,7 @@ Status SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_
   size_t pos = 0, pos_end = 0;
   std::string token;
   while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
-    token = additional_path.substr(pos, pos_end-pos);
+    token = additional_path.substr(pos, pos_end - pos);
     mAdditionalDependencyDirs.push_back(token);
     pos = pos_end + 1;
   }
@@ -286,7 +288,8 @@ Status SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_
 }
 
 #ifdef _WIN32
-Status SharedLibrary::AddAdditionalDependencyDirs()
+Status
+SharedLibrary::AddAdditionalDependencyDirs()
 {
   LOG_VERBOSE(1) << "Adding "<< mAdditionalDependencyDirs.size() <<" additional directories to search for dependencies";
   for (auto it = mAdditionalDependencyDirs.begin();
@@ -299,7 +302,8 @@ Status SharedLibrary::AddAdditionalDependencyDirs()
   return Status::Success;
 }
 
-Status SharedLibrary::RemoveAdditionalDependencyDirs()
+Status
+SharedLibrary::RemoveAdditionalDependencyDirs()
 {
   for (auto it = mAdditionalDirHandles.begin();
        it != mAdditionalDirHandles.end(); it++) {
