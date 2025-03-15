@@ -292,7 +292,7 @@ Status
 SharedLibrary::AddAdditionalDependencyDirs()
 {
   LOG_VERBOSE(1) << "Adding "<< mAdditionalDependencyDirs.size()
-                 <<" additional directories to search for dependencies";
+                 << " additional directories to search for dependencies";
   for (auto it = mAdditionalDependencyDirs.begin();
        it != mAdditionalDependencyDirs.end(); it++) {
     void* additional_dir_cookie = nullptr;
