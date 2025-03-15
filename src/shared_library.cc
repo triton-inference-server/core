@@ -141,7 +141,7 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
 
   uint32_t load_flags = 0x00000000;
   if (!mAdditionalDirHandles.empty()) {
-    load_flags = 
+    load_flags =
         LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS;
   }
   *handle = LoadLibraryExW(wpath.c_str(), NULL, load_flags);
@@ -291,7 +291,8 @@ SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
 Status
 SharedLibrary::AddAdditionalDependencyDirs()
 {
-  LOG_VERBOSE(1) << "Adding "<< mAdditionalDependencyDirs.size() <<" additional directories to search for dependencies";
+  LOG_VERBOSE(1) << "Adding "<< mAdditionalDependencyDirs.size()
+                 <<" additional directories to search for dependencies";
   for (auto it = mAdditionalDependencyDirs.begin();
        it != mAdditionalDependencyDirs.end(); it++) {
     void* additional_dir_cookie = nullptr;
