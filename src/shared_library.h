@@ -66,17 +66,19 @@ class SharedLibrary {
   Status GetEntrypoint(
       void* handle, const std::string& name, const bool optional, void** befn);
 
-  // Add an additional dependency directory to load search.
-  Status AddAdditionalDependencyDir(
-      const std::string& additional_path,
-      std::vector<void*>& additional_directory_cookies);
+  // Add an additional dependency directories to load search.
+  Status SetAdditionalDependencyDirs(const std::string& additional_path);
 
-  // Restore library search to original tree. To be used in
-  // conjunction with AddAdditionalDependencyDir.
-  Status RemoveAdditionalDependencyDir(
-      std::vector<void*> additional_directory_cookies);
+#ifdef _WIN32
+private:
+  Status SharedLibrary::AddAdditionalDependencyDirs(); 
+  Status SharedLibrary::RemoveAdditionalDependencyDirs();
 
- private:
+  std::vector<std::string> mAdditionalDependencyDirs;
+  std::vector<void*> mAdditionalDirHandles;
+#endif
+
+private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);
   explicit SharedLibrary() = default;
 };

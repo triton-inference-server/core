@@ -135,9 +135,17 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  *handle = LoadLibraryExW(
-      wpath.c_str(), NULL,
-      LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS);
+
+  
+  RETURN_IF_ERROR(slib->AddAdditionalDependencyDirs());
+
+  int32 load_flags = 0x00000000;
+  if (!mAdditionalDirHandles.empty()) {
+    load_flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS;
+  }
+  *handle = LoadLibraryExW(wpath.c_str(), NULL, load_flags);
+
+  RETURN_IF_ERROR(slib->RemoveAdditionalDependencyDirs());
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
@@ -249,10 +257,8 @@ SharedLibrary::GetEntrypoint(
   return Status::Success;
 }
 
-Status
-SharedLibrary::AddAdditionalDependencyDir(
-    const std::string& additional_path,
-    std::vector<void*>& additional_directory_cookies)
+
+Status SetAdditionalDependencyDirs(const std::string& additional_path)
 {
 #ifdef _WIN32
   if (additional_path.back() != ';') {
@@ -261,25 +267,13 @@ SharedLibrary::AddAdditionalDependencyDir(
         "backend config parameter \"additional-dependency-dirs\" is malformed. "
         "Each additional path provided should terminate with a ';'.");
   }
-
-  std::vector<std::string> additional_paths_list;
-  size_t pos = 0;
-  size_t pos_end = 0;
+  
+  size_t pos, pos_end = 0;
   std::string token;
   while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
     token = additional_path.substr(pos, pos_end-pos);
-    additional_paths_list.push_back(token);
+    mAdditionalDependencyDirs.push_back(token);
     pos = pos_end + 1;
-  }
-
-
-  LOG_VERBOSE(1) << "Adding additional directories to search for dependencies: "
-                 << std::string(additional_path.begin(), additional_path.end());
-  for (auto it = additional_paths_list.begin();
-       it != additional_paths_list.end(); it++) {
-    void* additional_dir_cookie = nullptr;
-    RETURN_IF_ERROR(AddLibraryDirectory(*it, &additional_dir_cookie));
-    additional_directory_cookies.push_back(additional_dir_cookie);
   }
 
 #else
@@ -291,13 +285,25 @@ SharedLibrary::AddAdditionalDependencyDir(
   return Status::Success;
 }
 
-Status
-SharedLibrary::RemoveAdditionalDependencyDir(
-    std::vector<void*> additional_directory_cookies)
-{
 #ifdef _WIN32
-  for (auto it = additional_directory_cookies.begin();
-       it != additional_directory_cookies.end(); it++) {
+Status SharedLibrary::AddAdditionalDependencyDirs()
+{
+  LOG_VERBOSE(1) << "Adding additional directories to search for dependencies: "
+                 << std::string(additional_path.begin(), additional_path.end());
+  for (auto it = mAdditionalDependencyDirs.begin();
+       it != mAdditionalDependencyDirs.end(); it++) {
+    void* additional_dir_cookie = nullptr;
+    RETURN_IF_ERROR(AddLibraryDirectory(*it, &additional_dir_cookie));
+    mAdditionalDirHandles.push_back(additional_dir_cookie);
+  }
+
+  return Status::Success;
+}
+
+Status SharedLibrary::RemoveAdditionalDependencyDirs()
+{
+  for (auto it = mAdditionalDirHandles.begin();
+       it != mAdditionalDirHandles.end(); it++) {
     if (*it == nullptr) {
       return Status(
           Status::Code::INTERNAL,
@@ -316,8 +322,10 @@ SharedLibrary::RemoveAdditionalDependencyDir(
           Status::Code::INTERNAL, "unable to remove dependency directory");
     }
   }
-#endif
+  mAdditionalDirHandles.clear();
+
   return Status::Success;
 }
+#endif
 
 }}  // namespace triton::core

@@ -195,18 +195,12 @@ TritonBackend::LoadBackendLibrary(
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
-    std::vector<void*> additional_directory_cookies;
     if (!additional_dependency_dir_path.empty()) {
-      RETURN_IF_ERROR(slib->AddAdditionalDependencyDir(
-          additional_dependency_dir_path, additional_directory_cookies));
+      RETURN_IF_ERROR(slib->SetAdditionalDependencyDirs(
+          additional_dependency_dir_path));
     }
 
     RETURN_IF_ERROR(slib->OpenLibraryHandle(libpath_, &dlhandle_));
-
-    if (!additional_dependency_dir_path.empty()) {
-      RETURN_IF_ERROR(
-          slib->RemoveAdditionalDependencyDir(additional_directory_cookies));
-    }
 
     // Backend initialize and finalize functions, optional
     RETURN_IF_ERROR(slib->GetEntrypoint(
