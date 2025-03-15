@@ -258,7 +258,7 @@ SharedLibrary::GetEntrypoint(
 }
 
 
-Status SetAdditionalDependencyDirs(const std::string& additional_path)
+Status SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
 {
 #ifdef _WIN32
   if (additional_path.back() != ';') {
@@ -289,7 +289,7 @@ Status SetAdditionalDependencyDirs(const std::string& additional_path)
 Status SharedLibrary::AddAdditionalDependencyDirs()
 {
   LOG_VERBOSE(1) << "Adding additional directories to search for dependencies: "
-                 << std::string(additional_path.begin(), additional_path.end());
+                 << std::string(mAdditionalDependencyDirs.begin(), mAdditionalDependencyDirs.end());
   for (auto it = mAdditionalDependencyDirs.begin();
        it != mAdditionalDependencyDirs.end(); it++) {
     void* additional_dir_cookie = nullptr;
