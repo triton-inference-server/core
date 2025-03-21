@@ -66,20 +66,38 @@ SharedLibrary::AddLibraryDirectory(
 #ifdef _WIN32
   LOG_VERBOSE(1) << "AddLibraryDirectory: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  *directory_cookie = AddDllDirectory(wpath.c_str());
-  if (*directory_cookie == nullptr) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
+  if (mAdditionalDependencyDirs.empty()) {
+    *directory_cookie = nullptr;
+    if (!SetDllDirectory(wpath.c_str())) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
 
-    return Status(
-        Status::Code::NOT_FOUND,
-        "unable to add dll path " + path + ": " + errstr);
+      return Status(
+          Status::Code::NOT_FOUND,
+          "unable to set dll path " + path + ": " + errstr);
+    }
+  } else {
+    *directory_cookie = AddDllDirectory(wpath.c_str());
+    if (*directory_cookie == nullptr) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
+
+      return Status(
+          Status::Code::NOT_FOUND,
+          "unable to add dll path " + path + ": " + errstr);
+    }
   }
 #endif
 
@@ -91,18 +109,34 @@ SharedLibrary::RemoveLibraryDirectory(void* directory_cookie)
 {
 #ifdef _WIN32
   LOG_VERBOSE(1) << "RemoveLibraryDirectory";
-  if (!RemoveDllDirectory(directory_cookie)) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
+  if (mAdditionalDependencyDirs.empty()) {
+    if (!SetDllDirectory(NULL)) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
 
-    return Status(
-        Status::Code::NOT_FOUND, "unable to remove dll path: " + errstr);
+      return Status(
+          Status::Code::NOT_FOUND, "unable to reset dll path: " + errstr);
+    }
+  } else {
+    if (!RemoveDllDirectory(directory_cookie)) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
+
+      return Status(
+          Status::Code::NOT_FOUND, "unable to remove dll path: " + errstr);
+    }
   }
 #endif
 
