@@ -68,7 +68,7 @@ SharedLibrary::AddLibraryDirectory(
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
   if (mAdditionalDependencyDirs.empty()) {
     *directory_cookie = nullptr;
-    if (!SetDllDirectory(wpath.c_str())) {
+    if (!SetDllDirectoryW(wpath.c_str())) {
       LPSTR err_buffer = nullptr;
       size_t size = FormatMessageA(
           FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
@@ -110,7 +110,7 @@ SharedLibrary::RemoveLibraryDirectory(void* directory_cookie)
 #ifdef _WIN32
   LOG_VERBOSE(1) << "RemoveLibraryDirectory";
   if (mAdditionalDependencyDirs.empty()) {
-    if (!SetDllDirectory(NULL)) {
+    if (!SetDllDirectoryW(NULL)) {
       LPSTR err_buffer = nullptr;
       size_t size = FormatMessageA(
           FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
