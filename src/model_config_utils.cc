@@ -1094,7 +1094,8 @@ AutoCompleteBackendFields(
       if (is_dir) {
         return Status(
             Status::Code::INVALID_ARG,
-            "TensorFlow is not supported since version 25.03, however, " +
+            std::string(
+                "TensorFlow is not supported since version 25.03, however, ") +
                 kTensorFlowSavedModelFilename + " dir is found.");
       }
     }
@@ -1105,7 +1106,8 @@ AutoCompleteBackendFields(
       if (!is_dir) {
         return Status(
             Status::Code::INVALID_ARG,
-            "TensorFlow is not supported for version >= 25.03, however, " +
+            std::string(
+                "TensorFlow is not supported for version >= 25.03, however, ") +
                 kTensorFlowGraphDefFilename + " file is found.");
       }
     }
