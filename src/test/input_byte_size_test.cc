@@ -258,7 +258,7 @@ char InputByteSizeTest::input_data_string_
 
 TEST_F(InputByteSizeTest, ValidInputByteSize)
 {
-  const char* model_name = "savedmodel_zero_1_float32";
+  const char* model_name = "onnx_zero_1_float32";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
@@ -313,7 +313,7 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
 
 TEST_F(InputByteSizeTest, InputByteSizeMismatch)
 {
-  const char* model_name = "savedmodel_zero_1_float32";
+  const char* model_name = "onnx_zero_1_float32";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
@@ -366,7 +366,7 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
 
 TEST_F(InputByteSizeTest, InputByteSizeLarge)
 {
-  const char* model_name = "savedmodel_zero_1_float32";
+  const char* model_name = "onnx_zero_1_float32";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
@@ -422,7 +422,7 @@ TEST_F(InputByteSizeTest, InputByteSizeLarge)
 
 TEST_F(InputByteSizeTest, ValidStringInputByteSize)
 {
-  const char* model_name = "savedmodel_zero_1_object";
+  const char* model_name = "onnx_zero_1_object";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
@@ -483,7 +483,7 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
 
 TEST_F(InputByteSizeTest, StringCountMismatch)
 {
-  const char* model_name = "savedmodel_zero_1_object";
+  const char* model_name = "onnx_zero_1_object";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
@@ -569,7 +569,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
 
 TEST_F(InputByteSizeTest, StringSizeMisalign)
 {
-  const char* model_name = "savedmodel_zero_1_object";
+  const char* model_name = "onnx_zero_1_object";
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
