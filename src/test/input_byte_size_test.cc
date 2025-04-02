@@ -528,7 +528,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "savedmodel_zero_1_object",
+          &irequest_, server_, "onnx_zero_1_object",
           -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
@@ -642,7 +642,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "savedmodel_zero_1_object",
+          &irequest_, server_, "onnx_zero_1_object",
           -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
@@ -699,7 +699,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "savedmodel_zero_1_object",
+          &irequest_, server_, "onnx_zero_1_object",
           -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
