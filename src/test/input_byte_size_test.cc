@@ -515,7 +515,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace*/),
       "expect error with inference request",
       "expected 3 string elements for inference input 'INPUT0' for model '" +
           std::string{model_name} + "', got 2");
@@ -528,8 +528,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "onnx_zero_1_object",
-          -1 /* model_version */),
+          &irequest_, server_, "onnx_zero_1_object", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -642,8 +641,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "onnx_zero_1_object",
-          -1 /* model_version */),
+          &irequest_, server_, "onnx_zero_1_object", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
@@ -699,8 +697,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
-          &irequest_, server_, "onnx_zero_1_object",
-          -1 /* model_version */),
+          &irequest_, server_, "onnx_zero_1_object", -1 /* model_version */),
       "creating inference request");
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestSetReleaseCallback(
