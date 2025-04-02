@@ -515,7 +515,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace*/),
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
       "expect error with inference request",
       "expected 3 string elements for inference input 'INPUT0' for model '" +
           std::string{model_name} + "', got 2");
