@@ -121,7 +121,8 @@ InferenceServer::InferenceServer()
 #ifdef TRITON_ENABLE_ENSEMBLE
   // TODO: Need to scale the thread pool size smarter, e.g. based on the
   // instance_group count of composing models.
-  ensemble_cb_pool_.reset(new triton::common::ThreadPool(16u));
+  ensemble_cb_pool_.reset(
+      new triton::common::ThreadPool(ENSEMBLE_CB_POOL_SIZE));
 #endif
 }
 

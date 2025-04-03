@@ -631,7 +631,7 @@ EnsembleContext::RequestComplete(
 
   // Attempt to enqueue the callback. If all workers are busy and queue is at
   // capacity, execute the callback immediately.
-  if (pool->QueueSize() < pool->Size()) {
+  if (pool->TaskQueueSize() < pool->Size()) {
     pool->Enqueue(fn);
   } else {
     fn();
@@ -658,7 +658,7 @@ EnsembleContext::ResponseComplete(
 
   // Attempt to enqueue the callback. If all workers are busy and queue is at
   // capacity, execute the callback immediately.
-  if (pool->QueueSize() < pool->Size()) {
+  if (pool->TaskQueueSize() < pool->Size()) {
     pool->Enqueue(fn);
   } else {
     fn();
