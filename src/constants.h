@@ -80,6 +80,8 @@ constexpr char kMetricsLabelModelNamespace[] = "namespace";
 constexpr char kMetricsLabelModelName[] = "model";
 constexpr char kMetricsLabelModelVersion[] = "version";
 constexpr char kMetricsLabelGpuUuid[] = "gpu_uuid";
+constexpr char kMetricsLabelGpuDeviceId[] = "device";
+constexpr char kMetricsLabelGpuDeviceIdPrefix[] = "nvidia";
 
 constexpr char kWarmupDataFolder[] = "warmup";
 constexpr char kInitialStateFolder[] = "initial_state";
