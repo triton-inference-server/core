@@ -27,6 +27,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "constants.h"
 #include "status.h"
@@ -50,10 +51,10 @@ class SharedLibrary {
 
   // Configuration so that dependent libraries will be searched for in
   // 'path' during OpenLibraryHandle.
-  Status SetLibraryDirectory(const std::string& path);
+  Status AddLibraryDirectory(const std::string& path, void** directory_cookie);
 
-  // Reset any configuration done by SetLibraryDirectory.
-  Status ResetLibraryDirectory();
+  // Removes a library directory set by AddLibraryDirectory.
+  Status RemoveLibraryDirectory(void* directory_cookie);
 
   // Open shared library and return generic handle.
   Status OpenLibraryHandle(const std::string& path, void** handle);
@@ -65,13 +66,17 @@ class SharedLibrary {
   Status GetEntrypoint(
       void* handle, const std::string& name, const bool optional, void** befn);
 
-  // Add an additional dependency directory to PATH.
-  Status AddAdditionalDependencyDir(
-      const std::string& additional_path, std::wstring& original_path);
+  // Add an additional dependency directories to load search.
+  Status SetAdditionalDependencyDirs(const std::string& additional_path);
 
-  // Restore PATH to its original configuration. Should be used in
-  // conjunction with AddAdditionalDependencyDir.
-  Status RemoveAdditionalDependencyDir(const std::wstring& original_path);
+#ifdef _WIN32
+ private:
+  Status SharedLibrary::AddAdditionalDependencyDirs();
+  Status SharedLibrary::RemoveAdditionalDependencyDirs();
+
+  std::vector<std::string> mAdditionalDependencyDirs;
+  std::vector<void*> mAdditionalDirHandles;
+#endif
 
  private:
   DISALLOW_COPY_AND_ASSIGN(SharedLibrary);

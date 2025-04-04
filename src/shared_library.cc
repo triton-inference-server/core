@@ -60,24 +60,44 @@ SharedLibrary::~SharedLibrary()
 }
 
 Status
-SharedLibrary::SetLibraryDirectory(const std::string& path)
+SharedLibrary::AddLibraryDirectory(
+    const std::string& path, void** directory_cookie)
 {
 #ifdef _WIN32
-  LOG_VERBOSE(1) << "SetLibraryDirectory: path = " << path;
+  LOG_VERBOSE(1) << "AddLibraryDirectory: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  if (!SetDllDirectoryW(wpath.c_str())) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
+  if (mAdditionalDependencyDirs.empty()) {
+    *directory_cookie = nullptr;
+    if (!SetDllDirectoryW(wpath.c_str())) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
 
-    return Status(
-        Status::Code::NOT_FOUND,
-        "unable to set dll path " + path + ": " + errstr);
+      return Status(
+          Status::Code::NOT_FOUND,
+          "unable to set dll path " + path + ": " + errstr);
+    }
+  } else {
+    *directory_cookie = AddDllDirectory(wpath.c_str());
+    if (*directory_cookie == nullptr) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
+
+      return Status(
+          Status::Code::NOT_FOUND,
+          "unable to add dll path " + path + ": " + errstr);
+    }
   }
 #endif
 
@@ -85,22 +105,38 @@ SharedLibrary::SetLibraryDirectory(const std::string& path)
 }
 
 Status
-SharedLibrary::ResetLibraryDirectory()
+SharedLibrary::RemoveLibraryDirectory(void* directory_cookie)
 {
 #ifdef _WIN32
-  LOG_VERBOSE(1) << "ResetLibraryDirectory";
-  if (!SetDllDirectoryW(NULL)) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
+  LOG_VERBOSE(1) << "RemoveLibraryDirectory";
+  if (mAdditionalDependencyDirs.empty()) {
+    if (!SetDllDirectoryW(NULL)) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
 
-    return Status(
-        Status::Code::NOT_FOUND, "unable to reset dll path: " + errstr);
+      return Status(
+          Status::Code::NOT_FOUND, "unable to reset dll path: " + errstr);
+    }
+  } else {
+    if (!RemoveDllDirectory(directory_cookie)) {
+      LPSTR err_buffer = nullptr;
+      size_t size = FormatMessageA(
+          FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+              FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+          (LPSTR)&err_buffer, 0, NULL);
+      std::string errstr(err_buffer, size);
+      LocalFree(err_buffer);
+
+      return Status(
+          Status::Code::NOT_FOUND, "unable to remove dll path: " + errstr);
+    }
   }
 #endif
 
@@ -126,17 +162,29 @@ SharedLibrary::OpenLibraryHandle(const std::string& path, void** handle)
   // Need to put shared library directory on the DLL path so that any
   // dependencies of the shared library are found
   const std::string library_dir = DirName(path);
-  RETURN_IF_ERROR(SetLibraryDirectory(library_dir));
+  void* directory_cookie = nullptr;
+  RETURN_IF_ERROR(AddLibraryDirectory(library_dir, &directory_cookie));
 
   // HMODULE is typedef of void*
   // https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types
   LOG_VERBOSE(1) << "OpenLibraryHandle: path = " << path;
   std::wstring wpath = LocalizedPath::GetWindowsValidPath(path);
-  *handle = LoadLibraryW(wpath.c_str());
+
+
+  RETURN_IF_ERROR(AddAdditionalDependencyDirs());
+
+  uint32_t load_flags = 0x00000000;
+  if (!mAdditionalDirHandles.empty()) {
+    load_flags =
+        LOAD_LIBRARY_SEARCH_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_USER_DIRS;
+  }
+  *handle = LoadLibraryExW(wpath.c_str(), NULL, load_flags);
+
+  RETURN_IF_ERROR(RemoveAdditionalDependencyDirs());
 
   // Remove the dll path added above... do this unconditionally before
   // check for failure in dll load.
-  RETURN_IF_ERROR(ResetLibraryDirectory());
+  RETURN_IF_ERROR(RemoveLibraryDirectory(directory_cookie));
 
   if (*handle == nullptr) {
     LPSTR err_buffer = nullptr;
@@ -244,13 +292,11 @@ SharedLibrary::GetEntrypoint(
   return Status::Success;
 }
 
+
 Status
-SharedLibrary::AddAdditionalDependencyDir(
-    const std::string& additional_path, std::wstring& original_path)
+SharedLibrary::SetAdditionalDependencyDirs(const std::string& additional_path)
 {
 #ifdef _WIN32
-  const std::wstring PATH(L"Path");
-
   if (additional_path.back() != ';') {
     return Status(
         Status::Code::INVALID_ARG,
@@ -258,45 +304,14 @@ SharedLibrary::AddAdditionalDependencyDir(
         "Each additional path provided should terminate with a ';'.");
   }
 
-  DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
-  if (len > 0) {
-    original_path.resize(len);
-    GetEnvironmentVariableW(PATH.c_str(), &original_path[0], len);
-  } else {
-    original_path = L"";
+  size_t pos = 0, pos_end = 0;
+  std::string token;
+  while ((pos_end = additional_path.find(';', pos)) != std::string::npos) {
+    token = additional_path.substr(pos, pos_end - pos);
+    mAdditionalDependencyDirs.push_back(token);
+    pos = pos_end + 1;
   }
 
-  LOG_VERBOSE(1) << "Environment before extending PATH: "
-                 << std::string(original_path.begin(), original_path.end());
-
-  std::wstring updated_path_value =
-      std::wstring(additional_path.begin(), additional_path.end());
-  updated_path_value += original_path;
-
-  if (!SetEnvironmentVariableW(PATH.c_str(), updated_path_value.c_str())) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
-    return Status(
-        Status::Code::INTERNAL,
-        "failed to append user-provided directory to PATH " + errstr);
-  }
-
-  if (LOG_VERBOSE_IS_ON(1)) {
-    std::wstring path_after;
-    len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
-    if (len > 0) {
-      path_after.resize(len);
-      GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
-    }
-    LOG_VERBOSE(1) << "Environment after extending PATH: "
-                   << std::string(path_after.begin(), path_after.end());
-  }
 #else
   LOG_WARNING
       << "The parameter \"additional-dependency-dirs\" has been specified but "
@@ -306,37 +321,49 @@ SharedLibrary::AddAdditionalDependencyDir(
   return Status::Success;
 }
 
-Status
-SharedLibrary::RemoveAdditionalDependencyDir(const std::wstring& original_path)
-{
 #ifdef _WIN32
-  const std::wstring PATH(L"Path");
-  if (!SetEnvironmentVariableW(PATH.c_str(), original_path.c_str())) {
-    LPSTR err_buffer = nullptr;
-    size_t size = FormatMessageA(
-        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-            FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        (LPSTR)&err_buffer, 0, NULL);
-    std::string errstr(err_buffer, size);
-    LocalFree(err_buffer);
-    return Status(
-        Status::Code::INTERNAL,
-        "failed to restore PATH to its original configuration " + errstr);
+Status
+SharedLibrary::AddAdditionalDependencyDirs()
+{
+  LOG_VERBOSE(1) << "Adding " << mAdditionalDependencyDirs.size()
+                 << " additional directories to search for dependencies";
+  for (auto it = mAdditionalDependencyDirs.begin();
+       it != mAdditionalDependencyDirs.end(); it++) {
+    void* additional_dir_cookie = nullptr;
+    RETURN_IF_ERROR(AddLibraryDirectory(*it, &additional_dir_cookie));
+    mAdditionalDirHandles.push_back(additional_dir_cookie);
   }
 
-  if (LOG_VERBOSE_IS_ON(1)) {
-    std::wstring path_after;
-    DWORD len = GetEnvironmentVariableW(PATH.c_str(), NULL, 0);
-    if (len > 0) {
-      path_after.resize(len);
-      GetEnvironmentVariableW(PATH.c_str(), &path_after[0], len);
-    }
-    LOG_VERBOSE(1) << "Environment after restoring PATH: "
-                   << std::string(path_after.begin(), path_after.end());
-  }
-#endif
   return Status::Success;
 }
+
+Status
+SharedLibrary::RemoveAdditionalDependencyDirs()
+{
+  for (auto it = mAdditionalDirHandles.begin();
+       it != mAdditionalDirHandles.end(); it++) {
+    if (*it == nullptr) {
+      return Status(
+          Status::Code::INTERNAL,
+          "failed to remove a non-existent additional directory ");
+    }
+
+    if (RemoveDllDirectory(*it)) {
+      if (LOG_VERBOSE_IS_ON(1)) {
+        LOG_VERBOSE(1) << "Removed an additional directory.";
+      }
+    } else {
+      if (LOG_VERBOSE_IS_ON(1)) {
+        LOG_VERBOSE(1) << "Failed to remove additional directory.";
+      }
+      return Status(
+          Status::Code::INTERNAL, "unable to remove dependency directory");
+    }
+  }
+  mAdditionalDirHandles.clear();
+
+  return Status::Success;
+}
+#endif
 
 }}  // namespace triton::core

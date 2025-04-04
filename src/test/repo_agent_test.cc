@@ -198,12 +198,13 @@ SharedLibrary::Acquire(std::unique_ptr<SharedLibrary>* slib)
 
 SharedLibrary::~SharedLibrary() {}
 Status
-SharedLibrary::SetLibraryDirectory(const std::string& path)
+SharedLibrary::AddLibraryDirectory(
+    const std::string& path, void** directory_cookie)
 {
   return Status::Success;
 }
 Status
-SharedLibrary::ResetLibraryDirectory()
+SharedLibrary::RemoveLibraryDirectory(void* directory_cookie)
 {
   return Status::Success;
 }
