@@ -62,6 +62,7 @@ constexpr char kPythonBackend[] = "python";
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 constexpr char kEnsemblePlatform[] = "ensemble";
+constexpr uint64_t ENSEMBLE_CB_POOL_SIZE = 8u;
 #endif  // TRITON_ENABLE_ENSEMBLE
 
 constexpr char kTensorRTExecutionAccelerator[] = "tensorrt";
