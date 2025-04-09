@@ -27,6 +27,7 @@
 #include "backend_manager.h"
 
 #include <algorithm>
+#include <vector>
 
 #include "backend_memory_manager.h"
 #include "server_message.h"
@@ -96,12 +97,14 @@ TritonBackend::Create(
   if (local_backend->backend_init_fn_ != nullptr) {
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
-    RETURN_IF_ERROR(slib->SetLibraryDirectory(local_backend->dir_));
+    void* directory_cookie = nullptr;
+    RETURN_IF_ERROR(
+        slib->AddLibraryDirectory(local_backend->dir_, &directory_cookie));
 
     TRITONSERVER_Error* err = local_backend->backend_init_fn_(
         reinterpret_cast<TRITONBACKEND_Backend*>(local_backend.get()));
 
-    RETURN_IF_ERROR(slib->ResetLibraryDirectory());
+    RETURN_IF_ERROR(slib->RemoveLibraryDirectory(directory_cookie));
     RETURN_IF_TRITONSERVER_ERROR(err);
   }
 
@@ -192,17 +195,12 @@ TritonBackend::LoadBackendLibrary(
     std::unique_ptr<SharedLibrary> slib;
     RETURN_IF_ERROR(SharedLibrary::Acquire(&slib));
 
-    std::wstring original_path;
     if (!additional_dependency_dir_path.empty()) {
-      RETURN_IF_ERROR(slib->AddAdditionalDependencyDir(
-          additional_dependency_dir_path, original_path));
+      RETURN_IF_ERROR(
+          slib->SetAdditionalDependencyDirs(additional_dependency_dir_path));
     }
 
     RETURN_IF_ERROR(slib->OpenLibraryHandle(libpath_, &dlhandle_));
-
-    if (!additional_dependency_dir_path.empty()) {
-      RETURN_IF_ERROR(slib->RemoveAdditionalDependencyDir(original_path));
-    }
 
     // Backend initialize and finalize functions, optional
     RETURN_IF_ERROR(slib->GetEntrypoint(
