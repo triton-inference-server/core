@@ -757,6 +757,59 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
 
 #endif  // TRITON_ENABLE_GPU
 
+TEST_F(InputByteSizeTest, BatchSizeOverflowInt32)
+{
+  const char* model_name = "onnx_zero_1_bool";
+  // Create an inference request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestNew(
+          &irequest_, server_, model_name, -1 /* model_version */),
+      "creating inference request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetReleaseCallback(
+          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
+      "setting request release callback");
+
+  // Define input shape and data
+  int64_t batch_size = 1LL << 31;
+  std::vector<int64_t> shape{batch_size, 1};
+  std::vector<uint8_t> input_data(batch_size, 1);
+  const auto input0_byte_size = sizeof(input_data[0]) * input_data.size();
+
+  // Set input for the request
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAddInput(
+          irequest_, "INPUT0", TRITONSERVER_TYPE_BOOL, shape.data(),
+          shape.size()),
+      "setting input for the request");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestAppendInputData(
+          irequest_, "INPUT0", input_data.data(), input0_byte_size,
+          TRITONSERVER_MEMORY_CPU, 0),
+      "assigning INPUT data");
+
+  std::promise<TRITONSERVER_InferenceResponse*> p;
+  std::future<TRITONSERVER_InferenceResponse*> future = p.get_future();
+
+  // Set response callback
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestSetResponseCallback(
+          irequest_, allocator_, nullptr /* response_allocator_userp */,
+          InferResponseComplete, reinterpret_cast<void*>(&p)),
+      "setting response callback");
+
+  // Run inference
+  FAIL_TEST_IF_SUCCESS(
+      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
+      "expect error with inference request",
+      "inference request batch-size must be <= 8 for '" +
+          std::string{model_name} + "'");
+
+  // Need to manually delete request, otherwise server will not shut down.
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_InferenceRequestDelete(irequest_),
+      "deleting inference request");
+}
 }  // namespace
 
 int
