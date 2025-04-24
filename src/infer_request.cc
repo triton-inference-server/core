@@ -1076,7 +1076,7 @@ InferenceRequest::Normalize()
 
   // Make sure request batch-size doesn't exceed what is supported by
   // the model.
-  if ((int)batch_size_ > model_config.max_batch_size()) {
+  if (static_cast<int64_t>(batch_size_) > model_config.max_batch_size()) {
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "inference request batch-size must be <= " +
@@ -1201,10 +1201,8 @@ InferenceRequest::Normalize()
       // Non-linear IO format input byte size validation will be handled in the
       // TensorRT backend.
       if (!input.IsNonLinearFormatIo()) {
-        TRITONSERVER_MemoryType input_memory_type;
         if (data_type == inference::DataType::TYPE_STRING) {
-          RETURN_IF_ERROR(ValidateBytesInputs(
-              input_name, input, model_name, &input_memory_type));
+          RETURN_IF_ERROR(ValidateBytesInputs(input_name, input, model_name));
         } else {
           // Shape tensor with dynamic batching does not introduce a new
           // dimension to the tensor but adds an additional value to the 1-D
@@ -1300,8 +1298,7 @@ InferenceRequest::ValidateRequestInputs() const
 Status
 InferenceRequest::ValidateBytesInputs(
     const std::string& input_name, const Input& input,
-    const std::string& model_name,
-    TRITONSERVER_MemoryType* buffer_memory_type) const
+    const std::string& model_name) const
 {
   const auto& input_dims = input.ShapeWithBatchDim();
 
@@ -1320,14 +1317,15 @@ InferenceRequest::ValidateBytesInputs(
   while (remaining_buffer_size || buffer_next_idx < buffer_count) {
     // Get the next buffer if not currently processing one.
     if (!remaining_buffer_size) {
+      TRITONSERVER_MemoryType buffer_memory_type;
       // Reset remaining buffer size and pointers for next buffer.
       RETURN_IF_ERROR(input.DataBuffer(
           buffer_next_idx++, (const void**)(&buffer), &remaining_buffer_size,
-          buffer_memory_type, &buffer_memory_id));
+          &buffer_memory_type, &buffer_memory_id));
 
       // GPU tensors are validated at platform backends to avoid additional
       // data copying. Check "ValidateStringBuffer" in backend_common.cc.
-      if (*buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
+      if (buffer_memory_type == TRITONSERVER_MEMORY_GPU) {
         return Status::Success;
       }
     }
