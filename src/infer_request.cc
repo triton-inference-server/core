@@ -1107,55 +1107,55 @@ InferenceRequest::Normalize()
     }
 
     // Validate input shape
-    {
-      bool match_config = true;
-      const auto& config_dims = input_config->dims();
-      const auto& input_dims = *shape;
-      if (config_dims.size() != (int64_t)input_dims.size()) {
-        match_config = false;
-      } else {
-        for (int i = 0; i < config_dims.size(); ++i) {
-          if (input_dims[i] == triton::common::WILDCARD_DIM) {
-            return Status(
-                Status::Code::INVALID_ARG,
-                LogRequest() +
-                    "All input dimensions should be specified for input '" +
-                    input_name + "' for model '" + model_name + "', got " +
-                    triton::common::DimsListToString(input.OriginalShape()));
-          } else if (
-              (config_dims[i] != triton::common::WILDCARD_DIM) &&
-              (config_dims[i] != input_dims[i])) {
-            match_config = false;
-            break;
-          }
-        }
-      }
-
-      if (!match_config) {
-        triton::common::DimsList full_dims;
-        std::string implicit_batch_note = "";
-        if (model_config.max_batch_size() > 0) {
-          full_dims.Add(triton::common::WILDCARD_DIM);
-          implicit_batch_note =
-              "NOTE: Setting a non-zero max_batch_size in the model config "
-              "requires a batch dimension to be prepended to each input shape. "
-              "If you want to specify the full shape including the batch dim "
-              "in your input dims config, try setting max_batch_size to zero. "
-              "See the model configuration docs for more info on "
-              "max_batch_size.";
-        }
-        for (int i = 0; i < input_config->dims_size(); ++i) {
-          full_dims.Add(input_config->dims(i));
-        }
-        return Status(
-            Status::Code::INVALID_ARG,
-            LogRequest() + "unexpected shape for input '" + input_name +
-                "' for model '" + model_name + "'. Expected " +
-                triton::common::DimsListToString(full_dims) + ", got " +
-                triton::common::DimsListToString(input.OriginalShape()) + ". " +
-                implicit_batch_note);
-      }
-    }
+    //{
+    //  bool match_config = true;
+    //  const auto& config_dims = input_config->dims();
+    //  const auto& input_dims = *shape;
+    //  if (config_dims.size() != (int64_t)input_dims.size()) {
+    //    match_config = false;
+    //  } else {
+    //    for (int i = 0; i < config_dims.size(); ++i) {
+    //      if (input_dims[i] == triton::common::WILDCARD_DIM) {
+    //        return Status(
+    //            Status::Code::INVALID_ARG,
+    //            LogRequest() +
+    //                "All input dimensions should be specified for input '" +
+    //                input_name + "' for model '" + model_name + "', got " +
+    //                triton::common::DimsListToString(input.OriginalShape()));
+    //      } else if (
+    //          (config_dims[i] != triton::common::WILDCARD_DIM) &&
+    //          (config_dims[i] != input_dims[i])) {
+    //        match_config = false;
+    //        break;
+    //      }
+    //    }
+    //  }
+//
+    //  if (!match_config) {
+    //    triton::common::DimsList full_dims;
+    //    std::string implicit_batch_note = "";
+    //    if (model_config.max_batch_size() > 0) {
+    //      full_dims.Add(triton::common::WILDCARD_DIM);
+    //      implicit_batch_note =
+    //          "NOTE: Setting a non-zero max_batch_size in the model config "
+    //          "requires a batch dimension to be prepended to each input shape. "
+    //          "If you want to specify the full shape including the batch dim "
+    //          "in your input dims config, try setting max_batch_size to zero. "
+    //          "See the model configuration docs for more info on "
+    //          "max_batch_size.";
+    //    }
+    //    for (int i = 0; i < input_config->dims_size(); ++i) {
+    //      full_dims.Add(input_config->dims(i));
+    //    }
+    //    return Status(
+    //        Status::Code::INVALID_ARG,
+    //        LogRequest() + "unexpected shape for input '" + input_name +
+    //            "' for model '" + model_name + "'. Expected " +
+    //            triton::common::DimsListToString(full_dims) + ", got " +
+    //            triton::common::DimsListToString(input.OriginalShape()) + ". " +
+    //            implicit_batch_note);
+    //  }
+    //}
 
     // If there is a reshape for this input then adjust them to
     // match the reshape. As reshape may have variable-size
