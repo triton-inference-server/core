@@ -331,8 +331,6 @@ class EnsembleContext {
   void CacheEnsembleTopLevelRequest(
       std::unique_ptr<InferenceResponse>& response);
 
-  triton::common::ThreadPool* CallbackPool() const { return callback_pool_; }
-
   InferenceServer* is_;
 
   EnsembleInfo* info_;
@@ -382,10 +380,6 @@ class EnsembleContext {
       TRITONSERVER_ResponseAllocator,
       decltype(&TRITONSERVER_ResponseAllocatorDelete)>
       allocator_;
-
-  // The thread pool used to execute ensemble callbacks and reduce e2e latency.
-  // The thread pool is managed by InferenceServer.
-  triton::common::ThreadPool* const callback_pool_;
 };
 
 EnsembleContext::EnsembleContext(
@@ -394,8 +388,7 @@ EnsembleContext::EnsembleContext(
     EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
     cudaStream_t stream, triton::common::ThreadPool* callback_pool)
     : is_(is), info_(info), stream_(stream), inflight_step_counter_(0),
-      allocator_(nullptr, TRITONSERVER_ResponseAllocatorDelete),
-      callback_pool_(callback_pool)
+      allocator_(nullptr, TRITONSERVER_ResponseAllocatorDelete)
 {
   uint64_t compute_start_ns = 0;
   INFER_STATS_SET_TIMESTAMP(compute_start_ns);
@@ -642,26 +635,14 @@ void
 EnsembleContext::ResponseComplete(
     TRITONSERVER_InferenceResponse* response, const uint32_t flags, void* userp)
 {
-  auto step_raw_ptr = reinterpret_cast<Step*>(userp);
-  auto pool = step_raw_ptr->ctx_->CallbackPool();
-  auto fn = [response, flags, step_raw_ptr]() {
-    auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
-    step_ptr->response_flags_ = flags;
-    step_ptr->response_ = response;
+  auto step_ptr = std::unique_ptr<Step>(reinterpret_cast<Step*>(userp));
+  step_ptr->response_flags_ = flags;
+  step_ptr->response_ = response;
 
-    EnsembleContext::Proceed(step_ptr->ctx_, step_ptr);
-    // Expecting more responses
-    if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) == 0) {
-      step_ptr.release();
-    }
-  };
-
-  // Attempt to enqueue the callback. If all workers are busy and queue is at
-  // capacity, execute the callback immediately.
-  if (pool->TaskQueueSize() < pool->Size()) {
-    pool->Enqueue(fn);
-  } else {
-    fn();
+  EnsembleContext::Proceed(step_ptr->ctx_, step_ptr);
+  // Expecting more responses
+  if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) == 0) {
+    step_ptr.release();
   }
 }
 
