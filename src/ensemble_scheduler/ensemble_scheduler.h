@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -36,7 +36,6 @@
 #include "scheduler.h"
 #include "scheduler_utils.h"
 #include "status.h"
-#include "triton/common/thread_pool.h"
 
 #ifdef TRITON_ENABLE_GPU
 #include <cuda_runtime_api.h>
@@ -108,8 +107,6 @@ class EnsembleScheduler : public Scheduler {
   // \see Scheduler::Stop()
   void Stop() override {}
 
-  triton::common::ThreadPool* CallbackPool() const { return callback_pool_; }
-
  private:
   EnsembleScheduler(
       InferenceStatsAggregator* const stats_aggregator,
@@ -131,10 +128,6 @@ class EnsembleScheduler : public Scheduler {
   cudaStream_t stream_;
 
   std::atomic<size_t> inflight_count_;
-
-  // Fixed-size thread pool to run callbacks at end of each ensemble step.
-  // Managed by the server.
-  triton::common::ThreadPool* callback_pool_;
 };
 
 }}  // namespace triton::core
