@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -52,10 +52,12 @@ class RequestTracker {
   explicit RequestTracker(
       std::unique_ptr<InferenceRequest>&& request, uint64_t compute_start_ns,
       MetricModelReporter* metric_reporter,
-      InferenceStatsAggregator* stats_aggregator)
+      InferenceStatsAggregator* stats_aggregator,
+      triton::common::ThreadPool* callback_pool)
       : inflight_request_counter_(1), request_(std::move(request)),
         compute_start_ns_(compute_start_ns), metric_reporter_(metric_reporter),
-        stats_aggregator_(stats_aggregator), status_(Status::Success)
+        stats_aggregator_(stats_aggregator), status_(Status::Success),
+        callback_pool_(callback_pool)
   {
   }
 
@@ -69,6 +71,8 @@ class RequestTracker {
   {
     return context_stats_aggregator_;
   }
+
+  triton::common::ThreadPool* CallbackPool() const { return callback_pool_; }
 
   void IncrementCounter()
   {
@@ -120,6 +124,7 @@ class RequestTracker {
   InferenceStatsAggregator* stats_aggregator_;
   InferenceStatsAggregator context_stats_aggregator_;
   Status status_;
+  triton::common::ThreadPool* const callback_pool_;
 };
 
 // Step is used as 'userp' and keeps ensemble context alive
@@ -237,7 +242,7 @@ class EnsembleContext {
       MetricModelReporter* metric_reporter,
       InferenceStatsAggregator* stats_aggregator, InferenceServer* is,
       EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
-      cudaStream_t stream);
+      cudaStream_t stream, triton::common::ThreadPool* callback_pool);
 
   // Perform transition on 'context' state given the information of
   // 'completed_step'
@@ -326,6 +331,8 @@ class EnsembleContext {
   void CacheEnsembleTopLevelRequest(
       std::unique_ptr<InferenceResponse>& response);
 
+  triton::common::ThreadPool* CallbackPool() const { return callback_pool_; }
+
   InferenceServer* is_;
 
   EnsembleInfo* info_;
@@ -375,20 +382,26 @@ class EnsembleContext {
       TRITONSERVER_ResponseAllocator,
       decltype(&TRITONSERVER_ResponseAllocatorDelete)>
       allocator_;
+
+  // The thread pool used to execute ensemble callbacks and reduce e2e latency.
+  // The thread pool is managed by InferenceServer.
+  triton::common::ThreadPool* const callback_pool_;
 };
 
 EnsembleContext::EnsembleContext(
     MetricModelReporter* metric_reporter,
     InferenceStatsAggregator* stats_aggregator, InferenceServer* is,
     EnsembleInfo* info, std::unique_ptr<InferenceRequest>& request,
-    cudaStream_t stream)
+    cudaStream_t stream, triton::common::ThreadPool* callback_pool)
     : is_(is), info_(info), stream_(stream), inflight_step_counter_(0),
-      allocator_(nullptr, TRITONSERVER_ResponseAllocatorDelete)
+      allocator_(nullptr, TRITONSERVER_ResponseAllocatorDelete),
+      callback_pool_(callback_pool)
 {
   uint64_t compute_start_ns = 0;
   INFER_STATS_SET_TIMESTAMP(compute_start_ns);
   request_tracker_ = new RequestTracker(
-      std::move(request), compute_start_ns, metric_reporter, stats_aggregator);
+      std::move(request), compute_start_ns, metric_reporter, stats_aggregator,
+      callback_pool);
 
   auto& lrequest = request_tracker_->Request();
 
@@ -603,14 +616,25 @@ void
 EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
-    LOG_TRITONSERVER_ERROR(
-        TRITONSERVER_InferenceRequestDelete(request),
-        "deleting ensemble inference request");
-    auto request_tracker = reinterpret_cast<RequestTracker*>(userp);
-    if (request_tracker->DecrementCounter()) {
-      delete request_tracker;
+  auto request_tracker = reinterpret_cast<RequestTracker*>(userp);
+  auto pool = request_tracker->CallbackPool();
+  auto fn = [request, flags, request_tracker]() {
+    if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
+      LOG_TRITONSERVER_ERROR(
+          TRITONSERVER_InferenceRequestDelete(request),
+          "deleting ensemble inference request");
+      if (request_tracker->DecrementCounter()) {
+        delete request_tracker;
+      }
     }
+  };
+
+  // Attempt to enqueue the callback. If all workers are busy and queue is at
+  // capacity, execute the callback immediately.
+  if (pool->TaskQueueSize() < pool->Size()) {
+    pool->Enqueue(fn);
+  } else {
+    fn();
   }
 }
 
@@ -618,14 +642,26 @@ void
 EnsembleContext::ResponseComplete(
     TRITONSERVER_InferenceResponse* response, const uint32_t flags, void* userp)
 {
-  auto step_ptr = std::unique_ptr<Step>(reinterpret_cast<Step*>(userp));
-  step_ptr->response_flags_ = flags;
-  step_ptr->response_ = response;
+  auto step_raw_ptr = reinterpret_cast<Step*>(userp);
+  auto pool = step_raw_ptr->ctx_->CallbackPool();
+  auto fn = [response, flags, step_raw_ptr]() {
+    auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
+    step_ptr->response_flags_ = flags;
+    step_ptr->response_ = response;
 
-  EnsembleContext::Proceed(step_ptr->ctx_, step_ptr);
-  // Expecting more responses
-  if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) == 0) {
-    step_ptr.release();
+    EnsembleContext::Proceed(step_ptr->ctx_, step_ptr);
+    // Expecting more responses
+    if ((flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) == 0) {
+      step_ptr.release();
+    }
+  };
+
+  // Attempt to enqueue the callback. If all workers are busy and queue is at
+  // capacity, execute the callback immediately.
+  if (pool->TaskQueueSize() < pool->Size()) {
+    pool->Enqueue(fn);
+  } else {
+    fn();
   }
 }
 
@@ -1448,7 +1484,7 @@ EnsembleScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
   RETURN_IF_ERROR(request->SetState(InferenceRequest::State::EXECUTING));
   std::shared_ptr<EnsembleContext> context(new EnsembleContext(
       metric_reporter_.get(), stats_aggregator_, is_, info_.get(), request,
-      stream_));
+      stream_, callback_pool_));
   EnsembleContext::Proceed(context);
   return Status::Success;
 }
@@ -1537,6 +1573,7 @@ EnsembleScheduler::EnsembleScheduler(
       info_->tensor_to_prev_step_.emplace(pair.second, step_idx);
     }
   }
+  callback_pool_ = is_->EnsembleCallbackPool();
 }
 
 EnsembleScheduler::~EnsembleScheduler()
