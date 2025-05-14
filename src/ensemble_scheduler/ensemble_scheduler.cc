@@ -45,6 +45,32 @@ class EnsembleContext;
 
 using IterationCount = size_t;
 
+// Check if the model is configured to preserve the order of responses.
+// This is critical for async execution of ResponseComplete callbacks.
+inline bool
+preserve_responses_order(const inference::ModelConfig& config)
+{
+  uint64_t total_instance_groups = 0;
+  for (const auto& group : config.instance_group()) {
+    total_instance_groups += group.count();
+  }
+
+  // Case 1: Sequence batching is enabled
+  // Case 2: Dynamic batching is disabled and there is only one instance group
+  // Case 3: Dynamic batching is enabled and preserve_ordering is true
+  // Case 4: Model transaction policy is decoupled (breaks RequestTracker
+  // lifecycle)
+  // Note: Although decoupled models do not preserve the order of
+  // responses, if the final response callback is not executed in the last step,
+  // the RequestTracker object will be freed prematurely and led to segmentation
+  // fault.
+  return config.has_sequence_batching() ||
+         (!config.has_dynamic_batching() && total_instance_groups <= 1) ||
+         (config.has_dynamic_batching() &&
+          config.dynamic_batching().preserve_ordering()) ||
+         config.model_transaction_policy().decoupled();
+}
+
 // Request tracker is passed as 'userp' in RequestRelease function and used
 // to manage the lifecycle of the ensemble request
 class RequestTracker {
@@ -134,9 +160,9 @@ class RequestTracker {
 struct Step {
   Step(
       size_t step_idx, const InferenceRequest::SequenceId& correlation_id,
-      uint32_t flags)
+      uint32_t flags, bool preserve_responses_order)
       : correlation_id_(correlation_id), flags_(flags), response_flags_(0),
-        step_idx_(step_idx)
+        preserve_responses_order_(preserve_responses_order), step_idx_(step_idx)
   {
   }
 
@@ -159,7 +185,7 @@ struct Step {
   // returning from the callback.
   uint32_t response_flags_;
   TRITONSERVER_InferenceResponse* response_;
-
+  const bool preserve_responses_order_;
 
   size_t step_idx_;
 };
@@ -630,7 +656,7 @@ EnsembleContext::RequestComplete(
   };
 
   // Attempt to enqueue the callback. If all workers are busy and queue is at
-  // capacity, execute the callback immediately.
+  // capacity, execute the callback immediately in current thread.
   if (pool->TaskQueueSize() < pool->Size()) {
     pool->Enqueue(fn);
   } else {
@@ -657,8 +683,13 @@ EnsembleContext::ResponseComplete(
   };
 
   // Attempt to enqueue the callback. If all workers are busy and queue is at
-  // capacity, execute the callback immediately.
-  if (pool->TaskQueueSize() < pool->Size()) {
+  // capacity, execute the callback immediately in current thread.
+  // Note: The async callback optimization does not guarantee the order of
+  // responses and expolit cases where responses can be out-of-order. For models
+  // required to preserve the order of responses, the response callbacks must be
+  // executed in the same thread synchronously.
+  if (!step_raw_ptr->preserve_responses_order_ &&
+      pool->TaskQueueSize() < pool->Size()) {
     pool->Enqueue(fn);
   } else {
     fn();
@@ -1007,8 +1038,8 @@ EnsembleContext::InitStep(
   for (const auto& pair : istep.output_to_tensor_) {
     irequest->AddOriginalRequestedOutput(pair.first);
   }
-
-  step->reset(new Step(step_idx, correlation_id, flags));
+  const bool preserve_order = preserve_responses_order(model->Config());
+  step->reset(new Step(step_idx, correlation_id, flags, preserve_order));
 
   irequest->SetId(request_id_);
   irequest->SetCorrelationId(correlation_id);
