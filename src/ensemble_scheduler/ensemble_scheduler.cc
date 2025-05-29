@@ -58,12 +58,9 @@ preserve_responses_order(const inference::ModelConfig& config)
   // Case 1: Sequence batching is enabled
   // Case 2: Dynamic batching is disabled and there is only one instance group
   // Case 3: Dynamic batching is enabled and preserve_ordering is true
-  // Case 4: Model transaction policy is decoupled (breaks RequestTracker
-  // lifecycle)
-  // Note: Although decoupled models do not preserve the order of
-  // responses, if the final response callback is not executed in the last step,
-  // the RequestTracker object will be freed prematurely and led to segmentation
-  // fault.
+  // Case 4: Model transaction policy is decoupled (if the final response
+  // callback is not executed in the last step, the RequestTracker object will
+  // be freed prematurely and led to segmentation fault)
   return config.has_sequence_batching() ||
          (!config.has_dynamic_batching() && total_instance_groups <= 1) ||
          (config.has_dynamic_batching() &&
