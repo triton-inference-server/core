@@ -179,7 +179,7 @@ class Model:
 
         request = inference_request._create_tritonserver_inference_request()
         self._server.infer_async(request)
-        return AsyncResponseIterator(self, request, inference_request)
+        return AsyncResponseIterator(self, request, inference_request, raise_on_error)
 
     def infer(
         self,
@@ -250,7 +250,7 @@ class Model:
 
         request = inference_request._create_tritonserver_inference_request()
         self._server.infer_async(request)
-        return ResponseIterator(self, request, inference_request)
+        return ResponseIterator(self, request, inference_request, raise_on_error)
 
     def metadata(self) -> dict[str, Any]:
         """Returns medatadata about a model and its inputs and outputs
