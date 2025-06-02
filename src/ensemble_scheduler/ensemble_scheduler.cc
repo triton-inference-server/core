@@ -669,7 +669,7 @@ EnsembleContext::ConsumeResponse(const std::unique_ptr<Step>& completed_step)
             break;
           case TRITONSERVER_PARAMETER_STRING:
             correlation_id = InferenceRequest::SequenceId(
-                std::string(*reinterpret_cast<const char* const*>(vvalue)));
+                std::string(reinterpret_cast<const char*>(vvalue)));
             parameter_override = true;
             break;
           default:
