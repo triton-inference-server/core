@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -332,6 +332,13 @@ class InferenceServer {
     return cache_manager_;
   }
 
+#ifdef TRITON_ENABLE_ENSEMBLE
+  triton::common::ThreadPool* EnsembleCallbackPool() const
+  {
+    return ensemble_cb_pool_.get();
+  }
+#endif  // TRITON_ENABLE_ENSEMBLE
+
  private:
   const std::string version_;
   std::string id_;
@@ -375,6 +382,12 @@ class InferenceServer {
   std::unique_ptr<ModelRepositoryManager> model_repository_manager_;
   std::shared_ptr<TritonBackendManager> backend_manager_;
   std::shared_ptr<TritonCacheManager> cache_manager_;
+
+#ifdef TRITON_ENABLE_ENSEMBLE
+  // The thread pool for all ensemble models to execute callbacks
+  // asynchronously.
+  std::unique_ptr<triton::common::ThreadPool> ensemble_cb_pool_;
+#endif  // TRITON_ENABLE_ENSEMBLE
 };
 
 }}  // namespace triton::core
