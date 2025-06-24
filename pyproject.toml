@@ -30,7 +30,7 @@ authors = [{ name = "NVIDIA Inc.", email = "sw-dl-triton@nvidia.com" }]
 description = "Triton Inference Server In-Process Python API"
 license = { file = "LICENSE.txt" }
 dynamic = ["version"]
-dependencies = ["numpy<2"]
+dependencies = ["numpy"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -62,7 +62,6 @@ requires = [
     "wheel==0.44.0",
     # For stubgen:
     "mypy==1.11.0",
-    "numpy<2",
 ]
 build-backend = "setuptools.build_meta"
 
