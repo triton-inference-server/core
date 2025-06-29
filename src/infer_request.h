@@ -271,6 +271,7 @@ class InferenceRequest {
     SequenceId();
     SequenceId(const std::string& sequence_label);
     SequenceId(uint64_t sequence_index);
+    SequenceId(const SequenceId& other) = default;
     SequenceId& operator=(const SequenceId& rhs) = default;
     SequenceId& operator=(const std::string& rhs);
     SequenceId& operator=(const uint64_t rhs);
@@ -289,8 +290,8 @@ class InferenceRequest {
    private:
     friend std::ostream& operator<<(
         std::ostream& out, const InferenceRequest::SequenceId& correlation_id);
-    friend bool operator==(const SequenceId lhs, const SequenceId rhs);
-    friend bool operator!=(const SequenceId lhs, const SequenceId rhs);
+    friend bool operator==(const SequenceId& lhs, const SequenceId& rhs);
+    friend bool operator!=(const SequenceId& lhs, const SequenceId& rhs);
 
     std::string sequence_label_;
     uint64_t sequence_index_;
@@ -802,7 +803,6 @@ class InferenceRequest {
   // The model version as requested and based on version policy the
   // specific version that is actually used for inference.
   int64_t requested_model_version_;
-  int64_t actual_model_version_;
 
   std::string id_;
 
@@ -851,11 +851,6 @@ class InferenceRequest {
   uint64_t cache_lookup_start_ns_;
   uint64_t cache_lookup_end_ns_;
 
-  // Cache insertion start/end timestamps. Cache manages its own stats even
-  // when statistics are not being colleceted.
-  uint64_t cache_insertion_start_ns_;
-  uint64_t cache_insertion_end_ns_;
-
   // Dedicated timestamp for batcher internal which can diverge from
   // queue start timestamp to provide accurate queue time without affecting
   // batcher functionalities.
@@ -900,8 +895,8 @@ std::ostream& operator<<(
 std::ostream& operator<<(
     std::ostream& out, const InferenceRequest::SequenceId& sequence_id);
 bool operator==(
-    const InferenceRequest::SequenceId lhs,
-    const InferenceRequest::SequenceId rhs);
+    const InferenceRequest::SequenceId& lhs,
+    const InferenceRequest::SequenceId& rhs);
 }}  // namespace triton::core
 
 namespace std {
