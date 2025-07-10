@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: nvcr.io/nvidia/tritonserver:24.10-py3
+      image: nvcr.io/nvidia/tritonserver:25.06-py3
       volumes:
         - ${{ github.workspace }}:/core
         # Mount /usr so we can free space
