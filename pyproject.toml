@@ -30,7 +30,7 @@ authors = [{ name = "NVIDIA Inc.", email = "sw-dl-triton@nvidia.com" }]
 description = "Triton Inference Server In-Process Python API"
 license = { file = "LICENSE.txt" }
 dynamic = ["version"]
-dependencies = ["numpy"]
+dependencies = ["numpy<2"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
