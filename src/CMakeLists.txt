@@ -55,8 +55,6 @@ FetchContent_MakeAvailable(repo-common)
 #
 if(${TRITON_ENABLE_GPU})
   find_package(CUDAToolkit REQUIRED)
-  find_package(CUDA REQUIRED)
-  message(STATUS "Using CUDA ${CUDA_VERSION}")
 endif() # TRITON_ENABLE_GPU
 
 #
@@ -371,13 +369,13 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
   )
 
-  if(CUDA_VERSION VERSION_GREATER "10.1" OR CUDA_VERSION VERSION_EQUAL "10.1")
+  if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "10.1")
     target_compile_definitions(
       triton-core
       PRIVATE TRITON_ENABLE_CUDA_GRAPH=1
     )
   else()
-    message(WARNING "CUDA ${CUDA_VERSION} does not support CUDA graphs.")
+    message(WARNING "CUDA ${CUDAToolkit_VERSION} does not support CUDA graphs.")
   endif()
 endif() # TRITON_ENABLE_GPU
 
