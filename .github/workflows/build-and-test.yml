@@ -60,7 +60,7 @@ jobs:
             -DTRITON_CORE_HEADERS_ONLY=OFF \
             -S /core \
             -B /core/build
-          cmake --build /core/build --parallel 8 -v
+          cmake --build /core/build --parallel 8 -v -t install
         working-directory: /core
 
       - name: "test: pytest"
