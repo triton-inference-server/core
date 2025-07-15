@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container:
-      image: nvcr.io/nvidia/tritonserver:24.10-py3
+      image: nvcr.io/nvidia/tritonserver:25.06-py3
       volumes:
         - ${{ github.workspace }}:/core
         # Mount /usr so we can free space
@@ -32,10 +32,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install -y --no-install-recommends clang-format-15 cmake libb64-dev rapidjson-dev libre2-dev
-          wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && (cd /tmp && tar xzf boost.tar.gz) && mv /tmp/boost_1_80_0/boost /usr/include/boost && rm /tmp/boost.tar.gz
-          pip install build pytest pytest-asyncio
+          apt update -qq && \
+          apt install -y --no-install-recommends \
+            clang-format-15 \
+            libb64-dev \
+            libre2-dev \
+            rapidjson-dev
+      - run: |
+          pip install \
+            cmake \
+            build \
+            pytest \
+            pytest-asyncio
+      - run: |
+          wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && \
+          tar xzf boost.tar.gz -C /tmp && \
+          mv /tmp/boost_1_80_0/boost /usr/include/boost && \
+          rm /tmp/boost.tar.gz
 
       - name: Build
         run: |
