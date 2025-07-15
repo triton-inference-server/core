@@ -18,11 +18,12 @@ jobs:
         - /usr:/host_usr
       env:
         AGENT_TOOLSDIRECTORY: "$AGENT_TOOLSDIRECTORY"
+        CMAKE_POLICY_VERSION_MINIMUM: 3.5
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Free space
+      - name: "prepare: free space"
         run: |
           rm -rf \
             /host_usr/share/dotnet /host_usr/local/lib/android /opt/ghc \
@@ -30,7 +31,7 @@ jobs:
             /host_usr/lib/jvm
           rm -rf "$AGENT_TOOLSDIRECTORY"
 
-      - name: Install dependencies
+      - name: "dependencies: apt"
         run: |
           apt update -qq && \
           apt install -y --no-install-recommends \
@@ -38,27 +39,31 @@ jobs:
             libb64-dev \
             libre2-dev \
             rapidjson-dev
-      - run: |
+      - name: "dependencies: pip"
+        run: |
           pip install \
-            cmake \
+            cmake==4.0.3 \
             build \
             pytest \
             pytest-asyncio
-      - run: |
+      - name: "dependencies: boost"
+        run: |
           wget -O /tmp/boost.tar.gz https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz && \
-          tar xzf boost.tar.gz -C /tmp && \
+          tar xzf /tmp/boost.tar.gz -C /tmp && \
           mv /tmp/boost_1_80_0/boost /usr/include/boost && \
           rm /tmp/boost.tar.gz
 
-      - name: Build
+      - name: "build: cmake"
         run: |
-          mkdir -p /core/build
-          cd /core/build
-          cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_CORE_HEADERS_ONLY=OFF ..
-          make -j8
+          cmake \
+            -DCMAKE_INSTALL_PREFIX:PATH=/core/install \
+            -DTRITON_CORE_HEADERS_ONLY=OFF \
+            -S /core \
+            -B /core/build
+          cmake --build /core/build --parallel 8 -v
+        working-directory: /core
 
-      - name: Run tests with pytest
+      - name: "test: pytest"
         run: |
-          cd /core
-          python3 -m pip install --force-reinstall build/python/generic/wheel/dist/tritonserver-*.whl
-          pytest python/test -v
+          python3 -m pip install --force-reinstall /core/build/python/generic/wheel/dist/tritonserver-*.whl
+          pytest /core/python/test -v
