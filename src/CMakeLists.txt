@@ -62,6 +62,7 @@ endif() # TRITON_ENABLE_GPU
 #
 # Minimum of 1.78 required for use of boost::span. This can eventually be
 # relaxed and replaced with std::span in C++20.
+cmake_policy (SET CMP0167 OLD)
 find_package(Boost 1.78 REQUIRED COMPONENTS)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
