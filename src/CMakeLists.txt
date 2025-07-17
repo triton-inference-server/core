@@ -42,8 +42,7 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-common
-  # GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
-  GIT_REPOSITORY yinggeh@10.110.41.20:/home/yinggeh/common
+  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
   GIT_TAG ${TRITON_COMMON_REPO_TAG}
 )
 
