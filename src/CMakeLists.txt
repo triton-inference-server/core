@@ -42,7 +42,8 @@ include(FetchContent)
 
 FetchContent_Declare(
   repo-common
-  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
+  # GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
+  GIT_REPOSITORY yinggeh@10.110.41.20:/home/yinggeh/common
   GIT_TAG ${TRITON_COMMON_REPO_TAG}
 )
 
@@ -105,6 +106,11 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
 endif()
+
+#
+# DCGM
+#
+set(DCGM_INCLUDE_PATHS "/usr/include/datacenter-gpu-manager-4" CACHE PATH "Path to DCGM headers")
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
@@ -300,6 +306,13 @@ if(${TRITON_ENABLE_METRICS})
     PRIVATE $<TARGET_PROPERTY:prometheus-cpp::core,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif() # TRITON_ENABLE_METRICS
+
+if(${TRITON_ENABLE_METRICS_GPU})
+  target_include_directories(
+    triton-core
+    PRIVATE ${DCGM_INCLUDE_PATHS}
+  )
+endif() # TRITON_ENABLE_METRICS_GPU
 
 if(${TRITON_ENABLE_GCS})
   target_include_directories(
