@@ -109,7 +109,11 @@ endif()
 #
 # DCGM
 #
-set(DCGM_INCLUDE_PATHS "/usr/include/datacenter-gpu-manager-4" CACHE PATH "Path to DCGM headers")
+if(${TRITON_ENABLE_METRICS_GPU})
+  find_package(DCGM REQUIRED)
+  message(STATUS "Using DCGM ${DCGM_VERSION}")
+endif()
+
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
@@ -529,7 +533,7 @@ if(${TRITON_ENABLE_METRICS_GPU})
   target_link_libraries(
     triton-core
     PRIVATE
-      dcgm
+      DCGM::dcgm
   )
 endif() # TRITON_ENABLE_METRICS_GPU
 
