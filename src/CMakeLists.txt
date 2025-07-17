@@ -309,13 +309,6 @@ if(${TRITON_ENABLE_METRICS})
   )
 endif() # TRITON_ENABLE_METRICS
 
-if(${TRITON_ENABLE_METRICS_GPU})
-  target_include_directories(
-    triton-core
-    PRIVATE ${DCGM_INCLUDE_PATHS}
-  )
-endif() # TRITON_ENABLE_METRICS_GPU
-
 if(${TRITON_ENABLE_GCS})
   target_include_directories(
     triton-core
