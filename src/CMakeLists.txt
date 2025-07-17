@@ -114,7 +114,6 @@ if(${TRITON_ENABLE_METRICS_GPU})
   message(STATUS "Using DCGM ${DCGM_VERSION}")
 endif()
 
-
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
