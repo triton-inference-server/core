@@ -514,10 +514,11 @@ if(${TRITON_ENABLE_GPU})
 endif() # TRITON_ENABLE_GPU
 
 if(${TRITON_ENABLE_METRICS_GPU})
+  find_package(DCGM REQUIRED)
   target_link_libraries(
     triton-core
     PRIVATE
-      dcgm
+      DCGM::dcgm
   )
 endif() # TRITON_ENABLE_METRICS_GPU
 
