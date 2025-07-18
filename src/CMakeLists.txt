@@ -106,14 +106,6 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
 endif()
 
-#
-# DCGM
-#
-if(${TRITON_ENABLE_METRICS_GPU})
-  find_package(DCGM REQUIRED)
-  message(STATUS "Using DCGM ${DCGM_VERSION}")
-endif()
-
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
 
 set(
@@ -522,6 +514,7 @@ if(${TRITON_ENABLE_GPU})
 endif() # TRITON_ENABLE_GPU
 
 if(${TRITON_ENABLE_METRICS_GPU})
+  find_package(DCGM REQUIRED)
   target_link_libraries(
     triton-core
     PRIVATE
