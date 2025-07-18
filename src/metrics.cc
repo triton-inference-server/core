@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -38,7 +38,6 @@
 
 #ifdef TRITON_ENABLE_METRICS_GPU
 #include <cuda_runtime_api.h>
-#include <dcgm_agent.h>
 
 #include <cstring>
 #include <set>
