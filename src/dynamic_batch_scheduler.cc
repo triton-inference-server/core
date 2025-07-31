@@ -673,7 +673,6 @@ void
 DynamicBatchScheduler::DelegateResponse(
     std::unique_ptr<InferenceRequest>& request)
 {
-  std::lock_guard<std::mutex> lock(completion_queue_mtx_);
   // Cache plumbing
   const std::string& key = request->CacheKey();
   const bool is_key_set = request->CacheKeyIsSet();
