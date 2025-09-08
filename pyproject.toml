@@ -67,7 +67,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project.optional-dependencies]
-GPU = ["cupy-cuda12x"]
+GPU = ["cupy-cuda13x"]
 test = ["pytest"]
 all = ["tritonserver[GPU]", "tritonserver[test]"]
 
