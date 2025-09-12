@@ -27,6 +27,7 @@
 
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
+#include <azure/identity.hpp>
 
 #include "common.h"
 // [WIP] below needed?
@@ -37,6 +38,7 @@ namespace triton { namespace core {
 
 namespace as = Azure::Storage;
 namespace asb = Azure::Storage::Blobs;
+namespace ai = Azure::Identity;
 const std::string AS_URL_PATTERN = "as://([^/]+)/([^/?]+)(?:/([^?]*))?(\\?.*)?";
 
 struct ASCredential {
@@ -152,10 +154,17 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
     std::string service_url(
         "https://" + account_name + ".blob.core.windows.net");
 
+    auto use_default_env = GetEnvironmentVariableOrDefault(
+      "AZURE_USE_DEFAULT_CREDENTIAL", "0");
+
     if (!as_cred.account_key_.empty()) {
       // Shared Key
       auto cred = std::make_shared<as::StorageSharedKeyCredential>(
           account_name, as_cred.account_key_);
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
+    } else if (use_default_env == "1" || use_default_env == "true") {
+      // Default Azure Credential (Managed Identity, Environment, VS, CLI, etc)
+      auto cred = std::make_shared<ai::DefaultAzureCredential>();
       client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
     } else {
       client_ = std::make_shared<asb::BlobServiceClient>(service_url);
