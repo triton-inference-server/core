@@ -25,9 +25,9 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <azure/identity.hpp>
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
-#include <azure/identity.hpp>
 
 #include "common.h"
 // [WIP] below needed?
@@ -154,8 +154,8 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
     std::string service_url(
         "https://" + account_name + ".blob.core.windows.net");
 
-    auto use_default_env = GetEnvironmentVariableOrDefault(
-      "AZURE_USE_DEFAULT_CREDENTIAL", "0");
+    auto use_default_env =
+        GetEnvironmentVariableOrDefault("AZURE_USE_DEFAULT_CREDENTIAL", "0");
 
     if (!as_cred.account_key_.empty()) {
       // Shared Key
