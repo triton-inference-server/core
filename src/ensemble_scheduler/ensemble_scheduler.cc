@@ -187,6 +187,11 @@ struct Step {
   size_t step_idx_;
 };
 
+struct BlockingState {
+  std::mutex mtx_;
+  std::condition_variable cv_;
+};
+
 struct TensorData {
   struct Metadata {
     Metadata() = default;
@@ -213,7 +218,8 @@ struct TensorData {
   TensorData() = default;
   TensorData(const size_t outgoing_steps_count)
       : current_iteration_(0), outgoing_steps_count_(outgoing_steps_count),
-        batch_size_(0)
+        batch_size_(0), max_buffered_tensors_(0),
+        blocking_state_(new BlockingState())
   {
   }
 
@@ -248,6 +254,10 @@ struct TensorData {
   // size of the generated tensor explicitly for checking and setting proper
   // shape for the downstream model request.
   size_t batch_size_;
+
+  // New fields for backpressure
+  size_t max_buffered_tensors_{0};
+  std::unique_ptr<BlockingState> blocking_state_;
 };
 
 // EnsembleContext maintains the state of the ensemble request
@@ -289,8 +299,7 @@ class EnsembleContext {
       const char* tensor_name, size_t* byte_size,
       TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
   static void RequestComplete(
-      TRITONSERVER_InferenceRequest* request, const uint32_t flags,
-      void* userp);
+      TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp);
   static void ResponseComplete(
       TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp);
@@ -369,6 +378,10 @@ class EnsembleContext {
   std::mutex mutex_;
 
   size_t inflight_step_counter_;
+
+  // vector of counters for tracking the number of in-flight requests for each
+  // step.
+  std::vector<size_t> inflight_step_counts_;
 
   // pointer that either points to 'pruned_tensor_to_step_' or to
   // 'info_->tensor_to_step_' if all ensemble outputs are requested
@@ -504,6 +517,17 @@ EnsembleContext::EnsembleContext(
       tensor_data_.emplace(pair.first, TensorData(pair.second.size()));
     }
   }
+
+  for (auto& pair : tensor_data_) {
+    const auto it = info_->step_buffer_size_.find(pair.first);
+    std::cout << "------------ EnsembleContext::EnsembleContext() - pair.first: " << pair.first;
+    if (it != info_->step_buffer_size_.end()) {
+      std::cout << " info_->step_buffer_size_.find(pair.first): " << it->second << std::endl;
+      pair.second.max_buffered_tensors_ = it->second;
+    }
+  }
+
+  inflight_step_counts_.resize(info_->steps_.size(), 0);
 
   if (ensemble_status_.IsOk()) {
     request_id_ = lrequest->Id();
@@ -669,6 +693,19 @@ EnsembleContext::ResponseComplete(
   auto pool = step_raw_ptr->ctx_->CallbackPool();
   auto fn = [response, flags, step_raw_ptr]() {
     auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
+    const auto& istep = step_ptr->ctx_->info_->steps_[step_ptr->step_idx_];
+    // Check if any of the outputs from this step need to be throttled.
+    for (const auto& pair : istep.output_to_tensor_) {
+      auto& tensor_data = step_ptr->ctx_->tensor_data_[pair.second];
+      if (tensor_data.max_buffered_tensors_ > 0) {
+        std::unique_lock<std::mutex> lk(tensor_data.blocking_state_->mtx_);
+        // Block this thread until the number of buffered tensors is below the
+        // limit.
+        tensor_data.blocking_state_->cv_.wait(lk, [&] {
+          return tensor_data.tensor_.size() < tensor_data.max_buffered_tensors_;
+        });
+      }
+    }
     step_ptr->response_flags_ = flags;
     step_ptr->response_ = response;
 
@@ -907,9 +944,28 @@ EnsembleContext::UpdateEnsembleState(
     if (completed_step->response_flags_ &
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
+      inflight_step_counts_[completed_step->step_idx_]--;
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
+
+    // After a consumer step completes and a slot is freed, we need to check
+    // if there are buffered tensors from the producer waiting to be processed.
+    // We do this by finding the completed step's input tensors and adding them
+    // to the 'updated_tensors' set, which will cause GetNextSteps to
+    // re-evaluate the consumer step.
+    const auto& completed_step_info = info_->steps_[completed_step->step_idx_];
+    for (const auto& input_map_pair : completed_step_info.input_to_tensor_) {
+      const auto& input_tensor_name = input_map_pair.second;
+      auto& tensor_data = tensor_data_[input_tensor_name];
+      // If there are any iterations of this tensor still in the buffer,
+      // trigger a check for them. Using the oldest available iteration is
+      // sufficient to trigger the scheduling logic.
+      if (!tensor_data.tensor_.empty()) {
+        updated_tensors->emplace(
+            input_tensor_name, tensor_data.tensor_.begin()->first);
+      }
+    }
   }
   return Status::Success;
 }
@@ -924,8 +980,8 @@ EnsembleContext::GetNextSteps(
   std::set<std::pair<size_t, IterationCount>> next_step_idx;
   // Get steps whose tensors used for input are set
   for (const auto& updated_tensor : updated_tensors) {
-    const auto& step_idx = (*tensor_to_step_)[updated_tensor.first];
-    for (const auto& idx : step_idx) {
+    const auto& step_idx_set = (*tensor_to_step_)[updated_tensor.first];
+    for (const auto& idx : step_idx_set) {
       bool ready = true;
       for (const auto& input_pair : info_->steps_[idx].input_to_tensor_) {
         auto& tensor = tensor_data_[input_pair.second].tensor_;
@@ -947,9 +1003,33 @@ EnsembleContext::GetNextSteps(
     }
   }
 
-  for (const auto& idx : next_step_idx) {
+  for (const auto& idx_pair : next_step_idx) {
+    const size_t step_idx = idx_pair.first;
+    const IterationCount iteration_count = idx_pair.second;
+
+    const auto& step_info = info_->steps_[step_idx];
+    size_t buffer_limit = 0;
+    // The buffer limit is determined by its input tensor, check all inputs
+    // and use the first limit found. This is based on the assumption that
+    // it is unlikely to have multiple limited inputs for one step.
+    for (const auto& input_map_pair : step_info.input_to_tensor_) {
+      const auto& tensor_name = input_map_pair.second;
+      const auto it = info_->step_buffer_size_.find(tensor_name);
+      if (it != info_->step_buffer_size_.end()) {
+        std::cout << "------------ EnsembleContext::GetNextSteps() - buffer_limit: " << it->second << std::endl;
+        buffer_limit = it->second;
+        break;
+      }
+    }
+
+    if ((buffer_limit > 0) &&
+        (inflight_step_counts_[step_idx] >= buffer_limit)) {
+      continue;
+    }
+
     steps->emplace_back();
-    RETURN_IF_ERROR(InitStep(idx.first, idx.second, &(steps->back())));
+    RETURN_IF_ERROR(InitStep(step_idx, iteration_count, &(steps->back())));
+    inflight_step_counts_[step_idx]++;
   }
   inflight_step_counter_ += steps->size();
 
@@ -1026,8 +1106,18 @@ EnsembleContext::InitStep(
 
   // Prune the tensor if it is not needed by other steps
   for (auto& releasing_pair : releasing_tensors) {
-    if ((--(*releasing_pair.second)) == 0) {
-      releasing_pair.first->tensor_.erase(iteration_count);
+    TensorData* tensor_data = releasing_pair.first;
+    size_t* ref_count = releasing_pair.second;
+    std::cout << "------------ EnsembleContext::InitStep() - tensor_data->blocking_state_->cv_.notify_one() " << std::endl;
+    if ((--(*ref_count)) == 0) {
+      tensor_data->tensor_.erase(iteration_count);
+      if (tensor_data->max_buffered_tensors_ > 0) {
+        // A tensor has been consumed and its memory released from the
+        // buffer. Notify one waiting producer thread that a slot has
+        // opened up.
+        std::lock_guard<std::mutex> lk(tensor_data->blocking_state_->mtx_);
+        tensor_data->blocking_state_->cv_.notify_one();
+      }
     }
   }
 
@@ -1602,6 +1692,9 @@ EnsembleScheduler::EnsembleScheduler(
     }
   }
   callback_pool_ = is_->EnsembleCallbackPool();
+  // FIXME: This should be parsed from the model config once available.
+  // This will limit the number of in-flight 'decoded_frames' tensors to 4.
+  info_->step_buffer_size_["decoded_frames"] = 4;
 }
 
 EnsembleScheduler::~EnsembleScheduler()
