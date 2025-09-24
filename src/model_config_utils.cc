@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1072,55 +1072,45 @@ AutoCompleteBackendFields(
 
   // Trying to fill the 'backend', 'default_model_filename' field.
 
-  // TensorFlow
-  // For TF backend, the platform is required
-  if (config->platform().empty()) {
-    // Check 'backend', 'default_model_filename', and the actual directory
-    // to determine the platform
-    if (config->backend().empty() ||
-        (config->backend() == kTensorFlowBackend)) {
-      if (config->default_model_filename() == kTensorFlowSavedModelFilename) {
-        config->set_platform(kTensorFlowSavedModelPlatform);
-      } else if (
-          config->default_model_filename() == kTensorFlowGraphDefFilename) {
-        config->set_platform(kTensorFlowGraphDefPlatform);
-      } else if (config->default_model_filename().empty() && has_version) {
-        bool is_dir = false;
-        if (version_dir_content.find(kTensorFlowSavedModelFilename) !=
-            version_dir_content.end()) {
-          RETURN_IF_ERROR(IsDirectory(
-              JoinPath({version_path, kTensorFlowSavedModelFilename}),
-              &is_dir));
-          if (is_dir) {
-            config->set_platform(kTensorFlowSavedModelPlatform);
-          }
-        }
-        if (version_dir_content.find(kTensorFlowGraphDefFilename) !=
-            version_dir_content.end()) {
-          RETURN_IF_ERROR(IsDirectory(
-              JoinPath({version_path, kTensorFlowGraphDefFilename}), &is_dir));
-          if (!is_dir) {
-            config->set_platform(kTensorFlowGraphDefPlatform);
-          }
-        }
+  // TensorFlow is not supported since version 25.03.
+  // Return error if TensorFlow is found being set or TensorFlow models are
+  // found in the version directory.
+  if ((config->backend() == kTensorFlowBackend) ||
+      (config->platform() == kTensorFlowSavedModelPlatform) ||
+      (config->platform() == kTensorFlowGraphDefPlatform) ||
+      (config->default_model_filename() == kTensorFlowSavedModelFilename) ||
+      (config->default_model_filename() == kTensorFlowGraphDefFilename)) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "TensorFlow backend is not supported since version 25.03, please do "
+        "NOT set backend, platform or default_model_filename related to "
+        "TensorFlow.");
+  } else if (has_version) {
+    bool is_dir = false;
+    if (version_dir_content.find(kTensorFlowSavedModelFilename) !=
+        version_dir_content.end()) {
+      RETURN_IF_ERROR(IsDirectory(
+          JoinPath({version_path, kTensorFlowSavedModelFilename}), &is_dir));
+      if (is_dir) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string(
+                "TensorFlow is not supported since version 25.03, however, ") +
+                kTensorFlowSavedModelFilename + " dir is found.");
       }
     }
-  }
-
-  // Fill 'backend' and 'default_model_filename' if missing
-  if ((config->platform() == kTensorFlowSavedModelPlatform) ||
-      (config->platform() == kTensorFlowGraphDefPlatform)) {
-    if (config->backend().empty()) {
-      config->set_backend(kTensorFlowBackend);
-    }
-    if (config->default_model_filename().empty()) {
-      if (config->platform() == kTensorFlowSavedModelPlatform) {
-        config->set_default_model_filename(kTensorFlowSavedModelFilename);
-      } else {
-        config->set_default_model_filename(kTensorFlowGraphDefFilename);
+    if (version_dir_content.find(kTensorFlowGraphDefFilename) !=
+        version_dir_content.end()) {
+      RETURN_IF_ERROR(IsDirectory(
+          JoinPath({version_path, kTensorFlowGraphDefFilename}), &is_dir));
+      if (!is_dir) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            std::string(
+                "TensorFlow is not supported for version >= 25.03, however, ") +
+                kTensorFlowGraphDefFilename + " file is found.");
       }
     }
-    return Status::Success;
   }
 
   // TensorRT
