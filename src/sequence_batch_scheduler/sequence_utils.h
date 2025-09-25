@@ -68,6 +68,7 @@ class Sequencer {
     // Sequencer will not reschedule requests
     return Status::Success;
   }
+  virtual ~Sequencer() = default;
 };
 
 class IterativeSequencer : public Sequencer {

@@ -494,7 +494,7 @@ ModelRepositoryManager::ModelRepositoryManager(
       return FindModelIdentifier(n, i);
     };
   } else {
-    find_identifier_fn_ = [this](const std::string& n, ModelIdentifier* i) {
+    find_identifier_fn_ = [](const std::string& n, ModelIdentifier* i) {
       return Status::Success;
     };
   }
