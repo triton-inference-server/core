@@ -84,9 +84,9 @@ struct EnsembleInfo {
   // backward path, ensemble tensor to the step that provides its data
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
-  // The map from ensemble tensor name to the max number of buffers allowed for
-  // the tensor.
-  std::unordered_map<std::string, int> step_buffer_size_;
+  // The buffer size for tensors produced by decoupled models. A value of 0
+  // means no limit.
+  int32_t decoupled_step_buffer_size_ = 0;
 };
 
 // Scheduler that implements ensemble scheduling.

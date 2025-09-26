@@ -518,12 +518,16 @@ EnsembleContext::EnsembleContext(
     }
   }
 
-  for (auto& pair : tensor_data_) {
-    const auto it = info_->step_buffer_size_.find(pair.first);
-    std::cout << "------------ EnsembleContext::EnsembleContext() - pair.first: " << pair.first;
-    if (it != info_->step_buffer_size_.end()) {
-      std::cout << " info_->step_buffer_size_.find(pair.first): " << it->second << std::endl;
-      pair.second.max_buffered_tensors_ = it->second;
+  // Set buffer size for outputs of decoupled models
+  for (const auto& step_info : info_->steps_) {
+    auto& version_map = handles_[step_info.model_id_];
+    auto& model = version_map[step_info.model_version_];
+    if ((model != nullptr) && model->IsDecoupled()) {
+      for (const auto& output_map : step_info.output_to_tensor_) {
+        tensor_data_[output_map.second].max_buffered_tensors_ =
+            info_->decoupled_step_buffer_size_;
+        std::cout << "------------ EnsembleContext::EnsembleContext() - output_map.second: " << output_map.second << " --- tensor_data_[output_map.second].max_buffered_tensors_: " << tensor_data_[output_map.second].max_buffered_tensors_;
+      }
     }
   }
 
@@ -1009,18 +1013,18 @@ EnsembleContext::GetNextSteps(
 
     const auto& step_info = info_->steps_[step_idx];
     size_t buffer_limit = 0;
-    // The buffer limit is determined by its input tensor, check all inputs
-    // and use the first limit found. This is based on the assumption that
-    // it is unlikely to have multiple limited inputs for one step.
+    // The buffer limit is determined by its input tensor. We check all inputs
+    // and use the first limit found, assuming it's unlikely for a step to
+    // consume multiple throttled tensors.
     for (const auto& input_map_pair : step_info.input_to_tensor_) {
       const auto& tensor_name = input_map_pair.second;
-      const auto it = info_->step_buffer_size_.find(tensor_name);
-      if (it != info_->step_buffer_size_.end()) {
-        std::cout << "------------ EnsembleContext::GetNextSteps() - buffer_limit: " << it->second << std::endl;
-        buffer_limit = it->second;
+      const auto& tensor_data = tensor_data_.at(tensor_name);
+      if (tensor_data.max_buffered_tensors_ > 0) {
+        buffer_limit = tensor_data.max_buffered_tensors_;
         break;
       }
     }
+    std::cout << "------------ EnsembleContext::GetNextSteps() - buffer_limit: " << buffer_limit;
 
     if ((buffer_limit > 0) &&
         (inflight_step_counts_[step_idx] >= buffer_limit)) {
@@ -1692,9 +1696,28 @@ EnsembleScheduler::EnsembleScheduler(
     }
   }
   callback_pool_ = is_->EnsembleCallbackPool();
-  // FIXME: This should be parsed from the model config once available.
-  // This will limit the number of in-flight 'decoded_frames' tensors to 4.
-  info_->step_buffer_size_["decoded_frames"] = 4;
+
+  for (const auto& param : config.parameters()) {
+    std::cout << "------------ param.first: " << param.first << std::endl;
+    if (param.first == "step_buffer_size") {
+      const std::string& value = param.second.string_value();
+      try {
+        const int32_t size = std::stoi(value);
+        if (size > 0) {
+          info_->decoupled_step_buffer_size_ = size;
+        } else {
+          LOG_WARNING << "Ignoring 'step_buffer_size' for ensemble '"
+                      << config.name() << "': size must be positive, got "
+                      << size;
+        }
+        std::cout << "------------ info_->decoupled_step_buffer_size_: " << info_->decoupled_step_buffer_size_ << std::endl;
+      }
+      catch (const std::invalid_argument& ia) {
+        LOG_WARNING << "Failed to parse 'step_buffer_size' for ensemble '"
+                    << config.name() << "': " << ia.what();
+      }
+    }
+  }
 }
 
 EnsembleScheduler::~EnsembleScheduler()
