@@ -112,7 +112,7 @@ InferenceRequest::InferenceRequest(
   SetPriority(0);
   // Outer-most release callback to ensure a request has been taken, this
   // callback won't be invoked, if certain flags are set.
-  release_callbacks_.emplace_back(
+  release_callbacks_.emplace_back(std::make_pair(
       [](std::unique_ptr<InferenceRequest>& request,
          const uint32_t flags) -> Status {
         if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
@@ -123,7 +123,8 @@ InferenceRequest::InferenceRequest(
               "configured to handle such a flag.");
         }
         return Status::Success;
-      });
+      },
+      false));
 }
 
 Status
@@ -476,9 +477,16 @@ InferenceRequest::Release(
 {
   // Invoke the release callbacks added internally before releasing the
   // request to user provided callback.
-  for (auto it = request->release_callbacks_.rbegin();
-       it != request->release_callbacks_.rend(); it++) {
-    RETURN_IF_ERROR((*it)(request, release_flags));
+
+  // Invoke callbacks in reverse order. Evict internal callbacks for reusing
+  // inference request object.
+  auto& release_callbacks = request->release_callbacks_;
+  for (int i = release_callbacks.size() - 1; i >= 0; --i) {
+    auto [release_fn, is_internal] = release_callbacks[i];
+    if (is_internal) {
+      release_callbacks.erase(release_callbacks.begin() + i);
+    }
+    release_fn(request, release_flags);
     if (request == nullptr) {
       return Status::Success;
     }
@@ -500,6 +508,7 @@ InferenceRequest::Release(
       "Failed to set released state");
   void* userp = request->release_userp_;
   auto& release_fn = request->release_fn_;
+  LOG_INFO << "userp " << userp << std::endl;
   release_fn(
       reinterpret_cast<TRITONSERVER_InferenceRequest*>(request.release()),
       release_flags, userp);
