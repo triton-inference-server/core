@@ -476,10 +476,9 @@ InferenceRequest::Release(
     std::unique_ptr<InferenceRequest>&& request, const uint32_t release_flags)
 {
   // Invoke the release callbacks added internally before releasing the
-  // request to user provided callback.
-
-  // Invoke callbacks in reverse order. Evict internal callbacks for reusing
-  // inference request object.
+  // request to user provided callback. Remove internal callbacks registered
+  // through AddInternalReleaseCallback to allow reuse of the inference request
+  // object.
   auto& release_callbacks = request->release_callbacks_;
   for (int i = release_callbacks.size() - 1; i >= 0; --i) {
     auto [release_fn, is_internal] = release_callbacks[i];
@@ -508,7 +507,6 @@ InferenceRequest::Release(
       "Failed to set released state");
   void* userp = request->release_userp_;
   auto& release_fn = request->release_fn_;
-  LOG_INFO << "userp " << userp << std::endl;
   release_fn(
       reinterpret_cast<TRITONSERVER_InferenceRequest*>(request.release()),
       release_flags, userp);
