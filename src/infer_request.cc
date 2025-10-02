@@ -112,7 +112,7 @@ InferenceRequest::InferenceRequest(
   SetPriority(0);
   // Outer-most release callback to ensure a request has been taken, this
   // callback won't be invoked, if certain flags are set.
-  release_callbacks_.emplace_back(
+  release_callbacks_.emplace_back(std::make_pair(
       [](std::unique_ptr<InferenceRequest>& request,
          const uint32_t flags) -> Status {
         if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
@@ -123,7 +123,8 @@ InferenceRequest::InferenceRequest(
               "configured to handle such a flag.");
         }
         return Status::Success;
-      });
+      },
+      false));
 }
 
 Status
@@ -475,10 +476,16 @@ InferenceRequest::Release(
     std::unique_ptr<InferenceRequest>&& request, const uint32_t release_flags)
 {
   // Invoke the release callbacks added internally before releasing the
-  // request to user provided callback.
-  for (auto it = request->release_callbacks_.rbegin();
-       it != request->release_callbacks_.rend(); it++) {
-    RETURN_IF_ERROR((*it)(request, release_flags));
+  // request to user provided callback. Remove internal callbacks registered
+  // through AddInternalReleaseCallback to allow reuse of the inference request
+  // object.
+  auto& release_callbacks = request->release_callbacks_;
+  for (int i = release_callbacks.size() - 1; i >= 0; --i) {
+    auto [release_fn, is_internal] = release_callbacks[i];
+    if (is_internal) {
+      release_callbacks.erase(release_callbacks.begin() + i);
+    }
+    release_fn(request, release_flags);
     if (request == nullptr) {
       return Status::Success;
     }
