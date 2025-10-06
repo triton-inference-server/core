@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1041,7 +1041,8 @@ TRITONSERVER_InferenceRequestNew(
     struct TRITONSERVER_Server* server, const char* model_name,
     const int64_t model_version);
 
-/// Delete an inference request object.
+/// Delete an inference request object. The request object must be
+/// released before deletion.
 ///
 /// \param inference_request The request object.
 /// \return a TRITONSERVER_Error indicating success or failure.

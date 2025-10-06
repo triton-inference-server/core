@@ -548,7 +548,7 @@ class InferenceRequest {
   // and they will be invoked in reversed order.
   Status AddInternalReleaseCallback(InternalReleaseFn&& callback)
   {
-    release_callbacks_.emplace_back(std::move(callback));
+    release_callbacks_.emplace_back(std::make_pair(std::move(callback), true));
     return Status::Success;
   }
 
@@ -832,8 +832,9 @@ class InferenceRequest {
   TRITONSERVER_InferenceRequestReleaseFn_t release_fn_;
   void* release_userp_;
 
-  // Additional release callbacks invoked before 'release_fn_'.
-  std::vector<InternalReleaseFn> release_callbacks_;
+  // Additional release callbacks invoked before 'release_fn_'. Set boolean to
+  // true if release callback is internal and should be evicted after invoking.
+  std::vector<std::pair<InternalReleaseFn, bool>> release_callbacks_;
 
   // Delegator to be invoked on sending responses.
   std::function<void(std::unique_ptr<InferenceResponse>&&, const uint32_t)>
