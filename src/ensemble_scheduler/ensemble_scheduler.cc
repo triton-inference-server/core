@@ -981,20 +981,6 @@ EnsembleContext::UpdateEnsembleState(
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
-
-    // Re-trigger scheduling for buffered outputs. When a consumer completes,
-    // check if producers have buffered outputs waiting and add them to
-    // updated_tensors to trigger immediate scheduling (maintains max
-    // throughput).
-    const auto& completed_step_info = info_->steps_[completed_step->step_idx_];
-    for (const auto& input_map_pair : completed_step_info.input_to_tensor_) {
-      const auto& input_tensor_name = input_map_pair.second;
-      auto& tensor_data = tensor_data_[input_tensor_name];
-      if (!tensor_data.tensor_.empty()) {
-        updated_tensors->emplace(
-            input_tensor_name, tensor_data.tensor_.begin()->first);
-      }
-    }
   }
   return Status::Success;
 }
@@ -1009,8 +995,8 @@ EnsembleContext::GetNextSteps(
   std::set<std::pair<size_t, IterationCount>> next_step_idx;
   // Get steps whose tensors used for input are set
   for (const auto& updated_tensor : updated_tensors) {
-    const auto& step_idx_set = (*tensor_to_step_)[updated_tensor.first];
-    for (const auto& idx : step_idx_set) {
+    const auto& step_idx = (*tensor_to_step_)[updated_tensor.first];
+    for (const auto& idx : step_idx) {
       bool ready = true;
       for (const auto& input_pair : info_->steps_[idx].input_to_tensor_) {
         auto& tensor = tensor_data_[input_pair.second].tensor_;
@@ -1118,10 +1104,8 @@ EnsembleContext::InitStep(
 
   // Prune the tensor if it is not needed by other steps
   for (auto& releasing_pair : releasing_tensors) {
-    TensorData* tensor_data = releasing_pair.first;
-    size_t* ref_count = releasing_pair.second;
-    if ((--(*ref_count)) == 0) {
-      tensor_data->tensor_.erase(iteration_count);
+    if ((--(*releasing_pair.second)) == 0) {
+      releasing_pair.first->tensor_.erase(iteration_count);
     }
   }
 
