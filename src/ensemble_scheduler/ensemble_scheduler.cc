@@ -526,7 +526,10 @@ EnsembleContext::EnsembleContext(
       for (const auto& output_map : step_info.output_to_tensor_) {
         tensor_data_[output_map.second].max_buffered_tensors_ =
             info_->decoupled_step_buffer_size_;
-        std::cout << "------------ EnsembleContext::EnsembleContext() - output_map.second: " << output_map.second << " --- tensor_data_[output_map.second].max_buffered_tensors_: " << tensor_data_[output_map.second].max_buffered_tensors_;
+        LOG_INFO << "Ensemble '" << info_->ensemble_name_
+                       << "' configured tensor '" << output_map.second
+                       << "' with max_buffered_tensors: "
+                       << tensor_data_[output_map.second].max_buffered_tensors_;
       }
     }
   }
@@ -703,11 +706,30 @@ EnsembleContext::ResponseComplete(
       auto& tensor_data = step_ptr->ctx_->tensor_data_[pair.second];
       if (tensor_data.max_buffered_tensors_ > 0) {
         std::unique_lock<std::mutex> lk(tensor_data.blocking_state_->mtx_);
+        size_t initial_size = tensor_data.tensor_.size();
+        
         // Block this thread until the number of buffered tensors is below the
-        // limit.
-        tensor_data.blocking_state_->cv_.wait(lk, [&] {
-          return tensor_data.tensor_.size() < tensor_data.max_buffered_tensors_;
-        });
+        // limit. Use timeout to prevent indefinite blocking if consumer fails.
+        auto timeout = std::chrono::seconds(300);  // 5 minutes
+        bool capacity_available = tensor_data.blocking_state_->cv_.wait_for(
+            lk, timeout, [&] {
+              return tensor_data.tensor_.size() <
+                     tensor_data.max_buffered_tensors_;
+            });
+        
+        if (!capacity_available) {
+          LOG_ERROR << "Ensemble '" << step_ptr->ctx_->info_->ensemble_name_
+                    << "' backpressure timeout: tensor '" << pair.second
+                    << "' buffer remained full (size: "
+                    << tensor_data.tensor_.size()
+                    << ", limit: " << tensor_data.max_buffered_tensors_
+                    << ") for 300 seconds. Proceeding to avoid deadlock.";
+        } else if (initial_size >= tensor_data.max_buffered_tensors_) {
+          LOG_INFO << "Ensemble '" << step_ptr->ctx_->info_->ensemble_name_
+                         << "' backpressure released for tensor '" << pair.second
+                         << "', buffer size: " << tensor_data.tensor_.size()
+                         << " < limit: " << tensor_data.max_buffered_tensors_;
+        }
       }
     }
     step_ptr->response_flags_ = flags;
@@ -1024,10 +1046,20 @@ EnsembleContext::GetNextSteps(
         break;
       }
     }
-    std::cout << "------------ EnsembleContext::GetNextSteps() - buffer_limit: " << buffer_limit;
+    LOG_INFO << "Ensemble '" << info_->ensemble_name_
+                   << "' evaluating step " << step_idx
+                   << " iteration " << iteration_count
+                   << ", buffer_limit: " << buffer_limit
+                   << ", inflight: " << inflight_step_counts_[step_idx];
 
     if ((buffer_limit > 0) &&
         (inflight_step_counts_[step_idx] >= buffer_limit)) {
+      LOG_INFO << "Ensemble '" << info_->ensemble_name_
+                     << "' skipping step " << step_idx
+                     << " iteration " << iteration_count
+                     << " due to inflight limit (inflight: "
+                     << inflight_step_counts_[step_idx]
+                     << " >= limit: " << buffer_limit << ")";
       continue;
     }
 
@@ -1112,7 +1144,6 @@ EnsembleContext::InitStep(
   for (auto& releasing_pair : releasing_tensors) {
     TensorData* tensor_data = releasing_pair.first;
     size_t* ref_count = releasing_pair.second;
-    std::cout << "------------ EnsembleContext::InitStep() - tensor_data->blocking_state_->cv_.notify_one() " << std::endl;
     if ((--(*ref_count)) == 0) {
       tensor_data->tensor_.erase(iteration_count);
       if (tensor_data->max_buffered_tensors_ > 0) {
@@ -1121,6 +1152,9 @@ EnsembleContext::InitStep(
         // opened up.
         std::lock_guard<std::mutex> lk(tensor_data->blocking_state_->mtx_);
         tensor_data->blocking_state_->cv_.notify_one();
+        LOG_INFO << "Ensemble buffer: tensor freed (iteration "
+                       << iteration_count << "), notifying waiting producers, "
+                       << "buffer size now: " << tensor_data->tensor_.size();
       }
     }
   }
@@ -1697,25 +1731,27 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  for (const auto& param : config.parameters()) {
-    std::cout << "------------ param.first: " << param.first << std::endl;
-    if (param.first == "step_buffer_size") {
-      const std::string& value = param.second.string_value();
-      try {
-        const int32_t size = std::stoi(value);
-        if (size > 0) {
-          info_->decoupled_step_buffer_size_ = size;
-        } else {
-          LOG_WARNING << "Ignoring 'step_buffer_size' for ensemble '"
-                      << config.name() << "': size must be positive, got "
-                      << size;
-        }
-        std::cout << "------------ info_->decoupled_step_buffer_size_: " << info_->decoupled_step_buffer_size_ << std::endl;
+  // Parse step_buffer_size parameter for backpressure control
+  if (config.parameters().contains("step_buffer_size")) {
+    const auto& param = config.parameters().at("step_buffer_size");
+    const std::string& value = param.string_value();
+    try {
+      const int32_t size = std::stoi(value);
+      if (size > 0) {
+        info_->decoupled_step_buffer_size_ = size;
+        LOG_INFO << "Ensemble '" << config.name()
+                 << "' configured with step_buffer_size: "
+                 << info_->decoupled_step_buffer_size_
+                 << " (limits tensor buffering for decoupled steps)";
+      } else {
+        LOG_WARNING << "Ignoring 'step_buffer_size' for ensemble '"
+                    << config.name() << "': size must be positive, got "
+                    << size;
       }
-      catch (const std::invalid_argument& ia) {
-        LOG_WARNING << "Failed to parse 'step_buffer_size' for ensemble '"
-                    << config.name() << "': " << ia.what();
-      }
+    }
+    catch (const std::invalid_argument& ia) {
+      LOG_WARNING << "Failed to parse 'step_buffer_size' for ensemble '"
+                  << config.name() << "': " << ia.what();
     }
   }
 }
