@@ -84,9 +84,11 @@ struct EnsembleInfo {
   // backward path, ensemble tensor to the step that provides its data
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
-  // The buffer size for tensors produced by decoupled models. A value of 0
-  // means no limit.
-  int32_t decoupled_step_buffer_size_ = 0;
+  // Maximum concurrent inflight responses from decoupled steps to downstream
+  // consumers. Prevents memory growth by blocking producers when limit reached.
+  // Value of 0 means unlimited (default). Configured via parameter
+  // 'max_ensemble_inflight_responses' in ensemble config.pbtxt.
+  size_t max_inflight_responses_ = 0;
 };
 
 // Scheduler that implements ensemble scheduling.

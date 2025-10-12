@@ -28,6 +28,7 @@
 
 #include "ensemble_scheduler.h"
 
+#include <condition_variable>
 #include <mutex>
 
 #include "cuda_utils.h"
@@ -187,11 +188,6 @@ struct Step {
   size_t step_idx_;
 };
 
-struct BlockingState {
-  std::mutex mtx_;
-  std::condition_variable cv_;
-};
-
 struct TensorData {
   struct Metadata {
     Metadata() = default;
@@ -218,8 +214,7 @@ struct TensorData {
   TensorData() = default;
   TensorData(const size_t outgoing_steps_count)
       : current_iteration_(0), outgoing_steps_count_(outgoing_steps_count),
-        batch_size_(0), max_buffered_tensors_(0),
-        blocking_state_(new BlockingState())
+        batch_size_(0)
   {
   }
 
@@ -254,10 +249,6 @@ struct TensorData {
   // size of the generated tensor explicitly for checking and setting proper
   // shape for the downstream model request.
   size_t batch_size_;
-
-  // New fields for backpressure
-  size_t max_buffered_tensors_{0};
-  std::unique_ptr<BlockingState> blocking_state_;
 };
 
 // EnsembleContext maintains the state of the ensemble request
@@ -299,7 +290,8 @@ class EnsembleContext {
       const char* tensor_name, size_t* byte_size,
       TRITONSERVER_MemoryType* memory_type, int64_t* memory_type_id);
   static void RequestComplete(
-      TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp);
+      TRITONSERVER_InferenceRequest* request, const uint32_t flags,
+      void* userp);
   static void ResponseComplete(
       TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp);
@@ -379,9 +371,12 @@ class EnsembleContext {
 
   size_t inflight_step_counter_;
 
-  // vector of counters for tracking the number of in-flight requests for each
-  // step.
-  std::vector<size_t> inflight_step_counts_;
+  // Backpressure support: Limits memory growth from decoupled models.
+  // Tracks inflight responses per step; blocks producers when downstream
+  // consumers are overloaded. Only active if max_inflight_responses_ > 0.
+  std::vector<size_t> step_inflight_response_counts_;
+  std::vector<std::unique_ptr<std::mutex>> step_mutexes_;
+  std::vector<std::unique_ptr<std::condition_variable>> step_cvs_;
 
   // pointer that either points to 'pruned_tensor_to_step_' or to
   // 'info_->tensor_to_step_' if all ensemble outputs are requested
@@ -518,23 +513,23 @@ EnsembleContext::EnsembleContext(
     }
   }
 
-  // Set buffer size for outputs of decoupled models
-  for (const auto& step_info : info_->steps_) {
-    auto& version_map = handles_[step_info.model_id_];
-    auto& model = version_map[step_info.model_version_];
-    if ((model != nullptr) && model->IsDecoupled()) {
-      for (const auto& output_map : step_info.output_to_tensor_) {
-        tensor_data_[output_map.second].max_buffered_tensors_ =
-            info_->decoupled_step_buffer_size_;
-        LOG_INFO << "Ensemble '" << info_->ensemble_name_
-                       << "' configured tensor '" << output_map.second
-                       << "' with max_buffered_tensors: "
-                       << tensor_data_[output_map.second].max_buffered_tensors_;
-      }
-    }
-  }
+  // Initialize backpressure tracking if enabled.
+  size_t num_steps = info_->steps_.size();
+  step_inflight_response_counts_.resize(num_steps, 0);
 
-  inflight_step_counts_.resize(info_->steps_.size(), 0);
+  if (info_->max_inflight_responses_ > 0) {
+    step_mutexes_.resize(num_steps);
+    step_cvs_.resize(num_steps);
+
+    for (size_t i = 0; i < num_steps; i++) {
+      step_mutexes_[i].reset(new std::mutex());
+      step_cvs_[i].reset(new std::condition_variable());
+    }
+
+    LOG_VERBOSE(1) << "Ensemble '" << info_->ensemble_name_
+                   << "' backpressure enabled: allocated synchronization "
+                   << "primitives for " << num_steps << " steps";
+  }
 
   if (ensemble_status_.IsOk()) {
     request_id_ = lrequest->Id();
@@ -700,35 +695,53 @@ EnsembleContext::ResponseComplete(
   auto pool = step_raw_ptr->ctx_->CallbackPool();
   auto fn = [response, flags, step_raw_ptr]() {
     auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
-    const auto& istep = step_ptr->ctx_->info_->steps_[step_ptr->step_idx_];
-    // Check if any of the outputs from this step need to be throttled.
-    for (const auto& pair : istep.output_to_tensor_) {
-      auto& tensor_data = step_ptr->ctx_->tensor_data_[pair.second];
-      if (tensor_data.max_buffered_tensors_ > 0) {
-        std::unique_lock<std::mutex> lk(tensor_data.blocking_state_->mtx_);
-        size_t initial_size = tensor_data.tensor_.size();
-        
-        // Block this thread until the number of buffered tensors is below the
-        // limit. Use timeout to prevent indefinite blocking if consumer fails.
-        auto timeout = std::chrono::seconds(300);  // 5 minutes
-        bool capacity_available = tensor_data.blocking_state_->cv_.wait_for(
-            lk, timeout, [&] {
-              return tensor_data.tensor_.size() <
-                     tensor_data.max_buffered_tensors_;
-            });
-        
-        if (!capacity_available) {
-          LOG_ERROR << "Ensemble '" << step_ptr->ctx_->info_->ensemble_name_
-                    << "' backpressure timeout: tensor '" << pair.second
-                    << "' buffer remained full (size: "
-                    << tensor_data.tensor_.size()
-                    << ", limit: " << tensor_data.max_buffered_tensors_
-                    << ") for 300 seconds. Proceeding to avoid deadlock.";
-        } else if (initial_size >= tensor_data.max_buffered_tensors_) {
-          LOG_INFO << "Ensemble '" << step_ptr->ctx_->info_->ensemble_name_
-                         << "' backpressure released for tensor '" << pair.second
-                         << "', buffer size: " << tensor_data.tensor_.size()
-                         << " < limit: " << tensor_data.max_buffered_tensors_;
+    auto& context = step_ptr->ctx_;
+    size_t this_step_idx = step_ptr->step_idx_;
+    const auto& istep = context->info_->steps_[this_step_idx];
+
+    // Block this producer if downstream consumers are overloaded.
+    // Prevents memory exhaustion by limiting concurrent inflight responses.
+    if (context->info_->max_inflight_responses_ > 0 &&
+        !context->step_cvs_.empty()) {
+      for (const auto& output_pair : istep.output_to_tensor_) {
+        const auto& tensor_name = output_pair.second;
+        const auto& downstream_steps = (*context->tensor_to_step_)[tensor_name];
+
+        for (const auto& downstream_step_idx : downstream_steps) {
+          std::unique_lock<std::mutex> lk(
+              *context->step_mutexes_[downstream_step_idx]);
+
+          size_t initial_inflight =
+              context->step_inflight_response_counts_[downstream_step_idx];
+
+          // Block if downstream inflight count >= limit. Timeout after 300s to
+          // prevent deadlock. Unblocks when downstream completes a request.
+          auto timeout = std::chrono::seconds(300);
+          bool capacity_available =
+              context->step_cvs_[downstream_step_idx]->wait_for(
+                  lk, timeout, [&] {
+                    return context->step_inflight_response_counts_
+                               [downstream_step_idx] <
+                           context->info_->max_inflight_responses_;
+                  });
+
+          if (!capacity_available) {
+            LOG_ERROR
+                << "Ensemble '" << context->info_->ensemble_name_ << "' step "
+                << this_step_idx << " blocked waiting for downstream step "
+                << downstream_step_idx << " (inflight: "
+                << context->step_inflight_response_counts_[downstream_step_idx]
+                << " >= limit: " << context->info_->max_inflight_responses_
+                << ") for 300 seconds. Proceeding to avoid deadlock.";
+          } else if (
+              initial_inflight >= context->info_->max_inflight_responses_) {
+            LOG_VERBOSE(1)
+                << "Ensemble '" << context->info_->ensemble_name_ << "' step "
+                << this_step_idx << " unblocked, downstream step "
+                << downstream_step_idx << " inflight: "
+                << context->step_inflight_response_counts_[downstream_step_idx]
+                << " < limit: " << context->info_->max_inflight_responses_;
+          }
         }
       }
     }
@@ -970,23 +983,30 @@ EnsembleContext::UpdateEnsembleState(
     if (completed_step->response_flags_ &
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
-      inflight_step_counts_[completed_step->step_idx_]--;
+
+      size_t completed_step_idx = completed_step->step_idx_;
+      step_inflight_response_counts_[completed_step_idx]--;
+
+      // Notify any producer threads blocked waiting for this step's capacity
+      if (info_->max_inflight_responses_ > 0 && !step_cvs_.empty()) {
+        std::lock_guard<std::mutex> lk(*step_mutexes_[completed_step_idx]);
+        step_cvs_[completed_step_idx]->notify_one();
+        LOG_VERBOSE(1) << "Ensemble '" << info_->ensemble_name_ << "' step "
+                       << completed_step_idx << " completed, inflight now: "
+                       << step_inflight_response_counts_[completed_step_idx]
+                       << ", notifying waiting producers";
+      }
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
 
-    // After a consumer step completes and a slot is freed, we need to check
-    // if there are buffered tensors from the producer waiting to be processed.
-    // We do this by finding the completed step's input tensors and adding them
-    // to the 'updated_tensors' set, which will cause GetNextSteps to
-    // re-evaluate the consumer step.
+    // Re-trigger scheduling for buffered outputs. When a consumer completes,
+    // check if producers have buffered outputs waiting and add them to
+    // updated_tensors to trigger immediate scheduling (maintains max throughput).
     const auto& completed_step_info = info_->steps_[completed_step->step_idx_];
     for (const auto& input_map_pair : completed_step_info.input_to_tensor_) {
       const auto& input_tensor_name = input_map_pair.second;
       auto& tensor_data = tensor_data_[input_tensor_name];
-      // If there are any iterations of this tensor still in the buffer,
-      // trigger a check for them. Using the oldest available iteration is
-      // sufficient to trigger the scheduling logic.
       if (!tensor_data.tensor_.empty()) {
         updated_tensors->emplace(
             input_tensor_name, tensor_data.tensor_.begin()->first);
@@ -1033,39 +1053,16 @@ EnsembleContext::GetNextSteps(
     const size_t step_idx = idx_pair.first;
     const IterationCount iteration_count = idx_pair.second;
 
-    const auto& step_info = info_->steps_[step_idx];
-    size_t buffer_limit = 0;
-    // The buffer limit is determined by its input tensor. We check all inputs
-    // and use the first limit found, assuming it's unlikely for a step to
-    // consume multiple throttled tensors.
-    for (const auto& input_map_pair : step_info.input_to_tensor_) {
-      const auto& tensor_name = input_map_pair.second;
-      const auto& tensor_data = tensor_data_.at(tensor_name);
-      if (tensor_data.max_buffered_tensors_ > 0) {
-        buffer_limit = tensor_data.max_buffered_tensors_;
-        break;
-      }
-    }
-    LOG_INFO << "Ensemble '" << info_->ensemble_name_
-                   << "' evaluating step " << step_idx
-                   << " iteration " << iteration_count
-                   << ", buffer_limit: " << buffer_limit
-                   << ", inflight: " << inflight_step_counts_[step_idx];
-
-    if ((buffer_limit > 0) &&
-        (inflight_step_counts_[step_idx] >= buffer_limit)) {
-      LOG_INFO << "Ensemble '" << info_->ensemble_name_
-                     << "' skipping step " << step_idx
-                     << " iteration " << iteration_count
-                     << " due to inflight limit (inflight: "
-                     << inflight_step_counts_[step_idx]
-                     << " >= limit: " << buffer_limit << ")";
-      continue;
-    }
-
     steps->emplace_back();
     RETURN_IF_ERROR(InitStep(step_idx, iteration_count, &(steps->back())));
-    inflight_step_counts_[step_idx]++;
+    
+    // Track as inflight. Checked by producers for backpressure; decremented on completion.
+    step_inflight_response_counts_[step_idx]++;
+
+    LOG_VERBOSE(1) << "Ensemble '" << info_->ensemble_name_
+                   << "' scheduled step " << step_idx << " iteration "
+                   << iteration_count << ", inflight now: "
+                   << step_inflight_response_counts_[step_idx];
   }
   inflight_step_counter_ += steps->size();
 
@@ -1146,16 +1143,6 @@ EnsembleContext::InitStep(
     size_t* ref_count = releasing_pair.second;
     if ((--(*ref_count)) == 0) {
       tensor_data->tensor_.erase(iteration_count);
-      if (tensor_data->max_buffered_tensors_ > 0) {
-        // A tensor has been consumed and its memory released from the
-        // buffer. Notify one waiting producer thread that a slot has
-        // opened up.
-        std::lock_guard<std::mutex> lk(tensor_data->blocking_state_->mtx_);
-        tensor_data->blocking_state_->cv_.notify_one();
-        LOG_INFO << "Ensemble buffer: tensor freed (iteration "
-                       << iteration_count << "), notifying waiting producers, "
-                       << "buffer size now: " << tensor_data->tensor_.size();
-      }
     }
   }
 
@@ -1731,27 +1718,31 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Parse step_buffer_size parameter for backpressure control
-  if (config.parameters().contains("step_buffer_size")) {
-    const auto& param = config.parameters().at("step_buffer_size");
+  // Parse backpressure configuration. Limits concurrent responses from decoupled
+  // steps to prevent memory growth..
+  if (config.parameters().contains("max_ensemble_inflight_responses")) {
+    const auto& param =
+        config.parameters().at("max_ensemble_inflight_responses");
     const std::string& value = param.string_value();
     try {
-      const int32_t size = std::stoi(value);
+      const int64_t size = std::stoll(value);
       if (size > 0) {
-        info_->decoupled_step_buffer_size_ = size;
+        info_->max_inflight_responses_ = static_cast<size_t>(size);
         LOG_INFO << "Ensemble '" << config.name()
-                 << "' configured with step_buffer_size: "
-                 << info_->decoupled_step_buffer_size_
-                 << " (limits tensor buffering for decoupled steps)";
+                 << "' configured with max_ensemble_inflight_responses: "
+                 << info_->max_inflight_responses_
+                 << " (limits concurrent responses from decoupled steps to "
+                 << "prevent memory growth)";
       } else {
-        LOG_WARNING << "Ignoring 'step_buffer_size' for ensemble '"
-                    << config.name() << "': size must be positive, got "
-                    << size;
+        LOG_WARNING
+            << "Ignoring 'max_ensemble_inflight_responses' for ensemble '"
+            << config.name() << "': value must be positive, got " << size;
       }
     }
     catch (const std::invalid_argument& ia) {
-      LOG_WARNING << "Failed to parse 'step_buffer_size' for ensemble '"
-                  << config.name() << "': " << ia.what();
+      LOG_WARNING
+          << "Failed to parse 'max_ensemble_inflight_responses' for ensemble '"
+          << config.name() << "': " << ia.what();
     }
   }
 }
