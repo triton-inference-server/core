@@ -525,10 +525,6 @@ EnsembleContext::EnsembleContext(
       step_mutexes_[i].reset(new std::mutex());
       step_cvs_[i].reset(new std::condition_variable());
     }
-
-    LOG_VERBOSE(1) << "Ensemble '" << info_->ensemble_name_
-                   << "' backpressure enabled: allocated synchronization "
-                   << "primitives for " << num_steps << " steps";
   }
 
   if (ensemble_status_.IsOk()) {
@@ -711,11 +707,8 @@ EnsembleContext::ResponseComplete(
           std::unique_lock<std::mutex> lk(
               *context->step_mutexes_[downstream_step_idx]);
 
-          size_t initial_inflight =
-              context->step_inflight_response_counts_[downstream_step_idx];
-
           // Block if downstream inflight count >= limit. Timeout after 300s to
-          // prevent deadlock. Unblocks when downstream completes a request.
+          // prevent any deadlock. Unblocks when downstream completes a request.
           auto timeout = std::chrono::seconds(300);
           bool capacity_available =
               context->step_cvs_[downstream_step_idx]->wait_for(
@@ -727,20 +720,13 @@ EnsembleContext::ResponseComplete(
 
           if (!capacity_available) {
             LOG_ERROR
-                << "Ensemble '" << context->info_->ensemble_name_ << "' step "
-                << this_step_idx << " blocked waiting for downstream step "
+                << "[Internal Error] Ensemble '"
+                << context->info_->ensemble_name_ << "' step " << this_step_idx
+                << " blocked waiting for downstream step "
                 << downstream_step_idx << " (inflight: "
                 << context->step_inflight_response_counts_[downstream_step_idx]
                 << " >= limit: " << context->info_->max_inflight_responses_
                 << ") for 300 seconds. Proceeding to avoid deadlock.";
-          } else if (
-              initial_inflight >= context->info_->max_inflight_responses_) {
-            LOG_VERBOSE(1)
-                << "Ensemble '" << context->info_->ensemble_name_ << "' step "
-                << this_step_idx << " unblocked, downstream step "
-                << downstream_step_idx << " inflight: "
-                << context->step_inflight_response_counts_[downstream_step_idx]
-                << " < limit: " << context->info_->max_inflight_responses_;
           }
         }
       }
@@ -991,10 +977,6 @@ EnsembleContext::UpdateEnsembleState(
       if (info_->max_inflight_responses_ > 0 && !step_cvs_.empty()) {
         std::lock_guard<std::mutex> lk(*step_mutexes_[completed_step_idx]);
         step_cvs_[completed_step_idx]->notify_one();
-        LOG_VERBOSE(1) << "Ensemble '" << info_->ensemble_name_ << "' step "
-                       << completed_step_idx << " completed, inflight now: "
-                       << step_inflight_response_counts_[completed_step_idx]
-                       << ", notifying waiting producers";
       }
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
@@ -1002,7 +984,8 @@ EnsembleContext::UpdateEnsembleState(
 
     // Re-trigger scheduling for buffered outputs. When a consumer completes,
     // check if producers have buffered outputs waiting and add them to
-    // updated_tensors to trigger immediate scheduling (maintains max throughput).
+    // updated_tensors to trigger immediate scheduling (maintains max
+    // throughput).
     const auto& completed_step_info = info_->steps_[completed_step->step_idx_];
     for (const auto& input_map_pair : completed_step_info.input_to_tensor_) {
       const auto& input_tensor_name = input_map_pair.second;
@@ -1055,14 +1038,10 @@ EnsembleContext::GetNextSteps(
 
     steps->emplace_back();
     RETURN_IF_ERROR(InitStep(step_idx, iteration_count, &(steps->back())));
-    
-    // Track as inflight. Checked by producers for backpressure; decremented on completion.
-    step_inflight_response_counts_[step_idx]++;
 
-    LOG_VERBOSE(1) << "Ensemble '" << info_->ensemble_name_
-                   << "' scheduled step " << step_idx << " iteration "
-                   << iteration_count << ", inflight now: "
-                   << step_inflight_response_counts_[step_idx];
+    // Track as inflight. Checked by producers for backpressure; decremented on
+    // completion.
+    step_inflight_response_counts_[step_idx]++;
   }
   inflight_step_counter_ += steps->size();
 
@@ -1718,8 +1697,8 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Parse backpressure configuration. Limits concurrent responses from decoupled
-  // steps to prevent memory growth..
+  // Parse backpressure configuration. Limits concurrent responses from
+  // decoupled steps to prevent memory growth.
   if (config.parameters().contains("max_ensemble_inflight_responses")) {
     const auto& param =
         config.parameters().at("max_ensemble_inflight_responses");
@@ -1728,19 +1707,16 @@ EnsembleScheduler::EnsembleScheduler(
       const int64_t size = std::stoll(value);
       if (size > 0) {
         info_->max_inflight_responses_ = static_cast<size_t>(size);
-        LOG_INFO << "Ensemble '" << config.name()
+        LOG_INFO << "Ensemble model '" << config.name()
                  << "' configured with max_ensemble_inflight_responses: "
-                 << info_->max_inflight_responses_
-                 << " (limits concurrent responses from decoupled steps to "
-                 << "prevent memory growth)";
+                 << info_->max_inflight_responses_;
       } else {
-        LOG_WARNING
-            << "Ignoring 'max_ensemble_inflight_responses' for ensemble '"
-            << config.name() << "': value must be positive, got " << size;
+        LOG_ERROR << "Ignoring 'max_ensemble_inflight_responses' for ensemble '"
+                  << config.name() << "': value must be positive, got " << size;
       }
     }
     catch (const std::invalid_argument& ia) {
-      LOG_WARNING
+      LOG_ERROR
           << "Failed to parse 'max_ensemble_inflight_responses' for ensemble '"
           << config.name() << "': " << ia.what();
     }
