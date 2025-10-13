@@ -1018,16 +1018,13 @@ EnsembleContext::GetNextSteps(
     }
   }
 
-  for (const auto& idx_pair : next_step_idx) {
-    const size_t step_idx = idx_pair.first;
-    const IterationCount iteration_count = idx_pair.second;
-
+  for (const auto& idx : next_step_idx) {
     steps->emplace_back();
-    RETURN_IF_ERROR(InitStep(step_idx, iteration_count, &(steps->back())));
+    RETURN_IF_ERROR(InitStep(idx.first, idx.second, &(steps->back())));
 
     // Track as inflight. Checked by producers for backpressure; decremented on
     // completion.
-    step_inflight_response_counts_[step_idx]++;
+    step_inflight_response_counts_[idx.first]++;
   }
   inflight_step_counter_ += steps->size();
 
