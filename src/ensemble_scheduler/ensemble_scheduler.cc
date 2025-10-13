@@ -522,8 +522,8 @@ EnsembleContext::EnsembleContext(
     step_cvs_.resize(num_steps);
 
     for (size_t i = 0; i < num_steps; i++) {
-      step_mutexes_[i].reset(new std::mutex());
-      step_cvs_[i].reset(new std::condition_variable());
+      step_mutexes_[i] = std::make_unique<std::mutex>();
+      step_cvs_[i] = std::make_unique<std::condition_variable>();
     }
   }
 
