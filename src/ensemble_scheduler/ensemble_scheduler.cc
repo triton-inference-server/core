@@ -1692,8 +1692,9 @@ EnsembleScheduler::EnsembleScheduler(
                  << "' configured with max_ensemble_inflight_responses: "
                  << info_->max_inflight_responses_;
       } else {
-        LOG_ERROR << "Ignoring 'max_ensemble_inflight_responses' for ensemble '"
-                  << config.name() << "': value must be positive, got " << size;
+        LOG_ERROR
+            << "Ignoring 'max_ensemble_inflight_responses' for ensemble model '"
+            << config.name() << "': value must be positive, got " << size;
       }
     }
     catch (const std::invalid_argument& ia) {
