@@ -46,6 +46,9 @@ class EnsembleContext;
 
 using IterationCount = size_t;
 
+// Timeout for mutex blocking to prevent potential deadlocks
+constexpr int kMutexTimeoutSeconds = 300;
+
 // Check if the model is configured to preserve the order of responses.
 // This is critical for async execution of ResponseComplete callbacks.
 inline bool
@@ -707,9 +710,9 @@ EnsembleContext::ResponseComplete(
           std::unique_lock<std::mutex> lk(
               *context->step_mutexes_[downstream_step_idx]);
 
-          // Block if downstream inflight count >= limit. Timeout after 300s to
-          // prevent any deadlock. Unblocks when downstream completes a request.
-          auto timeout = std::chrono::seconds(300);
+          // Block if downstream inflight count >= limit. Timeout to prevent
+          // potential deadlock. Unblocks when downstream completes a request.
+          auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
           bool capacity_available =
               context->step_cvs_[downstream_step_idx]->wait_for(
                   lk, timeout, [&] {
@@ -726,7 +729,8 @@ EnsembleContext::ResponseComplete(
                 << downstream_step_idx << " (inflight: "
                 << context->step_inflight_response_counts_[downstream_step_idx]
                 << " >= limit: " << context->info_->max_inflight_responses_
-                << ") for 300 seconds. Proceeding to avoid deadlock.";
+                << ") for " << kMutexTimeoutSeconds
+                << " seconds. Proceeding to avoid deadlock.";
           }
         }
       }
@@ -1697,10 +1701,10 @@ EnsembleScheduler::EnsembleScheduler(
             << config.name() << "': value must be positive, got " << size;
       }
     }
-    catch (const std::invalid_argument& ia) {
+    catch (const std::exception& e) {
       LOG_ERROR
           << "Failed to parse 'max_ensemble_inflight_responses' for ensemble '"
-          << config.name() << "': " << ia.what();
+          << config.name() << "': " << e.what();
     }
   }
 }
