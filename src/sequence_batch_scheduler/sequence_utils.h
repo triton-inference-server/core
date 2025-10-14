@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -93,7 +93,10 @@ class IterativeSequencer : public Sequencer {
       std::unique_ptr<InferenceRequest>& irequest,
       InferenceRequest::InternalReleaseFn&& callback) override
   {
-    if (irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_START) {
+    // Internal release callbacks are removed after getting invoked in
+    // InferenceRequest::Release. Make sure internal release callback is added
+    // for each iterative sequence request.
+    if (!(irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END)) {
       irequest->AddInternalReleaseCallback(std::move(callback));
     }
   }

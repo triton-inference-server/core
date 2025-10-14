@@ -485,7 +485,7 @@ InferenceRequest::Release(
     if (is_internal) {
       release_callbacks.erase(release_callbacks.begin() + i);
     }
-    release_fn(request, release_flags);
+    RETURN_IF_ERROR(release_fn(request, release_flags));
     if (request == nullptr) {
       return Status::Success;
     }
