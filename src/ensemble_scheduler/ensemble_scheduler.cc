@@ -711,17 +711,25 @@ EnsembleContext::ResponseComplete(
               *context->step_mutexes_[downstream_step_idx]);
 
           // Block if downstream inflight count >= limit. Timeout to prevent
-          // potential deadlock. Unblocks when downstream completes a request.
+          // potential deadlock. Unblocks when downstream completes a request
+          // or request is cancelled.
           auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
+          auto cancelled = [&]() {
+            auto& req = context->request_tracker_->Request();
+            return (req == nullptr) || req->IsCancelled();
+          };
+
           bool capacity_available =
               context->step_cvs_[downstream_step_idx]->wait_for(
                   lk, timeout, [&] {
-                    return context->step_inflight_response_counts_
-                               [downstream_step_idx] <
-                           context->info_->max_inflight_responses_;
+                    return cancelled() ||
+                           (context->step_inflight_response_counts_
+                                [downstream_step_idx] <
+                            context->info_->max_inflight_responses_);
                   });
 
-          if (!capacity_available) {
+          // Log error only if timeout occurred (not cancellation).
+          if (!capacity_available && !cancelled()) {
             LOG_ERROR
                 << "[Internal Error] Ensemble '"
                 << context->info_->ensemble_name_ << "' step " << this_step_idx
@@ -975,11 +983,12 @@ EnsembleContext::UpdateEnsembleState(
       inflight_step_counter_--;
 
       size_t completed_step_idx = completed_step->step_idx_;
-      step_inflight_response_counts_[completed_step_idx]--;
 
-      // Notify any producer threads blocked waiting for this step's capacity
+      // Decrement step_inflight_response_counts_, then notify any producer
+      // threads blocked waiting for this step's capacity
       if (info_->max_inflight_responses_ > 0 && !step_cvs_.empty()) {
         std::lock_guard<std::mutex> lk(*step_mutexes_[completed_step_idx]);
+        step_inflight_response_counts_[completed_step_idx]--;
         step_cvs_[completed_step_idx]->notify_one();
       }
     }
@@ -1028,7 +1037,10 @@ EnsembleContext::GetNextSteps(
 
     // Track as inflight. Checked by producers for backpressure; decremented on
     // completion.
-    step_inflight_response_counts_[idx.first]++;
+    if (info_->max_inflight_responses_ > 0 && !step_mutexes_.empty()) {
+      std::lock_guard<std::mutex> lk(*step_mutexes_[idx.first]);
+      step_inflight_response_counts_[idx.first]++;
+    }
   }
   inflight_step_counter_ += steps->size();
 
