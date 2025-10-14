@@ -1709,14 +1709,18 @@ EnsembleScheduler::EnsembleScheduler(
                  << info_->max_inflight_responses_;
       } else {
         LOG_ERROR
-            << "Ignoring 'max_ensemble_inflight_responses' for ensemble model '"
-            << config.name() << "': value must be positive, got " << size;
+            << "Ensemble model '" << config.name()
+            << "': max_ensemble_inflight_responses must be greater than 0. "
+            << "Received '" << size << "'. Falling back to default value ("
+            << info_->max_inflight_responses_ << ").";
       }
     }
     catch (const std::exception& e) {
-      LOG_ERROR
-          << "Failed to parse 'max_ensemble_inflight_responses' for ensemble '"
-          << config.name() << "': " << e.what();
+      LOG_ERROR << "Ensemble model '" << config.name()
+                << "': failed to parse max_ensemble_inflight_responses='"
+                << value << "': " << e.what()
+                << ". Falling back to default value ("
+                << info_->max_inflight_responses_ << ").";
     }
   }
 }
