@@ -1537,11 +1537,51 @@ EnsembleContext::ScheduleSteps(
 }  // namespace
 
 Status
+EnsembleScheduler::ValidateConfig(const inference::ModelConfig& config)
+{
+  // Validate max_ensemble_inflight_responses parameter if present
+  if (config.parameters().contains("max_ensemble_inflight_responses")) {
+    const auto& param =
+        config.parameters().at("max_ensemble_inflight_responses");
+    const std::string& value = param.string_value();
+
+    try {
+      const int parsed = std::stoi(value);
+      if (parsed <= 0) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "Invalid 'max_ensemble_inflight_responses' for ensemble model '" +
+                config.name() + "': value must be positive, got " +
+                std::to_string(parsed));
+      }
+    }
+    catch (const std::out_of_range& e) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Invalid 'max_ensemble_inflight_responses' for ensemble model '" +
+              config.name() + "': value exceeds maximum allowed (" +
+              std::to_string(INT_MAX) + ")");
+    }
+    catch (const std::invalid_argument& e) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "Invalid 'max_ensemble_inflight_responses' for ensemble model '" +
+              config.name() + "': cannot parse value '" + value + "'");
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
 EnsembleScheduler::Create(
     InferenceStatsAggregator* const stats_aggregator,
     InferenceServer* const server, const ModelIdentifier& model_id,
     const inference::ModelConfig& config, std::unique_ptr<Scheduler>* scheduler)
 {
+  // Validate configuration before constructing scheduler
+  RETURN_IF_ERROR(ValidateConfig(config));
+
   scheduler->reset(
       new EnsembleScheduler(stats_aggregator, server, model_id, config));
   return Status::Success;
@@ -1696,32 +1736,15 @@ EnsembleScheduler::EnsembleScheduler(
 
   // Parse backpressure configuration. Limits concurrent responses from
   // decoupled steps to prevent memory growth.
+  // Configuration is already validated in ValidateConfig()
   if (config.parameters().contains("max_ensemble_inflight_responses")) {
     const auto& param =
         config.parameters().at("max_ensemble_inflight_responses");
-    const std::string& value = param.string_value();
-    try {
-      const int64_t size = std::stoll(value);
-      if (size > 0) {
-        info_->max_inflight_responses_ = static_cast<size_t>(size);
-        LOG_INFO << "Ensemble model '" << config.name()
-                 << "' configured with max_ensemble_inflight_responses: "
-                 << info_->max_inflight_responses_;
-      } else {
-        LOG_ERROR
-            << "Ensemble model '" << config.name()
-            << "': max_ensemble_inflight_responses must be greater than 0. "
-            << "Received '" << size << "'. Falling back to default value ("
-            << info_->max_inflight_responses_ << ").";
-      }
-    }
-    catch (const std::exception& e) {
-      LOG_ERROR << "Ensemble model '" << config.name()
-                << "': failed to parse max_ensemble_inflight_responses='"
-                << value << "': " << e.what()
-                << ". Falling back to default value ("
-                << info_->max_inflight_responses_ << ").";
-    }
+    info_->max_inflight_responses_ =
+        static_cast<size_t>(std::stoi(param.string_value()));
+    LOG_INFO << "Ensemble model '" << config.name()
+             << "' configured with max_ensemble_inflight_responses: "
+             << info_->max_inflight_responses_;
   }
 }
 

@@ -122,6 +122,10 @@ class EnsembleScheduler : public Scheduler {
       InferenceServer* const server, const ModelIdentifier& model_id,
       const inference::ModelConfig& config);
 
+  // Validates ensemble configuration parameters before construction.
+  // Returns error Status if configuration is invalid.
+  static Status ValidateConfig(const inference::ModelConfig& config);
+
   void CacheLookUp(
       std::unique_ptr<InferenceRequest>& request,
       std::unique_ptr<InferenceResponse>& cached_response);
