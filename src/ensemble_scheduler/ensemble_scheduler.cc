@@ -694,55 +694,6 @@ EnsembleContext::ResponseComplete(
   auto pool = step_raw_ptr->ctx_->CallbackPool();
   auto fn = [response, flags, step_raw_ptr]() {
     auto step_ptr = std::unique_ptr<Step>(step_raw_ptr);
-    auto& context = step_ptr->ctx_;
-    size_t this_step_idx = step_ptr->step_idx_;
-    const auto& istep = context->info_->steps_[this_step_idx];
-
-    // Block this producer if downstream consumers are overloaded.
-    // Prevents memory exhaustion by limiting concurrent inflight responses.
-    if (context->info_->max_inflight_responses_ > 0 &&
-        !context->step_cv_vec_.empty()) {
-      for (const auto& output_pair : istep.output_to_tensor_) {
-        const auto& tensor_name = output_pair.second;
-        const auto& downstream_steps = (*context->tensor_to_step_)[tensor_name];
-
-        for (const auto& downstream_step_idx : downstream_steps) {
-          std::unique_lock<std::mutex> lk(
-              *context->step_mutexes_[downstream_step_idx]);
-
-          // Block if downstream inflight count >= limit. Timeout to prevent
-          // potential deadlock. Unblocks when downstream completes a request
-          // or request is cancelled.
-          auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
-          auto cancelled = [&]() {
-            auto& req = context->request_tracker_->Request();
-            return (req == nullptr) || req->IsCancelled();
-          };
-
-          bool capacity_available =
-              context->step_cv_vec_[downstream_step_idx]->wait_for(
-                  lk, timeout, [&] {
-                    return cancelled() ||
-                           (context->step_inflight_response_counts_
-                                [downstream_step_idx] <
-                            context->info_->max_inflight_responses_);
-                  });
-
-          // Log error only if timeout occurred (not cancellation).
-          if (!capacity_available && !cancelled()) {
-            LOG_ERROR
-                << "[Internal Error] Ensemble '"
-                << context->info_->ensemble_name_ << "' step " << this_step_idx
-                << " blocked waiting for downstream step "
-                << downstream_step_idx << " (inflight: "
-                << context->step_inflight_response_counts_[downstream_step_idx]
-                << " >= limit: " << context->info_->max_inflight_responses_
-                << ") for " << kMutexTimeoutSeconds
-                << " seconds. Proceeding to avoid deadlock.";
-          }
-        }
-      }
-    }
     step_ptr->response_flags_ = flags;
     step_ptr->response_ = response;
 
@@ -1483,6 +1434,39 @@ EnsembleContext::ScheduleSteps(
 {
   for (auto& step : steps) {
     step->ctx_ = context;
+    size_t this_step_idx = step->step_idx_;
+    
+    // Block if this step is overloaded.
+    if (context->info_->max_inflight_responses_ > 0 &&
+        !context->step_cv_vec_.empty()) {
+      std::unique_lock<std::mutex> lk(*context->step_mutexes_[this_step_idx]);
+
+      auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
+      auto cancelled = [&]() {
+        auto& req = context->request_tracker_->Request();
+        return (req == nullptr) || req->IsCancelled();
+      };
+
+      bool capacity_available = context->step_cv_vec_[this_step_idx]->wait_for(
+          lk, timeout, [&] {
+            return cancelled() ||
+                   (context->step_inflight_response_counts_[this_step_idx] <
+                    context->info_->max_inflight_responses_);
+          });
+
+      // Log error only if timeout occurred (not cancellation).
+      if (!capacity_available && !cancelled()) {
+        LOG_ERROR << "[Internal Error] Ensemble '"
+                  << context->info_->ensemble_name_
+                  << "' unable to schedule step " << this_step_idx
+                  << " (inflight: "
+                  << context->step_inflight_response_counts_[this_step_idx]
+                  << " >= limit: " << context->info_->max_inflight_responses_
+                  << ") for " << kMutexTimeoutSeconds
+                  << " seconds. Proceeding to avoid deadlock.";
+      }
+    }
+
     bool should_schedule = false;
     // Must release lock before InferAsync to avoid deadlock, as the same thread
     // will be calling request/response callbacks on cache hits, which will
