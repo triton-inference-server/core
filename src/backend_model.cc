@@ -1219,20 +1219,35 @@ TRITONBACKEND_RequestInputName(
             .c_str());
   }
 
-  // The request inputs are not allowed to change once the request
-  // makes it to the backend, so it is ok to just iterate through the
-  // map. This linear search is the best we can do given the need for
-  // the inputs to be in a map and given the typical small number of
-  // inputs is better than having every request maintain the inputs as
-  // both map and vector.
-  uint32_t cnt = 0;
-  for (const auto& pr : inputs) {
-    if (cnt++ == index) {
-      InferenceRequest::Input* in = pr.second;
-      *input_name = in->Name().c_str();
-      break;
+  // Optimization: only handle the +1 sequential access case for the same
+  // request on the same thread. Otherwise, restart from begin.
+  using IterT = decltype(inputs.cbegin());
+  struct Cache {
+    const void* request = nullptr;
+    uint32_t index = 0;
+    IterT iter{};
+  };
+  static thread_local Cache cache;
+
+  IterT it;
+  if (cache.request == tr && index == (cache.index + 1)) {
+    it = cache.iter;
+    ++it;  // move to next element (safe because index bounds checked above)
+  } else {
+    it = inputs.cbegin();
+    uint32_t adv = index;
+    while (adv-- > 0) {
+      ++it;
     }
   }
+
+  InferenceRequest::Input* in = it->second;
+  *input_name = in->Name().c_str();
+
+  // Update cache for potential next sequential access.
+  cache.request = tr;
+  cache.index = index;
+  cache.iter = it;
 
   return nullptr;  // success
 }
@@ -1273,20 +1288,35 @@ TRITONBACKEND_RequestInputByIndex(
             .c_str());
   }
 
-  // The request inputs are not allowed to change once the request
-  // makes it to the backend, so it is ok to just iterate through the
-  // map. This linear search is the best we can do given the need for
-  // the inputs to be in a map and given the typical small number of
-  // inputs is better than having every request maintain the inputs as
-  // both map and vector.
-  uint32_t cnt = 0;
-  for (const auto& pr : inputs) {
-    if (cnt++ == index) {
-      InferenceRequest::Input* in = pr.second;
-      *input = reinterpret_cast<TRITONBACKEND_Input*>(in);
-      break;
+  // Optimization: only handle the +1 sequential access case for the same
+  // request on the same thread. Otherwise, restart from begin.
+  using IterT = decltype(inputs.cbegin());
+  struct Cache {
+    const void* request = nullptr;
+    uint32_t index = 0;
+    IterT iter{};
+  };
+  static thread_local Cache cache;
+
+  IterT it;
+  if (cache.request == tr && index == (cache.index + 1)) {
+    it = cache.iter;
+    ++it;
+  } else {
+    it = inputs.cbegin();
+    uint32_t adv = index;
+    while (adv-- > 0) {
+      ++it;
     }
   }
+
+  InferenceRequest::Input* in = it->second;
+  *input = reinterpret_cast<TRITONBACKEND_Input*>(in);
+
+  // Update cache
+  cache.request = tr;
+  cache.index = index;
+  cache.iter = it;
 
   return nullptr;  // success
 }
@@ -1318,18 +1348,34 @@ TRITONBACKEND_RequestOutputName(
             .c_str());
   }
 
-  // The requested outputs are not allowed to change once the request
-  // makes it to the backend, so it is ok to just iterate through the
-  // set. This linear search is the best we can do given the requested
-  // outputs being in a set and given the typical small number of
-  // requested outputs it should not be a performance issue.
-  uint32_t cnt = 0;
-  for (const auto& rout : routputs) {
-    if (cnt++ == index) {
-      *output_name = rout.c_str();
-      break;
+  // Optimization: only handle +1 sequential access for the same request on
+  // the same thread. Otherwise restart from begin.
+  using IterT = decltype(routputs.cbegin());
+  struct Cache {
+    const void* request = nullptr;
+    uint32_t index = 0;
+    IterT iter{};
+  };
+  static thread_local Cache cache;
+
+  IterT it;
+  if (cache.request == tr && index == (cache.index + 1)) {
+    it = cache.iter;
+    ++it;
+  } else {
+    it = routputs.cbegin();
+    uint32_t adv = index;
+    while (adv-- > 0) {
+      ++it;
     }
   }
+
+  *output_name = it->c_str();
+
+  // Update cache
+  cache.request = tr;
+  cache.index = index;
+  cache.iter = it;
 
   return nullptr;  // success
 }
