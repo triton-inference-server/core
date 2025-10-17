@@ -1435,7 +1435,7 @@ EnsembleContext::ScheduleSteps(
   for (auto& step : steps) {
     step->ctx_ = context;
     size_t this_step_idx = step->step_idx_;
-    
+
     // Block if this step is overloaded.
     if (context->info_->max_inflight_responses_ > 0 &&
         !context->step_cv_vec_.empty()) {
@@ -1447,8 +1447,8 @@ EnsembleContext::ScheduleSteps(
         return (req == nullptr) || req->IsCancelled();
       };
 
-      bool capacity_available = context->step_cv_vec_[this_step_idx]->wait_for(
-          lk, timeout, [&] {
+      bool capacity_available =
+          context->step_cv_vec_[this_step_idx]->wait_for(lk, timeout, [&] {
             return cancelled() ||
                    (context->step_inflight_response_counts_[this_step_idx] <
                     context->info_->max_inflight_responses_);
