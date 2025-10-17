@@ -379,7 +379,7 @@ class EnsembleContext {
   // consumers are overloaded. Only active if max_inflight_responses_ > 0.
   std::vector<size_t> step_inflight_response_counts_;
   std::vector<std::unique_ptr<std::mutex>> step_mutexes_;
-  std::vector<std::unique_ptr<std::condition_variable>> step_cvs_;
+  std::vector<std::unique_ptr<std::condition_variable>> step_cv_vec_;
 
   // pointer that either points to 'pruned_tensor_to_step_' or to
   // 'info_->tensor_to_step_' if all ensemble outputs are requested
@@ -522,11 +522,11 @@ EnsembleContext::EnsembleContext(
 
   if (info_->max_inflight_responses_ > 0) {
     step_mutexes_.resize(num_steps);
-    step_cvs_.resize(num_steps);
+    step_cv_vec_.resize(num_steps);
 
     for (size_t i = 0; i < num_steps; i++) {
       step_mutexes_[i] = std::make_unique<std::mutex>();
-      step_cvs_[i] = std::make_unique<std::condition_variable>();
+      step_cv_vec_[i] = std::make_unique<std::condition_variable>();
     }
   }
 
@@ -701,7 +701,7 @@ EnsembleContext::ResponseComplete(
     // Block this producer if downstream consumers are overloaded.
     // Prevents memory exhaustion by limiting concurrent inflight responses.
     if (context->info_->max_inflight_responses_ > 0 &&
-        !context->step_cvs_.empty()) {
+        !context->step_cv_vec_.empty()) {
       for (const auto& output_pair : istep.output_to_tensor_) {
         const auto& tensor_name = output_pair.second;
         const auto& downstream_steps = (*context->tensor_to_step_)[tensor_name];
@@ -720,7 +720,7 @@ EnsembleContext::ResponseComplete(
           };
 
           bool capacity_available =
-              context->step_cvs_[downstream_step_idx]->wait_for(
+              context->step_cv_vec_[downstream_step_idx]->wait_for(
                   lk, timeout, [&] {
                     return cancelled() ||
                            (context->step_inflight_response_counts_
@@ -986,10 +986,10 @@ EnsembleContext::UpdateEnsembleState(
 
       // Decrement step_inflight_response_counts_, then notify any producer
       // threads blocked waiting for this step's capacity
-      if (info_->max_inflight_responses_ > 0 && !step_cvs_.empty()) {
+      if (info_->max_inflight_responses_ > 0 && !step_cv_vec_.empty()) {
         std::lock_guard<std::mutex> lk(*step_mutexes_[completed_step_idx]);
         step_inflight_response_counts_[completed_step_idx]--;
-        step_cvs_[completed_step_idx]->notify_one();
+        step_cv_vec_[completed_step_idx]->notify_one();
       }
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
@@ -1537,51 +1537,11 @@ EnsembleContext::ScheduleSteps(
 }  // namespace
 
 Status
-EnsembleScheduler::ValidateConfig(const inference::ModelConfig& config)
-{
-  // Validate max_ensemble_inflight_responses parameter if present
-  if (config.parameters().contains("max_ensemble_inflight_responses")) {
-    const auto& param =
-        config.parameters().at("max_ensemble_inflight_responses");
-    const std::string& value = param.string_value();
-
-    try {
-      const int parsed = std::stoi(value);
-      if (parsed <= 0) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "Invalid 'max_ensemble_inflight_responses' for ensemble model '" +
-                config.name() + "': value must be positive, got " +
-                std::to_string(parsed));
-      }
-    }
-    catch (const std::out_of_range& e) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          "Invalid 'max_ensemble_inflight_responses' for ensemble model '" +
-              config.name() + "': value exceeds maximum allowed (" +
-              std::to_string(INT_MAX) + ")");
-    }
-    catch (const std::invalid_argument& e) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          "Invalid 'max_ensemble_inflight_responses' for ensemble model '" +
-              config.name() + "': cannot parse value '" + value + "'");
-    }
-  }
-
-  return Status::Success;
-}
-
-Status
 EnsembleScheduler::Create(
     InferenceStatsAggregator* const stats_aggregator,
     InferenceServer* const server, const ModelIdentifier& model_id,
     const inference::ModelConfig& config, std::unique_ptr<Scheduler>* scheduler)
 {
-  // Validate configuration before constructing scheduler
-  RETURN_IF_ERROR(ValidateConfig(config));
-
   scheduler->reset(
       new EnsembleScheduler(stats_aggregator, server, model_id, config));
   return Status::Success;
@@ -1734,17 +1694,16 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Parse backpressure configuration. Limits concurrent responses from
-  // decoupled steps to prevent memory growth.
-  // Configuration is already validated in ValidateConfig()
-  if (config.parameters().contains("max_ensemble_inflight_responses")) {
-    const auto& param =
-        config.parameters().at("max_ensemble_inflight_responses");
+  // Backpressure configuration from protobuf field. Limits concurrent responses
+  // from decoupled steps to prevent memory growth. Value of 0 means unlimited.
+  if (config.has_ensemble_scheduling()) {
     info_->max_inflight_responses_ =
-        static_cast<size_t>(std::stoi(param.string_value()));
-    LOG_INFO << "Ensemble model '" << config.name()
-             << "' configured with max_ensemble_inflight_responses: "
-             << info_->max_inflight_responses_;
+        config.ensemble_scheduling().max_inflight_responses();
+    if (info_->max_inflight_responses_ > 0) {
+      LOG_INFO << "Ensemble model '" << config.name()
+               << "' configured with max_inflight_responses: "
+               << info_->max_inflight_responses_;
+    }
   }
 }
 
