@@ -482,7 +482,7 @@ InferenceRequest::Release(
   auto& release_callbacks = request->release_callbacks_;
   for (int i = release_callbacks.size() - 1; i >= 0; --i) {
     // Callbacks must be invoked before erasing
-    RETURN_IF_ERROR(release_fn(request, release_flags));
+    RETURN_IF_ERROR(release_callbacks[i].first(request, release_flags));
     if (release_callbacks[i].second) {
       // Erase internal callbacks to avoid duplicate callbacks in case of
       // reusing the InferenceRequest object
