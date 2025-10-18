@@ -481,11 +481,13 @@ InferenceRequest::Release(
   // object.
   auto& release_callbacks = request->release_callbacks_;
   for (int i = release_callbacks.size() - 1; i >= 0; --i) {
-    auto [release_fn, is_internal] = release_callbacks[i];
-    if (is_internal) {
+    // Callbacks must be invoked before erasing
+    RETURN_IF_ERROR(release_fn(request, release_flags));
+    if (release_callbacks[i].second) {
+      // Erase internal callbacks to avoid duplicate callbacks in case of
+      // reusing the InferenceRequest object
       release_callbacks.erase(release_callbacks.begin() + i);
     }
-    RETURN_IF_ERROR(release_fn(request, release_flags));
     if (request == nullptr) {
       return Status::Success;
     }
