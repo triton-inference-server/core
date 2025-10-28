@@ -84,10 +84,11 @@ struct EnsembleInfo {
   // backward path, ensemble tensor to the step that provides its data
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
-  // Maximum concurrent inflight requests to ensemble steps (downstream
-  // consumers). Prevents memory growth by blocking producers when limit is
-  // reached. Default value is 0, which indicates unlimited (no backpressure
-  // applied). Configured via 'max_inflight_requests' field in
+  // Maximum concurrent inflight requests allowed at each ensemble step
+  // (downstream consumer). This limit is applied per step, not globally for the
+  // entire ensemble model. Prevents memory growth by blocking producers when
+  // the limit is reached. Default value is 0, which indicates unlimited (no
+  // backpressure applied). Configured via 'max_inflight_requests' field in
   // ensemble_scheduling.
   size_t max_inflight_requests_ = 0;
 };
