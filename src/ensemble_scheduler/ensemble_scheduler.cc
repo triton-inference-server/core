@@ -31,6 +31,7 @@
 #include <condition_variable>
 #include <mutex>
 
+#include "constants.h"
 #include "cuda_utils.h"
 #include "metrics.h"
 #include "model.h"
@@ -45,9 +46,6 @@ namespace {
 class EnsembleContext;
 
 using IterationCount = size_t;
-
-// Timeout for mutex blocking to prevent potential deadlocks
-constexpr int kMutexTimeoutSeconds = 300;
 
 // Check if the model is configured to preserve the order of responses.
 // This is critical for async execution of ResponseComplete callbacks.
@@ -152,6 +150,81 @@ class RequestTracker {
   InferenceStatsAggregator context_stats_aggregator_;
   Status status_;
   triton::common::ThreadPool* const callback_pool_;
+};
+
+// Limits concurrent inflight requests for a single ensemble step.
+// Tracks inflight requests count and blocks producers when limit is reached.
+class StepInflightRequestLimiter {
+ public:
+  StepInflightRequestLimiter() : inflight_count_(0), max_inflight_(0) {}
+
+  void SetLimit(size_t limit) { max_inflight_ = limit; }
+
+  // Wait until capacity is available or request is cancelled.
+  // No-op if limit not configured (max_inflight_ == 0).
+  void WaitForCapacity(
+      RequestTracker* request_tracker, const size_t step_idx,
+      const std::string& ensemble_name)
+  {
+    // No limit configured, no blocking
+    if (max_inflight_ == 0) {
+      return;
+    }
+
+    std::unique_lock<std::mutex> lk(mutex_);
+    auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
+
+    auto is_request_cancelled = [&]() {
+      auto& req = request_tracker->Request();
+      return (req == nullptr) || req->IsCancelled();
+    };
+
+    bool capacity_available = cv_.wait_for(lk, timeout, [&] {
+      return is_request_cancelled() || (inflight_count_ < max_inflight_);
+    });
+
+    // Log error if timeout occurred (not cancellation), but proceed anyway
+    // to avoid deadlock. Caller always continues after this call.
+    if (!capacity_available && !is_request_cancelled()) {
+      LOG_ERROR << "[Internal Error] Ensemble '" << ensemble_name
+                << "' unable to schedule step " << step_idx
+                << " (inflight: " << inflight_count_
+                << " >= limit: " << max_inflight_ << ") for "
+                << kMutexTimeoutSeconds
+                << " seconds. Proceeding to avoid deadlock.";
+    }
+  }
+
+  // Increment inflight count after successfully scheduling a request.
+  // No-op if limit not configured (max_inflight_ == 0).
+  void IncrementInflightCount()
+  {
+    // No limit configured, no tracking needed
+    if (max_inflight_ == 0) {
+      return;
+    }
+    std::lock_guard<std::mutex> lk(mutex_);
+    inflight_count_++;
+  }
+
+  // Decrement inflight count when a request completes, and notify waiting
+  // producers. No-op if limit not configured (max_inflight_ == 0).
+  void DecrementInflightCount()
+  {
+    // No limit configured, no tracking needed
+    if (max_inflight_ == 0) {
+      return;
+    }
+    std::lock_guard<std::mutex> lk(mutex_);
+    inflight_count_--;
+    cv_.notify_one();
+  }
+
+ private:
+  size_t inflight_count_;
+  size_t max_inflight_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
 };
 
 // Step is used as 'userp' and keeps ensemble context alive
@@ -374,12 +447,9 @@ class EnsembleContext {
 
   size_t inflight_step_counter_;
 
-  // Backpressure support: Limits memory growth from decoupled models.
-  // Tracks inflight requests per step; blocks producers when downstream
-  // consumers are overloaded. Only active if max_inflight_requests_ > 0.
-  std::vector<size_t> step_inflight_request_counts_;
-  std::vector<std::unique_ptr<std::mutex>> step_mutexes_;
-  std::vector<std::unique_ptr<std::condition_variable>> step_cv_vec_;
+  // Inflight request limiters for each ensemble step.
+  std::vector<std::unique_ptr<StepInflightRequestLimiter>>
+      step_inflight_request_limiters_;
 
   // pointer that either points to 'pruned_tensor_to_step_' or to
   // 'info_->tensor_to_step_' if all ensemble outputs are requested
@@ -516,18 +586,13 @@ EnsembleContext::EnsembleContext(
     }
   }
 
-  // Initialize backpressure tracking if enabled.
+  // Initialize backpressure managers for each step.
   size_t num_steps = info_->steps_.size();
-  step_inflight_request_counts_.resize(num_steps, 0);
-
-  if (info_->max_inflight_requests_ > 0) {
-    step_mutexes_.resize(num_steps);
-    step_cv_vec_.resize(num_steps);
-
-    for (size_t i = 0; i < num_steps; i++) {
-      step_mutexes_[i] = std::make_unique<std::mutex>();
-      step_cv_vec_[i] = std::make_unique<std::condition_variable>();
-    }
+  step_inflight_request_limiters_.resize(num_steps);
+  for (size_t i = 0; i < num_steps; i++) {
+    step_inflight_request_limiters_[i] =
+        std::make_unique<StepInflightRequestLimiter>();
+    step_inflight_request_limiters_[i]->SetLimit(info_->max_inflight_requests_);
   }
 
   if (ensemble_status_.IsOk()) {
@@ -932,16 +997,8 @@ EnsembleContext::UpdateEnsembleState(
     if (completed_step->response_flags_ &
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
-
-      size_t completed_step_idx = completed_step->step_idx_;
-
-      // Decrement step_inflight_request_counts_, then notify any producer
-      // threads blocked waiting for this step's capacity
-      if (info_->max_inflight_requests_ > 0 && !step_cv_vec_.empty()) {
-        std::lock_guard<std::mutex> lk(*step_mutexes_[completed_step_idx]);
-        step_inflight_request_counts_[completed_step_idx]--;
-        step_cv_vec_[completed_step_idx]->notify_one();
-      }
+      step_inflight_request_limiters_[completed_step->step_idx_]
+          ->DecrementInflightCount();
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
@@ -1429,35 +1486,12 @@ EnsembleContext::ScheduleSteps(
     step->ctx_ = context;
     size_t this_step_idx = step->step_idx_;
 
-    // Apply backpressure to downstream steps only, not the entry step
-    if ((this_step_idx != 0) && context->info_->max_inflight_requests_ > 0 &&
-        !context->step_cv_vec_.empty()) {
-      std::unique_lock<std::mutex> lk(*context->step_mutexes_[this_step_idx]);
-
-      auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
-      auto cancelled = [&]() {
-        auto& req = context->request_tracker_->Request();
-        return (req == nullptr) || req->IsCancelled();
-      };
-
-      bool capacity_available =
-          context->step_cv_vec_[this_step_idx]->wait_for(lk, timeout, [&] {
-            return cancelled() ||
-                   (context->step_inflight_request_counts_[this_step_idx] <
-                    context->info_->max_inflight_requests_);
-          });
-
-      // Log error only if timeout occurred (not cancellation).
-      if (!capacity_available && !cancelled()) {
-        LOG_ERROR << "[Internal Error] Ensemble '"
-                  << context->info_->ensemble_name_
-                  << "' unable to schedule step " << this_step_idx
-                  << " (inflight: "
-                  << context->step_inflight_request_counts_[this_step_idx]
-                  << " >= limit: " << context->info_->max_inflight_requests_
-                  << ") for " << kMutexTimeoutSeconds
-                  << " seconds. Proceeding to avoid deadlock.";
-      }
+    // Apply backpressure to downstream steps only, not the entry step.
+    // Step 0 is scheduled on handler thread and should never block.
+    if (this_step_idx != 0) {
+      context->step_inflight_request_limiters_[this_step_idx]->WaitForCapacity(
+          context->request_tracker_, this_step_idx,
+          context->info_->ensemble_name_);
     }
 
     bool should_schedule = false;
@@ -1492,12 +1526,8 @@ EnsembleContext::ScheduleSteps(
         // Increment inflight counter AFTER successful scheduling. Always
         // increment for ALL steps (including step 0) to ensure symmetry with
         // decrement and prevent underflow when steps complete.
-        if (context->info_->max_inflight_requests_ > 0 &&
-            !context->step_mutexes_.empty()) {
-          std::lock_guard<std::mutex> lk(
-              *context->step_mutexes_[this_step_idx]);
-          context->step_inflight_request_counts_[this_step_idx]++;
-        }
+        context->step_inflight_request_limiters_[this_step_idx]
+            ->IncrementInflightCount();
         step.release();
         continue;
       } else {
