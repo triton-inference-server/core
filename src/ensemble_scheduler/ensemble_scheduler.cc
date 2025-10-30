@@ -156,9 +156,10 @@ class RequestTracker {
 // Tracks inflight requests count and blocks producers when limit is reached.
 class StepInflightRequestLimiter {
  public:
-  StepInflightRequestLimiter() : inflight_count_(0), max_inflight_(0) {}
-
-  void SetLimit(size_t limit) { max_inflight_ = limit; }
+  explicit StepInflightRequestLimiter(const size_t max_inflight)
+      : inflight_count_(0), max_inflight_(max_inflight)
+  {
+  }
 
   // Wait until capacity is available or request is cancelled.
   // No-op if limit not configured (max_inflight_ == 0).
@@ -222,7 +223,7 @@ class StepInflightRequestLimiter {
 
  private:
   size_t inflight_count_;
-  size_t max_inflight_;
+  const size_t max_inflight_;
   std::mutex mutex_;
   std::condition_variable cv_;
 };
@@ -588,11 +589,10 @@ EnsembleContext::EnsembleContext(
 
   // Initialize backpressure managers for each step.
   size_t num_steps = info_->steps_.size();
-  step_inflight_request_limiters_.resize(num_steps);
   for (size_t i = 0; i < num_steps; i++) {
-    step_inflight_request_limiters_[i] =
-        std::make_unique<StepInflightRequestLimiter>();
-    step_inflight_request_limiters_[i]->SetLimit(info_->max_inflight_requests_);
+    step_inflight_request_limiters_.emplace_back(
+        std::make_unique<StepInflightRequestLimiter>(
+            info_->max_inflight_requests_));
   }
 
   if (ensemble_status_.IsOk()) {
