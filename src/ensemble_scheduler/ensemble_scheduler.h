@@ -85,7 +85,7 @@ struct EnsembleInfo {
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
   // The maximum number of concurrent inflight requests allowed at each ensemble
-  // step per inference request. This limit is applied per step, not globally
+  // step per inference request. This limit is applied per step and per inference request, not globally
   // for the entire ensemble model. This limit prevents unbounded memory growth
   // when ensemble steps produce responses faster than downstream steps can
   // consume them. Default value is 0, which indicates that no limit is
