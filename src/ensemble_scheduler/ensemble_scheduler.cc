@@ -449,6 +449,7 @@ class EnsembleContext {
   size_t inflight_step_counter_;
 
   // Inflight request limiters for each ensemble step.
+  // Only allocated when max_inflight_requests_ > 0.
   std::vector<std::unique_ptr<StepInflightRequestLimiter>>
       step_inflight_request_limiters_;
 
@@ -587,12 +588,14 @@ EnsembleContext::EnsembleContext(
     }
   }
 
-  // Initialize backpressure managers for each step.
-  size_t num_steps = info_->steps_.size();
-  for (size_t i = 0; i < num_steps; i++) {
-    step_inflight_request_limiters_.emplace_back(
-        std::make_unique<StepInflightRequestLimiter>(
-            info_->max_inflight_requests_));
+  // Initialize step inflight request limiters for each step.
+  if (info_->max_inflight_requests_ > 0) {
+    size_t num_steps = info_->steps_.size();
+    for (size_t i = 0; i < num_steps; i++) {
+      step_inflight_request_limiters_.emplace_back(
+          std::make_unique<StepInflightRequestLimiter>(
+              info_->max_inflight_requests_));
+    }
   }
 
   if (ensemble_status_.IsOk()) {
@@ -997,8 +1000,10 @@ EnsembleContext::UpdateEnsembleState(
     if (completed_step->response_flags_ &
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
-      step_inflight_request_limiters_[completed_step->step_idx_]
-          ->DecrementInflightCount();
+      if (!step_inflight_request_limiters_.empty()) {
+        step_inflight_request_limiters_[completed_step->step_idx_]
+            ->DecrementInflightCount();
+      }
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
     updated_tensors->swap(completed_step->updated_tensors_);
@@ -1486,9 +1491,8 @@ EnsembleContext::ScheduleSteps(
     step->ctx_ = context;
     size_t this_step_idx = step->step_idx_;
 
-    // Apply backpressure to downstream steps only, not the entry step.
-    // Step 0 is scheduled on handler thread and should never block.
-    if (this_step_idx != 0) {
+    // Apply step inflight request limiters if configured.
+    if (!context->step_inflight_request_limiters_.empty()) {
       context->step_inflight_request_limiters_[this_step_idx]->WaitForCapacity(
           context->request_tracker_, this_step_idx,
           context->info_->ensemble_name_);
@@ -1526,8 +1530,10 @@ EnsembleContext::ScheduleSteps(
         // Increment inflight counter AFTER successful scheduling. Always
         // increment for ALL steps (including step 0) to ensure symmetry with
         // decrement and prevent underflow when steps complete.
-        context->step_inflight_request_limiters_[this_step_idx]
-            ->IncrementInflightCount();
+        if (!context->step_inflight_request_limiters_.empty()) {
+          context->step_inflight_request_limiters_[this_step_idx]
+              ->IncrementInflightCount();
+        }
         step.release();
         continue;
       } else {
@@ -1710,8 +1716,7 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Backpressure configuration from protobuf field. Limits concurrent requests
-  // from decoupled steps to prevent memory growth. Value of 0 means unlimited.
+  // Parse the configuration for max_inflight_requests from the protobuf field.
   if (config.has_ensemble_scheduling()) {
     info_->max_inflight_requests_ =
         config.ensemble_scheduling().max_inflight_requests();
