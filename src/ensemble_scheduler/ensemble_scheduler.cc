@@ -591,6 +591,7 @@ EnsembleContext::EnsembleContext(
   // Initialize step inflight request limiters for each step.
   if (info_->max_inflight_requests_ > 0) {
     size_t num_steps = info_->steps_.size();
+    step_inflight_request_limiters_.reserve(num_steps);
     for (size_t i = 0; i < num_steps; i++) {
       step_inflight_request_limiters_.emplace_back(
           std::make_unique<StepInflightRequestLimiter>(
