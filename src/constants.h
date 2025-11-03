@@ -95,6 +95,8 @@ constexpr int MAX_GRPC_MESSAGE_SIZE = INT32_MAX;
 constexpr uint64_t SEQUENCE_IDLE_DEFAULT_MICROSECONDS = 1000 * 1000;
 constexpr size_t CUDA_IPC_STRUCT_SIZE = 64;
 
+constexpr int kMutexTimeoutSeconds = 300;
+
 #ifdef TRITON_ENABLE_METRICS
 // MetricModelReporter expects a device ID for GPUs, but we reuse this device
 // ID for other metrics as well such as for CPU and Response Cache metrics
