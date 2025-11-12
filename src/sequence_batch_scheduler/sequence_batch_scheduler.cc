@@ -32,6 +32,7 @@
 #include <unistd.h>
 #endif
 #include <algorithm>
+#include <unordered_set>
 
 #include "constants.h"
 #include "dynamic_batch_scheduler.h"
@@ -747,8 +748,16 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   // max_sequence_idle_microseconds value is not exceed for any
   // sequence, and if it is it will release the sequence slot (if any)
   // allocated to that sequence.
-  uint64_t now_us = Now<std::chrono::microseconds>();
-  correlation_id_timestamps_[correlation_id] = now_us;
+  // 
+  // Skip updating timestamp for END requests that come from an already
+  // released sequence (force-ended by reaper), to prevent infinite loops
+  // where reaper keeps trying to end the same sequences.
+  if (!((irequest->Flags() & TRITONSERVER_REQUEST_FLAG_SEQUENCE_END) != 0 &&
+        sb_itr == sequence_to_batcherseqslot_map_.end() &&
+        bl_itr == sequence_to_backlog_map_.end())) {
+    uint64_t now_us = Now<std::chrono::microseconds>();
+    correlation_id_timestamps_[correlation_id] = now_us;
+  }
 
   // If this request starts a new sequence but the correlation ID
   // already has an in-progress sequence then that previous sequence
@@ -951,6 +960,9 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
       sequence_to_backlog_map_.erase(correlation_id);
       if (!seq_cancelled) {
         sequence_to_batcherseqslot_map_[correlation_id] = batcher_seq_slot;
+        
+        // Clean up backlog idle tracking when sequence moves to a slot
+        reaper_backlog_idle_counts.erase(correlation_id);
       }
     }
 
@@ -1042,6 +1054,10 @@ SequenceBatchScheduler::StopBackgroundThreads()
   }
 }
 
+// Static maps for tracking reaper state across iterations
+static std::unordered_map<InferenceRequest::SequenceId, int> reaper_backlog_idle_counts;
+static std::unordered_map<std::string, int> reaper_force_end_attempts;
+
 void
 SequenceBatchScheduler::ReaperThread(const int nice)
 {
@@ -1098,14 +1114,72 @@ SequenceBatchScheduler::ReaperThread(const int nice)
             auto idle_bl_itr =
                 sequence_to_backlog_map_.find(idle_correlation_id);
             if (idle_bl_itr != sequence_to_backlog_map_.end()) {
-              LOG_VERBOSE(1)
-                  << "Reaper: found idle CORRID " << idle_correlation_id;
-              wait_microseconds =
-                  std::min(wait_microseconds, backlog_idle_wait_microseconds);
-              ++cid_itr;
+              // Give backlog sequences 10x the idle timeout since they're waiting for slots
+              const uint64_t backlog_grace_multiplier = 10;
+              int64_t backlog_remaining_microseconds =
+                  (int64_t)(max_sequence_idle_microseconds_ * backlog_grace_multiplier) -
+                  (now_us - cid_itr->second);
+              
+              if (backlog_remaining_microseconds > 0) {
+                // Still within grace period
+                int& idle_count = reaper_backlog_idle_counts[idle_correlation_id];
+                idle_count++;
+                
+                // Only log the first few times to avoid log spam
+                if (idle_count <= 3) {
+                  LOG_VERBOSE(1)
+                      << "Reaper: found idle CORRID " << idle_correlation_id
+                      << " in backlog (count: " << idle_count << ")";
+                } else if (idle_count == 100) {
+                  // After many iterations, warn that slots may be stuck
+                  LOG_WARNING << "Reaper: CORRID " << idle_correlation_id 
+                             << " has been idle in backlog for extended time. "
+                             << "Model slots may be stuck.";
+                }
+                
+                wait_microseconds =
+                    std::min(wait_microseconds, backlog_idle_wait_microseconds);
+                ++cid_itr;
+              } else {
+                // Grace period exceeded - remove the backlog sequence
+                LOG_WARNING << "Reaper: removing idle backlog CORRID " << idle_correlation_id
+                            << " after " << (max_sequence_idle_microseconds_ * backlog_grace_multiplier) 
+                            << " microseconds (10x grace period)";
+                
+                // Find and remove the backlog queue
+                auto bl_queue_itr = backlog_queues_.begin();
+                while (bl_queue_itr != backlog_queues_.end()) {
+                  if (!(*bl_queue_itr)->queue_->empty() &&
+                      (*bl_queue_itr)->queue_->front()->CorrelationId() == idle_correlation_id) {
+                    // Move requests to cancelled list for cleanup
+                    while (!(*bl_queue_itr)->queue_->empty()) {
+                      cancelled_requests_.emplace_back(
+                          std::move((*bl_queue_itr)->queue_->front()));
+                      (*bl_queue_itr)->queue_->pop();
+                    }
+                    bl_queue_itr = backlog_queues_.erase(bl_queue_itr);
+                    break;
+                  } else {
+                    ++bl_queue_itr;
+                  }
+                }
+                
+                sequence_to_backlog_map_.erase(idle_bl_itr);
+                cid_itr = correlation_id_timestamps_.erase(cid_itr);
+                
+                // Clean up tracking
+                reaper_backlog_idle_counts.erase(idle_correlation_id);
+                
+                // Notify cleanup thread
+                clean_up_cv_.notify_one();
+              }
             } else {
               LOG_VERBOSE(1) << "Reaper: ignoring stale idle CORRID "
                              << idle_correlation_id;
+              
+              // Clean up tracking for sequences no longer in backlog
+              reaper_backlog_idle_counts.erase(idle_correlation_id);
+              
               cid_itr = correlation_id_timestamps_.erase(cid_itr);
             }
           }
@@ -1117,10 +1191,24 @@ SequenceBatchScheduler::ReaperThread(const int nice)
         const InferenceRequest::SequenceId& idle_correlation_id = pr.first;
         const TritonModelInstance* model_instance = pr.second.model_instance_;
         const uint32_t seq_slot = pr.second.seq_slot_;
+        
+        // Create unique key for tracking
+        std::string slot_key = model_instance->Name() + "_slot_" + std::to_string(seq_slot);
+        
+        // Track force-end attempts
+        int& attempts = reaper_force_end_attempts[slot_key];
+        attempts++;
 
-        LOG_VERBOSE(1) << "Reaper: force-ending CORRID " << idle_correlation_id
-                       << " in batcher " << model_instance->Name() << ", slot "
-                       << seq_slot;
+        if (attempts == 1) {
+          LOG_VERBOSE(1) << "Reaper: force-ending CORRID " << idle_correlation_id
+                         << " in batcher " << model_instance->Name() << ", slot "
+                         << seq_slot;
+        } else if (attempts == 10) {
+          LOG_ERROR << "Reaper: Failed to force-end CORRID " << idle_correlation_id
+                    << " after " << attempts << " attempts. Batcher " 
+                    << model_instance->Name() << " slot " << seq_slot 
+                    << " appears to be stuck and not processing null requests.";
+        }
 
         // A slot assignment is released by enqueuing a request with a
         // null request. The scheduler thread will interpret the null
@@ -1129,6 +1217,22 @@ SequenceBatchScheduler::ReaperThread(const int nice)
         std::unique_ptr<InferenceRequest> null_request;
         batchers_[model_instance]->Enqueue(
             seq_slot, idle_correlation_id, null_request);
+      }
+      
+      // Clean up successfully released slots from tracking
+      std::unordered_set<std::string> active_slots;
+      for (const auto& pr : force_end_sequences) {
+        std::string key = pr.second.model_instance_->Name() + "_slot_" + 
+                          std::to_string(pr.second.seq_slot_);
+        active_slots.insert(key);
+      }
+      
+      for (auto it = reaper_force_end_attempts.begin(); it != reaper_force_end_attempts.end();) {
+        if (active_slots.find(it->first) == active_slots.end()) {
+          it = reaper_force_end_attempts.erase(it);
+        } else {
+          ++it;
+        }
       }
 
       // Update timestamp for next idle check
