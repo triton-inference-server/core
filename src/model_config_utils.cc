@@ -1200,7 +1200,9 @@ AutoCompleteBackendFields(
   // PyTorch
   if (config->backend().empty()) {
     if ((config->platform() == kPyTorchLibTorchPlatform) ||
-        (config->default_model_filename() == kPyTorchLibTorchFilename)) {
+        (config->default_model_filename() == kPyTorchLibTorchFilename) ||
+        (config->platform() == kPyTorch2LibTorchPlatform) ||
+        (config->default_model_filename() == kPyTorch2LibTorchFilename)) {
       config->set_backend(kPyTorchBackend);
     } else if (
         config->platform().empty() &&
@@ -1218,12 +1220,20 @@ AutoCompleteBackendFields(
   }
   if (config->backend() == kPyTorchBackend) {
     if (config->platform().empty()) {
-      // do not introduce new platforms, new runtimes may ignore this field.
-      config->set_platform(kPyTorchLibTorchPlatform);
+      if (config->default_model_filename() == kPyTorch2LibTorchFilename) {
+        config->set_platform(kPyTorch2LibTorchPlatform);
+      } else {
+        // do not introduce new platforms, new runtimes may ignore this field.
+        config->set_platform(kPyTorchLibTorchPlatform);
+      }
     }
     if (config->runtime() != kPythonFilename &&
         config->default_model_filename().empty()) {
-      config->set_default_model_filename(kPyTorchLibTorchFilename);
+      if (config->platform() == kPyTorch2LibTorchPlatform) {
+        config->set_default_model_filename(kPyTorch2LibTorchFilename);
+      } else {
+        config->set_default_model_filename(kPyTorchLibTorchFilename);
+      }
     }
     return Status::Success;
   }
