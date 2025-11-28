@@ -112,6 +112,9 @@ class TritonModel : public Model {
   TritonModelBatchFiniFn_t ModelBatchFiniFn() const { return batch_fini_fn_; }
   TRITONBACKEND_Batcher** Batcher() { return &batcher_; }
 
+  // Check if the model is ready.
+  Status IsReady() const override;
+
  private:
   DISALLOW_COPY_AND_ASSIGN(TritonModel);
 

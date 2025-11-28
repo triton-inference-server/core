@@ -223,6 +223,7 @@ class TritonModelInstance {
   Status PrepareRequestsOrRespond(
       std::vector<std::unique_ptr<InferenceRequest>>& requests);
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
+  Status IsReady();
 
   std::shared_ptr<TritonBackendThread> triton_backend_thread_;
 
