@@ -57,9 +57,9 @@ constexpr char kPyTorchLibTorchPlatform[] = "pytorch_libtorch";
 constexpr char kPyTorchLibTorchFilename[] = "model.pt";
 constexpr char kPyTorchBackend[] = "pytorch";
 
-constexpr char kPyTorch2LibTorchPlatform[] = "pytorch2_libtorch";
-constexpr char kPyTorch2LibTorchFilename[] = "model.pt2";
-constexpr char kPyTorch2Backend[] = "pytorch2";
+constexpr char kPyTorchAotiPlatform[] = "torch_aoti";
+constexpr char kPyTorchAotiFilename[] = "model.pt2";
+constexpr char kPyTorchAotiBackend[] = "pytorch";
 
 constexpr char kPythonFilename[] = "model.py";
 constexpr char kPythonBackend[] = "python";
