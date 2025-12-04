@@ -2379,6 +2379,10 @@ GetBackendTypeFromPlatform(const std::string& platform_name)
     return BackendType::BACKEND_TYPE_PYTORCH;
   }
 
+  if (platform_name == kPyTorchAotiPlatform) {
+    return BackendType::BACKEND_TYPE_TORCHAOTI;
+  }
+
   return BackendType::BACKEND_TYPE_UNKNOWN;
 }
 
@@ -2403,6 +2407,10 @@ GetBackendType(const std::string& backend_name)
 
   if (backend_name == kPyTorchBackend) {
     return BackendType::BACKEND_TYPE_PYTORCH;
+  }
+
+  if (backend_name == kPyTorchAotiBackend) {
+    return BackendType::BACKEND_TYPE_TORCHAOTI;
   }
 
   return BackendType::BACKEND_TYPE_UNKNOWN;
