@@ -477,7 +477,7 @@ InferenceServer::ModelIsReady(
         if (!status.IsOk()) {
           *ready = false;
           LOG_VERBOSE(1) << "Model '" << model_name << "' version "
-                         << model_version
+                         << model->Version()
                          << " is not ready: " << status.Message();
         }
       }
