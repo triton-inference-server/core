@@ -1070,6 +1070,8 @@ AutoCompleteBackendFields(
     config->set_name(model_name);
   }
 
+  std::cerr << "\e[33m<<<< config: { backend: \"" << config->backend() << "\", platform: \"" << config->platform() << "\", filename: \"" << config->default_model_filename() << "\" } >>>>\e[0m" << std::endl;
+
   // Trying to fill the 'backend', 'default_model_filename' field.
 
   // TensorFlow
