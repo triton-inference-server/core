@@ -294,10 +294,12 @@ TritonModel::GetExecutionPolicy(const inference::ModelConfig& model_config)
 Status
 TritonModel::IsReady() const
 {
-  for (const auto& instances : {&instances_, &passive_instances_}) {
-    for (const auto& instance : (*instances)) {
-      RETURN_IF_ERROR(instance->IsReady());
-    }
+  for (const auto& instance : instances_) {
+    RETURN_IF_ERROR(instance->IsReady());
+  }
+
+  for (const auto& instance : passive_instances_) {
+    RETURN_IF_ERROR(instance->IsReady());
   }
 
   return Status::Success;
