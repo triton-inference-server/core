@@ -598,6 +598,7 @@ TritonModelInstance::IsReady()
   TritonBackend::TritonModelInstanceReadyFn_t inst_ready_fn =
       model_->Backend()->ModelInstanceReadyFn();
 
+  // Implementing inst_ready_fn is optional
   if (inst_ready_fn != nullptr) {
     TRITONBACKEND_ModelInstance* triton_model_instance =
         reinterpret_cast<TRITONBACKEND_ModelInstance*>(this);
