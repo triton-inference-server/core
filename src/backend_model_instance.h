@@ -117,6 +117,7 @@ class TritonModelInstance {
   Status Initialize();
   Status WarmUp();
   Status Schedule(std::vector<std::unique_ptr<InferenceRequest>>&& requests);
+  Status IsReady();
 
   TritonModel* Model() const { return model_; }
   void* State() { return state_; }

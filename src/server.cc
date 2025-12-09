@@ -472,6 +472,15 @@ InferenceServer::ModelIsReady(
             ->ModelState(model_name, model->Version(), &state)
             .IsOk()) {
       *ready = (state == ModelReadyState::READY);
+      if (*ready) {
+        Status status = model->IsReady();
+        if (!status.IsOk()) {
+          *ready = false;
+          LOG_VERBOSE(1) << "Model '" << model_name << "' version "
+                         << model->Version()
+                         << " is not ready: " << status.Message();
+        }
+      }
     }
   }
 

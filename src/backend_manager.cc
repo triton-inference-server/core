@@ -176,6 +176,7 @@ TritonBackend::ClearHandles()
   inst_init_fn_ = nullptr;
   inst_fini_fn_ = nullptr;
   inst_exec_fn_ = nullptr;
+  inst_ready_fn_ = nullptr;
 }
 
 Status
@@ -190,6 +191,7 @@ TritonBackend::LoadBackendLibrary(
   TritonModelInstanceInitFn_t iifn;
   TritonModelInstanceFiniFn_t iffn;
   TritonModelInstanceExecFn_t iefn;
+  TritonModelInstanceReadyFn_t irfn;
 
   {
     std::unique_ptr<SharedLibrary> slib;
@@ -234,6 +236,11 @@ TritonBackend::LoadBackendLibrary(
     RETURN_IF_ERROR(slib->GetEntrypoint(
         dlhandle_, "TRITONBACKEND_ModelInstanceExecute", false /* optional */,
         reinterpret_cast<void**>(&iefn)));
+
+    // Model instance ready function, optional
+    RETURN_IF_ERROR(slib->GetEntrypoint(
+        dlhandle_, "TRITONBACKEND_ModelInstanceReady", true /* optional */,
+        reinterpret_cast<void**>(&irfn)));
   }
 
   backend_init_fn_ = bifn;
@@ -244,6 +251,7 @@ TritonBackend::LoadBackendLibrary(
   inst_init_fn_ = iifn;
   inst_fini_fn_ = iffn;
   inst_exec_fn_ = iefn;
+  inst_ready_fn_ = irfn;
 
   return Status::Success;
 }

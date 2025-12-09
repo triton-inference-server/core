@@ -291,6 +291,20 @@ TritonModel::GetExecutionPolicy(const inference::ModelConfig& model_config)
   return Status::Success;
 }
 
+Status
+TritonModel::IsReady() const
+{
+  for (const auto& instance : instances_) {
+    RETURN_IF_ERROR(instance->IsReady());
+  }
+
+  for (const auto& instance : passive_instances_) {
+    RETURN_IF_ERROR(instance->IsReady());
+  }
+
+  return Status::Success;
+}
+
 std::vector<std::string>
 TritonModel::GetBackendLibrarySearchPaths(
     const std::string& model_path, int64_t version,
