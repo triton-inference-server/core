@@ -593,6 +593,29 @@ TritonModelInstance::Schedule(
 }
 
 Status
+TritonModelInstance::IsReady()
+{
+  TritonBackend::TritonModelInstanceReadyFn_t inst_ready_fn =
+      model_->Backend()->ModelInstanceReadyFn();
+
+  // Implementing inst_ready_fn is optional
+  if (inst_ready_fn != nullptr) {
+    TRITONBACKEND_ModelInstance* triton_model_instance =
+        reinterpret_cast<TRITONBACKEND_ModelInstance*>(this);
+    TRITONSERVER_Error* err = inst_ready_fn(triton_model_instance);
+    if (err != nullptr) {
+      Status status = Status(
+          TritonCodeToStatusCode(TRITONSERVER_ErrorCode(err)),
+          TRITONSERVER_ErrorMessage(err));
+      TRITONSERVER_ErrorDelete(err);
+      return status;
+    }
+  }
+
+  return Status::Success;
+}
+
+Status
 TritonModelInstance::Initialize()
 {
   RETURN_IF_ERROR(SetNumaConfigOnThread(HostPolicy()));

@@ -1643,6 +1643,15 @@ TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceExecute(
     TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
     const uint32_t request_count);
 
+/// Check if a model instance is ready. This function is optional, a backend is
+/// not required to implement it. This function is called to check if the
+/// model instance is ready to handle requests.
+///
+/// \param instance The model instance.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONBACKEND_ISPEC TRITONSERVER_Error* TRITONBACKEND_ModelInstanceReady(
+    TRITONBACKEND_ModelInstance* instance);
+
 /// Query the backend for different model attributes. This function is optional,
 /// a backend is not required to implement it. The backend is also not required
 /// to set all backend attribute listed. This function is called when

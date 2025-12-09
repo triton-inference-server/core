@@ -250,6 +250,9 @@ class Model {
     return reporter_;
   }
 
+  // Check if the model is ready.
+  virtual Status IsReady() const { return Status::Success; }
+
  protected:
   virtual std::map<TRITONSERVER_MemoryType, std::map<int64_t, size_t>>
   AccumulatedInstanceMemoryUsage() const

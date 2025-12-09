@@ -67,6 +67,8 @@ class TritonBackend {
   typedef TRITONSERVER_Error* (*TritonModelInstanceExecFn_t)(
       TRITONBACKEND_ModelInstance* instance, TRITONBACKEND_Request** requests,
       const uint32_t request_cnt);
+  typedef TRITONSERVER_Error* (*TritonModelInstanceReadyFn_t)(
+      TRITONBACKEND_ModelInstance* instance);
 
   static Status Create(
       const std::string& name, const std::string& dir,
@@ -111,6 +113,10 @@ class TritonBackend {
   TritonModelInstanceExecFn_t ModelInstanceExecFn() const
   {
     return inst_exec_fn_;
+  }
+  TritonModelInstanceReadyFn_t ModelInstanceReadyFn() const
+  {
+    return inst_ready_fn_;
   }
 
  private:
@@ -159,6 +165,7 @@ class TritonBackend {
   TritonModelInstanceInitFn_t inst_init_fn_;
   TritonModelInstanceFiniFn_t inst_fini_fn_;
   TritonModelInstanceExecFn_t inst_exec_fn_;
+  TritonModelInstanceReadyFn_t inst_ready_fn_;
 
   // Opaque state associated with the backend.
   void* state_;
