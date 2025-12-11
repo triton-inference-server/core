@@ -40,7 +40,7 @@ enum BackendType {
   BACKEND_TYPE_TENSORFLOW = 2,
   BACKEND_TYPE_ONNXRUNTIME = 3,
   BACKEND_TYPE_PYTORCH = 4,
-  BACKEND_TYPE_TORCHAOTI = 5,
+  BACKEND_TYPE_TORCHAOTI = 4,
 };
 
 // Get version of a model from the path containing the model
