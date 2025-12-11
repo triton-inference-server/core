@@ -62,7 +62,6 @@ requires = [
     "wheel==0.44.0",
     # For stubgen:
     "mypy==1.11.0",
-    "numpy<2",
 ]
 build-backend = "setuptools.build_meta"
 
