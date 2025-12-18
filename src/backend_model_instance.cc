@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -192,8 +192,8 @@ TritonModelInstance::TritonModelInstance(
         model_->Server()->ResponseCacheEnabled();
     MetricModelReporter::Create(
         model_->ModelId(), model_->Version(), id, response_cache_enabled,
-        model_->IsDecoupled(), model_->Config().metric_tags(),
-        model_->Config().model_metrics(), &reporter_);
+        model_->Config().metric_tags(), model_->Config().model_metrics(),
+        &reporter_);
   }
 #endif  // TRITON_ENABLE_METRICS
 }

@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -47,7 +47,7 @@ struct MetricReporterConfig {
 #ifdef TRITON_ENABLE_METRICS
   // Parses Metrics::ConfigMap and sets fields if specified
   void ParseConfig(
-      bool response_cache_enabled, bool is_decoupled,
+      bool response_cache_enabled,
       const inference::ModelMetrics& model_metrics);
   // Parses pairs of quantiles "quantile1:error1, quantile2:error2, ..."
   // and overwrites quantiles_ field if successful.
@@ -76,8 +76,6 @@ struct MetricReporterConfig {
   // This helps handle infer_stats aggregation for summaries on cache misses.
   bool cache_enabled_ = false;
 
-  bool is_decoupled_ = false;
-
  private:
   // Maps the metric family fullname to its lookup key. This field is required
   // because the users are expected to configure metric configuration
@@ -97,7 +95,7 @@ class MetricModelReporter {
   static Status Create(
       const triton::core::ModelIdentifier& model_id,
       const int64_t model_version, const int device,
-      bool response_cache_enabled, bool is_decoupled,
+      bool response_cache_enabled,
       // FIXME: [DLIS-7497] Merge model_tags with model_metrics
       const triton::common::MetricTagsMap& model_tags,
       const inference::ModelMetrics& model_metrics,
@@ -125,7 +123,7 @@ class MetricModelReporter {
  private:
   MetricModelReporter(
       const ModelIdentifier& model_id, const int64_t model_version,
-      const int device, bool response_cache_enabled, bool is_decoupled,
+      const int device, bool response_cache_enabled,
       const triton::common::MetricTagsMap& model_tags,
       const inference::ModelMetrics& model_metrics);
 

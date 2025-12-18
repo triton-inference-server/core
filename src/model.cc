@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -135,8 +135,7 @@ Model::Init(const bool is_config_provided)
 #ifdef TRITON_ENABLE_METRICS
   MetricModelReporter::Create(
       ModelId(), Version(), METRIC_REPORTER_ID_UTILITY, ResponseCacheEnabled(),
-      IsDecoupled(), Config().metric_tags(), Config().model_metrics(),
-      &reporter_);
+      Config().metric_tags(), Config().model_metrics(), &reporter_);
 #endif  // TRITON_ENABLE_METRICS
 
   return Status::Success;

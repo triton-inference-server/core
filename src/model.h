@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -146,12 +146,6 @@ class Model {
   bool ResponseCacheEnabled() const
   {
     return config_.response_cache().enable();
-  }
-
-  // Get whether the model is decoupled.
-  bool IsDecoupled() const
-  {
-    return config_.model_transaction_policy().decoupled();
   }
 
   // Get the number of required inputs

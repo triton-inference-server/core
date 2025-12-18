@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -42,8 +42,7 @@ namespace triton { namespace core {
 //
 void
 MetricReporterConfig::ParseConfig(
-    bool response_cache_enabled, bool is_decoupled,
-    const inference::ModelMetrics& model_metrics)
+    bool response_cache_enabled, const inference::ModelMetrics& model_metrics)
 {
   // Global config only for now in config map
   auto metrics_config_map = Metrics::ConfigMap();
@@ -74,7 +73,6 @@ MetricReporterConfig::ParseConfig(
 
   // Set flag to signal to stats aggregator if caching is enabled or not
   cache_enabled_ = response_cache_enabled;
-  is_decoupled_ = is_decoupled;
 
   // Override default histogram options if set in model_metrics.
   for (const auto& metric_control : model_metrics.metric_control()) {
@@ -139,7 +137,7 @@ const std::map<FailureReason, std::string>
 Status
 MetricModelReporter::Create(
     const ModelIdentifier& model_id, const int64_t model_version,
-    const int device, bool response_cache_enabled, bool is_decoupled,
+    const int device, bool response_cache_enabled,
     const triton::common::MetricTagsMap& model_tags,
     const inference::ModelMetrics& model_metrics,
     std::shared_ptr<MetricModelReporter>* metric_model_reporter)
@@ -169,15 +167,15 @@ MetricModelReporter::Create(
   }
 
   metric_model_reporter->reset(new MetricModelReporter(
-      model_id, model_version, device, response_cache_enabled, is_decoupled,
-      model_tags, model_metrics));
+      model_id, model_version, device, response_cache_enabled, model_tags,
+      model_metrics));
   reporter_map.insert({hash_labels, *metric_model_reporter});
   return Status::Success;
 }
 
 MetricModelReporter::MetricModelReporter(
     const ModelIdentifier& model_id, const int64_t model_version,
-    const int device, bool response_cache_enabled, bool is_decoupled,
+    const int device, bool response_cache_enabled,
     const triton::common::MetricTagsMap& model_tags,
     const inference::ModelMetrics& model_metrics)
 {
@@ -185,7 +183,7 @@ MetricModelReporter::MetricModelReporter(
   GetMetricLabels(&labels, model_id, model_version, device, model_tags);
 
   // Parse metrics config to control metric setup and behavior
-  config_.ParseConfig(response_cache_enabled, is_decoupled, model_metrics);
+  config_.ParseConfig(response_cache_enabled, model_metrics);
 
   // Initialize families and metrics
   InitializeCounters(labels);
@@ -306,12 +304,9 @@ MetricModelReporter::InitializeHistograms(
     const std::map<std::string, std::string>& labels)
 {
   // Update MetricReporterConfig::metric_map_ for new histograms.
-  // Only create response metrics if decoupled model to reduce metric output
   if (config_.latency_histograms_enabled_) {
-    if (config_.is_decoupled_) {
-      histogram_families_[kFirstResponseHistogram] =
-          &Metrics::FamilyFirstResponseDuration();
-    }
+    histogram_families_[kFirstResponseHistogram] =
+        &Metrics::FamilyFirstResponseDuration();
   }
 
   for (auto& iter : histogram_families_) {
