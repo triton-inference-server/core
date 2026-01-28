@@ -28,6 +28,8 @@
 
 #include <chrono>
 #include <future>
+#include <limits.h>
+#include <stdlib.h>
 
 #include "constants.h"
 #include "filesystem/api.h"
@@ -114,15 +116,24 @@ Model::Init(const bool is_config_provided)
     output_map_.insert(std::make_pair(io.name(), io));
 
     if (!io.label_filename().empty()) {
-      if (io.label_filename().find("..") != std::string::npos) {
+      auto label_path = JoinPath({model_dir_, io.label_filename()});
+      char resolved_path[PATH_MAX];
+      if (!realpath(label_path.c_str(), resolved_path)) {
         return Status(
-            Status::Code::INVALID_ARG,
-            "label_filename for output '" + io.name() + "' in model '" +
-                Name() +
-                "' does not support the '..' path operator for security "
-                "reasons.");
+            Status::Code::UNSUPPORTED,
+            "failed to resolve label file path '" + label_path +
+                "' for output '" + io.name() + "' in model '" + Name() +
+                "': " + std::string(strerror(errno)));
       }
-      const auto label_path = JoinPath({model_dir_, io.label_filename()});
+      label_path = std::string{resolved_path};
+      if (!label_path.starts_with(model_dir_ "/"))
+      {
+        return Status(
+            Status::Code::UNSUPPORTED,
+            "label file path '" + label_path + "' for output '" + io.name() +
+                "' in model '" + Name() +
+                "' is outside model directory");
+      }
       RETURN_IF_ERROR(label_provider_->AddLabels(io.name(), label_path));
     }
   }
