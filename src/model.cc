@@ -120,8 +120,7 @@ Model::Init(const bool is_config_provided)
         return Status(
             Status::Code::UNSUPPORTED,
             "label file path '" + label_path + "' for output '" + io.name() +
-                "' in model '" + Name() +
-                "' is outside model directory");
+                "' in model '" + Name() + "' is outside model directory");
       }
       RETURN_IF_ERROR(label_provider_->AddLabels(io.name(), label_path));
     }
