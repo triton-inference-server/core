@@ -114,6 +114,13 @@ Model::Init(const bool is_config_provided)
     output_map_.insert(std::make_pair(io.name(), io));
 
     if (!io.label_filename().empty()) {
+      if (io.label_filename().find("..") != std::string::npos) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "label_filename for output '" + io.name() + "' in model '"
+                + Name() + "' does not support the '..' path operator for "
+                "security reasons.");
+      }
       const auto label_path = JoinPath({model_dir_, io.label_filename()});
       RETURN_IF_ERROR(label_provider_->AddLabels(io.name(), label_path));
     }
