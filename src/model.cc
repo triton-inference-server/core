@@ -117,16 +117,7 @@ Model::Init(const bool is_config_provided)
 
     if (!io.label_filename().empty()) {
       auto label_path = JoinPath({model_dir_, io.label_filename()});
-      char resolved_path[PATH_MAX];
-      if (!realpath(label_path.c_str(), resolved_path)) {
-        return Status(
-            Status::Code::UNSUPPORTED,
-            "failed to resolve label file path '" + label_path +
-                "' for output '" + io.name() + "' in model '" + Name() +
-                "': " + std::string(strerror(errno)));
-      }
-      label_path = std::string{resolved_path};
-      if (!label_path.starts_with(model_dir_ "/"))
+      if (IsChildPathEscapingParentPath(label_path, model_dir_))
       {
         return Status(
             Status::Code::UNSUPPORTED,
