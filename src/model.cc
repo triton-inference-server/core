@@ -28,8 +28,6 @@
 
 #include <chrono>
 #include <future>
-#include <limits.h>
-#include <stdlib.h>
 
 #include "constants.h"
 #include "filesystem/api.h"
