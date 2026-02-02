@@ -968,8 +968,8 @@ EnsembleContext::PrepareSteps(
     std::set<std::pair<std::string, IterationCount>> updated_tensors;
     auto update_status = UpdateEnsembleState(completed_step, &updated_tensors);
 
-    // Preserve existing error status
-    // Only update if UpdateEnsembleState fails
+    // Preserve existing error status; only update ensemble_status_ if
+    // UpdateEnsembleState fails.
     if (!update_status.IsOk()) {
       ensemble_status_ = update_status;
     }
