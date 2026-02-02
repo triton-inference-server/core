@@ -974,7 +974,9 @@ EnsembleContext::PrepareSteps(
       ensemble_status_ = update_status;
     }
 
-    // Only compute and schedule next steps if ensemble is still OK
+    // Only compute and schedule next steps if ensemble is still OK; this
+    // prevents scheduling new steps after an error, as the condition now
+    // gates both GetNextSteps and subsequent FinishEnsemble logic.
     if (ensemble_status_.IsOk()) {
       ensemble_status_ = GetNextSteps(updated_tensors, ready_steps);
     }
