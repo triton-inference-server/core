@@ -962,8 +962,9 @@ EnsembleContext::PrepareSteps(
       return ensemble_status_;
     }
 
-    // Always consume completed steps to decrement inflight counter, even if
-    // ensemble has already failed. This allows proper cleanup after errors.
+    // Always process completed steps via UpdateEnsembleState to decrement the
+    // inflight counter, even if the ensemble has already failed. This allows
+    // proper cleanup after errors.
     std::set<std::pair<std::string, IterationCount>> updated_tensors;
     auto update_status = UpdateEnsembleState(completed_step, &updated_tensors);
 
