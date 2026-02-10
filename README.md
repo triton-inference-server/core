@@ -1,5 +1,5 @@
 <!--
-# Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -33,7 +33,7 @@
 This repository holds the source code and headers for the library that
 implements the core functionality of Triton. The *core* library can be
 built as described below and used directly via its [C
-API](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/inference_protocols.md#in-process-triton-server-api). To
+API](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/inprocess_c_api.md). To
 be useful the core library must be paired with one or more backends.
 You can learn more about backends in the [backend
 repo](https://github.com/triton-inference-server/backend).
