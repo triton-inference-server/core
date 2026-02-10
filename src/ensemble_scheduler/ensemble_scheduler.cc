@@ -481,6 +481,9 @@ class EnsembleContext {
   // better distinguish ensemble ending behavior (see annotation in
   // FinishEnsemble for details).
   bool response_sent_{false};
+
+  // Prevents duplicate error responses or status annotation when FinishEnsemble
+  // is invoked multiple times while steps are still in-flight.
   bool error_response_sent_{false};
 
   // The allocator that will be used to allocate buffers for the
@@ -1555,9 +1558,8 @@ EnsembleContext::ScheduleSteps(
       } else {
         std::lock_guard<std::mutex> lock(context->mutex_);
         context->ensemble_status_ = step_status;
-        LOG_VERBOSE(1) << "Ensemble '" << context->info_->ensemble_name_
-                       << "' failed to schedule step : "
-                       << step_status.Message();
+        LOG_WARNING << "Ensemble '" << context->info_->ensemble_name_
+                    << "' failed to schedule step : " << step_status.Message();
       }
     }
 
