@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -114,7 +114,13 @@ Model::Init(const bool is_config_provided)
     output_map_.insert(std::make_pair(io.name(), io));
 
     if (!io.label_filename().empty()) {
-      const auto label_path = JoinPath({model_dir_, io.label_filename()});
+      auto label_path = JoinPath({model_dir_, io.label_filename()});
+      if (IsChildPathEscapingParentPath(label_path, model_dir_)) {
+        return Status(
+            Status::Code::UNSUPPORTED,
+            "label file path '" + label_path + "' for output '" + io.name() +
+                "' in model '" + Name() + "' is outside model directory");
+      }
       RETURN_IF_ERROR(label_provider_->AddLabels(io.name(), label_path));
     }
   }
