@@ -1221,16 +1221,14 @@ class PyInferenceRequest
         responses_.push_back(std::move(py_response));
         return;
       }
-      // Move under lock - subsequent threads will see nullptr and queue instead
       response_future_local = std::move(response_future_);
     }
     // GIL must be held when decref'ing the future Python object and while
     // setting the result.
     {
       py::gil_scoped_acquire gil;
-      // Move into a GIL-scoped local so dec_ref runs with GIL held.
-      py::object response_future_for_use(std::move(response_future_local));
-      PyFutureSetResult(response_future_for_use, py_response);
+      py::object response_future_local(std::move(response_future_));
+      PyFutureSetResult(response_future_local, py_response);
     }
   }
 
