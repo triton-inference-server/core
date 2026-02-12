@@ -1227,8 +1227,9 @@ class PyInferenceRequest
     // setting the result.
     {
       py::gil_scoped_acquire gil;
-      py::object response_future_local(std::move(response_future_));
-      PyFutureSetResult(response_future_local, py_response);
+      // Use a GIL-scoped local so dec_ref runs with GIL held.
+      py::object response_future_for_use(std::move(response_future_local));
+      PyFutureSetResult(response_future_for_use, py_response);
     }
   }
 
