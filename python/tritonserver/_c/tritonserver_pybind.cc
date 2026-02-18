@@ -975,8 +975,7 @@ class PyInferenceRequest
     return nullptr;
   }
 
-  void SetResponseCallback(
-      const std::shared_ptr<PyInferenceRequest>& request)
+  void SetResponseCallback(const std::shared_ptr<PyInferenceRequest>& request)
   {
     // Keep the request wrapper alive until RESPONSE_COMPLETE_FINAL is
     // received, so that AddNextResponse never operates on a freed object.
