@@ -975,21 +975,28 @@ class PyInferenceRequest
     return nullptr;
   }
 
-  void SetResponseCallback()
+  void SetResponseCallback(
+      const std::shared_ptr<PyInferenceRequest>& request)
   {
-    // The caller is responsible for keeping the request wrapper alive until
-    // response complete final is received via GetNextResponse().
+    // Keep the request wrapper alive until RESPONSE_COMPLETE_FINAL is
+    // received, so that AddNextResponse never operates on a freed object.
+    std::shared_ptr<PyInferenceRequest>* prevent_prevent =
+        new std::shared_ptr<PyInferenceRequest>(request);
     ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
         triton_object_, allocator_.get(),
         nullptr /* response_allocator_userp */, ResponseCallback,
-        reinterpret_cast<void*>(this) /* response_userp */));
+        reinterpret_cast<void*>(prevent_prevent) /* response_userp */));
   }
   static void ResponseCallback(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
   {
-    reinterpret_cast<PyInferenceRequest*>(userp)->AddNextResponse(
-        response, flags);
+    auto* prevent_prevent =
+        reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp);
+    (*prevent_prevent)->AddNextResponse(response, flags);
+    if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
+      delete prevent_prevent;
+    }
   }
 
   // Trivial setters / getters
@@ -1687,7 +1694,7 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   {
     request->SetReleaseCallback(request);
     request->SetResponseAllocator();
-    request->SetResponseCallback();
+    request->SetResponseCallback(request);
     ThrowIfError(TRITONSERVER_ServerInferAsync(
         triton_object_, request->Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
@@ -1698,7 +1705,7 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   {
     request->SetReleaseCallback(request);
     request->SetResponseAllocator();
-    request->SetResponseCallback();
+    request->SetResponseCallback(request);
     ThrowIfError(
         TRITONSERVER_ServerInferAsync(triton_object_, request->Ptr(), nullptr));
   }
