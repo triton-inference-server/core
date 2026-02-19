@@ -979,22 +979,22 @@ class PyInferenceRequest
   {
     // Keep the request wrapper alive until RESPONSE_COMPLETE_FINAL is
     // received, so that AddNextResponse never operates on a freed object.
-    std::shared_ptr<PyInferenceRequest>* prevent_prevent =
+    std::shared_ptr<PyInferenceRequest>* request_ptr =
         new std::shared_ptr<PyInferenceRequest>(request);
     ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
         triton_object_, allocator_.get(),
         nullptr /* response_allocator_userp */, ResponseCallback,
-        reinterpret_cast<void*>(prevent_prevent) /* response_userp */));
+        reinterpret_cast<void*>(request_ptr) /* response_userp */));
   }
   static void ResponseCallback(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
   {
-    auto* prevent_prevent =
+    auto* request_ptr =
         reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp);
-    (*prevent_prevent)->AddNextResponse(response, flags);
+    (*request_ptr)->AddNextResponse(response, flags);
     if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
-      delete prevent_prevent;
+      delete request_ptr;
     }
   }
 
