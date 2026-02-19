@@ -1250,10 +1250,9 @@ class PyInferenceRequest
 
     auto set_result_if_pending = [](const py::object& future,
                                     const py::object& result) {
-      if (py::hasattr(future, "done") && future.attr("done")().cast<bool>()) {
-        return;
+      if (!future.attr("done")().cast<bool>()) {
+        future.attr("set_result")(result);
       }
-      future.attr("set_result")(result);
     };
 
     if (py::hasattr(py_future, "get_loop")) {
