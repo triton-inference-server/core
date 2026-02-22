@@ -62,6 +62,23 @@ AddToSet(const std::set<T>& src, std::set<T>* dest)
 
 static std::string file_prefix = "file:";
 
+Status
+ValidateModelName(const std::string& name)
+{
+  if (name.empty()) {
+    return Status(Status::Code::INVALID_ARG, "model name must not be empty");
+  }
+  if (name.find("..") != std::string::npos ||
+      name.find('/') != std::string::npos ||
+      name.find('\\') != std::string::npos) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "invalid model name '" + name +
+            "', model name must not contain path traversal characters");
+  }
+  return Status::Success;
+}
+
 // Internal repo agent used for model file override
 class LocalizeRepoAgent : public TritonRepoAgent {
  public:
@@ -773,6 +790,7 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   const auto& model_name = models.begin()->first;
+  RETURN_IF_ERROR(ValidateModelName(model_name));
 
   // Need ModelIdentifier to retrieve model state in lifecycle object,
   // which will not be available after graph update. So make a copy first
