@@ -790,7 +790,9 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   const auto& model_name = models.begin()->first;
-  RETURN_IF_ERROR(ValidateModelName(model_name));
+  if (type == ActionType::LOAD) {
+    RETURN_IF_ERROR(ValidateModelName(model_name));
+  }
 
   // Need ModelIdentifier to retrieve model state in lifecycle object,
   // which will not be available after graph update. So make a copy first
