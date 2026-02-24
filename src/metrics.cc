@@ -155,6 +155,32 @@ Metrics::Metrics()
               .Name("nv_inference_first_response_histogram_ms")
               .Help("Duration from request to first response in milliseconds")
               .Register(*registry_)),
+      inf_request_duration_histogram_us_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_inference_request_duration_histogram_us")
+              .Help("Histogram of end-to-end inference request duration, "
+                    "in microseconds")
+              .Register(*registry_)),
+      inf_queue_duration_histogram_us_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_inference_queue_duration_histogram_us")
+              .Help("Histogram of inference queuing duration, in microseconds")
+              .Register(*registry_)),
+      inf_compute_input_duration_histogram_us_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_inference_compute_input_duration_histogram_us")
+              .Help("Histogram of compute input duration, in microseconds")
+              .Register(*registry_)),
+      inf_compute_infer_duration_histogram_us_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_inference_compute_infer_duration_histogram_us")
+              .Help("Histogram of compute inference duration, in microseconds")
+              .Register(*registry_)),
+      inf_compute_output_duration_histogram_us_family_(
+          prometheus::BuildHistogram()
+              .Name("nv_inference_compute_output_duration_histogram_us")
+              .Help("Histogram of compute output duration, in microseconds")
+              .Register(*registry_)),
 
       // Summaries
       inf_request_summary_us_family_(
