@@ -453,8 +453,7 @@ InferenceServer::IsReady(bool* ready)
         // stub process died).
         if (vs.second.first == ModelReadyState::READY) {
           bool model_ready = false;
-          Status status =
-              ModelIsReady(mv.first.name_, vs.first, &model_ready);
+          Status status = ModelIsReady(mv.first.name_, vs.first, &model_ready);
           if (!status.IsOk() || !model_ready) {
             LOG_VERBOSE(1) << "Model '" << mv.first.name_ << "' version "
                            << vs.first
