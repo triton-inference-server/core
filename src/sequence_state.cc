@@ -217,7 +217,8 @@ SequenceStates::Initialize(
           return Status(
               Status::Code::INVALID_ARG,
               "state '" + state_config.input_name() +
-                  "' causes total element count to exceed maximum size of " +
+                  "' causes total element count or byte size to exceed maximum "
+                  "size of " +
                   std::to_string(INT64_MAX));
         }
         // Total number of bytes required is equal to the element count

@@ -415,7 +415,8 @@ SequenceBatchScheduler::GenerateInitialStateData(
         Status::Code::INVALID_ARG,
         std::string("'initial_state' field for state input name '") +
             state.input_name() +
-            "' causes total element count to exceed maximum size of " +
+            "' causes total element count or byte size to exceed maximum size "
+            "of " +
             std::to_string(SIZE_MAX));
   }
 

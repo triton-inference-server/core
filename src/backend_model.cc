@@ -831,7 +831,8 @@ TritonModel::SetConfiguredScheduler(
         return Status(
             Status::Code::INVALID_ARG,
             "input '" + input.name() +
-                "' causes total element count to exceed maximum size of " +
+                "' causes total element count or byte size to exceed maximum "
+                "size of " +
                 std::to_string(INT64_MAX));
       }
       if (!input.allow_ragged_batch() &&
