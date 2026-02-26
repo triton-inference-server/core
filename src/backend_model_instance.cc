@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -374,14 +374,19 @@ TritonModelInstance::GenerateWarmupData()
     for (const auto& input_meta : warmup_setting.inputs()) {
       auto element_count =
           triton::common::GetElementCount(input_meta.second.dims());
-      if (element_count == -1) {
+      if (element_count == triton::common::WILDCARD_SIZE) {
         return Status(
             Status::Code::INVALID_ARG,
             "warmup setting expects all variable-size dimensions are specified "
             "for input '" +
                 input_meta.first + "'");
+      } else if (element_count == triton::common::OVERFLOW_SIZE) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "warmup setting for input '" + input_meta.first +
+                "' causes total element count to exceed maximum size of " +
+                std::to_string(INT64_MAX));
       }
-
       int64_t batch_byte_size =
           element_count *
           triton::common::GetDataTypeByteSize(input_meta.second.data_type());
@@ -445,12 +450,20 @@ TritonModelInstance::GenerateWarmupData()
       for (const auto& input_meta : warmup_setting.inputs()) {
         auto batch1_element_count =
             triton::common::GetElementCount(input_meta.second.dims());
-        auto batch_byte_size =
-            batch1_element_count *
+        auto dtype_byte_size =
             triton::common::GetDataTypeByteSize(input_meta.second.data_type());
-        if (batch_byte_size == 0) {
-          batch_byte_size = batch1_element_count * sizeof(int32_t);
+        dtype_byte_size =
+            dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
+        if (batch1_element_count == triton::common::OVERFLOW_SIZE ||
+            (batch1_element_count >
+             INT64_MAX / static_cast<int64_t>(dtype_byte_size))) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "warmup setting for input '" + input_meta.first +
+                  "' causes total element count to exceed maximum size of " +
+                  std::to_string(INT64_MAX));
         }
+        auto batch_byte_size = batch1_element_count * dtype_byte_size;
 
         const char* allocated_ptr;
         switch (input_meta.second.input_data_type_case()) {

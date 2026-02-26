@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -159,7 +159,7 @@ SequenceStates::Initialize(
 
     // Convert the variable dimensions to 1 for the first request.
     for (auto& dim : state_config.dims()) {
-      if (dim == -1) {
+      if (dim == triton::common::WILDCARD_DIM) {
         dims.push_back(1);
       } else {
         dims.push_back(dim);
@@ -212,12 +212,27 @@ SequenceStates::Initialize(
       size_t state_size;
       if (state.second.data_type() == inference::DataType::TYPE_STRING) {
         auto element_count = triton::common::GetElementCount(dims);
+        if (element_count == triton::common::OVERFLOW_SIZE ||
+            (element_count > INT64_MAX / 4)) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "state '" + state_config.input_name() +
+                  "' causes total element count to exceed maximum size of " +
+                  std::to_string(INT64_MAX));
+        }
         // Total number of bytes required is equal to the element count
         // multiplied by 4.
         state_size = 4 * element_count;
       } else {
         state_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
+        if (state_size == static_cast<size_t>(triton::common::OVERFLOW_SIZE)) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "state '" + state_config.input_name() +
+                  "' causes total byte size to exceed maximum size of " +
+                  std::to_string(INT64_MAX));
+        }
       }
       if (use_growable_memory) {
         std::unique_ptr<GrowableMemory> growable_memory;

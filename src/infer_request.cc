@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1173,14 +1173,14 @@ InferenceRequest::Normalize()
     if (input_config->has_reshape()) {
       std::deque<int64_t> variable_size_values;
       for (int64_t idx = 0; idx < input_config->dims_size(); idx++) {
-        if (input_config->dims(idx) == -1) {
+        if (input_config->dims(idx) == triton::common::WILDCARD_DIM) {
           variable_size_values.push_back((*shape)[idx]);
         }
       }
 
       shape->clear();
       for (const auto& dim : input_config->reshape().shape()) {
-        if (dim == -1) {
+        if (dim == triton::common::WILDCARD_DIM) {
           shape->push_back(variable_size_values.front());
           variable_size_values.pop_front();
         } else {
@@ -1222,6 +1222,13 @@ InferenceRequest::Normalize()
           int64_t expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
           const size_t& byte_size = input.Data()->TotalByteSize();
+          if (expected_byte_size == triton::common::OVERFLOW_SIZE) {
+            return Status(
+                Status::Code::INVALID_ARG,
+                LogRequest() + "input '" + input_name +
+                    "' causes total byte size to exceed maximum size of " +
+                    std::to_string(INT64_MAX));
+          }
           if ((byte_size > LLONG_MAX) ||
               (static_cast<int64_t>(byte_size) != expected_byte_size)) {
             return Status(
@@ -1321,6 +1328,14 @@ InferenceRequest::ValidateBytesInputs(
   const char* buffer = nullptr;
   size_t remaining_buffer_size = 0;
   int64_t buffer_memory_id;
+
+  if (element_count == triton::common::OVERFLOW_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        LogRequest() + "input '" + input_name +
+            "' causes total element count to exceed maximum size of " +
+            std::to_string(INT64_MAX));
+  }
 
   // Validate elements until all buffers have been fully processed.
   while (remaining_buffer_size || buffer_next_idx < buffer_count) {

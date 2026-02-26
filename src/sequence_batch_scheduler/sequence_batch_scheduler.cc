@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -384,13 +384,14 @@ SequenceBatchScheduler::GenerateInitialStateData(
   auto state_dim = state.dims().begin();
   for (; initial_state_dim != initial_state.dims().end();
        initial_state_dim++, state_dim++) {
-    if (*initial_state_dim == -1) {
+    if (*initial_state_dim == triton::common::WILDCARD_DIM) {
       return Status(
           Status::Code::INVALID_ARG,
           std::string("'initial_state' field for state input name '") +
               state.input_name() + "' contains variable dimensions.");
     } else {
-      if (*state_dim != -1 && *initial_state_dim != *state_dim) {
+      if (*state_dim != triton::common::WILDCARD_DIM &&
+          *initial_state_dim != *state_dim) {
         return Status(
             Status::Code::INVALID_ARG,
             std::string("'initial_state' dim for input name '") +
@@ -408,6 +409,18 @@ SequenceBatchScheduler::GenerateInitialStateData(
   size_t dtype_byte_size =
       triton::common::GetDataTypeByteSize(initial_state.data_type());
   size_t total_byte_size = element_count * dtype_byte_size;
+
+  if (element_count == triton::common::OVERFLOW_SIZE ||
+      (dtype_byte_size != 0 &&
+       (element_count > INT64_MAX / (static_cast<int64_t>(dtype_byte_size)))) ||
+      (total_byte_size > INT64_MAX / sizeof(int32_t))) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("'initial_state' field for state input name '") +
+            state.input_name() +
+            "' causes total element count to exceed maximum size of " +
+            std::to_string(INT64_MAX));
+  }
 
   // Custom handling for TYPE_BYTES
   if (dtype_byte_size == 0) {

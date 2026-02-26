@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -357,6 +357,15 @@ ValidateIOShape(
     const int64_t reshape_size =
         triton::common::GetElementCount(io.reshape().shape());
 
+    if (dims_size == triton::common::OVERFLOW_SIZE ||
+        reshape_size == triton::common::OVERFLOW_SIZE) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          message_prefix_with_name +
+              "causes total element count to exceed maximum size of " +
+              std::to_string(INT64_MAX));
+    }
+
     // dims and reshape must both have same element count
     // or both have variable-size dimension.
     // Special case for empty reshape... expect dims to have element
@@ -372,12 +381,12 @@ ValidateIOShape(
     // each pair of the trunks separated by variable-size dimension has
     // the same element count. For instance, from [2, 4, -1, 6] to [8, -1, 1, 6]
     // is valid reshape as 2 * 4 = 8 and 6 = 1 * 6.
-    if (dims_size == -1) {
+    if (dims_size == triton::common::WILDCARD_DIM) {
       std::vector<int64_t> dim_element_cnts;
       std::vector<int64_t> reshape_element_cnts;
       int64_t current_cnt = 1;
       for (const auto& dim : io.dims()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           dim_element_cnts.push_back(current_cnt);
@@ -388,7 +397,7 @@ ValidateIOShape(
 
       current_cnt = 1;
       for (const auto& dim : io.reshape().shape()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           reshape_element_cnts.push_back(current_cnt);
