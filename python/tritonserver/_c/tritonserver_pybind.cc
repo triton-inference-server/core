@@ -1229,8 +1229,8 @@ class PyInferenceRequest
       }
       response_future_local = std::move(response_future_);
     }
-    // GIL must be held when decref'ing the future Python object and while
-    // setting the result.
+    // GIL must be held when decreasing the reference count of the future Python
+    // object and while setting the result.
     {
       py::gil_scoped_acquire gil;
       // Use a GIL-scoped local so dec_ref runs with GIL held.
