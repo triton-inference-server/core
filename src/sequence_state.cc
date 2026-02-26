@@ -224,15 +224,16 @@ SequenceStates::Initialize(
         // multiplied by 4.
         state_size = 4 * element_count;
       } else {
-        state_size =
+        auto byte_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
-        if (state_size == static_cast<size_t>(triton::common::OVERFLOW_SIZE)) {
+        if (byte_size == triton::common::OVERFLOW_SIZE) {
           return Status(
               Status::Code::INVALID_ARG,
               "state '" + state_config.input_name() +
                   "' causes total byte size to exceed maximum size of " +
                   std::to_string(INT64_MAX));
         }
+        state_size = static_cast<size_t>(byte_size);
       }
       if (use_growable_memory) {
         std::unique_ptr<GrowableMemory> growable_memory;

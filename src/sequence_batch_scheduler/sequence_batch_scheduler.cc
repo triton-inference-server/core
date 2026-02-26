@@ -408,24 +408,18 @@ SequenceBatchScheduler::GenerateInitialStateData(
   auto element_count = triton::common::GetElementCount(initial_state.dims());
   size_t dtype_byte_size =
       triton::common::GetDataTypeByteSize(initial_state.data_type());
-  size_t total_byte_size = element_count * dtype_byte_size;
-
+  dtype_byte_size = dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
   if (element_count == triton::common::OVERFLOW_SIZE ||
-      (dtype_byte_size != 0 &&
-       (element_count > INT64_MAX / (static_cast<int64_t>(dtype_byte_size)))) ||
-      (total_byte_size > INT64_MAX / sizeof(int32_t))) {
+      (static_cast<size_t>(element_count) > SIZE_MAX / dtype_byte_size)) {
     return Status(
         Status::Code::INVALID_ARG,
         std::string("'initial_state' field for state input name '") +
             state.input_name() +
             "' causes total element count to exceed maximum size of " +
-            std::to_string(INT64_MAX));
+            std::to_string(SIZE_MAX));
   }
 
-  // Custom handling for TYPE_BYTES
-  if (dtype_byte_size == 0) {
-    total_byte_size = sizeof(int32_t) * element_count;
-  }
+  size_t total_byte_size = static_cast<size_t>(element_count) * dtype_byte_size;
 
   switch (initial_state.state_data_case()) {
     case inference::ModelSequenceBatching_InitialState::StateDataCase::

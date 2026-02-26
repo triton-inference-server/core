@@ -381,7 +381,7 @@ ValidateIOShape(
     // each pair of the trunks separated by variable-size dimension has
     // the same element count. For instance, from [2, 4, -1, 6] to [8, -1, 1, 6]
     // is valid reshape as 2 * 4 = 8 and 6 = 1 * 6.
-    if (dims_size == triton::common::WILDCARD_DIM) {
+    if (dims_size == triton::common::WILDCARD_SIZE) {
       std::vector<int64_t> dim_element_cnts;
       std::vector<int64_t> reshape_element_cnts;
       int64_t current_cnt = 1;
