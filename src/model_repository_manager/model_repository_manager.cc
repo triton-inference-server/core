@@ -69,8 +69,7 @@ ValidateModelName(const std::string& name)
     return Status(Status::Code::INVALID_ARG, "model name must not be empty");
   }
   if (name.find("..") != std::string::npos ||
-      name.find('/') != std::string::npos ||
-      name.find('\\') != std::string::npos) {
+      name.find('/') != std::string::npos) {
     return Status(
         Status::Code::INVALID_ARG,
         "invalid model name '" + name +
