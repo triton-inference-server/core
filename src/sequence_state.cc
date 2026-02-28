@@ -235,7 +235,13 @@ SequenceStates::Initialize(
       } else {
         auto byte_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
-        if (byte_size == triton::common::OVERFLOW_SIZE) {
+        if (byte_size == triton::common::INVALID_SIZE) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "state '" + state_config.input_name() + "' shape " +
+                  triton::common::DimsListToString(dims) +
+                  " contains an invalid dimension");
+        } else if (byte_size == triton::common::OVERFLOW_SIZE) {
           return Status(
               Status::Code::INVALID_ARG,
               "state '" + state_config.input_name() +

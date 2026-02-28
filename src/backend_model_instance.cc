@@ -482,7 +482,8 @@ TritonModelInstance::GenerateWarmupData()
                   "size of " +
                   std::to_string(INT64_MAX));
         }
-        auto batch_byte_size = batch1_element_count * dtype_byte_size;
+        auto batch_byte_size =
+            batch1_element_count * static_cast<int64_t>(dtype_byte_size);
 
         const char* allocated_ptr;
         switch (input_meta.second.input_data_type_case()) {
