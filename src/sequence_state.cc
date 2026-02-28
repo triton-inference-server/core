@@ -231,7 +231,7 @@ SequenceStates::Initialize(
         }
         // Total number of bytes required is equal to the element count
         // multiplied by 4.
-        state_size = sizeof(int32_t) * element_count;
+        state_size = sizeof(int32_t) * static_cast<size_t>(element_count);
       } else {
         auto byte_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
