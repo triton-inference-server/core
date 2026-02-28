@@ -68,6 +68,13 @@ ValidateModelName(const std::string& name)
   if (name.empty()) {
     return Status(Status::Code::INVALID_ARG, "model name must not be empty");
   }
+  // Check if the name contains only whitespace characters
+  if (name.find_first_not_of(" \t\n\v\f\r") == std::string::npos) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "model name must not contain only whitespace characters");
+  }
+  // Check if the name contains path traversal characters
   if (name.find("..") != std::string::npos ||
       name.find('/') != std::string::npos) {
     return Status(
