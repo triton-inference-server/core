@@ -220,8 +220,7 @@ SequenceStates::Initialize(
                   " contains an invalid dimension");
         } else if (
             element_count == triton::common::OVERFLOW_SIZE ||
-            (element_count >
-             INT64_MAX / static_cast<int64_t>(sizeof(int32_t)))) {
+            (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t))) {
           return Status(
               Status::Code::INVALID_ARG,
               "state '" + state_config.input_name() +
