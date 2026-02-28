@@ -379,7 +379,13 @@ TritonModelInstance::GenerateWarmupData()
       dtype_byte_size =
           dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
 
-      if (element_count == triton::common::WILDCARD_SIZE) {
+      if (element_count == triton::common::INVALID_SIZE) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "warmup setting for input '" + input_meta.first + "' shape " +
+                triton::common::DimsListToString(input_meta.second.dims()) +
+                " contains an invalid dimension");
+      } else if (element_count == triton::common::WILDCARD_SIZE) {
         return Status(
             Status::Code::INVALID_ARG,
             "warmup setting expects all variable-size dimensions are specified "
@@ -458,7 +464,15 @@ TritonModelInstance::GenerateWarmupData()
             triton::common::GetDataTypeByteSize(input_meta.second.data_type());
         dtype_byte_size =
             dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
-        if (batch1_element_count == triton::common::OVERFLOW_SIZE ||
+
+        if (batch1_element_count == triton::common::INVALID_SIZE) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "warmup setting for input '" + input_meta.first + "' shape " +
+                  triton::common::DimsListToString(input_meta.second.dims()) +
+                  " contains an invalid dimension");
+        } else if (
+            batch1_element_count == triton::common::OVERFLOW_SIZE ||
             (batch1_element_count >
              INT64_MAX / static_cast<int64_t>(dtype_byte_size))) {
           return Status(

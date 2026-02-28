@@ -590,7 +590,8 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
       int64_t element_count =
           triton::common::GetElementCount(input.second.Shape());
 
-      size_t str_byte_size = static_cast<size_t>(4 * element_count);
+      size_t str_byte_size =
+          static_cast<size_t>(sizeof(int32_t) * element_count);
       max_str_byte_size = std::max(str_byte_size, max_str_byte_size);
       if (str_byte_size > max_byte_size) {
         max_byte_size = str_byte_size;
@@ -641,8 +642,9 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
       if (inference::DataType::TYPE_STRING == input.second.DType()) {
         new_input->AppendData(
             data_base,
-            triton::common::GetElementCount(input.second.Shape()) * 4, mem_type,
-            mem_id);
+            triton::common::GetElementCount(input.second.Shape()) *
+                sizeof(int32_t),
+            mem_type, mem_id);
       } else {
         new_input->AppendData(
             data_base, input.second.Data()->TotalByteSize(), mem_type, mem_id);
@@ -1222,7 +1224,13 @@ InferenceRequest::Normalize()
           int64_t expected_byte_size =
               triton::common::GetByteSize(data_type, input_dims);
           const size_t& byte_size = input.Data()->TotalByteSize();
-          if (expected_byte_size == triton::common::OVERFLOW_SIZE) {
+          if (expected_byte_size == triton::common::INVALID_SIZE) {
+            return Status(
+                Status::Code::INVALID_ARG,
+                LogRequest() + "input '" + input_name + "' shape " +
+                    triton::common::DimsListToString(input_dims) +
+                    " contains an invalid dimension");
+          } else if (expected_byte_size == triton::common::OVERFLOW_SIZE) {
             return Status(
                 Status::Code::INVALID_ARG,
                 LogRequest() + "input '" + input_name +
@@ -1329,7 +1337,13 @@ InferenceRequest::ValidateBytesInputs(
   size_t remaining_buffer_size = 0;
   int64_t buffer_memory_id;
 
-  if (element_count == triton::common::OVERFLOW_SIZE) {
+  if (element_count == triton::common::INVALID_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        LogRequest() + "input '" + input_name + "' shape " +
+            triton::common::DimsListToString(input_dims) +
+            " contains an invalid dimension");
+  } else if (element_count == triton::common::OVERFLOW_SIZE) {
     return Status(
         Status::Code::INVALID_ARG,
         LogRequest() + "input '" + input_name +

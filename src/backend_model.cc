@@ -827,7 +827,13 @@ TritonModel::SetConfiguredScheduler(
       enforce_equal_shape_tensors.insert({input.name(), true});
     } else {
       auto element_count = triton::common::GetElementCount(input);
-      if (element_count == triton::common::OVERFLOW_SIZE) {
+      if (element_count == triton::common::INVALID_SIZE) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "input '" + input.name() + "' shape " +
+                triton::common::DimsListToString(input.dims()) +
+                " contains an invalid dimension");
+      } else if (element_count == triton::common::OVERFLOW_SIZE) {
         return Status(
             Status::Code::INVALID_ARG,
             "input '" + input.name() +

@@ -409,7 +409,15 @@ SequenceBatchScheduler::GenerateInitialStateData(
   size_t dtype_byte_size =
       triton::common::GetDataTypeByteSize(initial_state.data_type());
   dtype_byte_size = dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
-  if (element_count == triton::common::OVERFLOW_SIZE ||
+  if (element_count == triton::common::INVALID_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        std::string("'initial_state' field for state input name '") +
+            state.input_name() + "' shape " +
+            triton::common::DimsListToString(initial_state.dims()) +
+            " contains an invalid dimension");
+  } else if (
+      element_count == triton::common::OVERFLOW_SIZE ||
       (static_cast<size_t>(element_count) > SIZE_MAX / dtype_byte_size)) {
     return Status(
         Status::Code::INVALID_ARG,

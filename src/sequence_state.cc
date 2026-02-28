@@ -212,8 +212,16 @@ SequenceStates::Initialize(
       size_t state_size;
       if (state.second.data_type() == inference::DataType::TYPE_STRING) {
         auto element_count = triton::common::GetElementCount(dims);
-        if (element_count == triton::common::OVERFLOW_SIZE ||
-            (element_count > INT64_MAX / 4)) {
+        if (element_count == triton::common::INVALID_SIZE) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "state '" + state_config.input_name() + "' shape " +
+                  triton::common::DimsListToString(dims) +
+                  " contains an invalid dimension");
+        } else if (
+            element_count == triton::common::OVERFLOW_SIZE ||
+            (element_count >
+             INT64_MAX / static_cast<int64_t>(sizeof(int32_t)))) {
           return Status(
               Status::Code::INVALID_ARG,
               "state '" + state_config.input_name() +
@@ -223,7 +231,7 @@ SequenceStates::Initialize(
         }
         // Total number of bytes required is equal to the element count
         // multiplied by 4.
-        state_size = 4 * element_count;
+        state_size = sizeof(int32_t) * element_count;
       } else {
         auto byte_size =
             triton::common::GetByteSize(state.second.data_type(), dims);
@@ -414,7 +422,7 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
         // Use all-zero input states for null requests.
         auto element_count =
             triton::common::GetElementCount(from_input_state_tensor->Shape());
-        auto state_size = 4 * element_count;
+        auto state_size = sizeof(int32_t) * element_count;
         data = std::make_shared<AllocatedMemory>(
             state_size, TRITONSERVER_MEMORY_CPU, 0);
       } else {
