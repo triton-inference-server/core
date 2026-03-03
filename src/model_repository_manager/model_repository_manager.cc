@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -61,6 +61,29 @@ AddToSet(const std::set<T>& src, std::set<T>* dest)
 }
 
 static std::string file_prefix = "file:";
+
+Status
+ValidateModelName(const std::string& name)
+{
+  if (name.empty()) {
+    return Status(Status::Code::INVALID_ARG, "model name must not be empty");
+  }
+  // Check if the name contains only whitespace characters
+  if (name.find_first_not_of(" \t\n\v\f\r") == std::string::npos) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "model name must not contain only whitespace characters");
+  }
+  // Check if the name contains path traversal characters
+  if (name.find("..") != std::string::npos ||
+      name.find('/') != std::string::npos) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "invalid model name '" + name +
+            "', model name must not contain path traversal characters");
+  }
+  return Status::Success;
+}
 
 // Internal repo agent used for model file override
 class LocalizeRepoAgent : public TritonRepoAgent {
@@ -773,6 +796,9 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   const auto& model_name = models.begin()->first;
+  if (type == ActionType::LOAD) {
+    RETURN_IF_ERROR(ValidateModelName(model_name));
+  }
 
   // Need ModelIdentifier to retrieve model state in lifecycle object,
   // which will not be available after graph update. So make a copy first
