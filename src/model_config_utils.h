@@ -39,7 +39,8 @@ enum BackendType {
   BACKEND_TYPE_TENSORRT = 1,
   BACKEND_TYPE_TENSORFLOW = 2,
   BACKEND_TYPE_ONNXRUNTIME = 3,
-  BACKEND_TYPE_PYTORCH = 4
+  BACKEND_TYPE_PYTORCH = 4,
+  BACKEND_TYPE_TORCHAOTI = 4,  // Torch AOTI uses the same backend as PyTorch
 };
 
 // Get version of a model from the path containing the model

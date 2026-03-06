@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -56,6 +56,10 @@ constexpr char kOpenVINORuntimeBackend[] = "openvino";
 constexpr char kPyTorchLibTorchPlatform[] = "pytorch_libtorch";
 constexpr char kPyTorchLibTorchFilename[] = "model.pt";
 constexpr char kPyTorchBackend[] = "pytorch";
+
+constexpr char kPyTorchAotiPlatform[] = "torch_aoti";
+constexpr char kPyTorchAotiFilename[] = "model.pt2";
+constexpr char kPyTorchAotiBackend[] = "pytorch";
 
 constexpr char kPythonFilename[] = "model.py";
 constexpr char kPythonBackend[] = "python";
