@@ -200,8 +200,8 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
             std::make_shared<Azure::Identity::ManagedIdentityCredential>();
         LOG_VERBOSE(1) << "Using system-assigned Managed Identity";
       }
-      client_ = std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
-          service_url, token_cred);
+      client_ =
+          std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
     } else if (as_cred.auth_type_ == "default") {
       // DefaultAzureCredential chains multiple credential sources:
       // environment variables → managed identity → Azure CLI → etc.
@@ -209,8 +209,8 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
                      << account_name;
       auto token_cred =
           std::make_shared<Azure::Identity::DefaultAzureCredential>();
-      client_ = std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
-          service_url, token_cred);
+      client_ =
+          std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
     } else if (!as_cred.account_key_.empty()) {
       // Shared Key authentication (backwards-compatible default).
       auto cred = std::make_shared<as::StorageSharedKeyCredential>(
