@@ -104,7 +104,7 @@ endif()
 if(${TRITON_ENABLE_AZURE_STORAGE})
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
-  
+
   find_package(azure-identity-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure identity ${azure-identity-cpp_VERSION}")
 endif()
