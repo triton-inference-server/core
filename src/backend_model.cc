@@ -826,20 +826,9 @@ TritonModel::SetConfiguredScheduler(
     if (input.is_shape_tensor()) {
       enforce_equal_shape_tensors.insert({input.name(), true});
     } else {
-      auto element_count = triton::common::GetElementCount(input);
-      if (element_count == triton::common::INVALID_SIZE) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "input '" + input.name() + "' shape " +
-                triton::common::DimsListToString(input.dims()) +
-                " contains an invalid dimension");
-      } else if (element_count == triton::common::OVERFLOW_SIZE) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "input '" + input.name() +
-                "' causes total element count to exceed maximum size of " +
-                std::to_string(INT64_MAX));
-      }
+      int64_t element_count = 0;
+      RETURN_IF_ERROR(
+          GetElementCount(input.dims(), input.name(), &element_count));
       if (!input.allow_ragged_batch() &&
           (element_count == triton::common::WILDCARD_SIZE)) {
         enforce_equal_shape_tensors.insert({input.name(), false});

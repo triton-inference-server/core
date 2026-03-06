@@ -515,9 +515,16 @@ InferenceRequest::Release(
   return Status::Success;
 }
 
-InferenceRequest*
-InferenceRequest::CopyAsNull(const InferenceRequest& from)
+Status
+InferenceRequest::CopyAsNull(
+    const InferenceRequest& from, std::unique_ptr<InferenceRequest>* to)
 {
+  if (to == nullptr) {
+    return Status(
+        Status::Code::INVALID_ARG, "InferenceRequest 'to' must not be null");
+  }
+  *to = nullptr;
+
   // Create a copy of 'from' request with artificial inputs and no requested
   // outputs. Maybe more efficient to share inputs and other metadata,
   // but that binds the Null request with 'from' request's lifecycle.
@@ -587,9 +594,15 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
     }
 
     if (input.second.DType() == inference::DataType::TYPE_STRING) {
-      int64_t element_count =
-          triton::common::GetElementCount(input.second.Shape());
-
+      int64_t element_count = 0;
+      RETURN_IF_ERROR(
+          GetElementCount(input.second.Shape(), input.first, &element_count));
+      if (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t)) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "element count for input '" + input.first +
+                "' exceeds maximum size of " + std::to_string(SIZE_MAX));
+      }
       size_t str_byte_size =
           static_cast<size_t>(sizeof(int32_t) * element_count);
       max_str_byte_size = std::max(str_byte_size, max_str_byte_size);
@@ -640,10 +653,17 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
       new_input->SetData(data);
     } else {
       if (inference::DataType::TYPE_STRING == input.second.DType()) {
+        int64_t element_count = 0;
+        RETURN_IF_ERROR(
+            GetElementCount(input.second.Shape(), input.first, &element_count));
+        if (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t)) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "element count for input '" + input.first +
+                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
+        }
         new_input->AppendData(
-            data_base,
-            triton::common::GetElementCount(input.second.Shape()) *
-                sizeof(int32_t),
+            data_base, static_cast<size_t>(element_count) * sizeof(int32_t),
             mem_type, mem_id);
       } else {
         new_input->AppendData(
@@ -664,7 +684,8 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
         std::make_pair(pr.second.Name(), std::addressof(pr.second)));
   }
 
-  return lrequest.release();
+  *to = std::move(lrequest);
+  return Status::Success;
 }
 
 Status
@@ -846,8 +867,13 @@ InferenceRequest::LoadInputStates()
   // Add the input states to the inference request.
   if (sequence_states_ != nullptr) {
     if (sequence_states_->IsNullRequest()) {
-      sequence_states_ =
-          SequenceStates::CopyAsNull(sequence_states_->NullSequenceStates());
+      std::shared_ptr<SequenceStates> copied;
+      Status status = SequenceStates::CopyAsNull(
+          sequence_states_->NullSequenceStates(), &copied);
+      if (!status.IsOk()) {
+        return status;
+      }
+      sequence_states_ = copied;
     }
     for (auto& input_state_pair : sequence_states_->InputStates()) {
       auto& input_state = input_state_pair.second;
@@ -1221,22 +1247,10 @@ InferenceRequest::Normalize()
           const std::vector<int64_t>& input_dims =
               input.IsShapeTensor() ? input.OriginalShape()
                                     : input.ShapeWithBatchDim();
-          int64_t expected_byte_size =
-              triton::common::GetByteSize(data_type, input_dims);
+          int64_t expected_byte_size = 0;
+          RETURN_IF_ERROR(GetByteSize(
+              data_type, input_dims, input_name, &expected_byte_size));
           const size_t& byte_size = input.Data()->TotalByteSize();
-          if (expected_byte_size == triton::common::INVALID_SIZE) {
-            return Status(
-                Status::Code::INVALID_ARG,
-                LogRequest() + "input '" + input_name + "' shape " +
-                    triton::common::DimsListToString(input_dims) +
-                    " contains an invalid dimension");
-          } else if (expected_byte_size == triton::common::OVERFLOW_SIZE) {
-            return Status(
-                Status::Code::INVALID_ARG,
-                LogRequest() + "input '" + input_name +
-                    "' causes total byte size to exceed maximum size of " +
-                    std::to_string(INT64_MAX));
-          }
           if ((byte_size > LLONG_MAX) ||
               (static_cast<int64_t>(byte_size) != expected_byte_size)) {
             return Status(
@@ -1326,7 +1340,7 @@ InferenceRequest::ValidateBytesInputs(
 {
   const auto& input_dims = input.ShapeWithBatchDim();
 
-  int64_t element_count = triton::common::GetElementCount(input_dims);
+  int64_t element_count = 0;
   int64_t element_checked = 0;
   size_t remaining_element_size = 0;
 
@@ -1337,19 +1351,7 @@ InferenceRequest::ValidateBytesInputs(
   size_t remaining_buffer_size = 0;
   int64_t buffer_memory_id;
 
-  if (element_count == triton::common::INVALID_SIZE) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        LogRequest() + "input '" + input_name + "' shape " +
-            triton::common::DimsListToString(input_dims) +
-            " contains an invalid dimension");
-  } else if (element_count == triton::common::OVERFLOW_SIZE) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        LogRequest() + "input '" + input_name +
-            "' causes total element count to exceed maximum size of " +
-            std::to_string(INT64_MAX));
-  }
+  RETURN_IF_ERROR(GetElementCount(input_dims, input_name, &element_count));
 
   // Validate elements until all buffers have been fully processed.
   while (remaining_buffer_size || buffer_next_idx < buffer_count) {

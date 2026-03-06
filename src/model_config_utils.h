@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -318,4 +318,45 @@ bool EquivalentInInstanceConfig(
 std::string InstanceConfigSignature(
     const inference::ModelInstanceGroup& instance_config);
 
+template <typename T>
+Status
+GetElementCount(const T& dims, const std::string& name, int64_t* cnt)
+{
+  *cnt = triton::common::GetElementCount(dims);
+  if (*cnt == triton::common::INVALID_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "tensor '" + name + "' contains an invalid dimension in shape " +
+            triton::common::DimsListToString(dims));
+  } else if (*cnt == triton::common::OVERFLOW_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG, "element count for tensor '" + name +
+                                       "' exceeds maximum size of " +
+                                       std::to_string(INT64_MAX));
+  } else {
+    return Status::Success;
+  }
+}
+
+template <typename T>
+Status
+GetByteSize(
+    const inference::DataType& dtype, const T& dims, const std::string& name,
+    int64_t* size)
+{
+  *size = triton::common::GetByteSize(dtype, dims);
+  if (*size == triton::common::INVALID_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG, "tensor '" + name +
+                                       "' contains an invalid dimension " +
+                                       triton::common::DimsListToString(dims));
+  } else if (*size == triton::common::OVERFLOW_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG, "byte size for tensor '" + name +
+                                       "' exceeds maximum size of " +
+                                       std::to_string(INT64_MAX));
+  } else {
+    return Status::Success;
+  }
+}
 }}  // namespace triton::core

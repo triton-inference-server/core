@@ -43,8 +43,8 @@ IterativeSequencer::RescheduleRequest(
   else if (!request->IsCancelled()) {
     // Use a null request to trigger sequence batcher cancellation so
     // additional request manipulation won't affect the actual request.
-    std::unique_ptr<InferenceRequest> ni(
-        InferenceRequest::CopyAsNull(*request));
+    std::unique_ptr<InferenceRequest> ni = nullptr;
+    RETURN_IF_ERROR(InferenceRequest::CopyAsNull(*request, &ni));
     ni->SetCorrelationId(request->CorrelationId());
     ni->SetFlags(TRITONSERVER_REQUEST_FLAG_SEQUENCE_END);
     ni->Cancel();

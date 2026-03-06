@@ -372,37 +372,20 @@ TritonModelInstance::GenerateWarmupData()
     int64_t max_zero_byte_size = 0;
     int64_t max_random_byte_size = 0;
     for (const auto& input_meta : warmup_setting.inputs()) {
-      auto element_count =
-          triton::common::GetElementCount(input_meta.second.dims());
-      size_t dtype_byte_size =
+      int64_t element_count = 0;
+      RETURN_IF_ERROR(GetElementCount(
+          input_meta.second.dims(), input_meta.first, &element_count));
+      int64_t dtype_byte_size =
           triton::common::GetDataTypeByteSize(input_meta.second.data_type());
       dtype_byte_size =
           dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
-
-      if (element_count == triton::common::INVALID_SIZE) {
+      if (element_count > INT64_MAX / dtype_byte_size) {
         return Status(
             Status::Code::INVALID_ARG,
-            "warmup setting for input '" + input_meta.first + "' shape " +
-                triton::common::DimsListToString(input_meta.second.dims()) +
-                " contains an invalid dimension");
-      } else if (element_count == triton::common::WILDCARD_SIZE) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "warmup setting expects all variable-size dimensions are specified "
-            "for input '" +
-                input_meta.first + "'");
-      } else if (
-          element_count == triton::common::OVERFLOW_SIZE ||
-          (element_count > INT64_MAX / static_cast<int64_t>(dtype_byte_size))) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "warmup setting for input '" + input_meta.first +
-                "' causes total element count or byte size to exceed maximum "
-                "size of " +
-                std::to_string(INT64_MAX));
+            "element count for input '" + input_meta.first +
+                "' exceeds maximum size of " + std::to_string(INT64_MAX));
       }
-      int64_t batch_byte_size =
-          element_count * static_cast<int64_t>(dtype_byte_size);
+      int64_t batch_byte_size = element_count * dtype_byte_size;
 
       switch (input_meta.second.input_data_type_case()) {
         case inference::ModelWarmup_Input::InputDataTypeCase::kZeroData:
@@ -458,32 +441,24 @@ TritonModelInstance::GenerateWarmupData()
       // Second pass to prepare original inputs.
       std::vector<std::shared_ptr<InferenceRequest::Input>> input_sps;
       for (const auto& input_meta : warmup_setting.inputs()) {
-        auto batch1_element_count =
-            triton::common::GetElementCount(input_meta.second.dims());
-        auto dtype_byte_size =
-            triton::common::GetDataTypeByteSize(input_meta.second.data_type());
+        int64_t batch1_element_count, dtype_byte_size = 0;
+        RETURN_IF_ERROR(GetElementCount(
+            input_meta.second.dims(), input_meta.first, &batch1_element_count));
+        RETURN_IF_ERROR(GetByteSize(
+            input_meta.second.data_type(), input_meta.second.dims(),
+            input_meta.first, &dtype_byte_size));
         dtype_byte_size =
             dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
 
-        if (batch1_element_count == triton::common::INVALID_SIZE) {
+        if (static_cast<size_t>(batch1_element_count) >
+            SIZE_MAX / dtype_byte_size) {
           return Status(
               Status::Code::INVALID_ARG,
-              "warmup setting for input '" + input_meta.first + "' shape " +
-                  triton::common::DimsListToString(input_meta.second.dims()) +
-                  " contains an invalid dimension");
-        } else if (
-            batch1_element_count == triton::common::OVERFLOW_SIZE ||
-            (batch1_element_count >
-             INT64_MAX / static_cast<int64_t>(dtype_byte_size))) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "warmup setting for input '" + input_meta.first +
-                  "' causes total element count or byte size to exceed maximum "
-                  "size of " +
-                  std::to_string(INT64_MAX));
+              "element count for input '" + input_meta.first +
+                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
         }
-        auto batch_byte_size =
-            batch1_element_count * static_cast<int64_t>(dtype_byte_size);
+        size_t batch_byte_size =
+            static_cast<size_t>(batch1_element_count) * dtype_byte_size;
 
         const char* allocated_ptr;
         switch (input_meta.second.input_data_type_case()) {

@@ -26,8 +26,11 @@
 
 #include "sequence_state.h"
 
+#include <cstdint>
+
 #include "cuda_utils.h"
 #include "memory.h"
+#include "model_config_utils.h"
 #include "triton/common/logging.h"
 
 namespace triton { namespace core {
@@ -211,42 +214,23 @@ SequenceStates::Initialize(
     } else {
       size_t state_size;
       if (state.second.data_type() == inference::DataType::TYPE_STRING) {
-        auto element_count = triton::common::GetElementCount(dims);
-        if (element_count == triton::common::INVALID_SIZE) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "state '" + state_config.input_name() + "' shape " +
-                  triton::common::DimsListToString(dims) +
-                  " contains an invalid dimension");
-        } else if (
-            element_count == triton::common::OVERFLOW_SIZE ||
-            (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t))) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "state '" + state_config.input_name() +
-                  "' causes total element count or byte size to exceed maximum "
-                  "size of " +
-                  std::to_string(INT64_MAX));
-        }
+        int64_t element_count = 0;
+        RETURN_IF_ERROR(
+            GetElementCount(dims, state_config.input_name(), &element_count));
         // Total number of bytes required is equal to the element count
         // multiplied by 4.
+        if (static_cast<size_t>(state_size) > SIZE_MAX / sizeof(int32_t)) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "element count for input '" + state_config.input_name() +
+                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
+        }
         state_size = sizeof(int32_t) * static_cast<size_t>(element_count);
       } else {
-        auto byte_size =
-            triton::common::GetByteSize(state.second.data_type(), dims);
-        if (byte_size == triton::common::INVALID_SIZE) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "state '" + state_config.input_name() + "' shape " +
-                  triton::common::DimsListToString(dims) +
-                  " contains an invalid dimension");
-        } else if (byte_size == triton::common::OVERFLOW_SIZE) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "state '" + state_config.input_name() +
-                  "' causes total byte size to exceed maximum size of " +
-                  std::to_string(INT64_MAX));
-        }
+        int64_t byte_size = 0;
+        RETURN_IF_ERROR(GetByteSize(
+            state.second.data_type(), dims, state_config.input_name(),
+            &byte_size));
         state_size = static_cast<size_t>(byte_size);
       }
       if (use_growable_memory) {
@@ -404,9 +388,16 @@ SequenceStates::OutputState(
   return OutputState(name, datatype, shape.data(), shape.size(), output_state);
 }
 
-std::shared_ptr<SequenceStates>
-SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
+Status
+SequenceStates::CopyAsNull(
+    const std::shared_ptr<SequenceStates>& from,
+    std::shared_ptr<SequenceStates>* to)
 {
+  if (to == nullptr) {
+    return Status(
+        Status::Code::INVALID_ARG, "SequenceStates 'to' must not be null");
+  }
+  *to = nullptr;
   std::shared_ptr<SequenceStates> lsequence_states;
   if (from != nullptr) {
     lsequence_states.reset(new SequenceStates);
@@ -425,9 +416,18 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
       if (from_input_state_tensor->DType() ==
           inference::DataType::TYPE_STRING) {
         // Use all-zero input states for null requests.
-        auto element_count =
-            triton::common::GetElementCount(from_input_state_tensor->Shape());
-        auto state_size = sizeof(int32_t) * element_count;
+        int64_t element_count = 0;
+        RETURN_IF_ERROR(GetElementCount(
+            from_input_state_tensor->Shape(), from_input_state_tensor->Name(),
+            &element_count));
+        if (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t)) {
+          return Status(
+              Status::Code::INVALID_ARG,
+              "element count for input '" + from_input_state_tensor->Name() +
+                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
+        }
+        size_t state_size =
+            static_cast<size_t>(element_count) * sizeof(int32_t);
         data = std::make_shared<AllocatedMemory>(
             state_size, TRITONSERVER_MEMORY_CPU, 0);
       } else {
@@ -454,6 +454,7 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
               false /* use_growable_memory */)));
     }
   }
-  return lsequence_states;
+  *to = std::move(lsequence_states);
+  return Status::Success;
 }
 }}  // namespace triton::core

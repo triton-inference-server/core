@@ -353,28 +353,11 @@ ValidateIOShape(
       }
     }
 
-    const int64_t dims_size = triton::common::GetElementCount(io.dims());
-    const int64_t reshape_size =
-        triton::common::GetElementCount(io.reshape().shape());
-
-    if (dims_size == triton::common::INVALID_SIZE ||
-        reshape_size == triton::common::INVALID_SIZE) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          message_prefix_with_name + "shape " +
-              triton::common::DimsListToString(io.dims()) +
-              " or reshaped shape " +
-              triton::common::DimsListToString(io.reshape().shape()) +
-              " contains an invalid dimension");
-    } else if (
-        dims_size == triton::common::OVERFLOW_SIZE ||
-        reshape_size == triton::common::OVERFLOW_SIZE) {
-      return Status(
-          Status::Code::INVALID_ARG,
-          message_prefix_with_name +
-              "causes total element count to exceed maximum size of " +
-              std::to_string(INT64_MAX));
-    }
+    int64_t dims_size = 0;
+    int64_t reshape_size = 0;
+    RETURN_IF_ERROR(GetElementCount(io.dims(), "dims", &dims_size));
+    RETURN_IF_ERROR(
+        GetElementCount(io.reshape().shape(), "reshape", &reshape_size));
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.

@@ -405,29 +405,18 @@ SequenceBatchScheduler::GenerateInitialStateData(
   }
 
   // Calculate total memory byte size
-  auto element_count = triton::common::GetElementCount(initial_state.dims());
+  int64_t element_count = 0;
+  RETURN_IF_ERROR(GetElementCount(
+      initial_state.dims(), state.input_name(), &element_count));
   size_t dtype_byte_size =
       triton::common::GetDataTypeByteSize(initial_state.data_type());
   dtype_byte_size = dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
-  if (element_count == triton::common::INVALID_SIZE) {
+  if (static_cast<size_t>(element_count) > SIZE_MAX / dtype_byte_size) {
     return Status(
         Status::Code::INVALID_ARG,
-        std::string("'initial_state' field for state input name '") +
-            state.input_name() + "' shape " +
-            triton::common::DimsListToString(initial_state.dims()) +
-            " contains an invalid dimension");
-  } else if (
-      element_count == triton::common::OVERFLOW_SIZE ||
-      (static_cast<size_t>(element_count) > SIZE_MAX / dtype_byte_size)) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        std::string("'initial_state' field for state input name '") +
-            state.input_name() +
-            "' causes total element count or byte size to exceed maximum size "
-            "of " +
-            std::to_string(SIZE_MAX));
+        "element count for input '" + state.input_name() +
+            "' exceeds maximum size of " + std::to_string(SIZE_MAX));
   }
-
   size_t total_byte_size = static_cast<size_t>(element_count) * dtype_byte_size;
 
   switch (initial_state.state_data_case()) {
@@ -1773,8 +1762,13 @@ DirectSequenceBatch::BatcherThread(const int nice)
           // Use null-request if necessary otherwise use the next
           // request in the queue...
           if (use_null_request) {
-            std::unique_ptr<InferenceRequest> ni(
-                InferenceRequest::CopyAsNull(*null_irequest));
+            std::unique_ptr<InferenceRequest> ni = nullptr;
+            Status status = InferenceRequest::CopyAsNull(*null_irequest, &ni);
+            if (!status.IsOk()) {
+              LOG_ERROR
+                  << "internal: unexpecting failure copying null request: "
+                  << status.Message();
+            }
             // Note that when the not-ready control input of the
             // request is "true" the model can't assume that any
             // other inputs are meaningful, including CORRID. So we
