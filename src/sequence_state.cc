@@ -212,27 +212,10 @@ SequenceStates::Initialize(
             initial_state_it->second.data_->TotalByteSize());
       }
     } else {
-      size_t state_size;
-      if (state.second.data_type() == inference::DataType::TYPE_STRING) {
-        int64_t element_count = 0;
-        RETURN_IF_ERROR(
-            GetElementCount(dims, state_config.input_name(), &element_count));
-        // Total number of bytes required is equal to the element count
-        // multiplied by 4.
-        if (static_cast<size_t>(state_size) > SIZE_MAX / sizeof(int32_t)) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "element count for input '" + state_config.input_name() +
-                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
-        }
-        state_size = sizeof(int32_t) * static_cast<size_t>(element_count);
-      } else {
-        int64_t byte_size = 0;
-        RETURN_IF_ERROR(GetByteSize(
-            state.second.data_type(), dims, state_config.input_name(),
-            &byte_size));
-        state_size = static_cast<size_t>(byte_size);
-      }
+      int64_t state_size = 0;
+      RETURN_IF_ERROR(GetByteSize(
+          state.second.data_type(), dims, state_config.input_name(),
+          &state_size));
       if (use_growable_memory) {
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
@@ -415,19 +398,10 @@ SequenceStates::CopyAsNull(
       std::shared_ptr<AllocatedMemory> data;
       if (from_input_state_tensor->DType() ==
           inference::DataType::TYPE_STRING) {
-        // Use all-zero input states for null requests.
-        int64_t element_count = 0;
-        RETURN_IF_ERROR(GetElementCount(
-            from_input_state_tensor->Shape(), from_input_state_tensor->Name(),
-            &element_count));
-        if (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t)) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "element count for input '" + from_input_state_tensor->Name() +
-                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
-        }
-        size_t state_size =
-            static_cast<size_t>(element_count) * sizeof(int32_t);
+        int64_t state_size = 0;
+        RETURN_IF_ERROR(GetByteSize(
+            inference::DataType::TYPE_STRING, from_input_state_tensor->Shape(),
+            from_input_state_tensor->Name(), &state_size));
         data = std::make_shared<AllocatedMemory>(
             state_size, TRITONSERVER_MEMORY_CPU, 0);
       } else {

@@ -372,20 +372,10 @@ TritonModelInstance::GenerateWarmupData()
     int64_t max_zero_byte_size = 0;
     int64_t max_random_byte_size = 0;
     for (const auto& input_meta : warmup_setting.inputs()) {
-      int64_t element_count = 0;
-      RETURN_IF_ERROR(GetElementCount(
-          input_meta.second.dims(), input_meta.first, &element_count));
-      int64_t dtype_byte_size =
-          triton::common::GetDataTypeByteSize(input_meta.second.data_type());
-      dtype_byte_size =
-          dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
-      if (element_count > INT64_MAX / dtype_byte_size) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "element count for input '" + input_meta.first +
-                "' exceeds maximum size of " + std::to_string(INT64_MAX));
-      }
-      int64_t batch_byte_size = element_count * dtype_byte_size;
+      int64_t batch_byte_size = 0;
+      RETURN_IF_ERROR(GetByteSize(
+          input_meta.second.data_type(), input_meta.second.dims(),
+          input_meta.first, &batch_byte_size));
 
       switch (input_meta.second.input_data_type_case()) {
         case inference::ModelWarmup_Input::InputDataTypeCase::kZeroData:

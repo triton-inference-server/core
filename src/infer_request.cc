@@ -594,17 +594,10 @@ InferenceRequest::CopyAsNull(
     }
 
     if (input.second.DType() == inference::DataType::TYPE_STRING) {
-      int64_t element_count = 0;
-      RETURN_IF_ERROR(
-          GetElementCount(input.second.Shape(), input.first, &element_count));
-      if (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t)) {
-        return Status(
-            Status::Code::INVALID_ARG,
-            "element count for input '" + input.first +
-                "' exceeds maximum size of " + std::to_string(SIZE_MAX));
-      }
-      size_t str_byte_size =
-          static_cast<size_t>(sizeof(int32_t) * element_count);
+      size_t str_byte_size = 0;
+      RETURN_IF_ERROR(GetByteSize(
+          inference::DataType::TYPE_STRING, input.second.Shape(), input.first,
+          reinterpret_cast<int64_t*>(&str_byte_size)));
       max_str_byte_size = std::max(str_byte_size, max_str_byte_size);
       if (str_byte_size > max_byte_size) {
         max_byte_size = str_byte_size;
@@ -652,19 +645,12 @@ InferenceRequest::CopyAsNull(
     if (input.first == *max_input_name) {
       new_input->SetData(data);
     } else {
-      if (inference::DataType::TYPE_STRING == input.second.DType()) {
-        int64_t element_count = 0;
-        RETURN_IF_ERROR(
-            GetElementCount(input.second.Shape(), input.first, &element_count));
-        if (static_cast<size_t>(element_count) > SIZE_MAX / sizeof(int32_t)) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "element count for input '" + input.first +
-                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
-        }
-        new_input->AppendData(
-            data_base, static_cast<size_t>(element_count) * sizeof(int32_t),
-            mem_type, mem_id);
+      if (input.second.DType() == inference::DataType::TYPE_STRING) {
+        int64_t str_byte_size = 0;
+        RETURN_IF_ERROR(GetByteSize(
+            inference::DataType::TYPE_STRING, input.second.Shape(), input.first,
+            &str_byte_size));
+        new_input->AppendData(data_base, str_byte_size, mem_type, mem_id);
       } else {
         new_input->AppendData(
             data_base, input.second.Data()->TotalByteSize(), mem_type, mem_id);
@@ -867,13 +853,8 @@ InferenceRequest::LoadInputStates()
   // Add the input states to the inference request.
   if (sequence_states_ != nullptr) {
     if (sequence_states_->IsNullRequest()) {
-      std::shared_ptr<SequenceStates> copied;
-      Status status = SequenceStates::CopyAsNull(
-          sequence_states_->NullSequenceStates(), &copied);
-      if (!status.IsOk()) {
-        return status;
-      }
-      sequence_states_ = copied;
+      RETURN_IF_ERROR(SequenceStates::CopyAsNull(
+          sequence_states_->NullSequenceStates(), &sequence_states_));
     }
     for (auto& input_state_pair : sequence_states_->InputStates()) {
       auto& input_state = input_state_pair.second;

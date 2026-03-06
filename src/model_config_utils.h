@@ -345,19 +345,36 @@ GetByteSize(
     const inference::DataType& dtype, const T& dims, const std::string& name,
     int64_t* size)
 {
-  *size = triton::common::GetByteSize(dtype, dims);
-  if (*size == triton::common::INVALID_SIZE) {
-    return Status(
-        Status::Code::INVALID_ARG, "tensor '" + name +
-                                       "' contains an invalid dimension " +
-                                       triton::common::DimsListToString(dims));
-  } else if (*size == triton::common::OVERFLOW_SIZE) {
-    return Status(
-        Status::Code::INVALID_ARG, "byte size for tensor '" + name +
-                                       "' exceeds maximum size of " +
-                                       std::to_string(INT64_MAX));
+  int64_t byte_size = 0;
+  if (dtype == inference::DataType::TYPE_STRING) {
+    int64_t element_count = 0;
+    RETURN_IF_ERROR(GetElementCount(dims, name, &element_count));
+
+    // Total number of bytes required is equal to the element count
+    // multiplied by 4.
+    if (element_count > static_cast<int64_t>(INT64_MAX / sizeof(int32_t))) {
+      return Status(
+          Status::Code::INVALID_ARG, "byte size for tensor '" + name +
+                                         "' exceeds maximum size of " +
+                                         std::to_string(INT64_MAX));
+    }
+    byte_size = sizeof(int32_t) * element_count;
   } else {
-    return Status::Success;
+    byte_size = triton::common::GetByteSize(dtype, dims);
+    if (byte_size == triton::common::INVALID_SIZE) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "tensor '" + name + "' contains an invalid dimension " +
+              triton::common::DimsListToString(dims));
+    } else if (byte_size == triton::common::OVERFLOW_SIZE) {
+      return Status(
+          Status::Code::INVALID_ARG, "byte size for tensor '" + name +
+                                         "' exceeds maximum size of " +
+                                         std::to_string(INT64_MAX));
+    }
   }
+  *size = byte_size;
+  return Status::Success;
 }
+
 }}  // namespace triton::core
