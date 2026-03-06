@@ -381,6 +381,7 @@ SequenceStates::CopyAsNull(
         Status::Code::INVALID_ARG, "SequenceStates 'to' must not be null");
   }
   *to = nullptr;
+
   std::shared_ptr<SequenceStates> lsequence_states;
   if (from != nullptr) {
     lsequence_states.reset(new SequenceStates);
