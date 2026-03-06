@@ -1,4 +1,4 @@
-# Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -103,8 +103,9 @@ endif()
 #
 if(${TRITON_ENABLE_AZURE_STORAGE})
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
-  find_package(azure-identity-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
+  
+  find_package(azure-identity-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure identity ${azure-identity-cpp_VERSION}")
 endif()
 

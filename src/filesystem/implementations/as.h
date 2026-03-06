@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -48,9 +48,9 @@ const std::string AS_URL_PATTERN = "as://([^/]+)/([^/?]+)(?:/([^?]*))?(\\?.*)?";
 ///    (environment → managed identity → CLI → etc.).
 struct ASCredential {
   std::string account_str_;
-  std::string account_key_;
   /// Authentication type: "key" (default), "managed_identity", or "default".
   std::string auth_type_;
+  std::string account_key_;
   /// Optional client ID for user-assigned Managed Identity.
   std::string client_id_;
 
@@ -64,12 +64,12 @@ ASCredential::ASCredential()
     return (s != nullptr ? std::string(s) : "");
   };
   const char* account_str = std::getenv("AZURE_STORAGE_ACCOUNT");
-  const char* account_key = std::getenv("AZURE_STORAGE_KEY");
   const char* auth_type = std::getenv("AZURE_STORAGE_AUTH_TYPE");
+  const char* account_key = std::getenv("AZURE_STORAGE_KEY");
   const char* client_id = std::getenv("AZURE_STORAGE_CLIENT_ID");
   account_str_ = to_str(account_str);
-  account_key_ = to_str(account_key);
   auth_type_ = to_str(auth_type);
+  account_key_ = to_str(account_key);
   client_id_ = to_str(client_id);
 
   // When no explicit auth type is set, infer from available credentials:
@@ -86,10 +86,10 @@ ASCredential::ASCredential(triton::common::TritonJson::Value& cred_json)
       auth_type_json, client_id_json;
   if (cred_json.Find("account_str", &account_str_json))
     account_str_json.AsString(&account_str_);
-  if (cred_json.Find("account_key", &account_key_json))
-    account_key_json.AsString(&account_key_);
   if (cred_json.Find("auth_type", &auth_type_json))
     auth_type_json.AsString(&auth_type_);
+  if (cred_json.Find("account_key", &account_key_json))
+    account_key_json.AsString(&account_key_);
   if (cred_json.Find("client_id", &client_id_json))
     client_id_json.AsString(&client_id_);
 }
@@ -200,7 +200,7 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
             std::make_shared<Azure::Identity::ManagedIdentityCredential>();
         LOG_VERBOSE(1) << "Using system-assigned Managed Identity";
       }
-      client_ = std::make_shared<asb::BlobServiceClient>(
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
           service_url, token_cred);
     } else if (as_cred.auth_type_ == "default") {
       // DefaultAzureCredential chains multiple credential sources:
@@ -209,7 +209,7 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
                      << account_name;
       auto token_cred =
           std::make_shared<Azure::Identity::DefaultAzureCredential>();
-      client_ = std::make_shared<asb::BlobServiceClient>(
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
           service_url, token_cred);
     } else if (!as_cred.account_key_.empty()) {
       // Shared Key authentication (backwards-compatible default).
