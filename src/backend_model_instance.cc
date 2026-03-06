@@ -431,24 +431,10 @@ TritonModelInstance::GenerateWarmupData()
       // Second pass to prepare original inputs.
       std::vector<std::shared_ptr<InferenceRequest::Input>> input_sps;
       for (const auto& input_meta : warmup_setting.inputs()) {
-        int64_t batch1_element_count, dtype_byte_size = 0;
-        RETURN_IF_ERROR(GetElementCount(
-            input_meta.second.dims(), input_meta.first, &batch1_element_count));
+        size_t batch_byte_size = 0;
         RETURN_IF_ERROR(GetByteSize(
             input_meta.second.data_type(), input_meta.second.dims(),
-            input_meta.first, &dtype_byte_size));
-        dtype_byte_size =
-            dtype_byte_size == 0 ? sizeof(int32_t) : dtype_byte_size;
-
-        if (static_cast<size_t>(batch1_element_count) >
-            SIZE_MAX / dtype_byte_size) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "element count for input '" + input_meta.first +
-                  "' exceeds maximum size of " + std::to_string(SIZE_MAX));
-        }
-        size_t batch_byte_size =
-            static_cast<size_t>(batch1_element_count) * dtype_byte_size;
+            input_meta.first, reinterpret_cast<int64_t*>(&batch_byte_size)));
 
         const char* allocated_ptr;
         switch (input_meta.second.input_data_type_case()) {
