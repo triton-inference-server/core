@@ -594,10 +594,11 @@ InferenceRequest::CopyAsNull(
     }
 
     if (input.second.DType() == inference::DataType::TYPE_STRING) {
-      size_t str_byte_size = 0;
+      int64_t str_byte_size_signed = 0;
       RETURN_IF_ERROR(GetByteSize(
           inference::DataType::TYPE_STRING, input.second.Shape(), input.first,
-          reinterpret_cast<int64_t*>(&str_byte_size)));
+          &str_byte_size_signed));
+      size_t str_byte_size = static_cast<size_t>(str_byte_size_signed);
       max_str_byte_size = std::max(str_byte_size, max_str_byte_size);
       if (str_byte_size > max_byte_size) {
         max_byte_size = str_byte_size;

@@ -431,10 +431,11 @@ TritonModelInstance::GenerateWarmupData()
       // Second pass to prepare original inputs.
       std::vector<std::shared_ptr<InferenceRequest::Input>> input_sps;
       for (const auto& input_meta : warmup_setting.inputs()) {
-        size_t batch_byte_size = 0;
+        int64_t batch_byte_size_signed = 0;
         RETURN_IF_ERROR(GetByteSize(
             input_meta.second.data_type(), input_meta.second.dims(),
-            input_meta.first, reinterpret_cast<int64_t*>(&batch_byte_size)));
+            input_meta.first, &batch_byte_size_signed));
+        size_t batch_byte_size = static_cast<size_t>(batch_byte_size_signed);
 
         const char* allocated_ptr;
         switch (input_meta.second.input_data_type_case()) {
@@ -460,10 +461,11 @@ TritonModelInstance::GenerateWarmupData()
                     {model_->LocalizedModelPath(), kWarmupDataFolder,
                      input_meta.second.input_data_file()}),
                 input_data));
+
             if (input_meta.second.data_type() ==
                 inference::DataType::TYPE_STRING) {
               batch_byte_size = input_data->size();
-            } else if (((size_t)batch_byte_size) > input_data->size()) {
+            } else if (batch_byte_size > input_data->size()) {
               return Status(
                   Status::Code::INVALID_ARG,
                   lrequest->LogRequest() + "warmup setting expects " +

@@ -25,12 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <cstdint>
+
 #include "filesystem/api.h"
 #include "model_config.pb.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
-
 namespace triton { namespace core {
 
 /// Enumeration for the different backend types.
@@ -323,20 +324,26 @@ template <typename T>
 Status
 GetElementCount(const T& dims, const std::string& name, int64_t* cnt)
 {
-  *cnt = triton::common::GetElementCount(dims);
-  if (*cnt == triton::common::INVALID_SIZE) {
+  if (cnt == nullptr) {
+    return Status(Status::Code::INTERNAL, "argument `cnt` cannot be nullptr");
+  }
+
+  int64_t element_count = 0;
+  element_count = triton::common::GetElementCount(dims);
+  if (element_count == triton::common::INVALID_SIZE) {
     return Status(
         Status::Code::INVALID_ARG,
         "tensor '" + name + "' contains an invalid dimension in shape " +
             triton::common::DimsListToString(dims));
-  } else if (*cnt == triton::common::OVERFLOW_SIZE) {
+  } else if (element_count == triton::common::OVERFLOW_SIZE) {
     return Status(
         Status::Code::INVALID_ARG, "element count for tensor '" + name +
                                        "' exceeds maximum size of " +
                                        std::to_string(INT64_MAX));
-  } else {
-    return Status::Success;
   }
+
+  *cnt = element_count;
+  return Status::Success;
 }
 
 template <typename T>
@@ -345,6 +352,10 @@ GetByteSize(
     const inference::DataType& dtype, const T& dims, const std::string& name,
     int64_t* size)
 {
+  if (size == nullptr) {
+    return Status(Status::Code::INTERNAL, "argument `size` cannot be nullptr");
+  }
+
   int64_t byte_size = 0;
   if (dtype == inference::DataType::TYPE_STRING) {
     int64_t element_count = 0;

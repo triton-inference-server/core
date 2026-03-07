@@ -405,10 +405,11 @@ SequenceBatchScheduler::GenerateInitialStateData(
   }
 
   // Calculate total memory byte size
-  size_t total_byte_size = 0;
+  int64_t total_byte_size_signed = 0;
   RETURN_IF_ERROR(GetByteSize(
       initial_state.data_type(), initial_state.dims(), state.input_name(),
-      reinterpret_cast<int64_t*>(&total_byte_size)));
+      &total_byte_size_signed));
+  size_t total_byte_size = static_cast<size_t>(total_byte_size_signed);
 
   switch (initial_state.state_data_case()) {
     case inference::ModelSequenceBatching_InitialState::StateDataCase::

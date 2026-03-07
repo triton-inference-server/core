@@ -355,9 +355,10 @@ ValidateIOShape(
 
     int64_t dims_size = 0;
     int64_t reshape_size = 0;
-    RETURN_IF_ERROR(GetElementCount(io.dims(), "dims", &dims_size));
     RETURN_IF_ERROR(
-        GetElementCount(io.reshape().shape(), "reshape", &reshape_size));
+        GetElementCount(io.dims(), io.name() + " dims", &dims_size));
+    RETURN_IF_ERROR(GetElementCount(
+        io.reshape().shape(), io.name() + " reshape", &reshape_size));
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.
