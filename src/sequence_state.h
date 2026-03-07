@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -160,8 +160,10 @@ class SequenceStates {
       const std::vector<int64_t>& shape, SequenceState** output_state);
 
   // Create a copy of the 'from' sequence states for NULL requests.
-  static std::shared_ptr<SequenceStates> CopyAsNull(
-      const std::shared_ptr<SequenceStates>& from);
+  // On success, sets *to and returns Status::Success; on failure returns error.
+  static Status CopyAsNull(
+      const std::shared_ptr<SequenceStates>& from,
+      std::shared_ptr<SequenceStates>* to);
 
   const std::map<std::string, std::shared_ptr<SequenceState>>& InputStates()
   {
