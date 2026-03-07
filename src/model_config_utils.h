@@ -361,6 +361,11 @@ GetByteSize(
     int64_t element_count = 0;
     RETURN_IF_ERROR(GetElementCount(dims, name, &element_count));
 
+    if (element_count == triton::common::WILDCARD_SIZE) {
+      *size = triton::common::WILDCARD_SIZE;
+      return Status::Success;
+    }
+
     // Total number of bytes required is equal to the element count
     // multiplied by 4.
     if (element_count > static_cast<int64_t>(INT64_MAX / sizeof(int32_t))) {

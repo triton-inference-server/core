@@ -376,6 +376,13 @@ TritonModelInstance::GenerateWarmupData()
       RETURN_IF_ERROR(GetByteSize(
           input_meta.second.data_type(), input_meta.second.dims(),
           input_meta.first, &batch_byte_size));
+      if (batch_byte_size == triton::common::WILDCARD_SIZE) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "warmup setting expects all variable-size dimensions are specified "
+            "for input '" +
+                input_meta.first + "'");
+      }
 
       switch (input_meta.second.input_data_type_case()) {
         case inference::ModelWarmup_Input::InputDataTypeCase::kZeroData:

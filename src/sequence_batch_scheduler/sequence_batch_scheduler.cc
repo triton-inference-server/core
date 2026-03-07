@@ -1757,9 +1757,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
             std::unique_ptr<InferenceRequest> ni = nullptr;
             Status status = InferenceRequest::CopyAsNull(*null_irequest, &ni);
             if (!status.IsOk()) {
-              LOG_ERROR
-                  << "internal: unexpecting failure copying null request: "
-                  << status.Message();
+              LOG_ERROR << "internal: unexpected failure copying null request: "
+                        << status.Message();
             }
             // Note that when the not-ready control input of the
             // request is "true" the model can't assume that any
