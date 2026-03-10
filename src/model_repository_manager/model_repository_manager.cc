@@ -65,6 +65,8 @@ static std::string file_prefix = "file:";
 Status
 ValidateModelName(const std::string& name)
 {
+
+  std::cout << "--------- Hello this is test in CORE ---------" << std::endl;
   if (name.empty()) {
     return Status(Status::Code::INVALID_ARG, "model name must not be empty");
   }

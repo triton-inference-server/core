@@ -81,6 +81,7 @@ class ScopedAtomicIncrement {
 InferenceServer::InferenceServer()
     : version_(TRITON_VERSION), ready_state_(ServerReadyState::SERVER_INVALID)
 {
+  std::cout << "--------- Hello this is test in CORE ---------" << std::endl;
   id_ = "triton";
   extensions_.push_back("classification");
   extensions_.push_back("sequence");
@@ -129,6 +130,8 @@ InferenceServer::InferenceServer()
 Status
 InferenceServer::Init()
 {
+
+  std::cout << "--------- Hello this is test in CORE ---------" << std::endl;
   Status status;
 
   ready_state_ = ServerReadyState::SERVER_INITIALIZING;
