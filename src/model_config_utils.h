@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -39,7 +39,8 @@ enum BackendType {
   BACKEND_TYPE_TENSORRT = 1,
   BACKEND_TYPE_TENSORFLOW = 2,
   BACKEND_TYPE_ONNXRUNTIME = 3,
-  BACKEND_TYPE_PYTORCH = 4
+  BACKEND_TYPE_PYTORCH = 4,
+  BACKEND_TYPE_TORCHAOTI = 4,  // Torch AOTI uses the same backend as PyTorch
 };
 
 // Get version of a model from the path containing the model

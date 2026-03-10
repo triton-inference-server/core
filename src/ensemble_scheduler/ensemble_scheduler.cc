@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -482,6 +482,10 @@ class EnsembleContext {
   // FinishEnsemble for details).
   bool response_sent_{false};
 
+  // Prevents duplicate error responses or status annotation when FinishEnsemble
+  // is invoked multiple times while steps are still in-flight.
+  bool error_response_sent_{false};
+
   // The allocator that will be used to allocate buffers for the
   // inference result tensors.
   std::unique_ptr<
@@ -958,28 +962,39 @@ EnsembleContext::PrepareSteps(
     // Initialization error, ensemble status will be not ok since the beginning
     if (completed_step == nullptr && !ensemble_status_.IsOk()) {
       ensemble_status_ = FinishEnsemble();
+      return ensemble_status_;
     }
 
-    if (ensemble_status_.IsOk()) {
-      StepList res;
-      std::set<std::pair<std::string, IterationCount>> updated_tensors;
-      ensemble_status_ = UpdateEnsembleState(completed_step, &updated_tensors);
-      if (ensemble_status_.IsOk()) {
-        ensemble_status_ = GetNextSteps(updated_tensors, ready_steps);
-      }
+    // Always process completed steps via UpdateEnsembleState to decrement the
+    // inflight counter, even if the ensemble has already failed. This allows
+    // proper cleanup after errors.
+    std::set<std::pair<std::string, IterationCount>> updated_tensors;
+    auto update_status = UpdateEnsembleState(completed_step, &updated_tensors);
 
-      // Reaching the end of processing completed step, check if the ensemble
-      // should send response / error.
-      if (!ensemble_status_.IsOk()) {
-        ensemble_status_ = FinishEnsemble();
-      } else {
-        std::unique_ptr<InferenceResponse> response;
-        if (!updated_tensors.empty()) {
-          ensemble_status_ =
-              CheckAndSetEnsembleOutput(updated_tensors, &response);
-        }
-        ensemble_status_ = FinishEnsemble(std::move(response));
+    // Preserve existing error status; only update ensemble_status_ if
+    // UpdateEnsembleState fails.
+    if (!update_status.IsOk()) {
+      ensemble_status_ = update_status;
+    }
+
+    // Only compute and schedule next steps if ensemble is still OK; this
+    // prevents scheduling new steps after an error, as the condition now
+    // gates both GetNextSteps and subsequent FinishEnsemble logic.
+    if (ensemble_status_.IsOk()) {
+      ensemble_status_ = GetNextSteps(updated_tensors, ready_steps);
+    }
+
+    // Reaching the end of processing completed step, check if the ensemble
+    // should send response / error.
+    if (!ensemble_status_.IsOk()) {
+      ensemble_status_ = FinishEnsemble();
+    } else {
+      std::unique_ptr<InferenceResponse> response;
+      if (!updated_tensors.empty()) {
+        ensemble_status_ =
+            CheckAndSetEnsembleOutput(updated_tensors, &response);
       }
+      ensemble_status_ = FinishEnsemble(std::move(response));
     }
     return ensemble_status_;
   }
@@ -1270,7 +1285,7 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
   }
 
   // Add ensemble name to make error message more trackable
-  if (!ensemble_status_.IsOk()) {
+  if (!ensemble_status_.IsOk() && !error_response_sent_) {
     ensemble_status_ = Status(
         ensemble_status_.StatusCode(), "in ensemble '" + info_->ensemble_name_ +
                                            "', " + ensemble_status_.Message());
@@ -1309,14 +1324,17 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
       }
     }
   } else {
-    if (response != nullptr) {
-      InferenceResponse::SendWithStatus(
-          std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL,
-          ensemble_status_);
-    } else {
-      InferenceRequest::RespondIfError(
-          request_tracker_->Request(), ensemble_status_,
-          false /* release_requests */, FailureReason::OTHER);
+    if (!error_response_sent_ && inflight_step_counter_ == 0) {
+      if (response != nullptr) {
+        InferenceResponse::SendWithStatus(
+            std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL,
+            ensemble_status_);
+      } else {
+        InferenceRequest::RespondIfError(
+            request_tracker_->Request(), ensemble_status_,
+            false /* release_requests */, FailureReason::OTHER);
+      }
+      error_response_sent_ = true;
     }
   }
 
@@ -1540,6 +1558,8 @@ EnsembleContext::ScheduleSteps(
       } else {
         std::lock_guard<std::mutex> lock(context->mutex_);
         context->ensemble_status_ = step_status;
+        LOG_WARNING << "Ensemble '" << context->info_->ensemble_name_
+                    << "' failed to schedule step : " << step_status.Message();
       }
     }
 

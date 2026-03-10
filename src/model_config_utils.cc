@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -1072,7 +1072,7 @@ AutoCompleteBackendFields(
 
   // Trying to fill the 'backend', 'default_model_filename' field.
 
-  // TensorFlow
+  // TensorFlow <-- TensorFlow backend is deprecated -->
   // For TF backend, the platform is required
   if (config->platform().empty()) {
     // Check 'backend', 'default_model_filename', and the actual directory
@@ -1199,33 +1199,39 @@ AutoCompleteBackendFields(
 
   // PyTorch
   if (config->backend().empty()) {
-    if ((config->platform() == kPyTorchLibTorchPlatform) ||
-        (config->default_model_filename() == kPyTorchLibTorchFilename)) {
+    // Torch JIT interface
+    if (config->platform() == kPyTorchLibTorchPlatform ||
+        config->default_model_filename() == kPyTorchLibTorchFilename) {
       config->set_backend(kPyTorchBackend);
-    } else if (
-        config->platform().empty() &&
-        config->default_model_filename().empty() && has_version) {
-      bool is_dir = false;
-      if (version_dir_content.find(kPyTorchLibTorchFilename) !=
-          version_dir_content.end()) {
-        RETURN_IF_ERROR(IsDirectory(
-            JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
-        if (!is_dir) {
-          config->set_backend(kPyTorchBackend);
-        }
+    } else
+      // Torch AOTI interface
+      if (config->platform() == kPyTorchAotiPlatform ||
+          config->default_model_filename() == kPyTorchAotiFilename) {
+        config->set_backend(kPyTorchAotiBackend);
+      } else if (
+          config->platform().empty() &&
+          config->default_model_filename().empty() && has_version) {
+        bool is_dir = false;
+
+        // Torch JIT interface
+        if (version_dir_content.find(kPyTorchLibTorchFilename) !=
+            version_dir_content.end()) {
+          RETURN_IF_ERROR(IsDirectory(
+              JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
+          if (!is_dir) {
+            config->set_backend(kPyTorchBackend);
+          }
+        } else
+          // Torch AOTI interface
+          if (version_dir_content.find(kPyTorchAotiFilename) !=
+              version_dir_content.end()) {
+            RETURN_IF_ERROR(IsDirectory(
+                JoinPath({version_path, kPyTorchAotiFilename}), &is_dir));
+            if (!is_dir) {
+              config->set_backend(kPyTorchAotiBackend);
+            }
+          }
       }
-    }
-  }
-  if (config->backend() == kPyTorchBackend) {
-    if (config->platform().empty()) {
-      // do not introduce new platforms, new runtimes may ignore this field.
-      config->set_platform(kPyTorchLibTorchPlatform);
-    }
-    if (config->runtime() != kPythonFilename &&
-        config->default_model_filename().empty()) {
-      config->set_default_model_filename(kPyTorchLibTorchFilename);
-    }
-    return Status::Success;
   }
 
   // Python
@@ -2369,6 +2375,10 @@ GetBackendTypeFromPlatform(const std::string& platform_name)
     return BackendType::BACKEND_TYPE_PYTORCH;
   }
 
+  if (platform_name == kPyTorchAotiPlatform) {
+    return BackendType::BACKEND_TYPE_TORCHAOTI;
+  }
+
   return BackendType::BACKEND_TYPE_UNKNOWN;
 }
 
@@ -2393,6 +2403,10 @@ GetBackendType(const std::string& backend_name)
 
   if (backend_name == kPyTorchBackend) {
     return BackendType::BACKEND_TYPE_PYTORCH;
+  }
+
+  if (backend_name == kPyTorchAotiBackend) {
+    return BackendType::BACKEND_TYPE_TORCHAOTI;
   }
 
   return BackendType::BACKEND_TYPE_UNKNOWN;
