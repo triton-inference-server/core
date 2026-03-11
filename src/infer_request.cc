@@ -523,7 +523,6 @@ InferenceRequest::CopyAsNull(
     return Status(
         Status::Code::INVALID_ARG, "InferenceRequest 'to' must not be null");
   }
-  *to = nullptr;
 
   // Create a copy of 'from' request with artificial inputs and no requested
   // outputs. Maybe more efficient to share inputs and other metadata,

@@ -380,7 +380,6 @@ SequenceStates::CopyAsNull(
     return Status(
         Status::Code::INVALID_ARG, "SequenceStates 'to' must not be null");
   }
-  *to = nullptr;
 
   std::shared_ptr<SequenceStates> lsequence_states;
   if (from != nullptr) {
