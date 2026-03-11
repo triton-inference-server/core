@@ -1236,6 +1236,17 @@ AutoCompleteBackendFields(
           }
       }
   }
+  if (config->backend() == kPyTorchBackend) {
+    if (config->platform().empty()) {
+      // do not introduce new platforms, new runtimes may ignore this field.
+      config->set_platform(kPyTorchLibTorchPlatform);
+    }
+    if (config->runtime() != kPythonFilename &&
+        config->default_model_filename().empty()) {
+      config->set_default_model_filename(kPyTorchLibTorchFilename);
+    }
+    return Status::Success;
+  }
 
   // Python
   if (config->backend().empty()) {
