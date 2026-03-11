@@ -27,7 +27,9 @@
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 
 #include "metric_model_reporter.h"
 #include "model.h"
@@ -49,6 +51,28 @@ using cudaStream_t = void*;
 #endif  // TRITON_ENABLE_GPU
 
 class InferenceServer;
+
+// Limits concurrent inflight requests for a single ensemble step globally.
+class StepInflightRequestLimiter {
+ public:
+  explicit StepInflightRequestLimiter(const size_t max_inflight);
+
+  // Wait until capacity is available or request cancellation is observed.
+  // On cancellation, waiting is bypassed so cancellation can be propagated
+  // through normal step scheduling.
+  void Acquire(
+      RequestTracker* request_tracker, const size_t step_idx,
+      const std::string& ensemble_name);
+
+  // Release one acquired slot and wake one waiter.
+  void Release();
+
+ private:
+  size_t inflight_count_;
+  const size_t max_inflight_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+};
 
 struct EnsembleInfo {
   struct StepInfo {
@@ -85,13 +109,18 @@ struct EnsembleInfo {
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
   // The maximum number of concurrent inflight requests allowed at each ensemble
-  // step per inference request. This limit is applied per step and per
-  // inference request, not globally for the entire ensemble model. This limit
-  // prevents unbounded memory growth when ensemble steps produce responses
-  // faster than downstream steps can consume them. Default value is 0, which
-  // indicates that no limit is enforced. Configured via 'max_inflight_requests'
-  // field in ensemble_scheduling.
+  // step across all concurrent ensemble requests for this model. This limit is
+  // applied per step index and is global for the ensemble model instance. This
+  // limit prevents unbounded memory growth when ensemble steps produce
+  // responses faster than downstream steps can consume them. Default value is
+  // 0, which indicates that no limit is enforced. Configured via
+  // 'max_inflight_requests' field in ensemble_scheduling.
   size_t max_inflight_requests_ = 0;
+
+  // Global inflight request limiters for each ensemble step.
+  // Only allocated when max_inflight_requests_ > 0.
+  std::vector<std::unique_ptr<StepInflightRequestLimiter>>
+      step_inflight_request_limiters_;
 };
 
 // Scheduler that implements ensemble scheduling.
