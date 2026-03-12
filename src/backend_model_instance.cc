@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -372,21 +372,16 @@ TritonModelInstance::GenerateWarmupData()
     int64_t max_zero_byte_size = 0;
     int64_t max_random_byte_size = 0;
     for (const auto& input_meta : warmup_setting.inputs()) {
-      auto element_count =
-          triton::common::GetElementCount(input_meta.second.dims());
-      if (element_count == -1) {
+      int64_t batch_byte_size = 0;
+      RETURN_IF_ERROR(GetByteSize(
+          input_meta.second.data_type(), input_meta.second.dims(),
+          input_meta.first, &batch_byte_size));
+      if (batch_byte_size == triton::common::WILDCARD_SIZE) {
         return Status(
             Status::Code::INVALID_ARG,
             "warmup setting expects all variable-size dimensions are specified "
             "for input '" +
                 input_meta.first + "'");
-      }
-
-      int64_t batch_byte_size =
-          element_count *
-          triton::common::GetDataTypeByteSize(input_meta.second.data_type());
-      if (batch_byte_size == 0) {
-        batch_byte_size = element_count * sizeof(int32_t);
       }
 
       switch (input_meta.second.input_data_type_case()) {
@@ -443,14 +438,11 @@ TritonModelInstance::GenerateWarmupData()
       // Second pass to prepare original inputs.
       std::vector<std::shared_ptr<InferenceRequest::Input>> input_sps;
       for (const auto& input_meta : warmup_setting.inputs()) {
-        auto batch1_element_count =
-            triton::common::GetElementCount(input_meta.second.dims());
-        auto batch_byte_size =
-            batch1_element_count *
-            triton::common::GetDataTypeByteSize(input_meta.second.data_type());
-        if (batch_byte_size == 0) {
-          batch_byte_size = batch1_element_count * sizeof(int32_t);
-        }
+        int64_t batch_byte_size_signed = 0;
+        RETURN_IF_ERROR(GetByteSize(
+            input_meta.second.data_type(), input_meta.second.dims(),
+            input_meta.first, &batch_byte_size_signed));
+        size_t batch_byte_size = static_cast<size_t>(batch_byte_size_signed);
 
         const char* allocated_ptr;
         switch (input_meta.second.input_data_type_case()) {
@@ -476,10 +468,11 @@ TritonModelInstance::GenerateWarmupData()
                     {model_->LocalizedModelPath(), kWarmupDataFolder,
                      input_meta.second.input_data_file()}),
                 input_data));
+
             if (input_meta.second.data_type() ==
                 inference::DataType::TYPE_STRING) {
               batch_byte_size = input_data->size();
-            } else if (((size_t)batch_byte_size) > input_data->size()) {
+            } else if (batch_byte_size > input_data->size()) {
               return Status(
                   Status::Code::INVALID_ARG,
                   lrequest->LogRequest() + "warmup setting expects " +
