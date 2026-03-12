@@ -445,6 +445,25 @@ InferenceServer::IsReady(bool* ready)
           *ready = false;
           goto strict_done;
         }
+
+        // For models in READY lifecycle state, also check runtime
+        // backend instance readiness. This catches cases where the
+        // model was loaded successfully (lifecycle = READY) but the
+        // backend has become unhealthy at runtime (e.g., Python backend
+        // stub process died).
+        if (vs.second.first == ModelReadyState::READY) {
+          bool model_ready = false;
+          Status status = ModelIsReady(mv.first.name_, vs.first, &model_ready);
+          if (!status.IsOk() || !model_ready) {
+            LOG_VERBOSE(1) << "Model '" << mv.first.name_ << "' version "
+                           << vs.first
+                           << " is in READY lifecycle state but failed "
+                              "runtime readiness check during server "
+                              "readiness evaluation";
+            *ready = false;
+            goto strict_done;
+          }
+        }
       }
     }
   strict_done:;
