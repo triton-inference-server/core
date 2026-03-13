@@ -69,16 +69,15 @@ ValidateModelName(const std::string& name)
   // Trim the model name to remove leading and trailing whitespace
   std::string trimmed_name = boost::trim_copy(name);
 
-  // Check if the trimmed name is empty or only consisted of whitespace characters
+  // Check if the trimmed name is empty or only consisted of whitespaces
   if (trimmed_name.empty()) {
     return Status(
-      Status::Code::INVALID_ARG,
-      "Model name cannot be empty. Please enter a valid name to deploy.");
-   }
+        Status::Code::INVALID_ARG,
+        "Model name cannot be empty. Please enter a valid name to deploy.");
+  }
 
   // Check if the trimmed name contains path traversal characters
-  if (trimmed_name == ".." ||
-      trimmed_name.find('/') != std::string::npos) {
+  if (trimmed_name == ".." || trimmed_name.find('/') != std::string::npos) {
     return Status(
         Status::Code::INVALID_ARG,
         "invalid model name '" + name +
