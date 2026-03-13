@@ -78,7 +78,7 @@ ValidateModelName(const std::string& name)
 
   // Check if the trimmed name contains path traversal characters
   if (trimmed_name == ".." ||
-    trimmed_name.find('/') != std::string::npos) {
+      trimmed_name.find('/') != std::string::npos) {
     return Status(
         Status::Code::INVALID_ARG,
         "invalid model name '" + name +
