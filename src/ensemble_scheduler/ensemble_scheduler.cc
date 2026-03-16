@@ -41,35 +41,6 @@
 
 namespace triton { namespace core {
 
-namespace {
-
-class EnsembleContext;
-
-using IterationCount = size_t;
-
-// Check if the model is configured to preserve the order of responses.
-// This is critical for async execution of ResponseComplete callbacks.
-inline bool
-preserve_responses_order(const inference::ModelConfig& config)
-{
-  uint64_t total_instance_groups = 0;
-  for (const auto& group : config.instance_group()) {
-    total_instance_groups += group.count();
-  }
-
-  // Case 1: Sequence batching is enabled
-  // Case 2: Dynamic batching is disabled and there is only one instance group
-  // Case 3: Dynamic batching is enabled and preserve_ordering is true
-  // Case 4: Model transaction policy is decoupled (if the final response
-  // callback is not executed in the last step, the RequestTracker object will
-  // be freed prematurely and led to segmentation fault)
-  return config.has_sequence_batching() ||
-         (!config.has_dynamic_batching() && total_instance_groups <= 1) ||
-         (config.has_dynamic_batching() &&
-          config.dynamic_batching().preserve_ordering()) ||
-         config.model_transaction_policy().decoupled();
-}
-
 // Request tracker is passed as 'userp' in RequestRelease function and used
 // to manage the lifecycle of the ensemble request
 class RequestTracker {
@@ -223,6 +194,35 @@ class StepInflightRequestLimiter {
   std::mutex mutex_;
   std::condition_variable cv_;
 };
+
+namespace {
+
+class EnsembleContext;
+
+using IterationCount = size_t;
+
+// Check if the model is configured to preserve the order of responses.
+// This is critical for async execution of ResponseComplete callbacks.
+inline bool
+preserve_responses_order(const inference::ModelConfig& config)
+{
+  uint64_t total_instance_groups = 0;
+  for (const auto& group : config.instance_group()) {
+    total_instance_groups += group.count();
+  }
+
+  // Case 1: Sequence batching is enabled
+  // Case 2: Dynamic batching is disabled and there is only one instance group
+  // Case 3: Dynamic batching is enabled and preserve_ordering is true
+  // Case 4: Model transaction policy is decoupled (if the final response
+  // callback is not executed in the last step, the RequestTracker object will
+  // be freed prematurely and led to segmentation fault)
+  return config.has_sequence_batching() ||
+         (!config.has_dynamic_batching() && total_instance_groups <= 1) ||
+         (config.has_dynamic_batching() &&
+          config.dynamic_batching().preserve_ordering()) ||
+         config.model_transaction_policy().decoupled();
+}
 
 // Step is used as 'userp' and keeps ensemble context alive
 // until no more internal requests are inflight.
