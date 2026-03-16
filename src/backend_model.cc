@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -825,10 +825,14 @@ TritonModel::SetConfiguredScheduler(
   for (const auto& input : config_.input()) {
     if (input.is_shape_tensor()) {
       enforce_equal_shape_tensors.insert({input.name(), true});
-    } else if (
-        !input.allow_ragged_batch() &&
-        (triton::common::GetElementCount(input) == -1)) {
-      enforce_equal_shape_tensors.insert({input.name(), false});
+    } else {
+      int64_t element_count = 0;
+      RETURN_IF_ERROR(
+          GetElementCount(input.dims(), input.name(), &element_count));
+      if (!input.allow_ragged_batch() &&
+          (element_count == triton::common::WILDCARD_SIZE)) {
+        enforce_equal_shape_tensors.insert({input.name(), false});
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,12 +25,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <cstdint>
+
 #include "filesystem/api.h"
 #include "model_config.pb.h"
 #include "status.h"
 #include "triton/common/model_config.h"
 #include "tritonserver_apis.h"
-
 namespace triton { namespace core {
 
 /// Enumeration for the different backend types.
@@ -39,7 +40,8 @@ enum BackendType {
   BACKEND_TYPE_TENSORRT = 1,
   BACKEND_TYPE_TENSORFLOW = 2,
   BACKEND_TYPE_ONNXRUNTIME = 3,
-  BACKEND_TYPE_PYTORCH = 4
+  BACKEND_TYPE_PYTORCH = 4,
+  BACKEND_TYPE_TORCHAOTI = 4,  // Torch AOTI uses the same backend as PyTorch
 };
 
 // Get version of a model from the path containing the model
@@ -317,5 +319,78 @@ bool EquivalentInInstanceConfig(
 /// \return Signature identifying the instance config.
 std::string InstanceConfigSignature(
     const inference::ModelInstanceGroup& instance_config);
+
+template <typename T>
+Status
+GetElementCount(const T& dims, const std::string& name, int64_t* cnt)
+{
+  if (cnt == nullptr) {
+    return Status(Status::Code::INTERNAL, "argument `cnt` cannot be nullptr");
+  }
+
+  int64_t element_count = 0;
+  element_count = triton::common::GetElementCount(dims);
+  if (element_count == triton::common::INVALID_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "tensor '" + name + "' contains an invalid dimension in shape " +
+            triton::common::DimsListToString(dims));
+  } else if (element_count == triton::common::OVERFLOW_SIZE) {
+    return Status(
+        Status::Code::INVALID_ARG, "element count for tensor '" + name +
+                                       "' exceeds maximum size of " +
+                                       std::to_string(INT64_MAX));
+  }
+
+  *cnt = element_count;
+  return Status::Success;
+}
+
+template <typename T>
+Status
+GetByteSize(
+    const inference::DataType& dtype, const T& dims, const std::string& name,
+    int64_t* size)
+{
+  if (size == nullptr) {
+    return Status(Status::Code::INTERNAL, "argument `size` cannot be nullptr");
+  }
+
+  int64_t byte_size = 0;
+  if (dtype == inference::DataType::TYPE_STRING) {
+    int64_t element_count = 0;
+    RETURN_IF_ERROR(GetElementCount(dims, name, &element_count));
+
+    if (element_count == triton::common::WILDCARD_SIZE) {
+      *size = triton::common::WILDCARD_SIZE;
+      return Status::Success;
+    }
+
+    // Total number of bytes required is equal to the element count
+    // multiplied by 4.
+    if (element_count > static_cast<int64_t>(INT64_MAX / sizeof(int32_t))) {
+      return Status(
+          Status::Code::INVALID_ARG, "byte size for tensor '" + name +
+                                         "' exceeds maximum size of " +
+                                         std::to_string(INT64_MAX));
+    }
+    byte_size = sizeof(int32_t) * element_count;
+  } else {
+    byte_size = triton::common::GetByteSize(dtype, dims);
+    if (byte_size == triton::common::INVALID_SIZE) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "tensor '" + name + "' contains an invalid dimension " +
+              triton::common::DimsListToString(dims));
+    } else if (byte_size == triton::common::OVERFLOW_SIZE) {
+      return Status(
+          Status::Code::INVALID_ARG, "byte size for tensor '" + name +
+                                         "' exceeds maximum size of " +
+                                         std::to_string(INT64_MAX));
+    }
+  }
+  *size = byte_size;
+  return Status::Success;
+}
 
 }}  // namespace triton::core

@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -632,7 +632,8 @@ class InferenceRequest {
   // required for the direct sequence batcher. The returned copy will
   // contain only the minimum content required for a null request.
   // The statistics of the copy will not be collected.
-  static InferenceRequest* CopyAsNull(const InferenceRequest& from);
+  static Status CopyAsNull(
+      const InferenceRequest& from, std::unique_ptr<InferenceRequest>* to);
 
   uint64_t QueueStartNs() const { return queue_start_ns_; }
   uint64_t CaptureQueueStartNs()

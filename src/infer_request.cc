@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -515,9 +515,15 @@ InferenceRequest::Release(
   return Status::Success;
 }
 
-InferenceRequest*
-InferenceRequest::CopyAsNull(const InferenceRequest& from)
+Status
+InferenceRequest::CopyAsNull(
+    const InferenceRequest& from, std::unique_ptr<InferenceRequest>* to)
 {
+  if (to == nullptr) {
+    return Status(
+        Status::Code::INVALID_ARG, "InferenceRequest 'to' must not be null");
+  }
+
   // Create a copy of 'from' request with artificial inputs and no requested
   // outputs. Maybe more efficient to share inputs and other metadata,
   // but that binds the Null request with 'from' request's lifecycle.
@@ -587,10 +593,11 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
     }
 
     if (input.second.DType() == inference::DataType::TYPE_STRING) {
-      int64_t element_count =
-          triton::common::GetElementCount(input.second.Shape());
-
-      size_t str_byte_size = static_cast<size_t>(4 * element_count);
+      int64_t str_byte_size_signed = 0;
+      RETURN_IF_ERROR(GetByteSize(
+          inference::DataType::TYPE_STRING, input.second.Shape(), input.first,
+          &str_byte_size_signed));
+      size_t str_byte_size = static_cast<size_t>(str_byte_size_signed);
       max_str_byte_size = std::max(str_byte_size, max_str_byte_size);
       if (str_byte_size > max_byte_size) {
         max_byte_size = str_byte_size;
@@ -638,11 +645,12 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
     if (input.first == *max_input_name) {
       new_input->SetData(data);
     } else {
-      if (inference::DataType::TYPE_STRING == input.second.DType()) {
-        new_input->AppendData(
-            data_base,
-            triton::common::GetElementCount(input.second.Shape()) * 4, mem_type,
-            mem_id);
+      if (input.second.DType() == inference::DataType::TYPE_STRING) {
+        int64_t str_byte_size = 0;
+        RETURN_IF_ERROR(GetByteSize(
+            inference::DataType::TYPE_STRING, input.second.Shape(), input.first,
+            &str_byte_size));
+        new_input->AppendData(data_base, str_byte_size, mem_type, mem_id);
       } else {
         new_input->AppendData(
             data_base, input.second.Data()->TotalByteSize(), mem_type, mem_id);
@@ -662,7 +670,8 @@ InferenceRequest::CopyAsNull(const InferenceRequest& from)
         std::make_pair(pr.second.Name(), std::addressof(pr.second)));
   }
 
-  return lrequest.release();
+  *to = std::move(lrequest);
+  return Status::Success;
 }
 
 Status
@@ -844,8 +853,8 @@ InferenceRequest::LoadInputStates()
   // Add the input states to the inference request.
   if (sequence_states_ != nullptr) {
     if (sequence_states_->IsNullRequest()) {
-      sequence_states_ =
-          SequenceStates::CopyAsNull(sequence_states_->NullSequenceStates());
+      RETURN_IF_ERROR(SequenceStates::CopyAsNull(
+          sequence_states_->NullSequenceStates(), &sequence_states_));
     }
     for (auto& input_state_pair : sequence_states_->InputStates()) {
       auto& input_state = input_state_pair.second;
@@ -1173,14 +1182,14 @@ InferenceRequest::Normalize()
     if (input_config->has_reshape()) {
       std::deque<int64_t> variable_size_values;
       for (int64_t idx = 0; idx < input_config->dims_size(); idx++) {
-        if (input_config->dims(idx) == -1) {
+        if (input_config->dims(idx) == triton::common::WILDCARD_DIM) {
           variable_size_values.push_back((*shape)[idx]);
         }
       }
 
       shape->clear();
       for (const auto& dim : input_config->reshape().shape()) {
-        if (dim == -1) {
+        if (dim == triton::common::WILDCARD_DIM) {
           shape->push_back(variable_size_values.front());
           variable_size_values.pop_front();
         } else {
@@ -1219,8 +1228,9 @@ InferenceRequest::Normalize()
           const std::vector<int64_t>& input_dims =
               input.IsShapeTensor() ? input.OriginalShape()
                                     : input.ShapeWithBatchDim();
-          int64_t expected_byte_size =
-              triton::common::GetByteSize(data_type, input_dims);
+          int64_t expected_byte_size = 0;
+          RETURN_IF_ERROR(GetByteSize(
+              data_type, input_dims, input_name, &expected_byte_size));
           const size_t& byte_size = input.Data()->TotalByteSize();
           if ((byte_size > LLONG_MAX) ||
               (static_cast<int64_t>(byte_size) != expected_byte_size)) {
@@ -1311,7 +1321,7 @@ InferenceRequest::ValidateBytesInputs(
 {
   const auto& input_dims = input.ShapeWithBatchDim();
 
-  int64_t element_count = triton::common::GetElementCount(input_dims);
+  int64_t element_count = 0;
   int64_t element_checked = 0;
   size_t remaining_element_size = 0;
 
@@ -1321,6 +1331,8 @@ InferenceRequest::ValidateBytesInputs(
   const char* buffer = nullptr;
   size_t remaining_buffer_size = 0;
   int64_t buffer_memory_id;
+
+  RETURN_IF_ERROR(GetElementCount(input_dims, input_name, &element_count));
 
   // Validate elements until all buffers have been fully processed.
   while (remaining_buffer_size || buffer_next_idx < buffer_count) {
