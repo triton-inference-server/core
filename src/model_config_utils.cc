@@ -353,9 +353,12 @@ ValidateIOShape(
       }
     }
 
-    const int64_t dims_size = triton::common::GetElementCount(io.dims());
-    const int64_t reshape_size =
-        triton::common::GetElementCount(io.reshape().shape());
+    int64_t dims_size = 0;
+    int64_t reshape_size = 0;
+    RETURN_IF_ERROR(
+        GetElementCount(io.dims(), io.name() + " dims", &dims_size));
+    RETURN_IF_ERROR(GetElementCount(
+        io.reshape().shape(), io.name() + " reshape", &reshape_size));
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.
@@ -372,12 +375,12 @@ ValidateIOShape(
     // each pair of the trunks separated by variable-size dimension has
     // the same element count. For instance, from [2, 4, -1, 6] to [8, -1, 1, 6]
     // is valid reshape as 2 * 4 = 8 and 6 = 1 * 6.
-    if (dims_size == -1) {
+    if (dims_size == triton::common::WILDCARD_SIZE) {
       std::vector<int64_t> dim_element_cnts;
       std::vector<int64_t> reshape_element_cnts;
       int64_t current_cnt = 1;
       for (const auto& dim : io.dims()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           dim_element_cnts.push_back(current_cnt);
@@ -388,7 +391,7 @@ ValidateIOShape(
 
       current_cnt = 1;
       for (const auto& dim : io.reshape().shape()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           reshape_element_cnts.push_back(current_cnt);
@@ -1232,6 +1235,17 @@ AutoCompleteBackendFields(
             }
           }
       }
+  }
+  if (config->backend() == kPyTorchBackend) {
+    if (config->platform().empty()) {
+      // do not introduce new platforms, new runtimes may ignore this field.
+      config->set_platform(kPyTorchLibTorchPlatform);
+    }
+    if (config->runtime() != kPythonFilename &&
+        config->default_model_filename().empty()) {
+      config->set_default_model_filename(kPyTorchLibTorchFilename);
+    }
+    return Status::Success;
   }
 
   // Python

@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -384,13 +384,14 @@ SequenceBatchScheduler::GenerateInitialStateData(
   auto state_dim = state.dims().begin();
   for (; initial_state_dim != initial_state.dims().end();
        initial_state_dim++, state_dim++) {
-    if (*initial_state_dim == -1) {
+    if (*initial_state_dim == triton::common::WILDCARD_DIM) {
       return Status(
           Status::Code::INVALID_ARG,
           std::string("'initial_state' field for state input name '") +
               state.input_name() + "' contains variable dimensions.");
     } else {
-      if (*state_dim != -1 && *initial_state_dim != *state_dim) {
+      if (*state_dim != triton::common::WILDCARD_DIM &&
+          *initial_state_dim != *state_dim) {
         return Status(
             Status::Code::INVALID_ARG,
             std::string("'initial_state' dim for input name '") +
@@ -404,15 +405,11 @@ SequenceBatchScheduler::GenerateInitialStateData(
   }
 
   // Calculate total memory byte size
-  auto element_count = triton::common::GetElementCount(initial_state.dims());
-  size_t dtype_byte_size =
-      triton::common::GetDataTypeByteSize(initial_state.data_type());
-  size_t total_byte_size = element_count * dtype_byte_size;
-
-  // Custom handling for TYPE_BYTES
-  if (dtype_byte_size == 0) {
-    total_byte_size = sizeof(int32_t) * element_count;
-  }
+  int64_t total_byte_size_signed = 0;
+  RETURN_IF_ERROR(GetByteSize(
+      initial_state.data_type(), initial_state.dims(), state.input_name(),
+      &total_byte_size_signed));
+  size_t total_byte_size = static_cast<size_t>(total_byte_size_signed);
 
   switch (initial_state.state_data_case()) {
     case inference::ModelSequenceBatching_InitialState::StateDataCase::
@@ -1757,8 +1754,12 @@ DirectSequenceBatch::BatcherThread(const int nice)
           // Use null-request if necessary otherwise use the next
           // request in the queue...
           if (use_null_request) {
-            std::unique_ptr<InferenceRequest> ni(
-                InferenceRequest::CopyAsNull(*null_irequest));
+            std::unique_ptr<InferenceRequest> ni = nullptr;
+            Status status = InferenceRequest::CopyAsNull(*null_irequest, &ni);
+            if (!status.IsOk()) {
+              LOG_ERROR << "internal: unexpected failure copying null request: "
+                        << status.Message();
+            }
             // Note that when the not-ready control input of the
             // request is "true" the model can't assume that any
             // other inputs are meaningful, including CORRID. So we
