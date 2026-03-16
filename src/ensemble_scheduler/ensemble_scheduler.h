@@ -51,7 +51,6 @@ using cudaStream_t = void*;
 #endif  // TRITON_ENABLE_GPU
 
 class InferenceServer;
-class StepInflightRequestLimiter;
 
 struct EnsembleInfo {
   struct StepInfo {

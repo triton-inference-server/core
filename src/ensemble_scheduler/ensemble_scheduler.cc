@@ -70,8 +70,6 @@ preserve_responses_order(const inference::ModelConfig& config)
          config.model_transaction_policy().decoupled();
 }
 
-}  // namespace
-
 // Request tracker is passed as 'userp' in RequestRelease function and used
 // to manage the lifecycle of the ensemble request
 class RequestTracker {
@@ -155,6 +153,7 @@ class RequestTracker {
 };
 
 // Limits concurrent inflight requests for a single ensemble step globally.
+// Tracks inflight requests count and blocks producers when limit is reached.
 class StepInflightRequestLimiter {
  public:
   explicit StepInflightRequestLimiter(const size_t max_inflight)
@@ -169,20 +168,25 @@ class StepInflightRequestLimiter {
       RequestTracker* request_tracker, const size_t step_idx,
       const std::string& ensemble_name)
   {
+    // No limit configured, no blocking
     if (max_inflight_ == 0) {
       return;
     }
 
     std::unique_lock<std::mutex> lk(mutex_);
     auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
+
     auto is_request_cancelled = [&]() {
       auto& req = request_tracker->Request();
       return (req == nullptr) || req->IsCancelled();
     };
+
     bool capacity_available = cv_.wait_for(lk, timeout, [&] {
       return is_request_cancelled() || (inflight_count_ < max_inflight_);
     });
 
+    // Log error if timeout occurred (not cancellation), but proceed anyway
+    // to avoid deadlock. Caller always continues after this call.
     if (!capacity_available && !is_request_cancelled()) {
       LOG_ERROR << "[Internal Error] Ensemble '" << ensemble_name
                 << "' unable to schedule step " << step_idx
@@ -219,8 +223,6 @@ class StepInflightRequestLimiter {
   std::mutex mutex_;
   std::condition_variable cv_;
 };
-
-namespace {
 
 // Step is used as 'userp' and keeps ensemble context alive
 // until no more internal requests are inflight.
