@@ -51,28 +51,7 @@ using cudaStream_t = void*;
 #endif  // TRITON_ENABLE_GPU
 
 class InferenceServer;
-
-// Limits concurrent inflight requests for a single ensemble step globally.
-class StepInflightRequestLimiter {
- public:
-  explicit StepInflightRequestLimiter(const size_t max_inflight);
-
-  // Wait until capacity is available or request cancellation is observed.
-  // On cancellation, waiting is bypassed so cancellation can be propagated
-  // through normal step scheduling.
-  void Acquire(
-      RequestTracker* request_tracker, const size_t step_idx,
-      const std::string& ensemble_name);
-
-  // Release one acquired slot and wake one waiter.
-  void Release();
-
- private:
-  size_t inflight_count_;
-  const size_t max_inflight_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
-};
+class StepInflightRequestLimiter;
 
 struct EnsembleInfo {
   struct StepInfo {
