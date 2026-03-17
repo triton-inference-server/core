@@ -1543,9 +1543,13 @@ EnsembleContext::ScheduleSteps(
     }
 
     std::lock_guard<std::mutex> lock(context->mutex_);
-    // The request is not sent to server properly, shouldn't expect its
-    // release function get called.
-    context->request_tracker_->DecrementCounter();
+    // Only decrement request tracker when IncrementCounter was called.
+    // When should_schedule is false, IncrementCounter was never called;
+    // an unconditional DecrementCounter here would underflow the counter,
+    // prematurely release the request, and cause use-after-free.
+    if (should_schedule) {
+      context->request_tracker_->DecrementCounter();
+    }
     --context->inflight_step_counter_;
 
     if (context->inflight_step_counter_ == 0) {
