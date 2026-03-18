@@ -93,6 +93,7 @@ struct EnsembleInfo {
   // produce responses faster than downstream steps can consume them.
   // A value of 0 means no limit is enforced.
   // Configured via the 'max_inflight_requests' field in ensemble_scheduling.
+  size_t max_inflight_requests_ = 0;
   std::vector<std::unique_ptr<StepInflightRequestLimiter>>
       step_inflight_request_limiters_;
 };
