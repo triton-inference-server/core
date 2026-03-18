@@ -28,7 +28,9 @@
 
 #include "ensemble_scheduler.h"
 
+#include <condition_variable>
 #include <chrono>
+#include <mutex>
 
 #include "constants.h"
 #include "cuda_utils.h"
