@@ -50,6 +50,31 @@ using cudaStream_t = void*;
 
 class InferenceServer;
 
+// Enforces a global per-step limit on concurrent in-flight requests shared
+// across all in-progress ensemble requests. Tracks the number of in-flight
+// requests and blocks producers when the limit is reached.
+class StepInflightRequestLimiter {
+ public:
+  explicit StepInflightRequestLimiter(size_t max_inflight);
+
+  // Blocks until a slot is available or the request is cancelled. Cancelled
+  // requests skip the wait so cancellation propagates via the normal
+  // step-scheduling path. The const reference prevents ownership transfer;
+  // only IsCancelled() is queried on the pointed-to request.
+  void Acquire(
+      const std::unique_ptr<InferenceRequest>& request, size_t step_idx,
+      const std::string& ensemble_name);
+
+  // Releases one acquired slot and wakes one waiting thread.
+  void Release();
+
+ private:
+  size_t inflight_count_;
+  const size_t max_inflight_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+};
+
 struct EnsembleInfo {
   struct StepInfo {
     StepInfo(const ModelIdentifier& model_id, const int64_t model_version)
@@ -84,14 +109,17 @@ struct EnsembleInfo {
   // backward path, ensemble tensor to the step that provides its data
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
-  // The maximum number of concurrent inflight requests allowed at each ensemble
-  // step per inference request. This limit is applied per step and per
-  // inference request, not globally for the entire ensemble model. This limit
-  // prevents unbounded memory growth when ensemble steps produce responses
-  // faster than downstream steps can consume them. Default value is 0, which
-  // indicates that no limit is enforced. Configured via 'max_inflight_requests'
-  // field in ensemble_scheduling.
+  // The maximum number of concurrent in-flight requests allowed at each
+  // ensemble step across all concurrent ensemble requests for this model.
+  // The limit is applied per step index and is global to the ensemble
+  // model instance.
+  // This limit prevents unbounded memory growth when upstream steps
+  // produce responses faster than downstream steps can consume them.
+  // A value of 0 means no limit is enforced.
+  // Configured via the 'max_inflight_requests' field in ensemble_scheduling.
   size_t max_inflight_requests_ = 0;
+  std::vector<std::unique_ptr<StepInflightRequestLimiter>>
+      step_inflight_request_limiters_;
 };
 
 // Scheduler that implements ensemble scheduling.
