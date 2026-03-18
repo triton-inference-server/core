@@ -41,35 +41,6 @@
 
 namespace triton { namespace core {
 
-namespace {
-
-class EnsembleContext;
-
-using IterationCount = size_t;
-
-// Check if the model is configured to preserve the order of responses.
-// This is critical for async execution of ResponseComplete callbacks.
-inline bool
-preserve_responses_order(const inference::ModelConfig& config)
-{
-  uint64_t total_instance_groups = 0;
-  for (const auto& group : config.instance_group()) {
-    total_instance_groups += group.count();
-  }
-
-  // Case 1: Sequence batching is enabled
-  // Case 2: Dynamic batching is disabled and there is only one instance group
-  // Case 3: Dynamic batching is enabled and preserve_ordering is true
-  // Case 4: Model transaction policy is decoupled (if the final response
-  // callback is not executed in the last step, the RequestTracker object will
-  // be freed prematurely and led to segmentation fault)
-  return config.has_sequence_batching() ||
-         (!config.has_dynamic_batching() && total_instance_groups <= 1) ||
-         (config.has_dynamic_batching() &&
-          config.dynamic_batching().preserve_ordering()) ||
-         config.model_transaction_policy().decoupled();
-}
-
 // Request tracker is passed as 'userp' in RequestRelease function and used
 // to manage the lifecycle of the ensemble request
 class RequestTracker {
@@ -152,8 +123,9 @@ class RequestTracker {
   triton::common::ThreadPool* const callback_pool_;
 };
 
-// Limits concurrent inflight requests for a single ensemble step.
-// Tracks inflight requests count and blocks producers when limit is reached.
+// Globally limits the number of concurrent in-flight requests for a single
+// ensemble step. Tracks the count of in-flight requests and blocks producers
+// when the limit is reached.
 class StepInflightRequestLimiter {
  public:
   explicit StepInflightRequestLimiter(const size_t max_inflight)
@@ -161,13 +133,14 @@ class StepInflightRequestLimiter {
   {
   }
 
-  // Wait until capacity is available or request is cancelled.
-  // No-op if limit not configured (max_inflight_ == 0).
-  void WaitForCapacity(
+  // Blocks until a slot becomes available or the request is canceled.
+  // Canceled requests bypass the wait so that cancellation propagates
+  // through the normal step-scheduling path.
+  void Acquire(
       RequestTracker* request_tracker, const size_t step_idx,
       const std::string& ensemble_name)
   {
-    // No limit configured, no blocking
+    // No limit is configured, so requests are not blocked.
     if (max_inflight_ == 0) {
       return;
     }
@@ -194,29 +167,25 @@ class StepInflightRequestLimiter {
                 << kMutexTimeoutSeconds
                 << " seconds. Proceeding to avoid deadlock.";
     }
-  }
 
-  // Increment inflight count after successfully scheduling a request.
-  // No-op if limit not configured (max_inflight_ == 0).
-  void IncrementInflightCount()
-  {
-    // No limit configured, no tracking needed
-    if (max_inflight_ == 0) {
-      return;
-    }
-    std::lock_guard<std::mutex> lk(mutex_);
+    // Increment while holding the lock to prevent transient oversubscription.
     inflight_count_++;
   }
 
-  // Decrement inflight count when a request completes, and notify waiting
-  // producers. No-op if limit not configured (max_inflight_ == 0).
-  void DecrementInflightCount()
+  // Release one acquired slot and notify a waiting thread
+  void Release()
   {
-    // No limit configured, no tracking needed
+    // No limit is configured, so requests are not blocked.
     if (max_inflight_ == 0) {
       return;
     }
+
     std::lock_guard<std::mutex> lk(mutex_);
+    if (inflight_count_ == 0) {
+      LOG_ERROR << "[Internal Error] step inflight request limiter underflow";
+      return;
+    }
+
     inflight_count_--;
     cv_.notify_one();
   }
@@ -227,6 +196,35 @@ class StepInflightRequestLimiter {
   std::mutex mutex_;
   std::condition_variable cv_;
 };
+
+namespace {
+
+class EnsembleContext;
+
+using IterationCount = size_t;
+
+// Check if the model is configured to preserve the order of responses.
+// This is critical for async execution of ResponseComplete callbacks.
+inline bool
+preserve_responses_order(const inference::ModelConfig& config)
+{
+  uint64_t total_instance_groups = 0;
+  for (const auto& group : config.instance_group()) {
+    total_instance_groups += group.count();
+  }
+
+  // Case 1: Sequence batching is enabled
+  // Case 2: Dynamic batching is disabled and there is only one instance group
+  // Case 3: Dynamic batching is enabled and preserve_ordering is true
+  // Case 4: Model transaction policy is decoupled (if the final response
+  // callback is not executed in the last step, the RequestTracker object will
+  // be freed prematurely and led to segmentation fault)
+  return config.has_sequence_batching() ||
+         (!config.has_dynamic_batching() && total_instance_groups <= 1) ||
+         (config.has_dynamic_batching() &&
+          config.dynamic_batching().preserve_ordering()) ||
+         config.model_transaction_policy().decoupled();
+}
 
 // Step is used as 'userp' and keeps ensemble context alive
 // until no more internal requests are inflight.
@@ -448,11 +446,6 @@ class EnsembleContext {
 
   size_t inflight_step_counter_;
 
-  // Inflight request limiters for each ensemble step.
-  // Only allocated when max_inflight_requests_ > 0.
-  std::vector<std::unique_ptr<StepInflightRequestLimiter>>
-      step_inflight_request_limiters_;
-
   // pointer that either points to 'pruned_tensor_to_step_' or to
   // 'info_->tensor_to_step_' if all ensemble outputs are requested
   std::unordered_map<std::string, std::set<size_t>>* tensor_to_step_;
@@ -589,17 +582,6 @@ EnsembleContext::EnsembleContext(
       tensor_data_.emplace(pair.first, TensorData(pair.second.size() + 1));
     } else {
       tensor_data_.emplace(pair.first, TensorData(pair.second.size()));
-    }
-  }
-
-  // Initialize step inflight request limiters for each step.
-  if (info_->max_inflight_requests_ > 0) {
-    size_t num_steps = info_->steps_.size();
-    step_inflight_request_limiters_.reserve(num_steps);
-    for (size_t i = 0; i < num_steps; i++) {
-      step_inflight_request_limiters_.emplace_back(
-          std::make_unique<StepInflightRequestLimiter>(
-              info_->max_inflight_requests_));
     }
   }
 
@@ -1016,9 +998,9 @@ EnsembleContext::UpdateEnsembleState(
     if (completed_step->response_flags_ &
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
-      if (!step_inflight_request_limiters_.empty()) {
-        step_inflight_request_limiters_[completed_step->step_idx_]
-            ->DecrementInflightCount();
+      if (!info_->step_inflight_request_limiters_.empty()) {
+        info_->step_inflight_request_limiters_[completed_step->step_idx_]
+            ->Release();
       }
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
@@ -1510,9 +1492,10 @@ EnsembleContext::ScheduleSteps(
     step->ctx_ = context;
     size_t this_step_idx = step->step_idx_;
 
-    // Apply step inflight request limiters if configured.
-    if (!context->step_inflight_request_limiters_.empty()) {
-      context->step_inflight_request_limiters_[this_step_idx]->WaitForCapacity(
+    // Acquire a slot from the global per-step limiter before scheduling the
+    // step.
+    if (!context->info_->step_inflight_request_limiters_.empty()) {
+      context->info_->step_inflight_request_limiters_[this_step_idx]->Acquire(
           context->request_tracker_, this_step_idx,
           context->info_->ensemble_name_);
     }
@@ -1546,13 +1529,6 @@ EnsembleContext::ScheduleSteps(
       std::unique_ptr<InferenceRequest> request = std::move(step->request_);
       auto step_status = context->is_->InferAsync(request);
       if (step_status.IsOk()) {
-        // Increment inflight counter AFTER successful scheduling. Always
-        // increment for ALL steps (including step 0) to ensure symmetry with
-        // decrement and prevent underflow when steps complete.
-        if (!context->step_inflight_request_limiters_.empty()) {
-          context->step_inflight_request_limiters_[this_step_idx]
-              ->IncrementInflightCount();
-        }
         step.release();
         continue;
       } else {
@@ -1565,10 +1541,19 @@ EnsembleContext::ScheduleSteps(
 
     // Reaching here means the step is not being scheduled, update corresponding
     // counters and attempt to finish ensemble if it is the last step.
+    if (!context->info_->step_inflight_request_limiters_.empty()) {
+      context->info_->step_inflight_request_limiters_[this_step_idx]->Release();
+    }
+
     std::lock_guard<std::mutex> lock(context->mutex_);
-    // The request is not sent to server properly, shouldn't expect its
-    // release function get called.
-    context->request_tracker_->DecrementCounter();
+    // Only decrement the request tracker when IncrementCounter was previously
+    // called. If should_schedule is false, IncrementCounter was never
+    // invoked; unconditionally calling DecrementCounter here would underflow
+    // the counter, prematurely release the request, and potentially cause a
+    // use-after-free.
+    if (should_schedule) {
+      context->request_tracker_->DecrementCounter();
+    }
     --context->inflight_step_counter_;
 
     if (context->inflight_step_counter_ == 0) {
@@ -1736,7 +1721,7 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Parse the configuration for max_inflight_requests from the protobuf field.
+  // Parse the max_inflight_requests configuration from the protobuf field
   if (config.has_ensemble_scheduling()) {
     info_->max_inflight_requests_ =
         config.ensemble_scheduling().max_inflight_requests();
@@ -1744,6 +1729,15 @@ EnsembleScheduler::EnsembleScheduler(
       LOG_INFO << "Ensemble model '" << config.name()
                << "' configured with max_inflight_requests: "
                << info_->max_inflight_requests_;
+
+      // Allocate one global limiter per step so that the in-flight bound is
+      // shared across all concurrent ensemble requests.
+      info_->step_inflight_request_limiters_.reserve(info_->steps_.size());
+      for (size_t i = 0; i < info_->steps_.size(); ++i) {
+        info_->step_inflight_request_limiters_.emplace_back(
+            std::make_unique<StepInflightRequestLimiter>(
+                info_->max_inflight_requests_));
+      }
     }
   }
 }

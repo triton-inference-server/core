@@ -49,6 +49,7 @@ using cudaStream_t = void*;
 #endif  // TRITON_ENABLE_GPU
 
 class InferenceServer;
+class StepInflightRequestLimiter;
 
 struct EnsembleInfo {
   struct StepInfo {
@@ -84,14 +85,17 @@ struct EnsembleInfo {
   // backward path, ensemble tensor to the step that provides its data
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
-  // The maximum number of concurrent inflight requests allowed at each ensemble
-  // step per inference request. This limit is applied per step and per
-  // inference request, not globally for the entire ensemble model. This limit
-  // prevents unbounded memory growth when ensemble steps produce responses
-  // faster than downstream steps can consume them. Default value is 0, which
-  // indicates that no limit is enforced. Configured via 'max_inflight_requests'
-  // field in ensemble_scheduling.
+  // The maximum number of concurrent in-flight requests allowed at each
+  // ensemble step across all concurrent ensemble requests for this model.
+  // The limit is applied per step index and is global to the ensemble
+  // model instance.
+  // This limit prevents unbounded memory growth when upstream steps
+  // produce responses faster than downstream steps can consume them.
+  // A value of 0 means no limit is enforced.
+  // Configured via the 'max_inflight_requests' field in ensemble_scheduling.
   size_t max_inflight_requests_ = 0;
+  std::vector<std::unique_ptr<StepInflightRequestLimiter>>
+      step_inflight_request_limiters_;
 };
 
 // Scheduler that implements ensemble scheduling.
