@@ -27,7 +27,9 @@
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 
 #include "metric_model_reporter.h"
 #include "model.h"
@@ -49,7 +51,31 @@ using cudaStream_t = void*;
 #endif  // TRITON_ENABLE_GPU
 
 class InferenceServer;
-class StepInflightRequestLimiter;
+
+// Enforces a global per-step limit on concurrent in-flight requests shared
+// across all in-progress ensemble requests. Tracks the number of in-flight
+// requests and blocks producers when the limit is reached.
+class StepInflightRequestLimiter {
+ public:
+  explicit StepInflightRequestLimiter(size_t max_inflight);
+
+  // Blocks until a slot is available or the request is cancelled. Cancelled
+  // requests skip the wait so cancellation propagates via the normal
+  // step-scheduling path. The const reference prevents ownership transfer;
+  // only IsCancelled() is queried on the pointed-to request.
+  void Acquire(
+      const std::unique_ptr<InferenceRequest>& request, size_t step_idx,
+      const std::string& ensemble_name);
+
+  // Releases one acquired slot and wakes one waiting thread.
+  void Release();
+
+ private:
+  size_t inflight_count_;
+  const size_t max_inflight_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+};
 
 struct EnsembleInfo {
   struct StepInfo {
