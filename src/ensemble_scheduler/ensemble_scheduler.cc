@@ -123,8 +123,9 @@ class RequestTracker {
   triton::common::ThreadPool* const callback_pool_;
 };
 
-// Limits concurrent inflight requests for a single ensemble step globally.
-// Tracks inflight requests count and blocks producers when limit is reached.
+// Globally limits the number of concurrent in-flight requests for a single
+// ensemble step. Tracks the count of in-flight requests and blocks producers
+// when the limit is reached.
 class StepInflightRequestLimiter {
  public:
   explicit StepInflightRequestLimiter(const size_t max_inflight)
@@ -132,9 +133,9 @@ class StepInflightRequestLimiter {
   {
   }
 
-  // Wait until capacity is available or request cancellation is observed.
-  // On cancellation, waiting is bypassed so cancellation can be propagated
-  // through normal step scheduling.
+  // Blocks until a slot becomes available or the request is canceled.
+  // Canceled requests bypass the wait so that cancellation propagates
+  // through the normal step-scheduling path.
   void Acquire(
       RequestTracker* request_tracker, const size_t step_idx,
       const std::string& ensemble_name)
@@ -167,13 +168,14 @@ class StepInflightRequestLimiter {
                 << " seconds. Proceeding to avoid deadlock.";
     }
 
-    // Reserve capacity under lock to avoid transient oversubscription.
+    // Increment while holding the lock to prevent transient oversubscription.
     inflight_count_++;
   }
 
   // Release one acquired slot and wake one waiter.
   void Release()
   {
+    // No limit is configured, so requests are not blocked.
     if (max_inflight_ == 0) {
       return;
     }
@@ -1490,7 +1492,8 @@ EnsembleContext::ScheduleSteps(
     step->ctx_ = context;
     size_t this_step_idx = step->step_idx_;
 
-    // Apply step inflight request limiters if configured.
+    // Acquire a slot from the global per-step limiter before scheduling the
+    // step.
     if (!context->info_->step_inflight_request_limiters_.empty()) {
       context->info_->step_inflight_request_limiters_[this_step_idx]->Acquire(
           context->request_tracker_, this_step_idx,
@@ -1543,10 +1546,11 @@ EnsembleContext::ScheduleSteps(
     }
 
     std::lock_guard<std::mutex> lock(context->mutex_);
-    // Only decrement request tracker when IncrementCounter was called.
-    // When should_schedule is false, IncrementCounter was never called;
-    // an unconditional DecrementCounter here would underflow the counter,
-    // prematurely release the request, and cause use-after-free.
+    // Only decrement the request tracker when IncrementCounter was previously
+    // called. If should_schedule is false, IncrementCounter was never
+    // invoked; unconditionally calling DecrementCounter here would underflow
+    // the counter, prematurely release the request, and potentially cause a
+    // use-after-free.
     if (should_schedule) {
       context->request_tracker_->DecrementCounter();
     }
@@ -1717,7 +1721,7 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Parse the configuration for max_inflight_requests from the protobuf field.
+  // Parse the max_inflight_requests configuration from the protobuf field
   if (config.has_ensemble_scheduling()) {
     info_->max_inflight_requests_ =
         config.ensemble_scheduling().max_inflight_requests();
@@ -1726,7 +1730,7 @@ EnsembleScheduler::EnsembleScheduler(
                << "' configured with max_inflight_requests: "
                << info_->max_inflight_requests_;
 
-      // Allocate one global limiter per step so that the inflight bound is
+      // Allocate one global limiter per step so that the in-flight bound is
       // shared across all concurrent ensemble requests.
       info_->step_inflight_request_limiters_.reserve(info_->steps_.size());
       for (size_t i = 0; i < info_->steps_.size(); ++i) {
