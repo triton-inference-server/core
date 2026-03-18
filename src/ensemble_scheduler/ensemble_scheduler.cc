@@ -140,7 +140,7 @@ class StepInflightRequestLimiter {
       RequestTracker* request_tracker, const size_t step_idx,
       const std::string& ensemble_name)
   {
-    // No limit configured, no blocking
+    // No limit is configured, so requests are not blocked.
     if (max_inflight_ == 0) {
       return;
     }
@@ -172,7 +172,7 @@ class StepInflightRequestLimiter {
     inflight_count_++;
   }
 
-  // Release one acquired slot and wake one waiter.
+  // Release one acquired slot and notify a waiting thread
   void Release()
   {
     // No limit is configured, so requests are not blocked.
@@ -182,7 +182,7 @@ class StepInflightRequestLimiter {
 
     std::lock_guard<std::mutex> lk(mutex_);
     if (inflight_count_ == 0) {
-      LOG_ERROR << "[Internal Error] inflight request limiter underflow";
+      LOG_ERROR << "[Internal Error] step inflight request limiter underflow";
       return;
     }
 
