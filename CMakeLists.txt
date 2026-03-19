@@ -1,4 +1,4 @@
-# Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -286,6 +286,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Dazure-storage-blobs-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-storage-blobs-cpp
       -Dazure-storage-common-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-storage-common-cpp
       -Dazure-core-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-core-cpp
+      -Dazure-identity-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-identity-cpp
     )
   endif() # TRITON_ENABLE_AZURE_STORAGE
   if(${TRITON_ENABLE_METRICS})
