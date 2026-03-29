@@ -1964,8 +1964,8 @@ operator<<(std::ostream& out, const InferenceRequest::State& state)
 
 bool
 operator==(
-    const InferenceRequest::SequenceId lhs,
-    const InferenceRequest::SequenceId rhs)
+    const InferenceRequest::SequenceId& lhs,
+    const InferenceRequest::SequenceId& rhs)
 {
   if (lhs.Type() == rhs.Type()) {
     switch (lhs.Type()) {
@@ -1983,8 +1983,8 @@ operator==(
 
 bool
 operator!=(
-    const InferenceRequest::SequenceId lhs,
-    const InferenceRequest::SequenceId rhs)
+    const InferenceRequest::SequenceId& lhs,
+    const InferenceRequest::SequenceId& rhs)
 {
   return !(lhs == rhs);
 }
