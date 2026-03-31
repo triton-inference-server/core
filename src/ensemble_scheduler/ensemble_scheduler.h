@@ -50,9 +50,9 @@ using cudaStream_t = void*;
 
 class InferenceServer;
 
-// Enforces a global per-step limit on concurrent in-flight requests shared
-// across all in-progress ensemble requests. Tracks the number of in-flight
-// requests and blocks producers when the limit is reached.
+// Enforces a per-step limit on concurrent in-flight requests, shared across
+// all active ensemble requests for a given ensemble model. Tracks in-flight
+// request count and blocks producers when the limit is reached.
 class StepInflightRequestLimiter {
  public:
   explicit StepInflightRequestLimiter(size_t max_inflight);
@@ -111,8 +111,8 @@ struct EnsembleInfo {
 
   // The maximum number of concurrent in-flight requests allowed at each
   // ensemble step across all concurrent ensemble requests for this model.
-  // The limit is applied per step index and is global to the ensemble
-  // model instance.
+  // The limit is applied per step index and is shared across all concurrent
+  // requests for this ensemble model.
   // This limit prevents unbounded memory growth when upstream steps
   // produce responses faster than downstream steps can consume them.
   // A value of 0 means no limit is enforced.

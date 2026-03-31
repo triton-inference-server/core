@@ -1439,9 +1439,9 @@ EnsembleContext::ScheduleSteps(
       if (context->request_tracker_->Request()->IsCancelled()) {
         step->request_->Cancel();
       }
-      // Acquire a slot from the global per-step limiter. This is done only for
-      // steps that will be dispatched, so that a failed ensemble does not
-      // block unnecessarily.
+      // Acquire a slot from the per-step shared limiter only for steps that
+      // will be dispatched, so that a failed ensemble does not hold capacity
+      // unnecessarily.
       if (!context->info_->step_inflight_request_limiters_.empty()) {
         context->info_->step_inflight_request_limiters_[this_step_idx]->Acquire(
             context->request_tracker_->Request(), this_step_idx,
@@ -1716,8 +1716,9 @@ EnsembleScheduler::EnsembleScheduler(
                << "' configured with max_inflight_requests: "
                << info_->max_inflight_requests_;
 
-      // Allocate one global limiter per step so that the in-flight bound is
-      // shared across all concurrent ensemble requests.
+      // Allocate one limiter per step to ensure max_inflight_requests is
+      // enforced as a shared limit across all concurrent requests for this
+      // ensemble model.
       info_->step_inflight_request_limiters_.reserve(info_->steps_.size());
       for (size_t i = 0; i < info_->steps_.size(); ++i) {
         info_->step_inflight_request_limiters_.emplace_back(
