@@ -1212,6 +1212,10 @@ AutoCompleteBackendFields(
           config->default_model_filename() == kPyTorchAotiFilename) {
         config->set_backend(kPyTorchAotiBackend);
       } else if (
+          config->platform() == kPyTorchAotiPlatform &&
+          config->default_model_filename().empty()) {
+        config->set_default_model_filename(kPyTorchAotiFilename);
+      } else if (
           config->platform().empty() &&
           config->default_model_filename().empty() && has_version) {
         bool is_dir = false;
@@ -1240,6 +1244,10 @@ AutoCompleteBackendFields(
     if (config->platform().empty()) {
       // do not introduce new platforms, new runtimes may ignore this field.
       config->set_platform(kPyTorchLibTorchPlatform);
+    } else if (
+        config->platform() == kPyTorchAotiPlatform &&
+        config->default_model_filename().empty()) {
+      config->set_default_model_filename(kPyTorchAotiFilename);
     }
     if (config->runtime() != kPythonFilename &&
         config->default_model_filename().empty()) {
