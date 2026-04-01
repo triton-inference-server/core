@@ -1202,56 +1202,59 @@ AutoCompleteBackendFields(
 
   // PyTorch
   if (config->backend().empty()) {
-    // Torch JIT interface
+    // Determine if the backend is PyTorch by testing the platform and
+    // default model name against known PyTorch values.
     if (config->platform() == kPyTorchLibTorchPlatform ||
+        config->platform() == kPyTorchLibTorchPlatformAlt ||
         config->default_model_filename() == kPyTorchLibTorchFilename) {
       config->set_backend(kPyTorchBackend);
-    } else
-      // Torch AOTI interface
-      if (config->platform() == kPyTorchAotiPlatform ||
-          config->default_model_filename() == kPyTorchAotiFilename) {
-        config->set_backend(kPyTorchAotiBackend);
+    } else if (
+        config->platform() == kPyTorchAotiPlatform ||
+        config->default_model_filename() == kPyTorchAotiFilename) {
+      config->set_backend(kPyTorchAotiBackend);
+    } else if (
+        has_version && config->default_model_filename().empty() &&
+        config->platform().empty() && !version_path.empty()) {
+      // When default model filename and platform are not given, we check the
+      // version directory for known PyTorch files to determine the backend and
+      // platform.
+      bool is_dir{false};
+      if (version_dir_content.find(kPyTorchLibTorchFilename) !=
+          version_dir_content.end()) {
+        RETURN_IF_ERROR(IsDirectory(
+            JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
+        if (!is_dir) {
+          config->set_backend(kPyTorchBackend);
+          config->set_platform(kPyTorchLibTorchPlatform);
+        }
       } else if (
-          config->platform() == kPyTorchAotiPlatform &&
-          config->default_model_filename().empty()) {
-        config->set_default_model_filename(kPyTorchAotiFilename);
-      } else if (
-          config->platform().empty() &&
-          config->default_model_filename().empty() && has_version) {
-        bool is_dir = false;
-
-        // Torch JIT interface
-        if (version_dir_content.find(kPyTorchLibTorchFilename) !=
-            version_dir_content.end()) {
-          RETURN_IF_ERROR(IsDirectory(
-              JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
-          if (!is_dir) {
-            config->set_backend(kPyTorchBackend);
-          }
-        } else
-          // Torch AOTI interface
-          if (version_dir_content.find(kPyTorchAotiFilename) !=
-              version_dir_content.end()) {
-            RETURN_IF_ERROR(IsDirectory(
-                JoinPath({version_path, kPyTorchAotiFilename}), &is_dir));
-            if (!is_dir) {
-              config->set_backend(kPyTorchAotiBackend);
-            }
-          }
+          version_dir_content.find(kPyTorchAotiFilename) !=
+          version_dir_content.end()) {
+        RETURN_IF_ERROR(IsDirectory(
+            JoinPath({version_path, kPyTorchAotiFilename}), &is_dir));
+        if (!is_dir) {
+          config->set_backend(kPyTorchAotiBackend);
+          config->set_platform(kPyTorchAotiPlatform);
+        }
       }
+    }
   }
+
+  // When we know the backend is PyTorch, we set the platform and default model
+  // filename as necessary.
   if (config->backend() == kPyTorchBackend) {
     if (config->platform().empty()) {
-      // do not introduce new platforms, new runtimes may ignore this field.
+      // The default platform for the PyTorch backend is LibTorch until it is
+      // deprecated. AOTI must be explicitly specified to maximize backwards
+      // compatibility.
       config->set_platform(kPyTorchLibTorchPlatform);
+      if (config->default_model_filename().empty()) {
+        config->set_default_model_filename(kPyTorchLibTorchFilename);
+      }
     } else if (
         config->platform() == kPyTorchAotiPlatform &&
         config->default_model_filename().empty()) {
       config->set_default_model_filename(kPyTorchAotiFilename);
-    }
-    if (config->runtime() != kPythonFilename &&
-        config->default_model_filename().empty()) {
-      config->set_default_model_filename(kPyTorchLibTorchFilename);
     }
     return Status::Success;
   }
