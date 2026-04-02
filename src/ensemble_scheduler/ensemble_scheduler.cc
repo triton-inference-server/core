@@ -87,7 +87,24 @@ class RequestTracker {
   {
   }
 
+  // Unsynchronized access -- only safe under EnsembleContext::mutex_ during
+  // normal (non-finalization) paths where no concurrent Release can occur.
   std::unique_ptr<InferenceRequest>& Request() { return request_; }
+
+  // Thread-safe accessors for the error-finalization path where request_
+  // may be concurrently moved by DecrementCounter -> Release.
+  bool IsCancelled()
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    return (request_ == nullptr) || request_->IsCancelled();
+  }
+
+  std::string LogRequest()
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    return (request_ != nullptr) ? request_->LogRequest()
+                                 : std::string("[request released] ");
+  }
 
   InferenceStatsAggregator* StatsAggregator() { return stats_aggregator_; }
 
@@ -141,6 +158,23 @@ class RequestTracker {
     status_ = status;
   }
 
+  void RespondIfError(const Status& status, FailureReason reason)
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (request_ != nullptr) {
+      InferenceRequest::RespondIfError(
+          request_, status, false /* release_request */, reason);
+    }
+  }
+
+  void SendFlags(const uint32_t flags)
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (request_ != nullptr) {
+      request_->ResponseFactory()->SendFlags(flags);
+    }
+  }
+
  private:
   std::mutex mtx_;
   uint32_t inflight_request_counter_;
@@ -153,6 +187,7 @@ class RequestTracker {
   triton::common::ThreadPool* const callback_pool_;
 };
 
+using RequestTrackerReference = std::shared_ptr<RequestTracker>;
 // Step is used as 'userp' and keeps ensemble context alive
 // until no more internal requests are inflight.
 // Step contains metadata, and status for the
@@ -188,6 +223,12 @@ struct Step {
   const bool preserve_responses_order_;
 
   size_t step_idx_;
+
+  // Raw pointer to the heap-allocated RequestTrackerReference passed as
+  // release callback userp.  Normally freed by RequestComplete when the
+  // request is released; stored here so ScheduleSteps can clean it up if
+  // InferAsync fails and the release callback will never fire.
+  RequestTrackerReference* tracker_ref_{nullptr};
 };
 
 struct TensorData {
@@ -396,7 +437,7 @@ class EnsembleContext {
 
   // Objects related to the ensemble infer request
   Status ensemble_status_;
-  RequestTracker* request_tracker_;
+  std::shared_ptr<RequestTracker> request_tracker_;
   // Use in conjunction with 'is_decoupled_' in EnsembleInfo to
   // better distinguish ensemble ending behavior (see annotation in
   // FinishEnsemble for details).
@@ -429,7 +470,7 @@ EnsembleContext::EnsembleContext(
 {
   uint64_t compute_start_ns = 0;
   INFER_STATS_SET_TIMESTAMP(compute_start_ns);
-  request_tracker_ = new RequestTracker(
+  request_tracker_ = std::make_shared<RequestTracker>(
       std::move(request), compute_start_ns, metric_reporter, stats_aggregator,
       callback_pool);
 
@@ -646,16 +687,17 @@ void
 EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  auto request_tracker = reinterpret_cast<RequestTracker*>(userp);
+  auto request_tracker_ref = reinterpret_cast<RequestTrackerReference*>(userp);
+  auto request_tracker = *request_tracker_ref;
   auto pool = request_tracker->CallbackPool();
-  auto fn = [request, flags, request_tracker]() {
+  auto fn = [request, flags, request_tracker, request_tracker_ref]() {
     if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
+      std::unique_ptr<RequestTrackerReference> managed_tracker_ref(
+          request_tracker_ref);
       LOG_TRITONSERVER_ERROR(
           TRITONSERVER_InferenceRequestDelete(request),
           "deleting ensemble inference request");
-      if (request_tracker->DecrementCounter()) {
-        delete request_tracker;
-      }
+      request_tracker->DecrementCounter();
     }
   };
 
@@ -1070,12 +1112,18 @@ EnsembleContext::InitStep(
   irequest->SetSecondaryStatsAggregator(
       &request_tracker_->ContextStatsAggregator());
 #endif
+  // Heap-allocate a shared_ptr to the tracker so it can be passed through the
+  // C callback API (void* userp).  Ownership transfers to the callback on
+  // successful PrepareForInference; cleaned up by unique_ptr on early return.
+  auto request_tracker_ref =
+      std::make_unique<RequestTrackerReference>(request_tracker_);
   irequest->SetResponseCallback(
       reinterpret_cast<ResponseAllocator*>(allocator_.get()), step->get(),
       ResponseComplete, step->get());
-  irequest->SetReleaseCallback(RequestComplete, request_tracker_);
+  irequest->SetReleaseCallback(RequestComplete, request_tracker_ref.get());
 
   RETURN_IF_ERROR(irequest->PrepareForInference());
+  (*step)->tracker_ref_ = request_tracker_ref.release();
 
 #ifdef TRITON_ENABLE_TRACING
   auto& parent_trace = request_tracker_->Request()->TraceProxy();
@@ -1220,16 +1268,14 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
         ensemble_status_ = Status(
             Status::Code::INVALID_ARG,
             "in ensemble '" + info_->ensemble_name_ + "', " +
-                request_tracker_->Request()->LogRequest() +
+                request_tracker_->LogRequest() +
                 "unexpected deadlock, at least one output is not set while no "
                 "more "
                 "ensemble steps can be made");
-        InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_,
-            false /* release_requests */, FailureReason::OTHER);
+        request_tracker_->RespondIfError(
+            ensemble_status_, FailureReason::OTHER);
       } else {
-        request_tracker_->Request()->ResponseFactory()->SendFlags(
-            TRITONSERVER_RESPONSE_COMPLETE_FINAL);
+        request_tracker_->SendFlags(TRITONSERVER_RESPONSE_COMPLETE_FINAL);
       }
     }
   } else {
@@ -1239,9 +1285,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
             std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL,
             ensemble_status_);
       } else {
-        InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_,
-            false /* release_requests */, FailureReason::OTHER);
+        request_tracker_->RespondIfError(
+            ensemble_status_, FailureReason::OTHER);
       }
       error_response_sent_ = true;
     }
@@ -1251,10 +1296,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
     // Reach here when the ensemble execution comes to the end,
     // 'ensemble_status_' at this point is representative.
     request_tracker_->SetStatus(ensemble_status_);
-    if (request_tracker_->DecrementCounter()) {
-      delete request_tracker_;
-    }
-    request_tracker_ = nullptr;
+    request_tracker_->DecrementCounter();
+    request_tracker_.reset();
   }
   return ensemble_status_;
 }
@@ -1436,7 +1479,7 @@ EnsembleContext::ScheduleSteps(
     if (should_schedule) {
       // If the ensemble request is cancelled, propagate the cancellation to the
       // next request step.
-      if (context->request_tracker_->Request()->IsCancelled()) {
+      if (context->request_tracker_->IsCancelled()) {
         step->request_->Cancel();
       }
       // Acquire a slot from the per-step shared limiter only for steps that
@@ -1469,7 +1512,6 @@ EnsembleContext::ScheduleSteps(
     // Reaching here means the step is not being scheduled, update corresponding
     // counters and attempt to finish ensemble if it is the last step.
 
-
     // Release the limiter slot if one was acquired, and update counters.
     if (should_schedule &&
         !context->info_->step_inflight_request_limiters_.empty()) {
@@ -1477,8 +1519,14 @@ EnsembleContext::ScheduleSteps(
     }
 
     std::lock_guard<std::mutex> lock(context->mutex_);
-    // Decrement only when IncrementCounter was called. An unconditional
-    // decrement would underflow the counter and cause a use-after-free.
+    // The request is not sent to server properly, shouldn't expect its
+    // release function get called.  Clean up the heap-allocated tracker
+    // reference that would normally be freed by RequestComplete.
+    delete step->tracker_ref_;
+    step->tracker_ref_ = nullptr;
+    // Only undo IncrementCounter() for steps that actually reached the
+    // scheduling path. Otherwise the counter can underflow and release the
+    // top-level request while FinishEnsemble is still using it.
     if (should_schedule) {
       context->request_tracker_->DecrementCounter();
     }
