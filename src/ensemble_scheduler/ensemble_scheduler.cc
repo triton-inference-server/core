@@ -687,8 +687,7 @@ void
 EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  auto request_tracker_ref =
-      reinterpret_cast<RequestTrackerReference*>(userp);
+  auto request_tracker_ref = reinterpret_cast<RequestTrackerReference*>(userp);
   auto request_tracker = *request_tracker_ref;
   auto pool = request_tracker->CallbackPool();
   auto fn = [request, flags, request_tracker, request_tracker_ref]() {
@@ -1273,7 +1272,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
                 "unexpected deadlock, at least one output is not set while no "
                 "more "
                 "ensemble steps can be made");
-        request_tracker_->RespondIfError(ensemble_status_, FailureReason::OTHER);
+        request_tracker_->RespondIfError(
+            ensemble_status_, FailureReason::OTHER);
       } else {
         request_tracker_->SendFlags(TRITONSERVER_RESPONSE_COMPLETE_FINAL);
       }
@@ -1285,7 +1285,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
             std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL,
             ensemble_status_);
       } else {
-        request_tracker_->RespondIfError(ensemble_status_, FailureReason::OTHER);
+        request_tracker_->RespondIfError(
+            ensemble_status_, FailureReason::OTHER);
       }
       error_response_sent_ = true;
     }
@@ -1510,7 +1511,6 @@ EnsembleContext::ScheduleSteps(
 
     // Reaching here means the step is not being scheduled, update corresponding
     // counters and attempt to finish ensemble if it is the last step.
-
 
     // Release the limiter slot if one was acquired, and update counters.
     if (should_schedule &&
