@@ -578,10 +578,51 @@ RateLimiter::AttemptAllocation()
 {
   std::lock_guard<std::recursive_mutex> lk(staged_instances_mtx_);
   if (!staged_instances_.empty()) {
-    ModelInstanceContext* instance = staged_instances_.top();
-    if (resource_manager_->AllocateResources(instance)) {
+    // Greedy allocation: Try to allocate ANY instance that has sufficient
+    // resources, not just the top priority one. This prevents deadlocks
+    // when BLS calls require resources and the child model stucks due to
+    // head‑of‑line blocking
+
+    // First, try the top instance (highest priority)
+    ModelInstanceContext* top_instance = staged_instances_.top();
+    if (resource_manager_->AllocateResources(top_instance)) {
       staged_instances_.pop();
-      instance->Allocate();
+      top_instance->Allocate();
+      // After allocating one instance, recursively try to allocate more
+      // in case resources were freed up
+      AttemptAllocation();
+      return;
+    }
+
+    // If top instance can't be allocated, try other staged instances
+    // to find one that can be allocated (greedy approach)
+    std::vector<ModelInstanceContext*> temp_instances;
+    temp_instances.push_back(top_instance);
+    staged_instances_.pop();
+
+    bool allocated = false;
+    while (!staged_instances_.empty() && !allocated) {
+      ModelInstanceContext* instance = staged_instances_.top();
+      staged_instances_.pop();
+
+      if (resource_manager_->AllocateResources(instance)) {
+        // Found an instance that can be allocated
+        instance->Allocate();
+        allocated = true;
+      } else {
+        // Can't allocate this instance, save it for later
+        temp_instances.push_back(instance);
+      }
+    }
+
+    // Restore unallocated instances back to the priority queue
+    for (auto* instance : temp_instances) {
+      staged_instances_.push(instance);
+    }
+
+    // If we allocated an instance, try again in case more can be allocated
+    if (allocated) {
+      AttemptAllocation();
     }
   }
 }
