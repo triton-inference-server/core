@@ -87,12 +87,11 @@ class RequestTracker {
   {
   }
 
-  // Unsynchronized access -- only safe under EnsembleContext::mutex_ during
-  // normal (non-finalization) paths where no concurrent Release can occur.
+  // Accessed without additional synchronization while protected by
+  // EnsembleContext::mutex_.
   std::unique_ptr<InferenceRequest>& Request() { return request_; }
 
-  // Thread-safe accessors for the error-finalization path where request_
-  // may be concurrently moved by DecrementCounter -> Release.
+  // Used from paths where request_ may be released concurrently.
   bool IsCancelled()
   {
     std::lock_guard<std::mutex> lk(mtx_);
@@ -224,10 +223,8 @@ struct Step {
 
   size_t step_idx_;
 
-  // Raw pointer to the heap-allocated RequestTrackerReference passed as
-  // release callback userp.  Normally freed by RequestComplete when the
-  // request is released; stored here so ScheduleSteps can clean it up if
-  // InferAsync fails and the release callback will never fire.
+  // Release callback userp. ScheduleSteps may clean this up directly if
+  // InferAsync fails before the release callback is installed.
   RequestTrackerReference* tracker_ref_{nullptr};
 };
 
