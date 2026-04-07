@@ -25,13 +25,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include <azure/identity/default_azure_credential.hpp>
-#include <azure/identity/managed_identity_credential.hpp>
+#include <azure/identity.hpp>
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
 
 #include "common.h"
-// [WIP] below needed?
 #undef LOG_INFO
 #undef LOG_WARNING
 
@@ -184,14 +182,13 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
       // Token caching and refresh are handled by the Azure Identity SDK.
       LOG_VERBOSE(1) << "Using Azure Managed Identity authentication for "
                      << account_name;
-      std::shared_ptr<Azure::Core::Credentials::TokenCredential> token_cred;
+      std::shared_ptr<Azure::Identity::ManagedIdentityCredential> token_cred;
       if (!as_cred.client_id_.empty()) {
-        // User-assigned Managed Identity: specify the client ID.
-        Azure::Identity::ManagedIdentityCredentialOptions mi_opts;
-        mi_opts.ClientId = as_cred.client_id_;
+        // User-assigned Managed Identity: pass the client ID directly
+        // to the credential constructor.
         token_cred =
             std::make_shared<Azure::Identity::ManagedIdentityCredential>(
-                mi_opts);
+                as_cred.client_id_);
         LOG_VERBOSE(1) << "Using user-assigned Managed Identity with client ID "
                        << as_cred.client_id_;
       } else {
