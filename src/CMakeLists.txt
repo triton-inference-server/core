@@ -103,7 +103,9 @@ endif()
 #
 if(${TRITON_ENABLE_AZURE_STORAGE})
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
+  find_package(azure-identity-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
+  message(STATUS "Using Azure identity ${azure-identity-cpp_VERSION}")
 endif()
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
@@ -327,6 +329,7 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   target_include_directories(
     triton-core
     PRIVATE $<TARGET_PROPERTY:Azure::azure-storage-blobs,INTERFACE_INCLUDE_DIRECTORIES>
+    PRIVATE $<TARGET_PROPERTY:Azure::azure-identity,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
@@ -500,6 +503,7 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
     triton-core
     PRIVATE
       Azure::azure-storage-blobs
+      Azure::azure-identity
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 

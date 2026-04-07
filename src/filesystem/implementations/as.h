@@ -25,11 +25,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <azure/identity.hpp>
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
 
 #include "common.h"
-// [WIP] below needed?
 #undef LOG_INFO
 #undef LOG_WARNING
 
@@ -42,6 +42,8 @@ const std::string AS_URL_PATTERN = "as://([^/]+)/([^/?]+)(?:/([^?]*))?(\\?.*)?";
 struct ASCredential {
   std::string account_str_;
   std::string account_key_;
+  std::string auth_type_;  // "key", "managed_identity", or "default"
+  std::string client_id_;  // Client ID for user-assigned managed identity
 
   ASCredential();  // from env var
   ASCredential(triton::common::TritonJson::Value& cred_json);
@@ -54,17 +56,36 @@ ASCredential::ASCredential()
   };
   const char* account_str = std::getenv("AZURE_STORAGE_ACCOUNT");
   const char* account_key = std::getenv("AZURE_STORAGE_KEY");
+  const char* auth_type = std::getenv("AZURE_STORAGE_AUTH_TYPE");
+  const char* client_id = std::getenv("AZURE_STORAGE_CLIENT_ID");
   account_str_ = to_str(account_str);
   account_key_ = to_str(account_key);
+  auth_type_ = to_str(auth_type);
+  client_id_ = to_str(client_id);
+
+  // Default to "key" if not specified
+  if (auth_type_.empty()) {
+    auth_type_ = "key";
+  }
 }
 
 ASCredential::ASCredential(triton::common::TritonJson::Value& cred_json)
 {
   triton::common::TritonJson::Value account_str_json, account_key_json;
+  triton::common::TritonJson::Value auth_type_json, client_id_json;
   if (cred_json.Find("account_str", &account_str_json))
     account_str_json.AsString(&account_str_);
   if (cred_json.Find("account_key", &account_key_json))
     account_key_json.AsString(&account_key_);
+  if (cred_json.Find("auth_type", &auth_type_json))
+    auth_type_json.AsString(&auth_type_);
+  if (cred_json.Find("client_id", &client_id_json))
+    client_id_json.AsString(&client_id_);
+
+  // Default to "key" if not specified
+  if (auth_type_.empty()) {
+    auth_type_ = "key";
+  }
 }
 
 class ASFileSystem : public FileSystem {
@@ -156,6 +177,27 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
       // Shared Key
       auto cred = std::make_shared<as::StorageSharedKeyCredential>(
           account_name, as_cred.account_key_);
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
+    } else if (as_cred.auth_type_ == "managed_identity") {
+      // Azure Managed Identity
+      std::shared_ptr<Azure::Identity::ManagedIdentityCredential> cred;
+      if (!as_cred.client_id_.empty()) {
+        LOG_VERBOSE(1)
+            << "Using user-assigned Managed Identity with client ID: "
+            << as_cred.client_id_;
+        cred = std::make_shared<Azure::Identity::ManagedIdentityCredential>(
+            as_cred.client_id_);
+      } else {
+        LOG_VERBOSE(1) << "Using system-assigned Managed Identity";
+        cred =
+            std::make_shared<Azure::Identity::ManagedIdentityCredential>();
+      }
+      client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
+    } else if (as_cred.auth_type_ == "default") {
+      // DefaultAzureCredential chain
+      LOG_VERBOSE(1) << "Using DefaultAzureCredential for Azure Storage";
+      auto cred =
+          std::make_shared<Azure::Identity::DefaultAzureCredential>();
       client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
     } else {
       client_ = std::make_shared<asb::BlobServiceClient>(service_url);
