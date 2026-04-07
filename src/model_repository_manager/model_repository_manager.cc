@@ -28,6 +28,7 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <boost/algorithm/string.hpp>
 #include <deque>
 #include <filesystem>
 #include <future>
@@ -65,18 +66,18 @@ static std::string file_prefix = "file:";
 Status
 ValidateModelName(const std::string& name)
 {
-  if (name.empty()) {
-    return Status(Status::Code::INVALID_ARG, "model name must not be empty");
-  }
-  // Check if the name contains only whitespace characters
-  if (name.find_first_not_of(" \t\n\v\f\r") == std::string::npos) {
+  // Trim the model name to remove leading and trailing whitespace
+  std::string trimmed_name = boost::trim_copy(name);
+
+  // Check if the trimmed name is empty or only consisted of whitespaces
+  if (trimmed_name.empty()) {
     return Status(
         Status::Code::INVALID_ARG,
-        "model name must not contain only whitespace characters");
+        "Model name cannot be empty. Please enter a valid name to deploy.");
   }
-  // Check if the name contains path traversal characters
-  if (name.find("..") != std::string::npos ||
-      name.find('/') != std::string::npos) {
+
+  // Check if the trimmed name contains path traversal characters
+  if (trimmed_name == ".." || trimmed_name.find('/') != std::string::npos) {
     return Status(
         Status::Code::INVALID_ARG,
         "invalid model name '" + name +

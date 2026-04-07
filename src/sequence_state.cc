@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -26,8 +26,11 @@
 
 #include "sequence_state.h"
 
+#include <cstdint>
+
 #include "cuda_utils.h"
 #include "memory.h"
+#include "model_config_utils.h"
 #include "triton/common/logging.h"
 
 namespace triton { namespace core {
@@ -159,7 +162,7 @@ SequenceStates::Initialize(
 
     // Convert the variable dimensions to 1 for the first request.
     for (auto& dim : state_config.dims()) {
-      if (dim == -1) {
+      if (dim == triton::common::WILDCARD_DIM) {
         dims.push_back(1);
       } else {
         dims.push_back(dim);
@@ -209,16 +212,10 @@ SequenceStates::Initialize(
             initial_state_it->second.data_->TotalByteSize());
       }
     } else {
-      size_t state_size;
-      if (state.second.data_type() == inference::DataType::TYPE_STRING) {
-        auto element_count = triton::common::GetElementCount(dims);
-        // Total number of bytes required is equal to the element count
-        // multiplied by 4.
-        state_size = 4 * element_count;
-      } else {
-        state_size =
-            triton::common::GetByteSize(state.second.data_type(), dims);
-      }
+      int64_t state_size = 0;
+      RETURN_IF_ERROR(GetByteSize(
+          state.second.data_type(), dims, state_config.input_name(),
+          &state_size));
       if (use_growable_memory) {
         std::unique_ptr<GrowableMemory> growable_memory;
         RETURN_IF_ERROR(GrowableMemory::Create(
@@ -374,9 +371,16 @@ SequenceStates::OutputState(
   return OutputState(name, datatype, shape.data(), shape.size(), output_state);
 }
 
-std::shared_ptr<SequenceStates>
-SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
+Status
+SequenceStates::CopyAsNull(
+    const std::shared_ptr<SequenceStates>& from,
+    std::shared_ptr<SequenceStates>* to)
 {
+  if (to == nullptr) {
+    return Status(
+        Status::Code::INVALID_ARG, "SequenceStates 'to' must not be null");
+  }
+
   std::shared_ptr<SequenceStates> lsequence_states;
   if (from != nullptr) {
     lsequence_states.reset(new SequenceStates);
@@ -394,10 +398,10 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
       std::shared_ptr<AllocatedMemory> data;
       if (from_input_state_tensor->DType() ==
           inference::DataType::TYPE_STRING) {
-        // Use all-zero input states for null requests.
-        auto element_count =
-            triton::common::GetElementCount(from_input_state_tensor->Shape());
-        auto state_size = 4 * element_count;
+        int64_t state_size = 0;
+        RETURN_IF_ERROR(GetByteSize(
+            inference::DataType::TYPE_STRING, from_input_state_tensor->Shape(),
+            from_input_state_tensor->Name(), &state_size));
         data = std::make_shared<AllocatedMemory>(
             state_size, TRITONSERVER_MEMORY_CPU, 0);
       } else {
@@ -424,6 +428,7 @@ SequenceStates::CopyAsNull(const std::shared_ptr<SequenceStates>& from)
               false /* use_growable_memory */)));
     }
   }
-  return lsequence_states;
+  *to = std::move(lsequence_states);
+  return Status::Success;
 }
 }}  // namespace triton::core

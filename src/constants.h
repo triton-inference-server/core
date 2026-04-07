@@ -54,6 +54,7 @@ constexpr char kOpenVINORuntimeOpenVINOFilename[] = "model.xml";
 constexpr char kOpenVINORuntimeBackend[] = "openvino";
 
 constexpr char kPyTorchLibTorchPlatform[] = "pytorch_libtorch";
+constexpr char kPyTorchLibTorchPlatformAlt[] = "libtorch";
 constexpr char kPyTorchLibTorchFilename[] = "model.pt";
 constexpr char kPyTorchBackend[] = "pytorch";
 

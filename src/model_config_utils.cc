@@ -353,9 +353,12 @@ ValidateIOShape(
       }
     }
 
-    const int64_t dims_size = triton::common::GetElementCount(io.dims());
-    const int64_t reshape_size =
-        triton::common::GetElementCount(io.reshape().shape());
+    int64_t dims_size = 0;
+    int64_t reshape_size = 0;
+    RETURN_IF_ERROR(
+        GetElementCount(io.dims(), io.name() + " dims", &dims_size));
+    RETURN_IF_ERROR(GetElementCount(
+        io.reshape().shape(), io.name() + " reshape", &reshape_size));
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.
@@ -372,12 +375,12 @@ ValidateIOShape(
     // each pair of the trunks separated by variable-size dimension has
     // the same element count. For instance, from [2, 4, -1, 6] to [8, -1, 1, 6]
     // is valid reshape as 2 * 4 = 8 and 6 = 1 * 6.
-    if (dims_size == -1) {
+    if (dims_size == triton::common::WILDCARD_SIZE) {
       std::vector<int64_t> dim_element_cnts;
       std::vector<int64_t> reshape_element_cnts;
       int64_t current_cnt = 1;
       for (const auto& dim : io.dims()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           dim_element_cnts.push_back(current_cnt);
@@ -388,7 +391,7 @@ ValidateIOShape(
 
       current_cnt = 1;
       for (const auto& dim : io.reshape().shape()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           reshape_element_cnts.push_back(current_cnt);
@@ -1199,39 +1202,61 @@ AutoCompleteBackendFields(
 
   // PyTorch
   if (config->backend().empty()) {
-    // Torch JIT interface
+    // Determine if the backend is PyTorch by testing the platform and
+    // default model name against known PyTorch values.
     if (config->platform() == kPyTorchLibTorchPlatform ||
+        config->platform() == kPyTorchLibTorchPlatformAlt ||
         config->default_model_filename() == kPyTorchLibTorchFilename) {
       config->set_backend(kPyTorchBackend);
-    } else
-      // Torch AOTI interface
-      if (config->platform() == kPyTorchAotiPlatform ||
-          config->default_model_filename() == kPyTorchAotiFilename) {
-        config->set_backend(kPyTorchAotiBackend);
+    } else if (
+        config->platform() == kPyTorchAotiPlatform ||
+        config->default_model_filename() == kPyTorchAotiFilename) {
+      config->set_backend(kPyTorchAotiBackend);
+    } else if (
+        has_version && config->default_model_filename().empty() &&
+        config->platform().empty() && !version_path.empty()) {
+      // When default model filename and platform are not given, we check the
+      // version directory for known PyTorch files to determine the backend and
+      // platform.
+      bool is_dir{false};
+      if (version_dir_content.find(kPyTorchLibTorchFilename) !=
+          version_dir_content.end()) {
+        RETURN_IF_ERROR(IsDirectory(
+            JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
+        if (!is_dir) {
+          config->set_backend(kPyTorchBackend);
+          config->set_platform(kPyTorchLibTorchPlatform);
+        }
       } else if (
-          config->platform().empty() &&
-          config->default_model_filename().empty() && has_version) {
-        bool is_dir = false;
-
-        // Torch JIT interface
-        if (version_dir_content.find(kPyTorchLibTorchFilename) !=
-            version_dir_content.end()) {
-          RETURN_IF_ERROR(IsDirectory(
-              JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
-          if (!is_dir) {
-            config->set_backend(kPyTorchBackend);
-          }
-        } else
-          // Torch AOTI interface
-          if (version_dir_content.find(kPyTorchAotiFilename) !=
-              version_dir_content.end()) {
-            RETURN_IF_ERROR(IsDirectory(
-                JoinPath({version_path, kPyTorchAotiFilename}), &is_dir));
-            if (!is_dir) {
-              config->set_backend(kPyTorchAotiBackend);
-            }
-          }
+          version_dir_content.find(kPyTorchAotiFilename) !=
+          version_dir_content.end()) {
+        RETURN_IF_ERROR(IsDirectory(
+            JoinPath({version_path, kPyTorchAotiFilename}), &is_dir));
+        if (!is_dir) {
+          config->set_backend(kPyTorchAotiBackend);
+          config->set_platform(kPyTorchAotiPlatform);
+        }
       }
+    }
+  }
+
+  // When we know the backend is PyTorch, we set the platform and default model
+  // filename as necessary.
+  if (config->backend() == kPyTorchBackend) {
+    if (config->platform().empty()) {
+      // The default platform for the PyTorch backend is LibTorch until it is
+      // deprecated. AOTI must be explicitly specified to maximize backwards
+      // compatibility.
+      config->set_platform(kPyTorchLibTorchPlatform);
+      if (config->default_model_filename().empty()) {
+        config->set_default_model_filename(kPyTorchLibTorchFilename);
+      }
+    } else if (
+        config->platform() == kPyTorchAotiPlatform &&
+        config->default_model_filename().empty()) {
+      config->set_default_model_filename(kPyTorchAotiFilename);
+    }
+    return Status::Success;
   }
 
   // Python
