@@ -52,18 +52,22 @@ using cudaStream_t = void*;
 
 class InferenceServer;
 
-// Enforces a per-step limit on concurrent in-flight requests shared across
-// active requests for an ensemble model.
+// Enforces a per-step limit on concurrent in-flight requests, shared across
+// all active ensemble requests for a given ensemble model. Tracks in-flight
+// request count and blocks producers when the limit is reached.
 class StepInflightRequestLimiter {
  public:
   explicit StepInflightRequestLimiter(size_t max_inflight);
 
-  // Waits for capacity unless the request has already been cancelled.
+  // Blocks until a slot is available or the request is cancelled. Cancelled
+  // requests skip the wait so cancellation propagates via the normal
+  // step-scheduling path. The const reference prevents ownership transfer;
+  // only IsCancelled() is queried on the pointed-to request.
   void Acquire(
       const std::unique_ptr<InferenceRequest>& request, size_t step_idx,
       const std::string& ensemble_name);
 
-  // Releases one slot and wakes one waiting thread.
+  // Releases one acquired slot and wakes one waiting thread.
   void Release();
 
  private:
@@ -107,8 +111,14 @@ struct EnsembleInfo {
   // backward path, ensemble tensor to the step that provides its data
   std::unordered_map<std::string, size_t> tensor_to_prev_step_;
 
-  // Maximum concurrent in-flight requests allowed per ensemble step across
-  // all requests for this model. A value of 0 disables the limit.
+  // The maximum number of concurrent in-flight requests allowed at each
+  // ensemble step across all concurrent ensemble requests for this model.
+  // The limit is applied per step index and is shared across all concurrent
+  // requests for this ensemble model.
+  // This limit prevents unbounded memory growth when upstream steps
+  // produce responses faster than downstream steps can consume them.
+  // A value of 0 means no limit is enforced.
+  // Configured via the 'max_inflight_requests' field in ensemble_scheduling.
   size_t max_inflight_requests_ = 0;
   std::vector<std::unique_ptr<StepInflightRequestLimiter>>
       step_inflight_request_limiters_;
