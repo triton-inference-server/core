@@ -488,6 +488,7 @@ if(${TRITON_ENABLE_METRICS})
     PRIVATE
       triton-common-error   # from repo-common
       triton-common-logging # from repo-common
+      triton-common-model-config # from repo-common; cuda_utils -> model_config_utils.h
       proto-library         # from repo-common
       triton-core
       GTest::gtest
@@ -678,6 +679,7 @@ if(${TRITON_ENABLE_GPU})
       triton-common-error        # from repo-common
       triton-core
       triton-common-logging      # from repo-common
+      triton-common-model-config # from repo-common
       proto-library              # from repo-common
       GTest::gtest
       GTest::gtest_main
