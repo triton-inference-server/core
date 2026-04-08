@@ -258,6 +258,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
+      triton-common-model-config # from repo-common; TRITON_COMMON_ENABLE_PROTOBUF + pb.h path
       proto-library              # from repo-common
       GTest::gtest
       GTest::gtest_main
@@ -325,6 +326,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
+      triton-common-model-config # from repo-common
       proto-library              # from repo-common
       GTest::gtest
       GTest::gtest_main
