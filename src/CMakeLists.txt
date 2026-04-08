@@ -463,6 +463,15 @@ target_link_libraries(
     re2::re2
 )
 
+# triton/common/model_config.h gates protobuf APIs on TRITON_COMMON_ENABLE_PROTOBUF;
+# CMake cache TRITON_COMMON_ENABLE_PROTOBUF=ON does not define this preprocessor
+# symbol. Ensure it for every TU (also belt-and-suspenders vs repo-common exports).
+target_compile_definitions(
+  triton-core
+  PRIVATE
+    TRITON_COMMON_ENABLE_PROTOBUF=1
+)
+
 if (NOT WIN32)
   target_link_libraries(
     triton-core
