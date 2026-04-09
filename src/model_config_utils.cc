@@ -2549,7 +2549,6 @@ EquivalentInInstanceConfig(
 
 std::string
 InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
-
 {
   inference::ModelInstanceGroup config = instance_config;
   *config.mutable_name() = "[Normalized]";
