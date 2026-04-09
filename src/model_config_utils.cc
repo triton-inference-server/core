@@ -1866,6 +1866,12 @@ ValidateModelOutput(
     const inference::ModelOutput& io, int32_t max_batch_size,
     const std::string& platform)
 {
+  if (io.name().empty()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "model output must have a name");
+  }
+
   RETURN_IF_ERROR(ValidateIOShape(io, max_batch_size, "model output "));
 
   if ((platform != kTensorRTPlanPlatform) && io.is_shape_tensor()) {
@@ -2549,5 +2555,21 @@ InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
   config.set_count(1);
   return config.SerializeAsString();
 }
+TEST(ModelConfigUtils, ValidateOutputEmptyName) {
+  // Create a ModelOutput object (this is a Protobuf object)
+  inference::ModelOutput io;
+  
+  // Purposefully DO NOT set the name (leave it empty)
+  io.set_data_type(inference::DataType::TYPE_FP32);
+  io.add_dims(1);
 
+  // Call the function you just edited
+  // We use 0 for max_batch_size and a dummy platform name
+  Status status = ValidateModelOutput(io, 0, "tensorrt_plan");
+
+  // ASSERTION: We expect this to fail. 
+  // If it returns Success, the test will fail and tell us our fix isn't working.
+  EXPECT_FALSE(status.IsOk()) << "Error: Server allowed an output with an empty name!";
+  EXPECT_EQ(status.Message(), "model output must have a name");
+}
 }}  // namespace triton::core
