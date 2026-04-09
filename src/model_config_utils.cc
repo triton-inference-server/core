@@ -2549,6 +2549,7 @@ EquivalentInInstanceConfig(
 
 std::string
 InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
+
 {
   inference::ModelInstanceGroup config = instance_config;
   *config.mutable_name() = "[Normalized]";
@@ -2556,20 +2557,14 @@ InstanceConfigSignature(const inference::ModelInstanceGroup& instance_config)
   return config.SerializeAsString();
 }
 TEST(ModelConfigUtils, ValidateOutputEmptyName) {
-  // Create a ModelOutput object (this is a Protobuf object)
   inference::ModelOutput io;
   
-  // Purposefully DO NOT set the name (leave it empty)
   io.set_data_type(inference::DataType::TYPE_FP32);
   io.add_dims(1);
 
-  // Call the function you just edited
-  // We use 0 for max_batch_size and a dummy platform name
   Status status = ValidateModelOutput(io, 0, "tensorrt_plan");
 
-  // ASSERTION: We expect this to fail. 
-  // If it returns Success, the test will fail and tell us our fix isn't working.
-  EXPECT_FALSE(status.IsOk()) << "Error: Server allowed an output with an empty name!";
+  EXPECT_FALSE(status.IsOk()) << "Error: Server outputted with empty name";
   EXPECT_EQ(status.Message(), "model output must have a name");
 }
 }}  // namespace triton::core
