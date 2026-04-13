@@ -223,9 +223,10 @@ struct Step {
 
   size_t step_idx_;
 
-  // Release callback userp. ScheduleSteps may clean this up directly if
-  // InferAsync fails before the release callback is installed.
-  RequestTrackerReference* tracker_ref_{nullptr};
+  // Heap allocation passed as the release-callback userp. The allocation
+  // stores a shared_ptr<RequestTracker> so the tracker stays alive until the
+  // release callback or local failure cleanup drops this reference.
+  RequestTrackerReference* callback_tracker_ref_{nullptr};
 };
 
 struct TensorData {
@@ -684,13 +685,13 @@ void
 EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  auto request_tracker_ref = reinterpret_cast<RequestTrackerReference*>(userp);
-  auto request_tracker = *request_tracker_ref;
+  auto callback_tracker_ref = reinterpret_cast<RequestTrackerReference*>(userp);
+  auto request_tracker = *callback_tracker_ref;
   auto pool = request_tracker->CallbackPool();
-  auto fn = [request, flags, request_tracker, request_tracker_ref]() {
+  auto fn = [request, flags, request_tracker, callback_tracker_ref]() {
     if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
-      std::unique_ptr<RequestTrackerReference> managed_tracker_ref(
-          request_tracker_ref);
+      std::unique_ptr<RequestTrackerReference> managed_callback_tracker_ref(
+          callback_tracker_ref);
       LOG_TRITONSERVER_ERROR(
           TRITONSERVER_InferenceRequestDelete(request),
           "deleting ensemble inference request");
@@ -1109,18 +1110,19 @@ EnsembleContext::InitStep(
   irequest->SetSecondaryStatsAggregator(
       &request_tracker_->ContextStatsAggregator());
 #endif
-  // Heap-allocate a shared_ptr to the tracker so it can be passed through the
-  // C callback API (void* userp).  Ownership transfers to the callback on
-  // successful PrepareForInference; cleaned up by unique_ptr on early return.
-  auto request_tracker_ref =
+  // Heap-allocate the release-callback userp because the C callback API only
+  // stores a raw void*. The heap object itself is single-owner here, while the
+  // object stored inside it is a shared_ptr<RequestTracker> that keeps the
+  // tracker alive until the callback or local cleanup drops this reference.
+  auto callback_tracker_ref =
       std::make_unique<RequestTrackerReference>(request_tracker_);
   irequest->SetResponseCallback(
       reinterpret_cast<ResponseAllocator*>(allocator_.get()), step->get(),
       ResponseComplete, step->get());
-  irequest->SetReleaseCallback(RequestComplete, request_tracker_ref.get());
+  irequest->SetReleaseCallback(RequestComplete, callback_tracker_ref.get());
 
   RETURN_IF_ERROR(irequest->PrepareForInference());
-  (*step)->tracker_ref_ = request_tracker_ref.release();
+  (*step)->callback_tracker_ref_ = callback_tracker_ref.release();
 
 #ifdef TRITON_ENABLE_TRACING
   auto& parent_trace = request_tracker_->Request()->TraceProxy();
@@ -1516,11 +1518,10 @@ EnsembleContext::ScheduleSteps(
     }
 
     std::lock_guard<std::mutex> lock(context->mutex_);
-    // The request is not sent to server properly, shouldn't expect its
-    // release function get called.  Clean up the heap-allocated tracker
-    // reference that would normally be freed by RequestComplete.
-    delete step->tracker_ref_;
-    step->tracker_ref_ = nullptr;
+    // The request never reaches the callback-owned release path, so drop the
+    // heap-allocated callback userp here.
+    delete step->callback_tracker_ref_;
+    step->callback_tracker_ref_ = nullptr;
     // Only undo IncrementCounter() for steps that actually reached the
     // scheduling path. Otherwise the counter can underflow and release the
     // top-level request while FinishEnsemble is still using it.
