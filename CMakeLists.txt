@@ -33,6 +33,9 @@ project(tritoncore LANGUAGES C CXX)
 # TRITON_CORE_HEADERS_ONLY=OFF to also build libtritonserver.so.
 option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 
+option(TRITON_SKIP_THIRD_PARTY_FETCH
+  "Skip FetchContent/ExternalProject for third-party deps (provided by Conan)" OFF)
+
 #
 # Specifying min required C++ standard
 #
@@ -153,7 +156,7 @@ set_target_properties(
 #
 # Shared library implementing Triton Server API
 #
-if(NOT TRITON_CORE_HEADERS_ONLY)
+if(NOT TRITON_CORE_HEADERS_ONLY AND NOT TRITON_SKIP_THIRD_PARTY_FETCH)
   include(CMakeDependentOption)
 
   set(TRITON_VERSION "0.0.0" CACHE STRING "The version of the Triton shared library" )
@@ -357,7 +360,12 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -DTRITON_VERSION:STRING=${TRITON_VERSION}
     DEPENDS ${TRITON_DEPENDS}
   )
-endif() # NOT TRITON_CORE_HEADERS_ONLY
+endif() # NOT TRITON_CORE_HEADERS_ONLY AND NOT TRITON_SKIP_THIRD_PARTY_FETCH
+
+if(NOT TRITON_CORE_HEADERS_ONLY AND TRITON_SKIP_THIRD_PARTY_FETCH)
+  # When called from the parent server build — deps already provided by Conan
+  add_subdirectory(src)
+endif()
 
 #
 # Install

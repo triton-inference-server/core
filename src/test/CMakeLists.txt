@@ -432,6 +432,7 @@ target_link_libraries(
     GTest::gtest
     GTest::gtest_main
     protobuf::libprotobuf
+    re2::re2
 )
 
 install(

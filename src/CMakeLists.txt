@@ -40,15 +40,17 @@ endif()
 #
 include(FetchContent)
 
-FetchContent_Declare(
-  repo-common
-  GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
-  GIT_TAG ${TRITON_COMMON_REPO_TAG}
-)
+if(NOT TRITON_SKIP_THIRD_PARTY_FETCH)
+  FetchContent_Declare(
+    repo-common
+    GIT_REPOSITORY ${TRITON_REPO_ORGANIZATION}/common.git
+    GIT_TAG ${TRITON_COMMON_REPO_TAG}
+  )
 
-set(TRITON_COMMON_ENABLE_PROTOBUF ON)
+  set(TRITON_COMMON_ENABLE_PROTOBUF ON)
 
-FetchContent_MakeAvailable(repo-common)
+  FetchContent_MakeAvailable(repo-common)
+endif()
 
 #
 # CUDA
@@ -262,7 +264,7 @@ else()
     triton-core
     PROPERTIES
       LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtritonserver.ldscript
-      LINK_FLAGS "-Wl,--version-script libtritonserver.ldscript"
+      LINK_FLAGS "-Wl,--version-script ${CMAKE_CURRENT_BINARY_DIR}/libtritonserver.ldscript"
   )
 endif()
 
@@ -287,11 +289,13 @@ target_include_directories(
 )
 
 if(${TRITON_ENABLE_GPU})
-  target_include_directories(
-    triton-core
-    PRIVATE
-      ${CNMEM_PATH}/include
-  )
+  if(NOT TARGET cnmem::cnmem)
+    target_include_directories(
+      triton-core
+      PRIVATE
+        ${CNMEM_PATH}/include
+    )
+  endif()
 endif() # TRITON_ENABLE_GPU
 
 if(${TRITON_ENABLE_METRICS})
@@ -503,14 +507,16 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
-if(${TRITON_ENABLE_GPU})
-  find_library(CNMEM_LIBRARY NAMES cnmem PATHS ${CNMEM_PATH}/lib)
-  target_link_libraries(
-    triton-core
-    PRIVATE
-      ${CNMEM_LIBRARY}
-      CUDA::cudart
-  )
+if(TRITON_ENABLE_GPU)
+  if(TARGET cnmem::cnmem)
+    # Provided by Conan — use imported target
+    target_link_libraries(triton-core PRIVATE cnmem::cnmem CUDA::cudart)
+  else()
+    # Fallback for standalone builds
+    find_library(CNMEM_LIBRARY cnmem PATHS ${CNMEM_PATH}/lib)
+    target_include_directories(triton-core PRIVATE ${CNMEM_PATH}/include)
+    target_link_libraries(triton-core PRIVATE ${CNMEM_LIBRARY} CUDA::cudart)
+  endif()
 endif() # TRITON_ENABLE_GPU
 
 if(${TRITON_ENABLE_METRICS_GPU})
