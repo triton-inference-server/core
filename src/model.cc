@@ -115,7 +115,10 @@ Model::Init(const bool is_config_provided)
 
     if (!io.label_filename().empty()) {
       auto label_path = JoinPath({model_dir_, io.label_filename()});
-      if (IsChildPathEscapingParentPath(label_path, model_dir_)) {
+      bool is_escape = false;
+      RETURN_IF_ERROR(
+          IsChildPathEscapingParentPath(label_path, model_dir_, &is_escape));
+      if (is_escape) {
         return Status(
             Status::Code::UNSUPPORTED,
             "label file path '" + label_path + "' for output '" + io.name() +

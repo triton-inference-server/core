@@ -107,8 +107,16 @@ class LocalizeRepoAgent : public TritonRepoAgent {
           RETURN_TRITONSERVER_ERROR_IF_ERROR(
               agent_model->AcquireMutableLocation(
                   TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
-          const std::string temp_dir =
-              std::filesystem::canonical(temp_dir_cstr).string();
+          std::string temp_dir;
+          try {
+            temp_dir = std::filesystem::canonical(temp_dir_cstr).string();
+          }
+          catch (const std::exception& e) {
+            const std::string err_msg = std::string("Nonexistent path '") +
+                                        temp_dir_cstr + "': " + e.what();
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INTERNAL, err_msg.c_str());
+          }
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
@@ -136,20 +144,30 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                         .c_str());
               }
 
+              const std::string file_relpath =
+                  file->Name().substr(file_prefix.size());
+              std::string file_path;
+              try {
+                file_path = std::filesystem::weakly_canonical(
+                                JoinPath({temp_dir, file_relpath}))
+                                .string();
+              }
+              catch (const std::exception& e) {
+                const std::string err_msg = std::string("Invalid file path '") +
+                                            file_relpath + "': " + e.what();
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG, err_msg.c_str());
+              }
+
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              const std::string file_path =
-                  std::filesystem::weakly_canonical(
-                      JoinPath(
-                          {temp_dir, file->Name().substr(file_prefix.size())}))
-                      .string();
               if (file_path.rfind(temp_dir, 0) != 0) {
+                const std::string msg =
+                    std::string("Invalid file parameter '") + file->Name() +
+                    "' with normalized path '" + file_path +
+                    "' must stay within model directory.";
                 return TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    (std::string("Invalid file parameter '") + file->Name() +
-                     "' with normalized path '" + file_path +
-                     "' must stay within model directory.")
-                        .c_str());
+                    TRITONSERVER_ERROR_INVALID_ARG, msg.c_str());
               }
 
               // Save model override file to the instructed directory using the
