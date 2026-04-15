@@ -115,7 +115,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
             const std::string err_msg = std::string("Nonexistent path '") +
                                         temp_dir_cstr + "': " + e.what();
             return TRITONSERVER_ErrorNew(
-                TRITONSERVER_ERROR_INVALID_ARG, err_msg.c_str());
+                TRITONSERVER_ERROR_INTERNAL, err_msg.c_str());
           }
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
