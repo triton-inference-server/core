@@ -57,6 +57,7 @@ endif()
 #
 if(${TRITON_ENABLE_GPU})
   find_package(CUDAToolkit REQUIRED)
+  set(CMAKE_CUDA_RUNTIME_LIBRARY Shared)
 endif() # TRITON_ENABLE_GPU
 
 #

@@ -125,7 +125,6 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
-      ${CNMEM_PATH}/include
       ${Boost_INCLUDE_DIRS}
   )
 
@@ -136,8 +135,6 @@ if(${TRITON_ENABLE_GPU})
       TRITON_ENABLE_GPU=1
       TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
   )
-
-  find_library(CNMEM_LIBRARY NAMES cnmem PATHS ${CNMEM_PATH}/lib)
 
   target_link_libraries(
     response_cache_test
@@ -150,7 +147,9 @@ if(${TRITON_ENABLE_GPU})
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf
-      ${CNMEM_LIBRARY}
+      cnmem::cnmem
+      rapidjson
+      re2::re2
       CUDA::cudart
   )
 
@@ -240,7 +239,6 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
-      ${CNMEM_PATH}/include
   )
 
   target_compile_definitions(
@@ -251,8 +249,6 @@ if(${TRITON_ENABLE_GPU})
       TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
   )
 
-  find_library(CNMEM_LIBRARY NAMES cnmem PATHS ${CNMEM_PATH}/lib)
-
   target_link_libraries(
     memory_test
     PRIVATE
@@ -262,7 +258,7 @@ if(${TRITON_ENABLE_GPU})
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf
-      ${CNMEM_LIBRARY}
+      cnmem::cnmem
       CUDA::cudart
   )
 
@@ -307,7 +303,6 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
-      ${CNMEM_PATH}/include
   )
 
   target_compile_definitions(
@@ -318,8 +313,6 @@ if(${TRITON_ENABLE_GPU})
       TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
   )
 
-  find_library(CNMEM_LIBRARY NAMES cnmem PATHS ${CNMEM_PATH}/lib)
-
   target_link_libraries(
     pinned_memory_manager_test
     PRIVATE
@@ -329,7 +322,7 @@ if(${TRITON_ENABLE_GPU})
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf
-      ${CNMEM_LIBRARY}
+      cnmem::cnmem
       CUDA::cudart
   )
 
@@ -500,7 +493,7 @@ if(${TRITON_ENABLE_METRICS})
     target_link_libraries(
       metrics_api_test
       PRIVATE
-        ${CNMEM_LIBRARY}
+        cnmem::cnmem
         CUDA::cudart
     )
   endif()
@@ -657,7 +650,6 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
-      ${CNMEM_PATH}/include
   )
 
   target_compile_definitions(
@@ -667,8 +659,6 @@ if(${TRITON_ENABLE_GPU})
       TRITON_ENABLE_GPU=1
       TRITON_MIN_COMPUTE_CAPABILITY=${TRITON_MIN_COMPUTE_CAPABILITY}
   )
-
-  find_library(CNMEM_LIBRARY NAMES cnmem PATHS ${CNMEM_PATH}/lib)
 
   target_link_libraries(
     input_byte_size_test
@@ -683,7 +673,7 @@ if(${TRITON_ENABLE_GPU})
       GTest::gmock
       protobuf::libprotobuf
       CUDA::cudart
-      ${CNMEM_LIBRARY}
+      cnmem::cnmem
   )
 else()
   add_executable(
