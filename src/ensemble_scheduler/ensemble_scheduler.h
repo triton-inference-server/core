@@ -27,7 +27,9 @@
 
 #ifdef TRITON_ENABLE_ENSEMBLE
 
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 
 #include "metric_model_reporter.h"
 #include "model.h"
