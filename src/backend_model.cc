@@ -364,11 +364,11 @@ TritonModel::GetBackendLibraryProperties(
                                        "', searched: " + search_paths_str);
   }
 
-  bool is_escape = false;
+  bool is_escaped = false;
   RETURN_IF_ERROR(IsChildPathEscapingParentPath(
       *backend_libpath /* child_path */, *backend_libdir /* parent_path */,
-      &is_escape));
-  if (is_escape) {
+      &is_escaped));
+  if (is_escaped) {
     return Status(
         Status::Code::INVALID_ARG,
         "backend library name '" + cpp_backend_libname +

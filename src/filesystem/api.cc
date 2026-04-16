@@ -402,7 +402,7 @@ IsAbsolutePath(const std::string& path)
 Status
 IsChildPathEscapingParentPath(
     const std::string& child_path, const std::string& parent_path,
-    bool* is_escape)
+    bool* is_escaped)
 {
   std::string absolute_child_path;
   std::string absolute_parent_path;
@@ -424,7 +424,7 @@ IsChildPathEscapingParentPath(
         "Nonexistent path '" + parent_path + "': " + e.what());
   }
   // Can use starts_with() over rfind() in C++20.
-  *is_escape = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
+  *is_escaped = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
   return Status::Success;
 }
 

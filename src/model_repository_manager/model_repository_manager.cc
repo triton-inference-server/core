@@ -153,8 +153,9 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                                 .string();
               }
               catch (const std::exception& e) {
-                const std::string err_msg = std::string("Invalid file path '") +
-                                            file_relpath + "': " + e.what();
+                const std::string err_msg =
+                    std::string("Invalid file parameter '") + file_relpath +
+                    "': " + e.what();
                 return TRITONSERVER_ErrorNew(
                     TRITONSERVER_ERROR_INVALID_ARG, err_msg.c_str());
               }
