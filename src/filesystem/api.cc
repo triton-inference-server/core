@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -399,17 +399,33 @@ IsAbsolutePath(const std::string& path)
   return !path.empty() && (path[0] == '/');
 }
 
-bool
+Status
 IsChildPathEscapingParentPath(
-    const std::string& child_path, const std::string& parent_path)
+    const std::string& child_path, const std::string& parent_path,
+    bool* is_escaped)
 {
-  const std::string absolute_child_path =
-      std::filesystem::weakly_canonical(child_path).string();
-  const std::string absolute_parent_path =
-      std::filesystem::canonical(parent_path).string();
+  std::string absolute_child_path;
+  std::string absolute_parent_path;
+  try {
+    absolute_child_path =
+        std::filesystem::weakly_canonical(child_path).string();
+  }
+  catch (const std::exception& e) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Invalid path '" + child_path + "': " + e.what());
+  }
+  try {
+    absolute_parent_path = std::filesystem::canonical(parent_path).string();
+  }
+  catch (const std::exception& e) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Nonexistent path '" + parent_path + "': " + e.what());
+  }
   // Can use starts_with() over rfind() in C++20.
-  bool is_escape = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
-  return is_escape;
+  *is_escaped = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
+  return Status::Success;
 }
 
 std::string
