@@ -43,5 +43,25 @@ class BuildPyCommand(build_py):
         )
 
 
+# The wheel ships an arch-specific CPython extension
+# (tritonserver/_c/triton_bindings.*.so). Mark root as impure so
+# setuptools/wheel tags the produced wheel with the current platform
+# (e.g. linux_x86_64 / linux_aarch64) instead of the misleading
+# "none-any" that violates PEP 425 for wheels with arch-specific content.
+try:
+    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
+
+    class bdist_wheel(_bdist_wheel):
+        def finalize_options(self):
+            _bdist_wheel.finalize_options(self)
+            self.root_is_pure = False
+
+except ImportError:
+    bdist_wheel = None
+
+
 if __name__ == "__main__":
-    setup(cmdclass={"build_py": BuildPyCommand})
+    cmdclass = {"build_py": BuildPyCommand}
+    if bdist_wheel is not None:
+        cmdclass["bdist_wheel"] = bdist_wheel
+    setup(cmdclass=cmdclass)
