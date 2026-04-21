@@ -842,7 +842,13 @@ InferenceRequest::AddOverrideInput(
 Status
 InferenceRequest::AddOriginalRequestedOutput(const std::string& name)
 {
-  original_requested_outputs_.insert(name);
+  const auto& pr = original_requested_outputs_.emplace(name);
+  if (!pr.second) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        LogRequest() + "output '" + name + "' already exists in request");
+  }
+
   needs_normalization_ = true;
   return Status::Success;
 }
