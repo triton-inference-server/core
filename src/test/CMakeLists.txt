@@ -439,6 +439,56 @@ install(
   RUNTIME DESTINATION bin
 )
 
+#
+# Unit test for AutoCompleteBackendFields in model_config_utils
+#
+add_executable(
+  model_config_utils_test
+  model_config_utils_test.cc
+  ../model_config_utils.cc
+  ../status.cc
+  ../filesystem/api.cc
+  ../model_config_utils.h
+  ../status.h
+  ../filesystem/api.h
+)
+
+set_target_properties(
+  model_config_utils_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  model_config_utils_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+    ${Boost_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  model_config_utils_test
+  PRIVATE
+    triton-common-error        # from repo-common
+    triton-common-model-config # from repo-common
+    triton-common-json         # from repo-common
+    triton-common-logging      # from repo-common
+    proto-library              # from repo-common
+    GTest::gtest
+    GTest::gtest_main
+    protobuf::libprotobuf
+)
+
+install(
+  TARGETS model_config_utils_test
+  RUNTIME DESTINATION bin
+)
+
 
 if(${TRITON_ENABLE_METRICS})
   #
