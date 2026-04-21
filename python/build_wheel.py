@@ -109,6 +109,12 @@ if __name__ == "__main__":
     shutil.copyfile("LICENSE.txt", os.path.join(FLAGS.whl_dir, "LICENSE.txt"))
     shutil.copyfile("setup.py", os.path.join(FLAGS.whl_dir, "setup.py"))
     shutil.copyfile("pyproject.toml", os.path.join(FLAGS.whl_dir, "pyproject.toml"))
+    # pyproject.toml resolves the wheel version from a TRITON_VERSION file
+    # located next to it (see [tool.setuptools.dynamic] in pyproject.toml).
+    # Copy it into the wheel build root so the dynamic-version lookup
+    # succeeds and the wheel is tagged with the Triton release instead of
+    # the setuptools fallback of 0.0.0.
+    shutil.copyfile("TRITON_VERSION", os.path.join(FLAGS.whl_dir, "TRITON_VERSION"))
 
     os.chdir(FLAGS.whl_dir)
     print("=== Building wheel")
