@@ -48,6 +48,13 @@ class BuildPyCommand(build_py):
 # setuptools/wheel tags the produced wheel with the current platform
 # (e.g. linux_x86_64 / linux_aarch64) instead of the misleading
 # "none-any" that violates PEP 425 for wheels with arch-specific content.
+#
+# NOTE: the embedded .so is also CPython-ABI-specific (filename encodes
+# "cpython-312-..." etc.), which means it is only loadable under the
+# matching interpreter. The current override keeps the existing
+# "py3-none-<plat>" shape for backwards compatibility with consumers;
+# promote the `get_tag` override to emit "cp<XY>-cp<XY>" when we are
+# ready to gate installs on the exact CPython version (see TRI-983).
 try:
     from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
