@@ -187,6 +187,16 @@ if __name__ == "__main__":
     os.chdir(FLAGS.whl_dir)
     print("=== Building wheel")
     args = ["python3", "-m", "build"]
+    # PEP 427 "build tag": an optional numeric segment between version
+    # and python-tag that lets two wheels of the same version coexist
+    # (e.g. reruns of the same CI pipeline). Preferred source is
+    # CI_PIPELINE_ID (GitLab) with a BUILD_NUMBER fallback — both are
+    # guaranteed to start with a digit as required by PEP 427. The
+    # value is forwarded through `python -m build` to the setuptools
+    # backend's `bdist_wheel --build=<N>` (alias for --build-number).
+    build_number = os.environ.get("CI_PIPELINE_ID") or os.environ.get("BUILD_NUMBER")
+    if build_number:
+        args += [f"-C--build-option=--build={build_number}"]
 
     wenv = os.environ.copy()
     wenv["VERSION"] = FLAGS.triton_version
