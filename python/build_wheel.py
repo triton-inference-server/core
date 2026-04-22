@@ -267,6 +267,16 @@ if __name__ == "__main__":
     # succeeds and the wheel is tagged with the Triton release instead of
     # the setuptools fallback of 0.0.0.
     shutil.copyfile("TRITON_VERSION", os.path.join(FLAGS.whl_dir, "TRITON_VERSION"))
+    # pyproject.toml reads the version from this file via
+    #   [tool.setuptools.dynamic] version = {file = "TRITON_VERSION"}
+    # so overwrite it with the composed version (which includes the
+    # +nv<upstream>.cu<cuda> local-version suffix). The VERSION env var
+    # is ignored by `python -m build` when a file-based version is
+    # declared in pyproject.toml — writing to the file is the only way
+    # the suffix reaches the wheel metadata.
+    composed_version = _compose_version(FLAGS.triton_version)
+    with open(os.path.join(FLAGS.whl_dir, "TRITON_VERSION"), "w") as _vf:
+        _vf.write(composed_version)
 
     os.chdir(FLAGS.whl_dir)
     print("=== Building wheel")
@@ -305,7 +315,7 @@ if __name__ == "__main__":
         args += [f"-C--build-option=--build={build_tag}"]
 
     wenv = os.environ.copy()
-    wenv["VERSION"] = _compose_version(FLAGS.triton_version)
+    wenv["VERSION"] = composed_version
     wenv["TRITON_PYBIND"] = PYBIND_LIB
     p = subprocess.Popen(args, env=wenv)
     p.wait()
