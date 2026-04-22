@@ -308,13 +308,17 @@ if __name__ == "__main__":
     # "<unknown>" default emitted for local builds without --build-id.
     # The value is forwarded through `python -m build` to the setuptools
     # backend's `bdist_wheel --build=<N>` (alias for --build-number).
-    build_tag = (
-        os.environ.get("CI_PIPELINE_ID")
-        or os.environ.get("NVIDIA_BUILD_ID")
-        or os.environ.get("BUILD_NUMBER")
-    )
+    if os.environ.get("PYPI_RELEASE", "").lower() in ("1", "true", "yes"):
+        build_tag = None
+    else:
+        build_tag = (
+            os.environ.get("CI_PIPELINE_ID")
+            or os.environ.get("NVIDIA_BUILD_ID")
+            or os.environ.get("BUILD_NUMBER")
+        )
     print(
         f"=== Wheel build-tag inputs: "
+        f"PYPI_RELEASE={os.environ.get('PYPI_RELEASE')!r} "
         f"CI_PIPELINE_ID={os.environ.get('CI_PIPELINE_ID')!r} "
         f"NVIDIA_BUILD_ID={os.environ.get('NVIDIA_BUILD_ID')!r} "
         f"BUILD_NUMBER={os.environ.get('BUILD_NUMBER')!r} "
