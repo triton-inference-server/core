@@ -1545,6 +1545,77 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
   return nullptr;  // Success
 }
 
+#ifdef TRITON_ENABLE_LOGGING
+namespace {
+
+// Context for bridging C callback to internal Logger callback
+struct LogCallbackContext {
+  TRITONSERVER_LogCallbackFn_t user_callback;
+  void* userp;
+};
+
+// Global context (logging is global in Triton)
+static LogCallbackContext* g_log_callback_context = nullptr;
+
+// Internal callback wrapper that converts Logger::Level to TRITONSERVER_LogLevel
+void LogCallbackWrapper(
+    triton::common::Logger::Level level, const char* filename, int line,
+    const char* msg, void* userp)
+{
+  auto* ctx = static_cast<LogCallbackContext*>(userp);
+  if (ctx == nullptr || ctx->user_callback == nullptr) {
+    return;
+  }
+
+  // Convert internal log level to C API log level
+  TRITONSERVER_LogLevel api_level;
+  switch (level) {
+    case triton::common::Logger::Level::kERROR:
+      api_level = TRITONSERVER_LOG_ERROR;
+      break;
+    case triton::common::Logger::Level::kWARNING:
+      api_level = TRITONSERVER_LOG_WARN;
+      break;
+    case triton::common::Logger::Level::kINFO:
+    default:
+      api_level = TRITONSERVER_LOG_INFO;
+      break;
+  }
+
+  ctx->user_callback(api_level, filename, line, msg, ctx->userp);
+}
+
+}  // namespace
+#endif  // TRITON_ENABLE_LOGGING
+
+// Set a callback function to receive log messages.
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogCallback(
+    TRITONSERVER_ServerOptions* options, TRITONSERVER_LogCallbackFn_t callback_fn,
+    void* userp, bool replace_default_logger)
+{
+#ifdef TRITON_ENABLE_LOGGING
+  // Clean up existing context if any
+  if (g_log_callback_context != nullptr) {
+    delete g_log_callback_context;
+    g_log_callback_context = nullptr;
+  }
+
+  if (callback_fn != nullptr) {
+    // Create new context for the callback
+    g_log_callback_context = new LogCallbackContext{callback_fn, userp};
+    LOG_SET_CALLBACK(LogCallbackWrapper, g_log_callback_context, replace_default_logger);
+  } else {
+    // Disable callback logging
+    LOG_SET_CALLBACK(nullptr, nullptr, false);
+  }
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
+#endif  // TRITON_ENABLE_LOGGING
+}
+
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogFormat(
     TRITONSERVER_ServerOptions* options, const TRITONSERVER_LogFormat format)
