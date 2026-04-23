@@ -53,6 +53,14 @@ classifiers = [
 [tool.setuptools]
 include-package-data = true
 
+[tool.setuptools.dynamic]
+# Resolve the `dynamic = ["version"]` declaration above from the
+# TRITON_VERSION file shipped alongside the wheel build directory.
+# build_wheel.py copies TRITON_VERSION into the wheel build root so this
+# lookup succeeds at build time and the wheel is versioned with the
+# Triton release (e.g. 2.68.0) instead of falling back to 0.0.0.
+version = {file = "TRITON_VERSION"}
+
 [tool.setuptools.package-data]
 tritonserver = ["_c/triton_bindings.*.so"]
 

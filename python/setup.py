@@ -28,7 +28,7 @@
 
 import subprocess
 
-from setuptools import setup
+from setuptools import Distribution, setup
 from setuptools.command.build_py import build_py
 
 
@@ -43,5 +43,25 @@ class BuildPyCommand(build_py):
         )
 
 
+# The wheel ships an arch-specific CPython extension
+# (tritonserver/_c/triton_bindings.cpython-<xy>-<arch>-linux-gnu.so)
+# that is copied into the package_data at build time rather than
+# declared via setup(ext_modules=...). Without a declared ext_module
+# setuptools treats the distribution as pure-Python and emits
+# "Root-Is-Purelib: true" in the WHEEL metadata + a "py3-none-any"
+# tag, which auditwheel rightly rejects.
+#
+# Signaling has_ext_modules()=True via a custom Distribution subclass
+# is the canonical way to tell setuptools the wheel is binary without
+# triggering a fake compilation step. setuptools then:
+#   - sets Root-Is-Purelib to false (required for auditwheel repair),
+#   - auto-derives the correct cp<XY>-cp<XY>-linux_<arch> tag from
+#     the current interpreter and sysconfig.get_platform().
+# See TRI-983.
+class BinaryDistribution(Distribution):
+    def has_ext_modules(self):
+        return True
+
+
 if __name__ == "__main__":
-    setup(cmdclass={"build_py": BuildPyCommand})
+    setup(distclass=BinaryDistribution, cmdclass={"build_py": BuildPyCommand})
