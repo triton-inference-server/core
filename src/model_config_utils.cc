@@ -1273,7 +1273,8 @@ AutoCompleteBackendFields(
     }
   }
   if (config->backend() == kPythonBackend) {
-    if (config->default_model_filename().empty()) {
+    if (config->default_model_filename().empty() &&
+        config->cc_model_filenames().empty()) {
       config->set_default_model_filename(kPythonFilename);
     }
     return Status::Success;
