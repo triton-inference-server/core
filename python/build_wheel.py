@@ -107,7 +107,9 @@ def _compose_version(base_version):
     CUDA toolkit the wheel was built against, so consumers can tell an
     nv26.04 wheel from an nv26.05 wheel (same upstream Triton version)
     and a cu132 wheel from a cu128 wheel. The local-version segment is
-    purely informational and does not affect pip's version comparison.
+    primarily for distinguishing these builds; while it does not change
+    the public upstream version, it can still affect version ordering
+    and candidate selection among wheels with the same base version.
 
     Sources for NVIDIA upstream version (first non-empty wins):
       NVIDIA_UPSTREAM_VERSION        - propagated by build.py via
