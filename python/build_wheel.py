@@ -311,7 +311,7 @@ if __name__ == "__main__":
     wenv["TRITON_PYBIND"] = PYBIND_LIB
     p = subprocess.Popen(args, env=wenv)
     p.wait()
-    fail_if(p.returncode != 0, "Building wheel failed failed")
+    fail_if(p.returncode != 0, "Building wheel failed")
 
     # Post-process with auditwheel so the wheel is tagged with a proper
     # manylinux_2_X_<arch> platform (required by canonical PyPI). When
