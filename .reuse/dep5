@@ -1,0 +1,16 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: triton-inference-server/core
+Upstream-Contact: sw-dl-triton@nvidia.com
+Source: https://github.com/triton-inference-server/core
+
+Files: .clang-format
+Copyright: 2020-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+License: BSD-3-Clause
+
+Files: python/test/test_api_models/test/config.pbtxt
+Copyright: 2020-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+License: BSD-3-Clause
+
+Files: tools/__pycache__/*
+Copyright: 2020-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+License: BSD-3-Clause

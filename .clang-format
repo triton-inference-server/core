@@ -9,7 +9,7 @@ MaxEmptyLinesToKeep: 2
 
 SortIncludes: true
 CompactNamespaces: true
-ReflowComments: true
+ReflowComments: false
 
 DerivePointerAlignment: false
 PointerAlignment: Left
