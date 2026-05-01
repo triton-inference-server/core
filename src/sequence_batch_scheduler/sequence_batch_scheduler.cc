@@ -323,8 +323,9 @@ SequenceBatchScheduler::GenerateInitialStateData(
   if (initial_state.name().size() == 0) {
     return Status(
         Status::Code::INVALID_ARG,
-        std::string("Field 'name' must be set when using initial_state for "
-                    "state input '") +
+        std::string(
+            "Field 'name' must be set when using initial_state for "
+            "state input '") +
             state.input_name() + "'.");
   }
 

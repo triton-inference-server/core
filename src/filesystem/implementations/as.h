@@ -485,8 +485,9 @@ ASFileSystem::LocalizePath(
   std::string env_mount_dir = GetEnvironmentVariableOrDefault(
       "TRITON_AZURE_MOUNT_DIRECTORY", kDefaultMountDirectory);
   std::string tmp_folder;
-  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
-      FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
+  RETURN_IF_ERROR(
+      triton::core::MakeTemporaryDirectory(
+          FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
 
   localized->reset(new LocalizedPath(path, tmp_folder));
 

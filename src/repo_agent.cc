@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2021-2026 NVIDIA CORPORATION. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "repo_agent.h"
@@ -171,7 +171,7 @@ TritonRepoAgentModel::~TritonRepoAgentModel()
                 reinterpret_cast<TRITONREPOAGENT_AgentModel*>(this),
                 TRITONREPOAGENT_ACTION_UNLOAD),
             "Inform TRITONREPOAGENT_ACTION_UNLOAD");
-        // Fallthough is not yet an language feature until C++17
+        // Fallthrough is not yet a language feature until C++17
         LOG_TRITONSERVER_ERROR(
             agent_->AgentModelActionFn()(
                 reinterpret_cast<TRITONREPOAGENT_Agent*>(agent_.get()),

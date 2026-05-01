@@ -655,10 +655,12 @@ TritonModel::PrepareInstances(
               // The requested instance did not match an existing instance.
               // Create a new instance.
               std::shared_ptr<TritonModelInstance> new_instance;
-              RETURN_IF_ERROR(TritonModelInstance::CreateInstance(
-                  this, instance_name, signature, is.kind_, is.device_id_,
-                  profile_names, passive, is.policy_name_,
-                  *is.rate_limiter_config_, secondary_devices, &new_instance));
+              RETURN_IF_ERROR(
+                  TritonModelInstance::CreateInstance(
+                      this, instance_name, signature, is.kind_, is.device_id_,
+                      profile_names, passive, is.policy_name_,
+                      *is.rate_limiter_config_, secondary_devices,
+                      &new_instance));
               {
                 std::lock_guard<std::mutex> lk(instance_mu);
                 added_instances->push_back(new_instance);
@@ -824,25 +826,28 @@ TritonModel::SetConfiguredScheduler(
       LOG_ERROR << "TRITON_BATCH_STRATEGY_PATH cannot be specified with "
                    "sequence batcher, using default batching strategy";
     }
-    RETURN_IF_ERROR(SequenceBatchScheduler::Create(
-        this, new_instances, enforce_equal_shape_tensors, &scheduler));
+    RETURN_IF_ERROR(
+        SequenceBatchScheduler::Create(
+            this, new_instances, enforce_equal_shape_tensors, &scheduler));
   } else if (config_.has_dynamic_batching()) {
     // Dynamic batcher
-    RETURN_IF_ERROR(DynamicBatchScheduler::Create(
-        this, nullptr, 0 /*nice*/, true /* dynamic_batching_enabled */,
-        config_.max_batch_size(), enforce_equal_shape_tensors,
-        config_.dynamic_batching(), &scheduler));
+    RETURN_IF_ERROR(
+        DynamicBatchScheduler::Create(
+            this, nullptr, 0 /*nice*/, true /* dynamic_batching_enabled */,
+            config_.max_batch_size(), enforce_equal_shape_tensors,
+            config_.dynamic_batching(), &scheduler));
   } else {
     // Default scheduler. Use dynamic batch scheduler (with batching
     // disabled) as the default scheduler.
-    RETURN_IF_ERROR(DynamicBatchScheduler::Create(
-        this, nullptr, 0 /*nice*/, false /* dynamic_batching_enabled */,
-        1 /* max_batch_size */,
-        std::unordered_map<
-            std::string, bool>() /* enforce_equal_shape_tensors */,
-        false /* preserve_ordering */,
-        std::set<int32_t>() /* preferred_batch_sizes */,
-        0 /* max_queue_delay_microseconds */, &scheduler));
+    RETURN_IF_ERROR(
+        DynamicBatchScheduler::Create(
+            this, nullptr, 0 /*nice*/, false /* dynamic_batching_enabled */,
+            1 /* max_batch_size */,
+            std::unordered_map<
+                std::string, bool>() /* enforce_equal_shape_tensors */,
+            false /* preserve_ordering */,
+            std::set<int32_t>() /* preferred_batch_sizes */,
+            0 /* max_queue_delay_microseconds */, &scheduler));
   }
 
   return SetScheduler(std::move(scheduler));
@@ -1639,11 +1644,12 @@ TRITONBACKEND_ResponseSend(
     RETURN_TRITONSERVER_ERROR_IF_ERROR(
         InferenceResponse::Send(std::move(utr), send_flags));
   } else {
-    RETURN_TRITONSERVER_ERROR_IF_ERROR(InferenceResponse::SendWithStatus(
-        std::move(utr), send_flags,
-        Status(
-            TritonCodeToStatusCode(TRITONSERVER_ErrorCode(error)),
-            TRITONSERVER_ErrorMessage(error))));
+    RETURN_TRITONSERVER_ERROR_IF_ERROR(
+        InferenceResponse::SendWithStatus(
+            std::move(utr), send_flags,
+            Status(
+                TritonCodeToStatusCode(TRITONSERVER_ErrorCode(error)),
+                TRITONSERVER_ErrorMessage(error))));
   }
 
   return nullptr;  // success

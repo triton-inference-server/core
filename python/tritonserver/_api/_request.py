@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Class for sending inference requests to Triton Inference Server Models"""
@@ -24,7 +24,6 @@ from tritonserver._c.triton_bindings import TRITONSERVER_Server
 
 @dataclass
 class InferenceRequest:
-
     """Dataclass representing an inference request.
 
     Inference request objects are created using Model factory

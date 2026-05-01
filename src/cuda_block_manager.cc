@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "cuda_block_manager.h"
@@ -82,8 +82,9 @@ CudaBlockManager::Allocate(
     prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
     prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
     prop.location.id = device_id;
-    RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemCreate(
-        &block, instance_->block_size_, &prop, 0 /* flags */));
+    RETURN_IF_ERROR(
+        CudaDriverHelper::GetInstance().CuMemCreate(
+            &block, instance_->block_size_, &prop, 0 /* flags */));
     allocation->AddBlock(block);
   }
 

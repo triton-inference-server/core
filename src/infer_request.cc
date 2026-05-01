@@ -89,19 +89,21 @@ InferenceRequest::InferenceRequest(
   SetPriority(0);
   // Outer-most release callback to ensure a request has been taken, this
   // callback won't be invoked, if certain flags are set.
-  release_callbacks_.emplace_back(std::make_pair(
-      [](std::unique_ptr<InferenceRequest>& request,
-         const uint32_t flags) -> Status {
-        if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
-          return Status(
-              Status::Code::INVALID_ARG,
-              "Request is released with "
-              "TRITONSERVER_REQUEST_RELEASE_RESCHEDULE, while the model is not "
-              "configured to handle such a flag.");
-        }
-        return Status::Success;
-      },
-      false));
+  release_callbacks_.emplace_back(
+      std::make_pair(
+          [](std::unique_ptr<InferenceRequest>& request,
+             const uint32_t flags) -> Status {
+            if (flags & TRITONSERVER_REQUEST_RELEASE_RESCHEDULE) {
+              return Status(
+                  Status::Code::INVALID_ARG,
+                  "Request is released with "
+                  "TRITONSERVER_REQUEST_RELEASE_RESCHEDULE, while the model is "
+                  "not "
+                  "configured to handle such a flag.");
+            }
+            return Status::Success;
+          },
+          false));
 }
 
 Status
@@ -836,8 +838,9 @@ InferenceRequest::LoadInputStates()
   // Add the input states to the inference request.
   if (sequence_states_ != nullptr) {
     if (sequence_states_->IsNullRequest()) {
-      RETURN_IF_ERROR(SequenceStates::CopyAsNull(
-          sequence_states_->NullSequenceStates(), &sequence_states_));
+      RETURN_IF_ERROR(
+          SequenceStates::CopyAsNull(
+              sequence_states_->NullSequenceStates(), &sequence_states_));
     }
     for (auto& input_state_pair : sequence_states_->InputStates()) {
       auto& input_state = input_state_pair.second;
@@ -1102,8 +1105,9 @@ InferenceRequest::Normalize()
               std::string(
                   triton::common::DataTypeToProtocolString(input.DType())) +
               "', but model '" + model_name + "' expects '" +
-              std::string(triton::common::DataTypeToProtocolString(
-                  input_config->data_type())) +
+              std::string(
+                  triton::common::DataTypeToProtocolString(
+                      input_config->data_type())) +
               "'");
     }
 
@@ -1455,8 +1459,9 @@ InferenceRequest::ValidateCorrelationId() const
               correlation_id_tensor_name + "' data-type is '" +
               request_corrid_datatype + "', but model '" + model_name +
               "' expects '" +
-              std::string(triton::common::DataTypeToProtocolString(
-                  correlation_id_datatype)) +
+              std::string(
+                  triton::common::DataTypeToProtocolString(
+                      correlation_id_datatype)) +
               "'");
     }
   }

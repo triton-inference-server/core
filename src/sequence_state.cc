@@ -117,17 +117,19 @@ SequenceStates::Initialize(
       if (!use_single_buffer) {
         return Status(
             Status::Code::INVALID_ARG,
-            std::string("In order to 'use_growable_memory', you must also "
-                        "enable 'use_single_buffer' for state input name '") +
+            std::string(
+                "In order to 'use_growable_memory', you must also "
+                "enable 'use_single_buffer' for state input name '") +
                 state_config.input_name() + ("'."));
       }
       if (kind != TRITONSERVER_INSTANCEGROUPKIND_GPU) {
         return Status(
             Status::Code::INVALID_ARG,
-            std::string("'use_growable_memory' can only work with KIND_GPU "
-                        "model instances right now. Please either change the "
-                        "instance type to KIND_GPU or set "
-                        "'use_growable_memory' to false for state input '") +
+            std::string(
+                "'use_growable_memory' can only work with KIND_GPU "
+                "model instances right now. Please either change the "
+                "instance type to KIND_GPU or set "
+                "'use_growable_memory' to false for state input '") +
                 state_config.input_name() + ("'."));
       }
     }
@@ -151,10 +153,12 @@ SequenceStates::Initialize(
     if (initial_state_it != initial_state.end()) {
       if (use_growable_memory) {
         std::unique_ptr<GrowableMemory> growable_memory;
-        RETURN_IF_ERROR(GrowableMemory::Create(
-            growable_memory, initial_state_it->second.data_->TotalByteSize(),
-            TRITONSERVER_MEMORY_GPU, device_id,
-            cuda_virtual_address_size.at(device_id)));
+        RETURN_IF_ERROR(
+            GrowableMemory::Create(
+                growable_memory,
+                initial_state_it->second.data_->TotalByteSize(),
+                TRITONSERVER_MEMORY_GPU, device_id,
+                cuda_virtual_address_size.at(device_id)));
         data = std::move(growable_memory);
 
 #ifdef TRITON_ENABLE_GPU
@@ -195,9 +199,10 @@ SequenceStates::Initialize(
           &state_size));
       if (use_growable_memory) {
         std::unique_ptr<GrowableMemory> growable_memory;
-        RETURN_IF_ERROR(GrowableMemory::Create(
-            growable_memory, state_size, TRITONSERVER_MEMORY_GPU, device_id,
-            cuda_virtual_address_size.at(device_id)));
+        RETURN_IF_ERROR(
+            GrowableMemory::Create(
+                growable_memory, state_size, TRITONSERVER_MEMORY_GPU, device_id,
+                cuda_virtual_address_size.at(device_id)));
         data = std::move(growable_memory);
       } else {
         data = std::make_shared<AllocatedMemory>(

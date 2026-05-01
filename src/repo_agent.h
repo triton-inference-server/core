@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2021-2026 NVIDIA CORPORATION. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -150,7 +150,7 @@ class TritonRepoAgentManager {
   DISALLOW_COPY_AND_ASSIGN(TritonRepoAgentManager);
 
   TritonRepoAgentManager()
-      : global_search_path_("/opt/tritonserver/repoagents"){};
+      : global_search_path_("/opt/tritonserver/repoagents") {};
   static TritonRepoAgentManager& Singleton();
   std::mutex mu_;
   std::string global_search_path_;

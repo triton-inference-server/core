@@ -61,7 +61,8 @@ namespace triton { namespace core { namespace python {
             err__, TRITONSERVER_ErrorDelete);            \
         py::print(TRITONSERVER_ErrorMessage(err__));     \
       }                                                  \
-  }}
+    }                                                    \
+  }
 // base exception for all Triton error code
 struct TritonError : public std::runtime_error {
   explicit TritonError(const std::string& what) : std::runtime_error(what) {}
@@ -2180,8 +2181,10 @@ PYBIND11_MODULE(triton_bindings, m)
       .value("GAUGE", TRITONSERVER_METRIC_KIND_GAUGE);
   // TRITONSERVER_MetricFamily
   py::class_<PyMetricFamily>(m, "TRITONSERVER_MetricFamily")
-      .def(py::init<
-           TRITONSERVER_MetricKind, const std::string&, const std::string&>());
+      .def(
+          py::init<
+              TRITONSERVER_MetricKind, const std::string&,
+              const std::string&>());
   // TRITONSERVER_Metric
   py::class_<PyMetric>(m, "TRITONSERVER_Metric")
       .def(

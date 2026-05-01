@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Class for interacting with Triton Inference Server Models"""
@@ -12,14 +12,18 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from tritonserver._api._request import InferenceRequest
 from tritonserver._api._response import AsyncResponseIterator, ResponseIterator
-from tritonserver._c.triton_bindings import InvalidArgumentError
+from tritonserver._c.triton_bindings import (
+    InvalidArgumentError,
+)
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelBatchFlag as ModelBatchFlag,
 )
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelTxnPropertyFlag as ModelTxnPropertyFlag,
 )
-from tritonserver._c.triton_bindings import TRITONSERVER_Server
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_Server,
+)
 
 if TYPE_CHECKING:
     from tritonserver._api._server import Server

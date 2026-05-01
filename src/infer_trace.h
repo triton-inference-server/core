@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2020-2024 NVIDIA CORPORATION. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2020-2026 NVIDIA CORPORATION. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -205,4 +205,4 @@ class InferenceTraceProxy {
 #define INFER_TRACE_ACTIVITY_NOW(T, A)
 #define INFER_TRACE_TENSOR_ACTIVITY(T, A, N, D, BA, BY, S, DI, MT, MTI)
 #endif  // TRITON_ENABLE_TRACING
-}}      // namespace triton::core
+}}  // namespace triton::core

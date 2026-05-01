@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2020-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -43,9 +43,10 @@ class TritonModelInstance {
     Signature(
         const inference::ModelInstanceGroup& group_config, int32_t device_id)
         : group_config_(group_config), device_id_(device_id),
-          hash_(std::hash<std::string>{}(
-              std::to_string(device_id_) +
-              InstanceConfigSignature(group_config_)))
+          hash_(
+              std::hash<std::string>{}(
+                  std::to_string(device_id_) +
+                  InstanceConfigSignature(group_config_)))
     {
     }
     bool operator==(const Signature& rhs) const

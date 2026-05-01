@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2018 NVIDIA CORPORATION. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2018-2026 NVIDIA CORPORATION. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "model_config_cuda.h"

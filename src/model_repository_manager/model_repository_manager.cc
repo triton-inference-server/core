@@ -272,9 +272,10 @@ CreateAgentModelListWithLoadAction(
           model_config.Clear();
         }
       }
-      RETURN_IF_ERROR(TritonRepoAgentModel::Create(
-          artifact_type, location, model_config, agent, agent_params,
-          &agent_model));
+      RETURN_IF_ERROR(
+          TritonRepoAgentModel::Create(
+              artifact_type, location, model_config, agent, agent_params,
+              &agent_model));
       RETURN_IF_ERROR(agent_model->InvokeAgent(TRITONREPOAGENT_ACTION_LOAD));
       lagent_model_list->AddAgentModel(std::move(agent_model));
     }
@@ -1527,9 +1528,10 @@ ModelRepositoryManager::InitializeModelInfo(
     // the lifecycle of the localized files
     std::shared_ptr<TritonRepoAgent> localize_agent(new LocalizeRepoAgent());
     std::unique_ptr<TritonRepoAgentModel> localize_agent_model;
-    RETURN_IF_ERROR(TritonRepoAgentModel::Create(
-        TRITONREPOAGENT_ARTIFACT_FILESYSTEM, "", inference::ModelConfig(),
-        localize_agent, {}, &localize_agent_model));
+    RETURN_IF_ERROR(
+        TritonRepoAgentModel::Create(
+            TRITONREPOAGENT_ARTIFACT_FILESYSTEM, "", inference::ModelConfig(),
+            localize_agent, {}, &localize_agent_model));
 
     // Set agent model state so the repo agent can access the encoded files
     // Using const_cast here but we are safe as the RepoAgent will not

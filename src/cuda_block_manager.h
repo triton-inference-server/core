@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -35,7 +35,7 @@ class CudaBlockManager {
   static void Reset() { instance_.reset(); }
 
  private:
-  CudaBlockManager(){};
+  CudaBlockManager() {};
   std::unordered_map<int, std::vector<CUmemGenericAllocationHandle>>
       free_blocks_;
   size_t block_size_;

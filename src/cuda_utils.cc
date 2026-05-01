@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2019-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "cuda_utils.h"
@@ -248,8 +248,9 @@ GetAllocationGranularity(size_t& aligned_sz)
   prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
   prop.location.id = 0;
 
-  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemGetAllocationGranularity(
-      &aligned_sz, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
+  RETURN_IF_ERROR(
+      CudaDriverHelper::GetInstance().CuMemGetAllocationGranularity(
+          &aligned_sz, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
   return Status::Success;
 }
 

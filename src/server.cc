@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2018-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2018-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "server.h"
@@ -165,8 +165,9 @@ InferenceServer::Init()
   }
 
   if (buffer_manager_thread_count_ > 0) {
-    status = CommonErrorToStatus(triton::common::AsyncWorkQueue::Initialize(
-        buffer_manager_thread_count_));
+    status = CommonErrorToStatus(
+        triton::common::AsyncWorkQueue::Initialize(
+            buffer_manager_thread_count_));
     if (!status.IsOk()) {
       ready_state_ = ServerReadyState::SERVER_FAILED_TO_INITIALIZE;
       return status;

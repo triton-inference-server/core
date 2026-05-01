@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2019-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <string>
@@ -1846,8 +1846,9 @@ TRITONSERVER_InferenceRequestPriority(
   if (temp > std::numeric_limits<uint32_t>::max()) {
     return TRITONSERVER_ErrorNew(
         TRITONSERVER_ERROR_INVALID_ARG,
-        (std::string("request priority overflows uint32_t, use "
-                     "TRITONSERVER_InferenceRequestPriorityUInt64, priority=") +
+        (std::string(
+             "request priority overflows uint32_t, use "
+             "TRITONSERVER_InferenceRequestPriorityUInt64, priority=") +
          std::to_string(temp))
             .c_str());
   }
@@ -2498,9 +2499,10 @@ TRITONSERVER_ServerNew(
 
   size_t i = 0;
   for (const auto& model_repository_path : lserver->ModelRepositoryPaths()) {
-    options_table.InsertRow(std::vector<std::string>{
-        "model_repository_path[" + std::to_string(i) + "]",
-        model_repository_path});
+    options_table.InsertRow(
+        std::vector<std::string>{
+            "model_repository_path[" + std::to_string(i) + "]",
+            model_repository_path});
     ++i;
   }
 
@@ -2528,49 +2530,60 @@ TRITONSERVER_ServerNew(
 
   i = 0;
   for (const auto& startup_model : lserver->StartupModels()) {
-    options_table.InsertRow(std::vector<std::string>{
-        "startup_models_" + std::to_string(i), startup_model});
+    options_table.InsertRow(
+        std::vector<std::string>{
+            "startup_models_" + std::to_string(i), startup_model});
     ++i;
   }
-  options_table.InsertRow(std::vector<std::string>{
-      "strict_model_config",
-      std::to_string(lserver->StrictModelConfigEnabled())});
-  options_table.InsertRow(std::vector<std::string>{
-      "model_config_name", lserver->ModelConfigName()});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "strict_model_config",
+          std::to_string(lserver->StrictModelConfigEnabled())});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "model_config_name", lserver->ModelConfigName()});
   std::string rate_limit = RateLimitModeToString(lserver->RateLimiterMode());
   options_table.InsertRow(std::vector<std::string>{"rate_limit", rate_limit});
   i = 0;
   for (const auto& device_resources : lserver->RateLimiterResources()) {
     for (const auto& resource : device_resources.second) {
-      options_table.InsertRow(std::vector<std::string>{
-          "rate_limit_resource[" + std::to_string(i) + "]",
-          ResourceString(
-              resource.first, resource.second, device_resources.first)});
+      options_table.InsertRow(
+          std::vector<std::string>{
+              "rate_limit_resource[" + std::to_string(i) + "]",
+              ResourceString(
+                  resource.first, resource.second, device_resources.first)});
       ++i;
     }
   }
-  options_table.InsertRow(std::vector<std::string>{
-      "pinned_memory_pool_byte_size",
-      std::to_string(lserver->PinnedMemoryPoolByteSize())});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "pinned_memory_pool_byte_size",
+          std::to_string(lserver->PinnedMemoryPoolByteSize())});
   for (const auto& cuda_memory_pool : lserver->CudaMemoryPoolByteSize()) {
-    options_table.InsertRow(std::vector<std::string>{
-        "cuda_memory_pool_byte_size{" + std::to_string(cuda_memory_pool.first) +
-            "}",
-        std::to_string(cuda_memory_pool.second)});
+    options_table.InsertRow(
+        std::vector<std::string>{
+            "cuda_memory_pool_byte_size{" +
+                std::to_string(cuda_memory_pool.first) + "}",
+            std::to_string(cuda_memory_pool.second)});
   }
 
   std::stringstream compute_capability_ss;
   compute_capability_ss.setf(std::ios::fixed);
   compute_capability_ss.precision(1);
   compute_capability_ss << lserver->MinSupportedComputeCapability();
-  options_table.InsertRow(std::vector<std::string>{
-      "min_supported_compute_capability", compute_capability_ss.str()});
-  options_table.InsertRow(std::vector<std::string>{
-      "strict_readiness", std::to_string(lserver->StrictReadinessEnabled())});
-  options_table.InsertRow(std::vector<std::string>{
-      "exit_timeout", std::to_string(lserver->ExitTimeoutSeconds())});
-  options_table.InsertRow(std::vector<std::string>{
-      "cache_enabled", std::to_string(lserver->ResponseCacheEnabled())});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "min_supported_compute_capability", compute_capability_ss.str()});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "strict_readiness",
+          std::to_string(lserver->StrictReadinessEnabled())});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "exit_timeout", std::to_string(lserver->ExitTimeoutSeconds())});
+  options_table.InsertRow(
+      std::vector<std::string>{
+          "cache_enabled", std::to_string(lserver->ResponseCacheEnabled())});
 
   LOG_TABLE_INFO(options_table);
 
@@ -3112,8 +3125,9 @@ TRITONSERVER_ServerModelConfig(
   RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
 
   std::string model_config_json;
-  RETURN_IF_STATUS_ERROR(tc::ModelConfigToJson(
-      model->Config(), config_version, &model_config_json));
+  RETURN_IF_STATUS_ERROR(
+      tc::ModelConfigToJson(
+          model->Config(), config_version, &model_config_json));
 
   *model_config = reinterpret_cast<TRITONSERVER_Message*>(
       new tc::TritonServerMessage(std::move(model_config_json)));

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
@@ -29,7 +29,9 @@ from tritonserver._c.triton_bindings import (
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_DataType as DataType
 from tritonserver._c.triton_bindings import TRITONSERVER_MemoryType as MemoryType
-from tritonserver._c.triton_bindings import UnsupportedError
+from tritonserver._c.triton_bindings import (
+    UnsupportedError,
+)
 
 try:
     import cupy

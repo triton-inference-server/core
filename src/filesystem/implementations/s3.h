@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2019-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -639,8 +639,9 @@ S3FileSystem::LocalizePath(
   std::string env_mount_dir = GetEnvironmentVariableOrDefault(
       "TRITON_AWS_MOUNT_DIRECTORY", kDefaultMountDirectory);
   std::string tmp_folder;
-  RETURN_IF_ERROR(triton::core::MakeTemporaryDirectory(
-      FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
+  RETURN_IF_ERROR(
+      triton::core::MakeTemporaryDirectory(
+          FileSystemType::LOCAL, env_mount_dir, &tmp_folder));
 
   // Specify contents to be downloaded
   std::set<std::string> contents;

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2018-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2018-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #ifdef TRITON_ENABLE_METRICS
@@ -35,59 +35,70 @@ Metrics::Metrics()
               .Name("nv_inference_request_failure")
               .Help("Number of failed inference requests, all batch sizes")
               .Register(*registry_)),
-      inf_count_family_(prometheus::BuildCounter()
-                            .Name("nv_inference_count")
-                            .Help("Number of inferences performed (does not "
-                                  "include cached requests)")
-                            .Register(*registry_)),
-      inf_count_exec_family_(prometheus::BuildCounter()
-                                 .Name("nv_inference_exec_count")
-                                 .Help("Number of model executions performed "
-                                       "(does not include cached requests)")
-                                 .Register(*registry_)),
+      inf_count_family_(
+          prometheus::BuildCounter()
+              .Name("nv_inference_count")
+              .Help(
+                  "Number of inferences performed (does not "
+                  "include cached requests)")
+              .Register(*registry_)),
+      inf_count_exec_family_(
+          prometheus::BuildCounter()
+              .Name("nv_inference_exec_count")
+              .Help(
+                  "Number of model executions performed "
+                  "(does not include cached requests)")
+              .Register(*registry_)),
       inf_request_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_request_duration_us")
-              .Help("Cumulative inference request duration in microseconds "
-                    "(includes cached requests)")
+              .Help(
+                  "Cumulative inference request duration in microseconds "
+                  "(includes cached requests)")
               .Register(*registry_)),
       inf_queue_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_queue_duration_us")
-              .Help("Cumulative inference queuing duration in microseconds "
-                    "(includes cached requests)")
+              .Help(
+                  "Cumulative inference queuing duration in microseconds "
+                  "(includes cached requests)")
               .Register(*registry_)),
 
       inf_compute_input_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_compute_input_duration_us")
-              .Help("Cumulative compute input duration in microseconds (does "
-                    "not include cached requests)")
+              .Help(
+                  "Cumulative compute input duration in microseconds (does "
+                  "not include cached requests)")
               .Register(*registry_)),
       inf_compute_infer_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_compute_infer_duration_us")
-              .Help("Cumulative compute inference duration in microseconds "
-                    "(does not include cached requests)")
+              .Help(
+                  "Cumulative compute inference duration in microseconds "
+                  "(does not include cached requests)")
               .Register(*registry_)),
       inf_compute_output_duration_us_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_compute_output_duration_us")
-              .Help("Cumulative inference compute output duration in "
-                    "microseconds (does not include cached requests)")
+              .Help(
+                  "Cumulative inference compute output duration in "
+                  "microseconds (does not include cached requests)")
               .Register(*registry_)),
 
       inf_pending_request_count_family_(
           prometheus::BuildGauge()
               .Name("nv_inference_pending_request_count")
-              .Help("Instantaneous number of pending requests awaiting "
-                    "execution per-model.")
+              .Help(
+                  "Instantaneous number of pending requests awaiting "
+                  "execution per-model.")
               .Register(*registry_)),
 
-      model_load_time_family_(prometheus::BuildGauge()
-                                  .Name("nv_model_load_duration_secs")
-                                  .Help("Model load time in seconds")
-                                  .Register(*registry_)),
+      model_load_time_family_(
+          prometheus::BuildGauge()
+              .Name("nv_model_load_duration_secs")
+              .Help("Model load time in seconds")
+              .Register(*registry_)),
 
       pinned_memory_pool_total_family_(
           prometheus::BuildGauge()
@@ -103,10 +114,11 @@ Metrics::Metrics()
 
       // Per-model cache metric families
       // NOTE: These are used in infer_stats for perf_analyzer
-      cache_num_hits_model_family_(prometheus::BuildCounter()
-                                       .Name("nv_cache_num_hits_per_model")
-                                       .Help("Number of cache hits per model")
-                                       .Register(*registry_)),
+      cache_num_hits_model_family_(
+          prometheus::BuildCounter()
+              .Name("nv_cache_num_hits_per_model")
+              .Help("Number of cache hits per model")
+              .Register(*registry_)),
       cache_hit_duration_us_model_family_(
           prometheus::BuildCounter()
               .Name("nv_cache_hit_duration_per_model")
@@ -120,8 +132,9 @@ Metrics::Metrics()
       cache_miss_duration_us_model_family_(
           prometheus::BuildCounter()
               .Name("nv_cache_miss_duration_per_model")
-              .Help("Total cache miss (insert+lookup) duration per model, in "
-                    "microseconds")
+              .Help(
+                  "Total cache miss (insert+lookup) duration per model, in "
+                  "microseconds")
               .Register(*registry_)),
 
       // Histograms
@@ -136,90 +149,106 @@ Metrics::Metrics()
       inf_request_summary_us_family_(
           prometheus::BuildSummary()
               .Name("nv_inference_request_summary_us")
-              .Help("Summary of inference request duration in microseconds "
-                    "(includes cached requests)")
+              .Help(
+                  "Summary of inference request duration in microseconds "
+                  "(includes cached requests)")
               .Register(*registry_)),
       inf_queue_summary_us_family_(
           prometheus::BuildSummary()
               .Name("nv_inference_queue_summary_us")
-              .Help("Summary of inference queuing duration in microseconds "
-                    "(includes cached requests)")
+              .Help(
+                  "Summary of inference queuing duration in microseconds "
+                  "(includes cached requests)")
               .Register(*registry_)),
       inf_compute_input_summary_us_family_(
           prometheus::BuildSummary()
               .Name("nv_inference_compute_input_summary_us")
-              .Help("Cumulative compute input duration in microseconds (does "
-                    "not include cached requests)")
+              .Help(
+                  "Cumulative compute input duration in microseconds (does "
+                  "not include cached requests)")
               .Register(*registry_)),
       inf_compute_infer_summary_us_family_(
           prometheus::BuildSummary()
               .Name("nv_inference_compute_infer_summary_us")
-              .Help("Cumulative compute inference duration in microseconds "
-                    "(does not include cached requests)")
+              .Help(
+                  "Cumulative compute inference duration in microseconds "
+                  "(does not include cached requests)")
               .Register(*registry_)),
       inf_compute_output_summary_us_family_(
           prometheus::BuildSummary()
               .Name("nv_inference_compute_output_summary_us")
-              .Help("Cumulative inference compute output duration in "
-                    "microseconds (does not include cached requests)")
+              .Help(
+                  "Cumulative inference compute output duration in "
+                  "microseconds (does not include cached requests)")
               .Register(*registry_)),
 
       cache_hit_summary_us_model_family_(
           prometheus::BuildSummary()
               .Name("nv_cache_hit_summary_per_model")
-              .Help("Summary of cache hit counts/durations per model, in "
-                    "microseconds.")
+              .Help(
+                  "Summary of cache hit counts/durations per model, in "
+                  "microseconds.")
               .Register(*registry_)),
 
       cache_miss_summary_us_model_family_(
           prometheus::BuildSummary()
               .Name("nv_cache_miss_summary_per_model")
-              .Help("Summary of cache miss counts/durations per model, in "
-                    "microseconds.")
+              .Help(
+                  "Summary of cache miss counts/durations per model, in "
+                  "microseconds.")
               .Register(*registry_)),
 
 #ifdef TRITON_ENABLE_METRICS_GPU
-      gpu_utilization_family_(prometheus::BuildGauge()
-                                  .Name("nv_gpu_utilization")
-                                  .Help("GPU utilization rate [0.0 - 1.0)")
-                                  .Register(*registry_)),
-      gpu_memory_total_family_(prometheus::BuildGauge()
-                                   .Name("nv_gpu_memory_total_bytes")
-                                   .Help("GPU total memory, in bytes")
-                                   .Register(*registry_)),
-      gpu_memory_used_family_(prometheus::BuildGauge()
-                                  .Name("nv_gpu_memory_used_bytes")
-                                  .Help("GPU used memory, in bytes")
-                                  .Register(*registry_)),
-      gpu_power_usage_family_(prometheus::BuildGauge()
-                                  .Name("nv_gpu_power_usage")
-                                  .Help("GPU power usage in watts")
-                                  .Register(*registry_)),
-      gpu_power_limit_family_(prometheus::BuildGauge()
-                                  .Name("nv_gpu_power_limit")
-                                  .Help("GPU power management limit in watts")
-                                  .Register(*registry_)),
+      gpu_utilization_family_(
+          prometheus::BuildGauge()
+              .Name("nv_gpu_utilization")
+              .Help("GPU utilization rate [0.0 - 1.0)")
+              .Register(*registry_)),
+      gpu_memory_total_family_(
+          prometheus::BuildGauge()
+              .Name("nv_gpu_memory_total_bytes")
+              .Help("GPU total memory, in bytes")
+              .Register(*registry_)),
+      gpu_memory_used_family_(
+          prometheus::BuildGauge()
+              .Name("nv_gpu_memory_used_bytes")
+              .Help("GPU used memory, in bytes")
+              .Register(*registry_)),
+      gpu_power_usage_family_(
+          prometheus::BuildGauge()
+              .Name("nv_gpu_power_usage")
+              .Help("GPU power usage in watts")
+              .Register(*registry_)),
+      gpu_power_limit_family_(
+          prometheus::BuildGauge()
+              .Name("nv_gpu_power_limit")
+              .Help("GPU power management limit in watts")
+              .Register(*registry_)),
       gpu_energy_consumption_family_(
           prometheus::BuildCounter()
               .Name("nv_energy_consumption")
-              .Help("GPU energy consumption in joules since the Triton Server "
-                    "started")
+              .Help(
+                  "GPU energy consumption in joules since the Triton Server "
+                  "started")
               .Register(*registry_)),
 #endif  // TRITON_ENABLE_METRICS_GPU
 
 #ifdef TRITON_ENABLE_METRICS_CPU
-      cpu_utilization_family_(prometheus::BuildGauge()
-                                  .Name("nv_cpu_utilization")
-                                  .Help("CPU utilization rate [0.0 - 1.0]")
-                                  .Register(*registry_)),
-      cpu_memory_total_family_(prometheus::BuildGauge()
-                                   .Name("nv_cpu_memory_total_bytes")
-                                   .Help("CPU total memory (RAM), in bytes")
-                                   .Register(*registry_)),
-      cpu_memory_used_family_(prometheus::BuildGauge()
-                                  .Name("nv_cpu_memory_used_bytes")
-                                  .Help("CPU used memory (RAM), in bytes")
-                                  .Register(*registry_)),
+      cpu_utilization_family_(
+          prometheus::BuildGauge()
+              .Name("nv_cpu_utilization")
+              .Help("CPU utilization rate [0.0 - 1.0]")
+              .Register(*registry_)),
+      cpu_memory_total_family_(
+          prometheus::BuildGauge()
+              .Name("nv_cpu_memory_total_bytes")
+              .Help("CPU total memory (RAM), in bytes")
+              .Register(*registry_)),
+      cpu_memory_used_family_(
+          prometheus::BuildGauge()
+              .Name("nv_cpu_memory_used_bytes")
+              .Help("CPU used memory (RAM), in bytes")
+              .Register(*registry_)),
 #endif  // TRITON_ENABLE_METRICS_CPU
 
       metrics_enabled_(false), gpu_metrics_enabled_(false),
@@ -834,9 +863,10 @@ Metrics::InitializeDcgmMetrics()
       pci_bus_id_to_device_name[pciBusId] =
           std::string(gpu_attributes[i].identifiers.deviceName);
       std::map<std::string, std::string> gpu_labels;
-      gpu_labels.insert(std::map<std::string, std::string>::value_type(
-          kMetricsLabelGpuUuid,
-          std::string(gpu_attributes[i].identifiers.uuid)));
+      gpu_labels.insert(
+          std::map<std::string, std::string>::value_type(
+              kMetricsLabelGpuUuid,
+              std::string(gpu_attributes[i].identifiers.uuid)));
       pci_bus_id_to_gpu_labels[pciBusId] = gpu_labels;
     }
   }

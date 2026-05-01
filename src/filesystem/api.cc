@@ -322,9 +322,10 @@ FileSystemManager::LoadCredential(
       std::string cred_name = cred_names[i];
       triton::common::TritonJson::Value cred_json;
       creds_fs_json.Find(cred_name.c_str(), &cred_json);
-      cache.push_back(std::make_tuple(
-          cred_name, CredentialType(cred_json),
-          std::shared_ptr<FileSystemType>()));
+      cache.push_back(
+          std::make_tuple(
+              cred_name, CredentialType(cred_json),
+              std::shared_ptr<FileSystemType>()));
     }
     SortCache(cache);
   }

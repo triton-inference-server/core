@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2021-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "numa_utils.h"
@@ -161,8 +161,9 @@ SetNumaThreadAffinity(
         if (delim_range == std::string::npos) {
           return Status(
               Status::Code::INVALID_ARG,
-              std::string("host policy setting 'cpu-cores' format is "
-                          "'<lower_cpu_core_id>-<upper_cpu_core_id>'. Got ") +
+              std::string(
+                  "host policy setting 'cpu-cores' format is "
+                  "'<lower_cpu_core_id>-<upper_cpu_core_id>'. Got ") +
                   cpu_str.substr(
                       current_pos, ((delim_cpus == std::string::npos)
                                         ? (cpu_str.length() + 1)

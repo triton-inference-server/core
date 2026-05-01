@@ -319,8 +319,9 @@ TritonModelInstance::SetBackendThread(
   }
   if (triton_backend_thread_.get() == nullptr) {
     std::unique_ptr<TritonBackendThread> local_backend_thread;
-    RETURN_IF_ERROR(TritonBackendThread::CreateBackendThread(
-        Name(), this, 0 /* nice */, device_id, &local_backend_thread));
+    RETURN_IF_ERROR(
+        TritonBackendThread::CreateBackendThread(
+            Name(), this, 0 /* nice */, device_id, &local_backend_thread));
     triton_backend_thread_ = std::move(local_backend_thread);
   } else {
     triton_backend_thread_->AddModelInstance(this);

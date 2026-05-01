@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2019-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "ensemble_model.h"
@@ -26,9 +26,10 @@ EnsembleModel::Create(
   RETURN_IF_ERROR(local_model->Init(is_config_provided));
 
   std::unique_ptr<Scheduler> scheduler;
-  RETURN_IF_ERROR(EnsembleScheduler::Create(
-      local_model->MutableStatsAggregator(), server, local_model->ModelId(),
-      model_config, &scheduler));
+  RETURN_IF_ERROR(
+      EnsembleScheduler::Create(
+          local_model->MutableStatsAggregator(), server, local_model->ModelId(),
+          model_config, &scheduler));
   RETURN_IF_ERROR(local_model->SetScheduler(std::move(scheduler)));
 
   LOG_VERBOSE(1) << "ensemble model for " << local_model->Name() << std::endl;

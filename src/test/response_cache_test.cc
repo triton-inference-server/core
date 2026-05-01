@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2021-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2021-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <numeric>
@@ -743,8 +743,9 @@ ParallelInsert(
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    threads.emplace_back(std::thread(
-        &helpers::InsertWrapper, cache, insert_response.get(), key));
+    threads.emplace_back(
+        std::thread(
+            &helpers::InsertWrapper, cache, insert_response.get(), key));
   }
 
   // Join threads
@@ -884,10 +885,13 @@ ParallelLookupInsert(
             << "] threads in parallel" << std::endl;
   for (size_t idx = 0; idx < thread_count; idx++) {
     auto key = std::to_string(idx);
-    insert_threads.emplace_back(std::thread(
-        &helpers::InsertWrapper, cache, insert_response.get(), key));
-    lookup_threads.emplace_back(std::thread(
-        &helpers::LookupWrapperMaybeMiss, cache, responses[idx].get(), key));
+    insert_threads.emplace_back(
+        std::thread(
+            &helpers::InsertWrapper, cache, insert_response.get(), key));
+    lookup_threads.emplace_back(
+        std::thread(
+            &helpers::LookupWrapperMaybeMiss, cache, responses[idx].get(),
+            key));
   }
 
   // Join threads

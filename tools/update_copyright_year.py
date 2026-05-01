@@ -52,8 +52,10 @@ def update_file(filepath: str) -> bool:
 
 
 def main() -> int:
-    modified = any(update_file(f) for f in sys.argv[1:])
-    return 1 if modified else 0
+    # Evaluate all files — do NOT use any() which short-circuits and skips
+    # remaining files once the first modification is found.
+    results = [update_file(f) for f in sys.argv[1:]]
+    return 1 if any(results) else 0
 
 
 if __name__ == "__main__":

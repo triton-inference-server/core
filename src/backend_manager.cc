@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2020-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2020-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "backend_manager.h"
@@ -365,8 +365,9 @@ TritonBackendManager::CreateBackend(
     }
   }
 
-  RETURN_IF_ERROR(TritonBackend::Create(
-      name, dir, libpath, backend_cmdline_config, backend));
+  RETURN_IF_ERROR(
+      TritonBackend::Create(
+          name, dir, libpath, backend_cmdline_config, backend));
 
   (*backend)->SetPythonBasedBackendFlag(is_python_based_backend);
   if (is_python_based_backend) {

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
@@ -56,84 +56,84 @@ STRING_TO_TRITON_MEMORY_TYPE: dict[str, MemoryType] = CustomKeyErrorDict(
 )
 
 
-DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE: dict[
-    _dlpack.DLDeviceType, MemoryType
-] = CustomKeyErrorDict(
-    "DLPack device type",
-    "Triton server memory type",
-    {
-        _dlpack.DLDeviceType.kDLCUDA: MemoryType.GPU,
-        _dlpack.DLDeviceType.kDLCPU: MemoryType.CPU,
-    },
-)
-
-TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE: dict[
-    MemoryType, _dlpack.DLDeviceType
-] = CustomKeyErrorDict(
-    "Triton server memory type",
-    "DLPack device type",
-    {
-        **{
-            value: key
-            for key, value in DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE.items()
+DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE: dict[_dlpack.DLDeviceType, MemoryType] = (
+    CustomKeyErrorDict(
+        "DLPack device type",
+        "Triton server memory type",
+        {
+            _dlpack.DLDeviceType.kDLCUDA: MemoryType.GPU,
+            _dlpack.DLDeviceType.kDLCPU: MemoryType.CPU,
         },
-        **{MemoryType.CPU_PINNED: _dlpack.DLDeviceType.kDLCPU},
-    },
+    )
 )
 
-DLPACK_TO_TRITON_DTYPE: dict[
-    tuple[_dlpack.DLDataTypeCode, int], DataType
-] = CustomKeyErrorDict(
-    "DLPack data type",
-    "Triton server data type",
-    {
-        (_dlpack.DLDataTypeCode.kDLBool, 8): DataType.BOOL,
-        (_dlpack.DLDataTypeCode.kDLInt, 8): DataType.INT8,
-        (
-            _dlpack.DLDataTypeCode.kDLInt,
-            16,
-        ): DataType.INT16,
-        (
-            _dlpack.DLDataTypeCode.kDLInt,
-            32,
-        ): DataType.INT32,
-        (
-            _dlpack.DLDataTypeCode.kDLInt,
-            64,
-        ): DataType.INT64,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            8,
-        ): DataType.UINT8,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            16,
-        ): DataType.UINT16,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            32,
-        ): DataType.UINT32,
-        (
-            _dlpack.DLDataTypeCode.kDLUInt,
-            64,
-        ): DataType.UINT64,
-        (
-            _dlpack.DLDataTypeCode.kDLFloat,
-            16,
-        ): DataType.FP16,
-        (
-            _dlpack.DLDataTypeCode.kDLFloat,
-            32,
-        ): DataType.FP32,
-        (
-            _dlpack.DLDataTypeCode.kDLFloat,
-            64,
-        ): DataType.FP64,
-        (
-            _dlpack.DLDataTypeCode.kDLBfloat,
-            16,
-        ): DataType.BF16,
-    },
+TRITON_MEMORY_TYPE_TO_DLPACK_DEVICE_TYPE: dict[MemoryType, _dlpack.DLDeviceType] = (
+    CustomKeyErrorDict(
+        "Triton server memory type",
+        "DLPack device type",
+        {
+            **{
+                value: key
+                for key, value in DLPACK_DEVICE_TYPE_TO_TRITON_MEMORY_TYPE.items()
+            },
+            **{MemoryType.CPU_PINNED: _dlpack.DLDeviceType.kDLCPU},
+        },
+    )
+)
+
+DLPACK_TO_TRITON_DTYPE: dict[tuple[_dlpack.DLDataTypeCode, int], DataType] = (
+    CustomKeyErrorDict(
+        "DLPack data type",
+        "Triton server data type",
+        {
+            (_dlpack.DLDataTypeCode.kDLBool, 8): DataType.BOOL,
+            (_dlpack.DLDataTypeCode.kDLInt, 8): DataType.INT8,
+            (
+                _dlpack.DLDataTypeCode.kDLInt,
+                16,
+            ): DataType.INT16,
+            (
+                _dlpack.DLDataTypeCode.kDLInt,
+                32,
+            ): DataType.INT32,
+            (
+                _dlpack.DLDataTypeCode.kDLInt,
+                64,
+            ): DataType.INT64,
+            (
+                _dlpack.DLDataTypeCode.kDLUInt,
+                8,
+            ): DataType.UINT8,
+            (
+                _dlpack.DLDataTypeCode.kDLUInt,
+                16,
+            ): DataType.UINT16,
+            (
+                _dlpack.DLDataTypeCode.kDLUInt,
+                32,
+            ): DataType.UINT32,
+            (
+                _dlpack.DLDataTypeCode.kDLUInt,
+                64,
+            ): DataType.UINT64,
+            (
+                _dlpack.DLDataTypeCode.kDLFloat,
+                16,
+            ): DataType.FP16,
+            (
+                _dlpack.DLDataTypeCode.kDLFloat,
+                32,
+            ): DataType.FP32,
+            (
+                _dlpack.DLDataTypeCode.kDLFloat,
+                64,
+            ): DataType.FP64,
+            (
+                _dlpack.DLDataTypeCode.kDLBfloat,
+                16,
+            ): DataType.BF16,
+        },
+    )
 )
 
 TRITON_TO_DLPACK_DTYPE: dict[DataType, _dlpack.DLDataType] = CustomKeyErrorDict(

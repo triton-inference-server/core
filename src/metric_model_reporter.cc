@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2019-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "metric_model_reporter.h"
@@ -347,16 +347,21 @@ MetricModelReporter::GetMetricLabels(
     const triton::common::MetricTagsMap& model_tags)
 {
   if (!model_id.NamespaceDisabled()) {
-    labels->insert(std::map<std::string, std::string>::value_type(
-        std::string(kMetricsLabelModelNamespace), model_id.namespace_));
+    labels->insert(
+        std::map<std::string, std::string>::value_type(
+            std::string(kMetricsLabelModelNamespace), model_id.namespace_));
   }
-  labels->insert(std::map<std::string, std::string>::value_type(
-      std::string(kMetricsLabelModelName), model_id.name_));
-  labels->insert(std::map<std::string, std::string>::value_type(
-      std::string(kMetricsLabelModelVersion), std::to_string(model_version)));
+  labels->insert(
+      std::map<std::string, std::string>::value_type(
+          std::string(kMetricsLabelModelName), model_id.name_));
+  labels->insert(
+      std::map<std::string, std::string>::value_type(
+          std::string(kMetricsLabelModelVersion),
+          std::to_string(model_version)));
   for (const auto& tag : model_tags) {
-    labels->insert(std::map<std::string, std::string>::value_type(
-        "_" + tag.first, tag.second));
+    labels->insert(
+        std::map<std::string, std::string>::value_type(
+            "_" + tag.first, tag.second));
   }
 
   // 'device' can be < 0 to indicate that the GPU is not known. In
@@ -364,8 +369,9 @@ MetricModelReporter::GetMetricLabels(
   if (device >= 0) {
     std::string uuid;
     if (Metrics::UUIDForCudaDevice(device, &uuid)) {
-      labels->insert(std::map<std::string, std::string>::value_type(
-          std::string(kMetricsLabelGpuUuid), uuid));
+      labels->insert(
+          std::map<std::string, std::string>::value_type(
+              std::string(kMetricsLabelGpuUuid), uuid));
     }
   }
 }

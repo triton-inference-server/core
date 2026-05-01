@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Classes for configuring, instantiating, and interacting with an
@@ -13,20 +13,26 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Optional
 
 from tritonserver._api._model import Model
-from tritonserver._c.triton_bindings import InvalidArgumentError
+from tritonserver._c.triton_bindings import (
+    InvalidArgumentError,
+)
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_InstanceGroupKind as InstanceGroupKind,
 )
 from tritonserver._c.triton_bindings import TRITONSERVER_LogFormat as LogFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_LogLevel as LogLevel
-from tritonserver._c.triton_bindings import TRITONSERVER_Metric
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_Metric,
+)
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFamily as MetricFamily
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricFormat as MetricFormat
 from tritonserver._c.triton_bindings import TRITONSERVER_MetricKind as MetricKind
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_ModelControlMode as ModelControlMode,
 )
-from tritonserver._c.triton_bindings import TRITONSERVER_Parameter
+from tritonserver._c.triton_bindings import (
+    TRITONSERVER_Parameter,
+)
 from tritonserver._c.triton_bindings import TRITONSERVER_RateLimitMode as RateLimitMode
 from tritonserver._c.triton_bindings import (
     TRITONSERVER_Server,

@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2022-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -77,7 +77,7 @@ using ModelStateMap = std::map<ModelIdentifier, VersionStateMap>;
 class TritonRepoAgentModelList {
  public:
   TritonRepoAgentModelList()
-      : last_action_type_(TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE){};
+      : last_action_type_(TRITONREPOAGENT_ACTION_UNLOAD_COMPLETE) {};
   ~TritonRepoAgentModelList()
   {
     // Using destructor to finish the unload lifecycle without

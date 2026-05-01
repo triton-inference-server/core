@@ -94,11 +94,12 @@ BuildEnsembleGraph(
           it->second.isOutput = true;
         }
       } else {
-        it =
-            keyed_ensemble_graph
-                .emplace(std::make_pair(
-                    output_map.second, EnsembleTensor(output_map.second, true)))
-                .first;
+        it = keyed_ensemble_graph
+                 .emplace(
+                     std::make_pair(
+                         output_map.second,
+                         EnsembleTensor(output_map.second, true)))
+                 .first;
       }
       tensor_as_output.push_back(&(it->second));
     }
@@ -118,8 +119,10 @@ BuildEnsembleGraph(
       auto it = keyed_ensemble_graph.find(input_map.second);
       if (it == keyed_ensemble_graph.end()) {
         it = keyed_ensemble_graph
-                 .emplace(std::make_pair(
-                     input_map.second, EnsembleTensor(input_map.second, false)))
+                 .emplace(
+                     std::make_pair(
+                         input_map.second,
+                         EnsembleTensor(input_map.second, false)))
                  .first;
       }
       for (auto output : tensor_as_output) {

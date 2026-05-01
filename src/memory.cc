@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: Copyright (c) 2018-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// SPDX-FileCopyrightText: Copyright (c) 2018-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "memory.h"
@@ -281,15 +281,17 @@ GrowableMemory::Create(
   if (memory_type != TRITONSERVER_MEMORY_GPU) {
     return Status(
         Status::Code::INVALID_ARG,
-        std::string("Only TRITONSERVER_MEMORY_GPU is supported for growable "
-                    "memory."));
+        std::string(
+            "Only TRITONSERVER_MEMORY_GPU is supported for growable "
+            "memory."));
   }
 
   if (byte_size > virtual_address_size) {
     return Status(
         Status::Code::INVALID_ARG,
-        std::string("'byte_size' requested for GrowableMemory cannot be smaller"
-                    " than the virtual address size. byte_size: ") +
+        std::string(
+            "'byte_size' requested for GrowableMemory cannot be smaller"
+            " than the virtual address size. byte_size: ") +
             std::to_string(byte_size) +
             ", virtual_address_size:" + std::to_string(virtual_address_size));
   }
@@ -298,9 +300,10 @@ GrowableMemory::Create(
       CudaBlockManager::Allocate(byte_size, allocation, memory_type_id));
 
   void* buffer;
-  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemAddressReserve(
-      reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
-      0 /* alignment */, 0 /* start_address */, 0 /* flags */));
+  RETURN_IF_ERROR(
+      CudaDriverHelper::GetInstance().CuMemAddressReserve(
+          reinterpret_cast<CUdeviceptr*>(&buffer), virtual_address_size,
+          0 /* alignment */, 0 /* start_address */, 0 /* flags */));
   growable_memory.reset(new GrowableMemory(
       CudaBlockManager::BlockSize() * allocation->Blocks().size(), memory_type,
       memory_type_id, std::move(allocation), virtual_address_size));
@@ -322,12 +325,15 @@ GrowableMemory::Create(
 Status
 GrowableMemory::Map(CUmemGenericAllocationHandle& block)
 {
-  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemMap(
-      reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
-      CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */));
-  RETURN_IF_ERROR(CudaDriverHelper::GetInstance().CuMemSetAccess(
-      reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
-      CudaBlockManager::BlockSize(), &access_desc_, 1ULL /* Mapping size */));
+  RETURN_IF_ERROR(
+      CudaDriverHelper::GetInstance().CuMemMap(
+          reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+          CudaBlockManager::BlockSize(), 0UL, block, 0UL /* flags */));
+  RETURN_IF_ERROR(
+      CudaDriverHelper::GetInstance().CuMemSetAccess(
+          reinterpret_cast<CUdeviceptr>(buffer_) + virtual_address_offset_,
+          CudaBlockManager::BlockSize(), &access_desc_,
+          1ULL /* Mapping size */));
   virtual_address_offset_ += CudaBlockManager::BlockSize();
   return Status::Success;
 }
@@ -353,8 +359,9 @@ GrowableMemory::Resize(size_t size)
     size_t new_size = size - buffer_attributes_.ByteSize();
     std::unique_ptr<Allocation> allocation =
         std::make_unique<Allocation>(buffer_attributes_.MemoryTypeId());
-    RETURN_IF_ERROR(CudaBlockManager::Allocate(
-        new_size, allocation, buffer_attributes_.MemoryTypeId()));
+    RETURN_IF_ERROR(
+        CudaBlockManager::Allocate(
+            new_size, allocation, buffer_attributes_.MemoryTypeId()));
     for (auto& block : allocation->Blocks()) {
       RETURN_IF_ERROR(Map(block));
     }
