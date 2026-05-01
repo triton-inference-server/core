@@ -1,18 +1,26 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: BSD-3-Clause
 
 repos:
+- repo: local
+  hooks:
+  - id: copyright-year
+    name: Copyright year
+    entry: python tools/update_copyright_year.py
+    language: python
+    types_or: [c, c++, cuda, proto, python, yaml, toml]
+    files: \.(cc|h|cu|cpp|c|proto|py|yaml|yml|toml)$|CMakeLists\.txt$|\.cmake$|\.cmake\.in$|\.ldscript$
 - repo: https://codeberg.org/fsfe/reuse-tool
   rev: v6.2.0
   hooks:
   - id: reuse
 - repo: https://github.com/PyCQA/isort
-  rev: 5.12.0
+  rev: 8.0.1
   hooks:
   - id: isort
     additional_dependencies: [toml]
 - repo: https://github.com/psf/black
-  rev: 23.1.0
+  rev: 26.3.1
   hooks:
   - id: black
     types_or: [python, cython]
@@ -23,13 +31,13 @@ repos:
     args: [--max-line-length=88, --select=C,E,F,W,B,B950, --extend-ignore = E203,E501]
     types_or: [python, cython]
 - repo: https://github.com/pre-commit/mirrors-clang-format
-  rev: v16.0.5
+  rev: v22.1.4
   hooks:
   - id: clang-format
     types_or: [c, c++, cuda, proto, textproto, java]
     args: ["-fallback-style=none", "-style=file", "-i"]
 - repo: https://github.com/codespell-project/codespell
-  rev: v2.2.4
+  rev: v2.4.2
   hooks:
   - id: codespell
     additional_dependencies: [tomli]
