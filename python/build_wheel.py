@@ -72,7 +72,7 @@ def sed(pattern, replace, source, dest=None):
         shutil.copyfile(name, source)
 
 
-def _detect_cuda_version():
+def _detect_cuda_version() -> str | None:
     """Detect the CUDA toolkit version visible to the build.
 
     Prefers the CUDA_VERSION env var (set by official NVIDIA base
