@@ -162,7 +162,10 @@ class LocalizeRepoAgent : public TritonRepoAgent {
 
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              if (file_path.rfind(temp_dir, 0) != 0) {
+              bool escapes{false};
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(
+                  IsChildPathEscapingParentPath(file_path, temp_dir, &escapes));
+              if (escapes) {
                 const std::string msg =
                     std::string("Invalid file parameter '") + file->Name() +
                     "' with normalized path '" + file_path +

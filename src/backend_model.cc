@@ -196,6 +196,14 @@ TritonModel::Create(
       batch_libpath = model_config.parameters()
                           .at("TRITON_BATCH_STRATEGY_PATH")
                           .string_value();
+      bool escapes{false};
+      RETURN_IF_ERROR(IsChildPathEscapingParentPath(
+          batch_libpath, localized_model_dir->Path(), &escapes));
+      if (escapes) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "Batching library path escapes model repository.");
+      }
       bool exists = false;
       RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
       if (!exists) {
