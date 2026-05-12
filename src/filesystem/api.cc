@@ -47,6 +47,7 @@
 
 #include <filesystem>
 #include <mutex>
+#include <string>
 
 namespace triton { namespace core {
 
@@ -404,11 +405,11 @@ IsChildPathEscapingParentPath(
     const std::string& child_path, const std::string& parent_path,
     bool* is_escaped)
 {
-  std::string absolute_child_path;
-  std::string absolute_parent_path;
+  std::filesystem::path canonical_child_path;
+  std::filesystem::path canonical_parent_path;
+
   try {
-    absolute_child_path =
-        std::filesystem::weakly_canonical(child_path).string();
+    canonical_child_path = std::filesystem::weakly_canonical(child_path);
   }
   catch (const std::exception& e) {
     return Status(
@@ -416,15 +417,23 @@ IsChildPathEscapingParentPath(
         "Invalid path '" + child_path + "': " + e.what());
   }
   try {
-    absolute_parent_path = std::filesystem::canonical(parent_path).string();
+    canonical_parent_path = std::filesystem::canonical(parent_path);
   }
   catch (const std::exception& e) {
     return Status(
         Status::Code::INVALID_ARG,
         "Nonexistent path '" + parent_path + "': " + e.what());
   }
-  // Can use starts_with() over rfind() in C++20.
-  *is_escaped = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
+  static const std::filesystem::path empty_path;
+  while (canonical_child_path != empty_path) {
+    if (std::filesystem::equivalent(
+            canonical_child_path, canonical_parent_path)) {
+      *is_escaped = false;
+      return Status::Success;
+    }
+    canonical_child_path = canonical_child_path.parent_path();
+  }
+  *is_escaped = true;
   return Status::Success;
 }
 
