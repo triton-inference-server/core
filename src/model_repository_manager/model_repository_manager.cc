@@ -162,7 +162,7 @@ class LocalizeRepoAgent : public TritonRepoAgent {
 
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              bool escapes{false};
+              bool escapes{true};
               RETURN_TRITONSERVER_ERROR_IF_ERROR(
                   IsChildPathEscapingParentPath(file_path, temp_dir, &escapes));
               if (escapes) {

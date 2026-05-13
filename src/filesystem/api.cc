@@ -405,33 +405,34 @@ IsChildPathEscapingParentPath(
     const std::string& child_path, const std::string& parent_path,
     bool* is_escaped)
 {
-  std::filesystem::path canonical_child_path;
-  std::filesystem::path canonical_parent_path;
-
+  if (parent_path.empty() || child_path.empty()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Parent path and child path must be non-empty");
+  }
+  std::string canonical_child_path;
+  std::string canonical_parent_path;
   try {
-    canonical_child_path = std::filesystem::weakly_canonical(child_path);
+    canonical_child_path =
+        std::filesystem::weakly_canonical(child_path).string();
+    canonical_parent_path = std::filesystem::canonical(parent_path).string();
   }
   catch (const std::exception& e) {
     return Status(
         Status::Code::INVALID_ARG,
-        "Invalid path '" + child_path + "': " + e.what());
+        "Invalid path comparison (child:" + child_path +
+            ", parent:" + parent_path + "): " + e.what());
   }
-  try {
-    canonical_parent_path = std::filesystem::canonical(parent_path);
-  }
-  catch (const std::exception& e) {
-    return Status(
-        Status::Code::INVALID_ARG,
-        "Nonexistent path '" + parent_path + "': " + e.what());
-  }
-  static const std::filesystem::path empty_path;
-  while (canonical_child_path != empty_path) {
-    if (std::filesystem::equivalent(
-            canonical_child_path, canonical_parent_path)) {
-      *is_escaped = false;
-      return Status::Success;
-    }
-    canonical_child_path = canonical_child_path.parent_path();
+  // Determine if the parent path is the prefix of the child path.
+  // Ensure that the paths are identical or the first mismatch character in the
+  // child path is a path separator ('/') to avoid partial matching
+  // (i.e. "/parent" and "/parent_dir").
+  if (canonical_parent_path.find(canonical_child_path, 0) == 0 &&
+      ((canonical_child_path.size() > canonical_parent_path.size() &&
+        canonical_child_path[canonical_parent_path.size()] == '/') ||
+       (canonical_child_path.size() == canonical_parent_path.size()))) {
+    *is_escaped = false;
+    return Status::Success;
   }
   *is_escaped = true;
   return Status::Success;
