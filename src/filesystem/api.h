@@ -141,7 +141,15 @@ Status IsChildPathEscapingParentPath(
 /// Check if a character is a path separator.
 /// \param c The character to check.
 /// \return `true` when the character is a path separator, otherwise `false`.
-bool IsPathSeparator(char c);
+inline bool
+IsPathSeparator(char c)
+{
+#if defined(_WIN32)
+  return c == '/' || c == '\\';
+#else
+  return c == '/';
+#endif
+}
 
 /// Join path segments into a longer path
 /// \param segments The path segments.

@@ -445,16 +445,6 @@ IsChildPathEscapingParentPath(
   return Status::Success;
 }
 
-bool
-IsPathSeparator(char c)
-{
-#if defined(_WIN32)
-  return c == '/' || c == '\\';
-#else
-  return c == '/';
-#endif
-}
-
 std::string
 JoinPath(std::initializer_list<std::string> segments)
 {
