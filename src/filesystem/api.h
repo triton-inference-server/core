@@ -132,11 +132,16 @@ bool IsAbsolutePath(const std::string& path);
 /// \param child_path The child path.
 /// \param parent_path The parent path. The path must exist.
 /// \param is_escaped returns true if the child path escapes from its parent
-/// path, false if the child path is within its parent path. \return Error
-/// status
+/// path, false if the child path is within its parent path.
+/// \return Error status
 Status IsChildPathEscapingParentPath(
     const std::string& child_path, const std::string& parent_path,
     bool* is_escaped);
+
+/// Check if a character is a path separator.
+/// \param c The character to check.
+/// \return `true` when the character is a path separator, otherwise `false`.
+bool IsPathSeparator(char c);
 
 /// Join path segments into a longer path
 /// \param segments The path segments.

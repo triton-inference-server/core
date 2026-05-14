@@ -196,7 +196,7 @@ TritonModel::Create(
       batch_libpath = model_config.parameters()
                           .at("TRITON_BATCH_STRATEGY_PATH")
                           .string_value();
-      bool escapes{false};
+      bool escapes{true};
       RETURN_IF_ERROR(IsChildPathEscapingParentPath(
           batch_libpath, localized_model_dir->Path(), &escapes));
       if (escapes) {

@@ -64,6 +64,8 @@ LocalizedPath::~LocalizedPath()
 
 namespace {
 
+namespace fs = std::filesystem;
+
 class FileSystemManager {
  public:
   Status GetFileSystem(
@@ -413,15 +415,20 @@ IsChildPathEscapingParentPath(
   std::string canonical_child_path;
   std::string canonical_parent_path;
   try {
-    canonical_child_path =
-        std::filesystem::weakly_canonical(child_path).string();
-    canonical_parent_path = std::filesystem::canonical(parent_path).string();
+    canonical_child_path = fs::weakly_canonical(child_path).string();
+  }
+  catch (const std::exception& ex) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Failed to canonicalize child path '" + child_path + "': " + ex.what());
+  }
+  try {
+    canonical_parent_path = fs::canonical(parent_path).string();
   }
   catch (const std::exception& e) {
     return Status(
-        Status::Code::INVALID_ARG,
-        "Invalid path comparison (child:" + child_path +
-            ", parent:" + parent_path + "): " + e.what());
+        Status::Code::INVALID_ARG, "Failed to canonicalize parent path '" +
+                                       parent_path + "': " + e.what());
   }
   // Determine if the parent path is the prefix of the child path.
   // Ensure that the paths are identical or the first mismatch character in the
@@ -429,13 +436,23 @@ IsChildPathEscapingParentPath(
   // (i.e. "/parent" and "/parent_dir").
   if (canonical_parent_path.find(canonical_child_path, 0) == 0 &&
       ((canonical_child_path.size() > canonical_parent_path.size() &&
-        canonical_child_path[canonical_parent_path.size()] == '/') ||
+        IsPathSeparator(canonical_child_path[canonical_parent_path.size()])) ||
        (canonical_child_path.size() == canonical_parent_path.size()))) {
     *is_escaped = false;
     return Status::Success;
   }
   *is_escaped = true;
   return Status::Success;
+}
+
+bool
+IsPathSeparator(char c)
+{
+#if defined(_WIN32)
+  return c == '/' || c == '\\';
+#else
+  return c == '/';
+#endif
 }
 
 std::string
