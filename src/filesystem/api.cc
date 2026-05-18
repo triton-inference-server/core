@@ -436,7 +436,7 @@ IsChildPathEscapingParentPath(
   // (i.e. "/parent" and "/parent_dir").
   if (canonical_parent_path.find(canonical_child_path, 0) == 0 &&
       ((canonical_child_path.size() > canonical_parent_path.size() &&
-        IsPathSeparator(canonical_child_path[canonical_parent_path.size()])) ||
+        canonical_child_path[canonical_parent_path.size()] == '/') ||
        (canonical_child_path.size() == canonical_parent_path.size()))) {
     *is_escaped = false;
     return Status::Success;

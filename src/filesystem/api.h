@@ -138,19 +138,6 @@ Status IsChildPathEscapingParentPath(
     const std::string& child_path, const std::string& parent_path,
     bool* is_escaped);
 
-/// Check if a character is a path separator.
-/// \param c The character to check.
-/// \return `true` when the character is a path separator, otherwise `false`.
-inline bool
-IsPathSeparator(char c)
-{
-#if defined(_WIN32)
-  return c == '/' || c == '\\';
-#else
-  return c == '/';
-#endif
-}
-
 /// Join path segments into a longer path
 /// \param segments The path segments.
 /// \return the path formed by joining the segments.
