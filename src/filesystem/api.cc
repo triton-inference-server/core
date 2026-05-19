@@ -434,7 +434,7 @@ IsChildPathEscapingParentPath(
   // Ensure that the paths are identical or the first mismatch character in the
   // child path is a path separator ('/') to avoid partial matching
   // (i.e. "/parent" and "/parent_dir").
-  if (canonical_parent_path.find(canonical_child_path, 0) == 0 &&
+  if (canonical_child_path.find(canonical_parent_path, 0) == 0 &&
       ((canonical_child_path.size() > canonical_parent_path.size() &&
         canonical_child_path[canonical_parent_path.size()] == '/') ||
        (canonical_child_path.size() == canonical_parent_path.size()))) {
