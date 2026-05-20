@@ -1,0 +1,63 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 31, "patch": 8 },
+  "$comment": "Standalone build presets for triton-core. For integrated server builds use server/cmake/CMakePresets.json — it includes core via add_subdirectory and its variables take precedence.",
+  "configurePresets": [
+    {
+      "name": "conan-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/build/${presetName}/conan/conan_toolchain.cmake",
+      "cacheVariables": { "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" }
+    },
+    {
+      "name": "release",
+      "inherits": "conan-base",
+      "displayName": "Release (GPU + Metrics)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":      "Release",
+        "TRITON_ENABLE_GPU":     "ON",
+        "TRITON_ENABLE_METRICS": "ON",
+        "TRITON_CORE_HEADERS_ONLY": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "inherits": "conan-base",
+      "displayName": "Debug (GPU + Metrics)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":      "Debug",
+        "TRITON_ENABLE_GPU":     "ON",
+        "TRITON_ENABLE_METRICS": "ON",
+        "TRITON_CORE_HEADERS_ONLY": "OFF"
+      }
+    },
+    {
+      "name": "headers-only",
+      "inherits": "conan-base",
+      "displayName": "Headers only (no build)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":         "Release",
+        "TRITON_CORE_HEADERS_ONLY": "ON"
+      }
+    },
+    {
+      "name": "cpu-only",
+      "inherits": "conan-base",
+      "displayName": "Release CPU-only",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":         "Release",
+        "TRITON_ENABLE_GPU":        "OFF",
+        "TRITON_ENABLE_METRICS":    "ON",
+        "TRITON_CORE_HEADERS_ONLY": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "release",      "configurePreset": "release" },
+    { "name": "debug",        "configurePreset": "debug" },
+    { "name": "headers-only", "configurePreset": "headers-only" },
+    { "name": "cpu-only",     "configurePreset": "cpu-only" }
+  ]
+}
