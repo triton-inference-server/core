@@ -362,8 +362,11 @@ GetByteSize(
     RETURN_IF_ERROR(GetElementCount(dims, name, &element_count));
 
     if (element_count == triton::common::WILDCARD_SIZE) {
-      *size = triton::common::WILDCARD_SIZE;
-      return Status::Success;
+      return Status(
+          Status::Code::INVALID_ARG,
+          "cannot compute a fixed byte size for tensor '" + name +
+              "' because shape " + triton::common::DimsListToString(dims) +
+              " contains one or more variable-size dimensions (-1)");
     }
 
     // Total number of bytes required is equal to the element count
@@ -387,6 +390,13 @@ GetByteSize(
           Status::Code::INVALID_ARG, "byte size for tensor '" + name +
                                          "' exceeds maximum size of " +
                                          std::to_string(INT64_MAX));
+    } else if (byte_size == triton::common::WILDCARD_SIZE) {
+      return Status(
+          Status::Code::INVALID_ARG,
+          "cannot compute a fixed byte size for tensor '" + name +
+              "' because shape " + triton::common::DimsListToString(dims) +
+              " contains one or more variable-size dimensions (-1), or the "
+              "data type does not have a fixed size per element");
     }
   }
   *size = byte_size;
