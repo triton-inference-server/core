@@ -2139,6 +2139,42 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogVerbose(
     struct TRITONSERVER_ServerOptions* options, int level);
 
+/// Type for log callback function. When registered, this callback will be
+/// invoked for each log message, allowing custom log handling (e.g.,
+/// integration with external logging systems).
+///
+/// \param level The log level of the message.
+/// \param filename The source file where the log message originated.
+/// \param line The line number in the source file.
+/// \param msg The log message content.
+/// \param userp User-provided pointer passed to
+/// TRITONSERVER_ServerOptionsSetLogCallback.
+typedef void (*TRITONSERVER_LogCallbackFn_t)(
+    TRITONSERVER_LogLevel level, const char* filename, int line,
+    const char* msg, void* userp);
+
+/// Set a callback function to receive log messages. This allows applications
+/// to integrate Triton logging with their own logging infrastructure.
+///
+/// When a callback is set with 'replace_default_logger' as true, the callback
+/// completely replaces the default logging behavior (writing to
+/// stdout/stderr/file). When false, the callback is invoked in addition to
+/// the default logging.
+///
+/// \param options The server options object.
+/// \param callback_fn The callback function to invoke for each log message,
+/// or nullptr to disable callback logging.
+/// \param userp User-provided pointer that will be passed to the callback.
+/// \param replace_default_logger If true, the callback replaces the default
+/// logging behavior. If false, callback is called in addition to default
+/// logging.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogCallback(
+    struct TRITONSERVER_ServerOptions* options,
+    TRITONSERVER_LogCallbackFn_t callback_fn, void* userp,
+    bool replace_default_logger);
+
 /// Enable or disable metrics collection in a server options.
 ///
 /// \param options The server options object.
