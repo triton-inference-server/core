@@ -91,6 +91,7 @@ class SequenceBatchScheduler : public Scheduler {
   struct BatcherSequenceSlot {
     BatcherSequenceSlot() = default;
     BatcherSequenceSlot(const BatcherSequenceSlot&) = default;
+    BatcherSequenceSlot& operator=(const BatcherSequenceSlot&) = default;
     BatcherSequenceSlot(TritonModelInstance* i, uint32_t s)
         : model_instance_(i), seq_slot_(s)
     {
