@@ -126,22 +126,11 @@ add_library(
 )
 target_compile_features(triton-core-serverstub PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  message("Using MSVC as compiler, default target on Windows 10. "
-		  "If the target system is not Windows 10, please update _WIN32_WINNT "
-		  "to corresponding value.")
-  target_compile_options(
-    triton-core-serverstub
-    PRIVATE
-      /Wall /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
-  )
-else()
-  target_compile_options(
-    triton-core-serverstub
-    PRIVATE
-      -Wall -Wextra -Wno-unused-parameter -Werror
-  )
-endif()
+target_compile_options(
+  triton-core-serverstub
+  PRIVATE
+    -Wall -Wextra -Wno-unused-parameter -Werror
+)
 
 set_target_properties(
   triton-core-serverstub
@@ -255,13 +244,8 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(_CMAKE_ARGS_OPENSSL_ROOT_DIR "-DOPENSSL_ROOT_DIR:PATH=${OPENSSL_ROOT_DIR}")
   endif()
 
-  # Location where protobuf-config.cmake will be installed varies by
-  # platform
-  if (WIN32)
-    set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/cmake")
-  else()
-    set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/${LIB_DIR}/cmake/protobuf")
-  endif()
+  # Location where protobuf-config.cmake will be installed
+  set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/${LIB_DIR}/cmake/protobuf")
 
   if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(TRITON_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/install)

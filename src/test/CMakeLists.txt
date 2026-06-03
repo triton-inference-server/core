@@ -154,14 +154,12 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 
-  if (NOT WIN32)
-    target_link_libraries(
-      response_cache_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    response_cache_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS response_cache_test
@@ -266,14 +264,12 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 
-  if (NOT WIN32)
-    target_link_libraries(
-      memory_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    memory_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS memory_test
@@ -333,14 +329,12 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 
-  if (NOT WIN32)
-    target_link_libraries(
-      pinned_memory_manager_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    pinned_memory_manager_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS pinned_memory_manager_test
@@ -504,14 +498,12 @@ if(${TRITON_ENABLE_METRICS})
     )
   endif()
 
-  if (NOT WIN32)
-    target_link_libraries(
-      metrics_api_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    metrics_api_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS metrics_api_test
