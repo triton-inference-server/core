@@ -221,6 +221,32 @@ class Metrics {
     return GetSingleton()->inf_first_response_histogram_ms_family_;
   }
 
+  static prometheus::Family<prometheus::Histogram>&
+  FamilyRequestDurationHistogram()
+  {
+    return GetSingleton()->inf_request_duration_histogram_us_family_;
+  }
+  static prometheus::Family<prometheus::Histogram>&
+  FamilyQueueDurationHistogram()
+  {
+    return GetSingleton()->inf_queue_duration_histogram_us_family_;
+  }
+  static prometheus::Family<prometheus::Histogram>&
+  FamilyComputeInputDurationHistogram()
+  {
+    return GetSingleton()->inf_compute_input_duration_histogram_us_family_;
+  }
+  static prometheus::Family<prometheus::Histogram>&
+  FamilyComputeInferDurationHistogram()
+  {
+    return GetSingleton()->inf_compute_infer_duration_histogram_us_family_;
+  }
+  static prometheus::Family<prometheus::Histogram>&
+  FamilyComputeOutputDurationHistogram()
+  {
+    return GetSingleton()->inf_compute_output_duration_histogram_us_family_;
+  }
+
   // Metric family of load time per model
   static prometheus::Family<prometheus::Gauge>& FamilyModelLoadTime()
   {
@@ -331,6 +357,16 @@ class Metrics {
   // Histograms
   prometheus::Family<prometheus::Histogram>&
       inf_first_response_histogram_ms_family_;
+  prometheus::Family<prometheus::Histogram>&
+      inf_request_duration_histogram_us_family_;
+  prometheus::Family<prometheus::Histogram>&
+      inf_queue_duration_histogram_us_family_;
+  prometheus::Family<prometheus::Histogram>&
+      inf_compute_input_duration_histogram_us_family_;
+  prometheus::Family<prometheus::Histogram>&
+      inf_compute_infer_duration_histogram_us_family_;
+  prometheus::Family<prometheus::Histogram>&
+      inf_compute_output_duration_histogram_us_family_;
 
   // Summaries
   prometheus::Family<prometheus::Summary>& inf_request_summary_us_family_;
