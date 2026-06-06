@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -452,14 +452,21 @@ InferenceServer::IsReady(bool* ready)
         // backend has become unhealthy at runtime (e.g., Python backend
         // stub process died).
         if (vs.second.first == ModelReadyState::READY) {
-          bool model_ready = false;
-          Status status = ModelIsReady(mv.first.name_, vs.first, &model_ready);
-          if (!status.IsOk() || !model_ready) {
-            LOG_VERBOSE(1) << "Model '" << mv.first.name_ << "' version "
-                           << vs.first
+          std::shared_ptr<Model> model;
+          if (!GetModel(mv.first, vs.first, &model).IsOk()) {
+            LOG_VERBOSE(1) << "Model '" << mv.first << "' version " << vs.first
+                           << " failed model lookup during server readiness "
+                              "evaluation";
+            *ready = false;
+            goto strict_done;
+          }
+          Status status = model->IsReady();
+          if (!status.IsOk()) {
+            LOG_VERBOSE(1) << "Model '" << mv.first << "' version " << vs.first
                            << " is in READY lifecycle state but failed "
                               "runtime readiness check during server "
-                              "readiness evaluation";
+                              "readiness evaluation: "
+                           << status.Message();
             *ready = false;
             goto strict_done;
           }
@@ -473,8 +480,7 @@ InferenceServer::IsReady(bool* ready)
 }
 
 Status
-InferenceServer::ModelIsReady(
-    const std::string& model_name, const int64_t model_version, bool* ready)
+InferenceServer::ModelIsReady(const Model& model, bool* ready)
 {
   *ready = false;
 
@@ -484,22 +490,17 @@ InferenceServer::ModelIsReady(
 
   ScopedAtomicIncrement inflight(inflight_request_counter_);
 
-  std::shared_ptr<Model> model;
-  if (GetModel(model_name, model_version, &model).IsOk()) {
-    ModelReadyState state;
-    if (model_repository_manager_
-            ->ModelState(model_name, model->Version(), &state)
-            .IsOk()) {
-      *ready = (state == ModelReadyState::READY);
-      if (*ready) {
-        Status status = model->IsReady();
-        if (!status.IsOk()) {
-          *ready = false;
-          LOG_VERBOSE(1) << "Model '" << model_name << "' version "
-                         << model->Version()
-                         << " is not ready: " << status.Message();
-        }
-      }
+  ModelReadyState state;
+  if (model_repository_manager_
+          ->ModelState(model.Name(), model.Version(), &state)
+          .IsOk() &&
+      (state == ModelReadyState::READY)) {
+    const Status status = model.IsReady();
+    *ready = status.IsOk();
+    if (!*ready) {
+      LOG_VERBOSE(1) << "Model '" << model.Name() << "' version "
+                     << model.Version()
+                     << " is not ready: " << status.Message();
     }
   }
 

@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -99,8 +99,7 @@ class InferenceServer {
   Status IsReady(bool* ready);
 
   // Model health
-  Status ModelIsReady(
-      const std::string& model_name, const int64_t model_version, bool* ready);
+  Status ModelIsReady(const Model& model, bool* ready);
 
   // Return the ready versions of specific model
   Status ModelReadyVersions(
@@ -289,6 +288,11 @@ class InferenceServer {
   void SetRepoAgentDir(const std::string& d) { repoagent_dir_ = d; }
 
   // Return the requested model object.
+  //
+  // WARNING: This overload resolves by model name only. When model namespacing
+  // is enabled and the same model name exists in multiple namespaces, lookup
+  // fails with an ambiguity error. Use the ModelIdentifier overload below to
+  // specify namespace and name explicitly.
   Status GetModel(
       const std::string& model_name, const int64_t model_version,
       std::shared_ptr<Model>* model)
