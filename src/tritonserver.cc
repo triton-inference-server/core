@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -2730,8 +2730,9 @@ TRITONSERVER_ServerModelIsReady(
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  RETURN_IF_STATUS_ERROR(
-      lserver->ModelIsReady(model_name, model_version, ready));
+  std::shared_ptr<tc::Model> model;
+  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
+  RETURN_IF_STATUS_ERROR(lserver->ModelIsReady(*model, ready));
   return nullptr;  // Success
 }
 
