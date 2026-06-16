@@ -35,6 +35,20 @@ import sys
 from distutils.dir_util import copy_tree
 from tempfile import mkstemp
 
+# ANSI colors for CI log readability (rendered by GitLab CI, harmlessly
+# inert in non-ANSI viewers). Suppressed when stderr is redirected to a
+# file by piping through a tool that strips them, or set NO_COLOR=1.
+if os.environ.get("NO_COLOR") or not sys.stderr.isatty() and not os.environ.get("CI"):
+    _GREEN = _YELLOW = _CYAN = _RED = _RESET = ""
+else:
+    _GREEN, _YELLOW, _CYAN, _RED, _RESET = (
+        "\033[32m",
+        "\033[33m",
+        "\033[36m",
+        "\033[31m",
+        "\033[0m",
+    )
+
 
 def fail_if(p, msg):
     if p:
@@ -98,64 +112,32 @@ def _detect_cuda_version() -> str | None:
         return None
 
 
-def _compose_version(base_version):
-    """Compose the full wheel version string.
-
-    The base version comes from TRITON_VERSION and may already include a
-    PEP 440 pre-release suffix (e.g. "2.69.0.dev0"). Append a PEP 440
-    local-version segment describing the NVIDIA container release and
-    CUDA toolkit the wheel was built against, so consumers can tell an
-    nv26.04 wheel from an nv26.05 wheel (same upstream Triton version)
-    and a cu132 wheel from a cu128 wheel. The local-version segment is
-    primarily for distinguishing these builds; while it does not change
-    the public upstream version, it can still affect version ordering
-    and candidate selection among wheels with the same base version.
-
-    Sources for NVIDIA upstream version (first non-empty wins):
-      NVIDIA_UPSTREAM_VERSION        - propagated by build.py via
-                                       `docker run -e` from
-                                       FLAGS.upstream_container_version.
-      NVIDIA_TRITON_SERVER_VERSION   - set as ENV in the buildbase image
-                                       at image-build time from the
-                                       TRITON_CONTAINER_VERSION ARG
-                                       (survives even if the docker-run
-                                       `-e` forwarding is not applied).
-      TRITON_CONTAINER_VERSION       - set as ENV in some downstream
-                                       images; same value as above in CI.
-    Source for CUDA toolkit version:
-      CUDA_VERSION / toolkit         - discovered by _detect_cuda_version()
-
-    All sources are optional; if none is present the version is returned
-    unchanged so local non-CI builds stay stable. Each detection
-    outcome is logged to stderr so any future gap is self-announcing
-    in the build log rather than surfacing only as a missing suffix in
-    the wheel filename.
-    """
+def _compose_variant_label():
+    """PEP 817 variant label 'nv<container>.cu<major><minor>'. Returns None
+    if neither input is detectable or the label violates ^[a-z0-9._]{1,16}$."""
     nv = (
         os.environ.get("NVIDIA_UPSTREAM_VERSION")
         or os.environ.get("NVIDIA_TRITON_SERVER_VERSION")
         or os.environ.get("TRITON_CONTAINER_VERSION")
     )
     cuda = _detect_cuda_version()
-    print(
-        f"=== Wheel local-version inputs: "
-        f"NVIDIA_UPSTREAM_VERSION={os.environ.get('NVIDIA_UPSTREAM_VERSION')!r} "
-        f"NVIDIA_TRITON_SERVER_VERSION={os.environ.get('NVIDIA_TRITON_SERVER_VERSION')!r} "
-        f"TRITON_CONTAINER_VERSION={os.environ.get('TRITON_CONTAINER_VERSION')!r} "
-        f"-> nv={nv!r}, cuda={cuda!r}",
-        file=sys.stderr,
-    )
-    local = []
+    parts = []
     if nv:
-        local.append(f"nv{nv}")
+        parts.append(f"nv{nv}")
     if cuda:
-        # "13.2" / "13.2.0" / "13.2.1" -> "cu132"
-        parts = cuda.split(".")
-        if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
-            local.append(f"cu{parts[0]}{parts[1]}")
-    if local:
-        return f"{base_version}+{'.'.join(local)}"
-    return base_version
+        cu = cuda.split(".")
+        if len(cu) >= 2 and cu[0].isdigit() and cu[1].isdigit():
+            parts.append(f"cu{cu[0]}{cu[1]}")
+    if not parts:
+        return None
+    label = ".".join(parts)
+    if len(label) > 16 or not re.fullmatch(r"[a-z0-9._]+", label):
+        print(
+            f"{_RED}=== Variant label {label!r} violates PEP 817; skipping{_RESET}",
+            file=sys.stderr,
+        )
+        return None
+    return label
 
 
 def _repair_wheel_with_auditwheel(whl_dir, dest_dir):
@@ -235,12 +217,40 @@ if __name__ == "__main__":
     parser.add_argument(
         "--binding-path", type=str, required=True, help="Path to Triton Python binding."
     )
+    parser.add_argument(
+        "--release-version",
+        type=str,
+        required=False,
+        default=None,
+        help=(
+            "Base PEP 440 release version (e.g. '2.70.0'). Overrides the "
+            "TRITON_RELEASE_VERSION env var and the in-tree TRITON_VERSION file. "
+            "Precedence: --release-version > TRITON_RELEASE_VERSION > TRITON_VERSION file."
+        ),
+    )
 
     FLAGS = parser.parse_args()
 
-    FLAGS.triton_version = None
-    with open("TRITON_VERSION", "r") as vfile:
-        FLAGS.triton_version = vfile.readline().strip()
+    # Base release version source — explicit precedence so CI can pin a
+    # release tag without editing the in-tree TRITON_VERSION file:
+    #   1. --release-version CLI flag
+    #   2. TRITON_RELEASE_VERSION env var
+    #   3. TRITON_VERSION file in CWD (legacy behaviour)
+    env_release_version = os.environ.get("TRITON_RELEASE_VERSION")
+    if FLAGS.release_version:
+        FLAGS.triton_version = FLAGS.release_version
+        base_source = "--release-version"
+    elif env_release_version:
+        FLAGS.triton_version = env_release_version
+        base_source = "TRITON_RELEASE_VERSION env"
+    else:
+        with open("TRITON_VERSION", "r") as vfile:
+            FLAGS.triton_version = vfile.readline().strip()
+        base_source = "TRITON_VERSION file"
+    print(
+        f"=== Wheel base version: {FLAGS.triton_version!r} (source: {base_source})",
+        file=sys.stderr,
+    )
 
     FLAGS.whl_dir = os.path.join(FLAGS.dest_dir, "wheel")
 
@@ -264,50 +274,34 @@ if __name__ == "__main__":
     shutil.copyfile("setup.py", os.path.join(FLAGS.whl_dir, "setup.py"))
     shutil.copyfile("pyproject.toml", os.path.join(FLAGS.whl_dir, "pyproject.toml"))
     # pyproject.toml resolves the wheel version from the TRITON_VERSION file
-    # next to it (see [tool.setuptools.dynamic]). Write the *composed* version
-    # (which appends the +nv…cu… local segment) into the wheel build root so
-    # that the full version — not just the bare release number — is embedded
-    # in the wheel filename. Do NOT modify the source-tree TRITON_VERSION.
-    composed_version = _compose_version(FLAGS.triton_version)
+    # next to it. Write the chosen version into the wheel build root; do NOT
+    # modify the source-tree TRITON_VERSION.
     with open(os.path.join(FLAGS.whl_dir, "TRITON_VERSION"), "w") as vf:
-        vf.write(composed_version)
-    print(f"=== Wheel TRITON_VERSION set to: {composed_version!r}", file=sys.stderr)
+        vf.write(FLAGS.triton_version)
 
     os.chdir(FLAGS.whl_dir)
     print("=== Building wheel")
     args = ["python3", "-m", "build"]
-    # PEP 427 "build tag": an optional segment between version and
-    # python-tag that lets two wheels of the same version coexist
-    # (e.g. reruns of the same CI pipeline). Sources, first non-empty
-    # and usable wins:
-    #   CI_PIPELINE_ID   - GitLab pipeline-scoped ID, matches the
-    #                      identifier used in RHEL .zip artifact
-    #                      naming (.gitlab-ci.yml). Preferred so all
-    #                      wheels in a pipeline share one build tag.
-    #   NVIDIA_BUILD_ID  - set from build.py's --build-id flag
-    #                      (CI feeds ${CI_JOB_ID}); falls back for
-    #                      non-CI builds that pass --build-id.
-    #   BUILD_NUMBER     - generic CI systems that set this instead.
-    # PEP 427 requires the build tag to start with a digit. Skip the
-    # slot when the value does not satisfy that constraint or is the
-    # "<unknown>" default emitted for local builds without --build-id.
-    # The value is forwarded through `python -m build` to the setuptools
-    # backend's `bdist_wheel --build=<N>` (alias for --build-number).
-    build_tag = (
-        os.environ.get("CI_PIPELINE_ID")
-        or os.environ.get("NVIDIA_BUILD_ID")
-        or os.environ.get("BUILD_NUMBER")
-    )
+
+    # Release-semantic X.Y.Z -> PyPI-clean (no build tag, no variant label).
+    # Anything else -> PEP 427 build tag + PEP 817 variant label.
+    is_release = bool(re.match(r"^\d+\.\d+\.\d+$", FLAGS.triton_version))
     print(
-        f"=== Wheel build-tag inputs: "
-        f"CI_PIPELINE_ID={os.environ.get('CI_PIPELINE_ID')!r} "
-        f"NVIDIA_BUILD_ID={os.environ.get('NVIDIA_BUILD_ID')!r} "
-        f"BUILD_NUMBER={os.environ.get('BUILD_NUMBER')!r} "
-        f"-> build-tag={build_tag!r}",
+        f"{_GREEN if is_release else _YELLOW}"
+        f"=== Version {FLAGS.triton_version!r} -> "
+        f"{'PEP 440 release (PyPI-clean)' if is_release else 'PEP 817 variant'}"
+        f"{_RESET}",
         file=sys.stderr,
     )
-    if build_tag and build_tag != "<unknown>" and build_tag[:1].isdigit():
-        args += [f"-C--build-option=--build={build_tag}"]
+    if not is_release:
+        build_tag = (
+            os.environ.get("CI_PIPELINE_ID")
+            or os.environ.get("NVIDIA_BUILD_ID")
+            or os.environ.get("BUILD_NUMBER")
+        )
+        if build_tag and build_tag != "<unknown>" and build_tag[:1].isdigit():
+            args += [f"-C--build-option=--build={build_tag}"]
+            print(f"{_CYAN}=== PEP 427 build tag: {build_tag}{_RESET}", file=sys.stderr)
 
     wenv = os.environ.copy()
     wenv["TRITON_PYBIND"] = PYBIND_LIB
@@ -315,13 +309,26 @@ if __name__ == "__main__":
     p.wait()
     fail_if(p.returncode != 0, "Building wheel failed")
 
-    # Post-process with auditwheel so the wheel is tagged with a proper
-    # manylinux_2_X_<arch> platform (required by canonical PyPI). When
-    # auditwheel is unavailable in the build image we keep the
-    # linux_<arch> wheel and emit a warning; the Poetry/pip lock-file
-    # problem is already solved by the distinct filename, and the tag can
-    # be fixed up in a follow-up publish step if needed.
     _repair_wheel_with_auditwheel(FLAGS.whl_dir, FLAGS.dest_dir)
+
+    if not is_release:
+        label = _compose_variant_label()
+        if label:
+            print(
+                f"{_CYAN}=== PEP 817 variant label: {label!r}{_RESET}", file=sys.stderr
+            )
+            for fname in os.listdir(FLAGS.dest_dir):
+                if fname.endswith(".whl"):
+                    os.rename(
+                        os.path.join(FLAGS.dest_dir, fname),
+                        os.path.join(FLAGS.dest_dir, fname[:-4] + f"-{label}.whl"),
+                    )
+        else:
+            print(
+                f"{_RED}=== PEP 817 variant: no nv/cu inputs detected; "
+                f"wheel emitted unlabeled{_RESET}",
+                file=sys.stderr,
+            )
 
     print("=== Output wheel file is in: {}".format(FLAGS.dest_dir))
     touch(os.path.join(FLAGS.dest_dir, "stamp.whl"))
