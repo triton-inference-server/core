@@ -252,6 +252,22 @@ if __name__ == "__main__":
         file=sys.stderr,
     )
 
+    # Replace the PEP 440 dev counter with CI_PIPELINE_ID when present, so
+    # each CI rebuild gets a monotonic, PyPI-uploadable, naturally-sortable
+    # version (e.g. 2.70.0.dev0 + CI_PIPELINE_ID=12345 -> 2.70.0.dev12345).
+    # Replaces the legacy PEP 427 build-tag scheme which PyPI rejects and
+    # which embedded the pipeline id in a separate filename segment.
+    _pipeline = os.environ.get("CI_PIPELINE_ID", "")
+    _dev_m = re.match(r"^(\d+\.\d+\.\d+)\.dev\d+$", FLAGS.triton_version)
+    if _dev_m and _pipeline.isdigit():
+        _new = f"{_dev_m.group(1)}.dev{_pipeline}"
+        print(
+            f"{_CYAN}=== PEP 440 dev counter: {FLAGS.triton_version!r} -> "
+            f"{_new!r} (from CI_PIPELINE_ID={_pipeline}){_RESET}",
+            file=sys.stderr,
+        )
+        FLAGS.triton_version = _new
+
     FLAGS.whl_dir = os.path.join(FLAGS.dest_dir, "wheel")
 
     print("=== Building in: {}".format(os.getcwd()))
@@ -283,8 +299,10 @@ if __name__ == "__main__":
     print("=== Building wheel")
     args = ["python3", "-m", "build"]
 
-    # Release-semantic X.Y.Z -> PyPI-clean (no build tag, no variant label).
-    # Anything else -> PEP 427 build tag + PEP 817 variant label.
+    # Release-semantic X.Y.Z -> PyPI-clean (no variant label).
+    # Anything else -> PEP 817 variant label. The pipeline id is already
+    # encoded as the PEP 440 .dev<N> counter above, so no separate
+    # PEP 427 build tag is needed.
     is_release = bool(re.match(r"^\d+\.\d+\.\d+$", FLAGS.triton_version))
     print(
         f"{_GREEN if is_release else _YELLOW}"
@@ -293,15 +311,6 @@ if __name__ == "__main__":
         f"{_RESET}",
         file=sys.stderr,
     )
-    if not is_release:
-        build_tag = (
-            os.environ.get("CI_PIPELINE_ID")
-            or os.environ.get("NVIDIA_BUILD_ID")
-            or os.environ.get("BUILD_NUMBER")
-        )
-        if build_tag and build_tag != "<unknown>" and build_tag[:1].isdigit():
-            args += [f"-C--build-option=--build={build_tag}"]
-            print(f"{_CYAN}=== PEP 427 build tag: {build_tag}{_RESET}", file=sys.stderr)
 
     wenv = os.environ.copy()
     wenv["TRITON_PYBIND"] = PYBIND_LIB
