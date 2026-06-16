@@ -309,6 +309,24 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
     const char* msg);
 
+/// Type for a log callback function.
+///
+/// Receives structured fields for each enabled log record so an embedding
+/// application can route Triton's logs into its own logging pipeline instead
+/// of parsing the formatted stderr/file output. 'timestamp_us' is the number
+/// of microseconds since the Unix epoch. 'message' is the raw (unescaped,
+/// unformatted) log text; the callback owns any re-formatting. 'userp' is the
+/// opaque pointer supplied when the callback was registered.
+///
+/// The callback is invoked synchronously from the thread that produced the
+/// log record and MUST be lightweight, thread-safe, and must not throw.
+///
+/// Note: Triton emits VERBOSE messages at the INFO level, so verbose records
+/// are reported to the callback as TRITONSERVER_LOG_INFO.
+typedef void (*TRITONSERVER_LogCallbackFn_t)(
+    TRITONSERVER_LogLevel level, const char* filename, int64_t line,
+    uint64_t timestamp_us, const char* message, void* userp);
+
 /// TRITONSERVER_Error
 ///
 /// Errors are reported by a TRITONSERVER_Error object. A NULL
@@ -2138,6 +2156,30 @@ TRITONSERVER_ServerOptionsSetLogFormat(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogVerbose(
     struct TRITONSERVER_ServerOptions* options, int level);
+
+/// Register a callback to receive log messages as structured records, in
+/// addition to (or instead of) the default stderr/file output. This lets an
+/// embedding application (e.g. an in-process host runtime) forward Triton's
+/// logs into its own logging pipeline.
+///
+/// Note: logging configuration is global for now; the most recent
+/// registration wins and applies process-wide. The callback is invoked
+/// synchronously from the logging thread and must be lightweight,
+/// thread-safe, and must not throw.
+///
+/// While a callback is registered, records are delivered ONLY to it and the
+/// default stderr/file sink is bypassed, so the host owns the single output
+/// stream.
+///
+/// \param options The server options object.
+/// \param callback The callback to invoke per log record, or nullptr to clear
+/// a previously registered callback.
+/// \param userp Opaque pointer passed back to the callback on each invocation.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogCallback(
+    struct TRITONSERVER_ServerOptions* options,
+    TRITONSERVER_LogCallbackFn_t callback, void* userp);
 
 /// Enable or disable metrics collection in a server options.
 ///

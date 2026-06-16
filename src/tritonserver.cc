@@ -1567,6 +1567,50 @@ TRITONSERVER_ServerOptionsSetLogFormat(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogCallback(
+    TRITONSERVER_ServerOptions* options, TRITONSERVER_LogCallbackFn_t callback,
+    void* userp)
+{
+#ifdef TRITON_ENABLE_LOGGING
+  // Logging is global for now...
+  if (callback == nullptr) {
+    // Clear any previously registered callback.
+    LOG_SET_CALLBACK(triton::common::Logger::LogCallbackFn());
+    return nullptr;  // Success
+  }
+  // Adapt the C function pointer + opaque userp into the std::function the
+  // common Logger holds, mapping the internal log level to the public enum.
+  triton::common::Logger::LogCallbackFn fn =
+      [callback, userp](
+          triton::common::Logger::Level level, const char* file, int line,
+          uint64_t timestamp_us, const char* message) {
+        TRITONSERVER_LogLevel c_level;
+        switch (level) {
+          case triton::common::Logger::Level::kERROR:
+            c_level = TRITONSERVER_LOG_ERROR;
+            break;
+          case triton::common::Logger::Level::kWARNING:
+            c_level = TRITONSERVER_LOG_WARN;
+            break;
+          case triton::common::Logger::Level::kINFO:
+          default:
+            // Triton emits VERBOSE records at the INFO level.
+            c_level = TRITONSERVER_LOG_INFO;
+            break;
+        }
+        callback(
+            c_level, file, static_cast<int64_t>(line), timestamp_us, message,
+            userp);
+      };
+  LOG_SET_CALLBACK(fn);
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
+#endif  // TRITON_ENABLE_LOGGING
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetrics(
     TRITONSERVER_ServerOptions* options, bool metrics)
 {

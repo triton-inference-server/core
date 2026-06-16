@@ -1447,6 +1447,57 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
     ThrowIfError(
         TRITONSERVER_ServerOptionsSetLogVerbose(triton_object_, level));
   }
+
+  // Register a Python callable to receive structured log records. The callable
+  // is invoked as: callback(level, filename, line, timestamp_us, message).
+  // While registered, records are routed only to the callback, bypassing
+  // Triton's default stderr/file output so the host owns the single stream.
+  void SetLogCallback(py::object callback)
+  {
+    // Logging configuration is process-global, and the common Logger outlives
+    // any single Options/Server, so the Python callable must live for the
+    // life of the process. Hold it in an intentionally-leaked global to avoid
+    // interpreter-finalization ordering issues; the most recent registration
+    // wins (matches the global semantics of the other log options).
+    static py::object* log_callback_holder = new py::object();
+
+    if (callback.is_none()) {
+      ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
+          triton_object_, nullptr, nullptr));
+      *log_callback_holder = py::none();
+      return;
+    }
+
+    *log_callback_holder = std::move(callback);
+
+    // Captureless lambda -> C function pointer. The logging thread does not
+    // hold the GIL, so acquire it before entering Python. A logging callback
+    // must not propagate exceptions back into Triton's C++ logging path.
+    TRITONSERVER_LogCallbackFn_t trampoline =
+        [](TRITONSERVER_LogLevel level, const char* filename, int64_t line,
+           uint64_t timestamp_us, const char* message, void* userp) {
+          // The logging thread does not hold the GIL; acquire it before
+          // entering Python.
+          py::gil_scoped_acquire gil;
+          try {
+            auto* fn = reinterpret_cast<py::object*>(userp);
+            (*fn)(level, filename, line, timestamp_us, message);
+          }
+          catch (py::error_already_set& e) {
+            // A logging callback must not propagate exceptions back into
+            // Triton's C++ logging path. Report it via Python's unraisable
+            // hook and clear the error indicator.
+            e.discard_as_unraisable("Triton log callback");
+          }
+          catch (...) {
+          }
+        };
+
+    ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
+        triton_object_, trampoline,
+        reinterpret_cast<void*>(log_callback_holder)));
+  }
+
   void SetMetrics(bool metrics)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetMetrics(triton_object_, metrics));
@@ -2134,6 +2185,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_log_error", &PyServerOptions::SetLogError)
       .def("set_log_format", &PyServerOptions::SetLogFormat)
       .def("set_log_verbose", &PyServerOptions::SetLogVerbose)
+      .def("set_log_callback", &PyServerOptions::SetLogCallback)
       .def("set_metrics", &PyServerOptions::SetMetrics)
       .def("set_gpu_metrics", &PyServerOptions::SetGpuMetrics)
       .def("set_cpu_metrics", &PyServerOptions::SetCpuMetrics)
