@@ -1571,6 +1571,12 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
 
   PyServer(PyServerOptions& options)
   {
+    // TRITONSERVER_ServerNew is a long, blocking call that loads the model
+    // repository on Triton's internal threads (e.g. MODE_NONE auto-load).
+    // Those threads may emit logs through a registered log callback, which
+    // must acquire the GIL; holding it here would deadlock. Release it for the
+    // duration of the call, mirroring LoadModel()/Stop().
+    py::gil_scoped_release release;
     ThrowIfError(TRITONSERVER_ServerNew(&triton_object_, options.Ptr()));
     owned_ = true;
   }
