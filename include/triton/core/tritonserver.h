@@ -321,8 +321,9 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
 /// The callback is invoked synchronously from the thread that produced the
 /// log record and MUST be lightweight, thread-safe, and must not throw.
 ///
-/// Note: Triton emits VERBOSE messages at the INFO level, so verbose records
-/// are reported to the callback as TRITONSERVER_LOG_INFO.
+/// Note: Triton emits VERBOSE messages at the INFO level internally, but they
+/// are reported to this callback as TRITONSERVER_LOG_VERBOSE so the level is
+/// accurate.
 typedef void (*TRITONSERVER_LogCallbackFn_t)(
     TRITONSERVER_LogLevel level, const char* filename, int64_t line,
     uint64_t timestamp_us, const char* message, void* userp);
