@@ -1447,6 +1447,49 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
     ThrowIfError(
         TRITONSERVER_ServerOptionsSetLogVerbose(triton_object_, level));
   }
+
+  // Registers a Python callable to receive structured log records as
+  // callback(level, filename, line, timestamp_us, message).
+  // While registered, bypasses Triton's default stderr/file sink entirely.
+  void SetLogCallback(py::object callback)
+  {
+    // The logger is process-global and outlives any Options/Server instance.
+    // Intentionally leak the holder to avoid interpreter-finalization ordering
+    // issues. The most recent registration wins, consistent with other log options.
+    static py::object* log_callback_holder = new py::object();
+
+    if (callback.is_none()) {
+      ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
+          triton_object_, nullptr, nullptr));
+      *log_callback_holder = py::none();
+      return;
+    }
+
+    *log_callback_holder = std::move(callback);
+
+    // Acquires the GIL before entering Python since the logging thread does
+    // not hold it. Exceptions must not propagate into Triton's C++ logging path.
+    TRITONSERVER_LogCallbackFn_t trampoline =
+        [](TRITONSERVER_LogLevel level, const char* filename, int64_t line,
+           uint64_t timestamp_us, const char* message, void* userp) {
+          py::gil_scoped_acquire gil;
+          try {
+            auto* fn = reinterpret_cast<py::object*>(userp);
+            (*fn)(level, filename, line, timestamp_us, message);
+          }
+          catch (py::error_already_set& e) {
+            // Report via Python's unraisable hook and clear the error indicator.
+            e.discard_as_unraisable("Triton log callback");
+          }
+          catch (...) {
+          }
+        };
+
+    ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
+        triton_object_, trampoline,
+        reinterpret_cast<void*>(log_callback_holder)));
+  }
+
   void SetMetrics(bool metrics)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetMetrics(triton_object_, metrics));
@@ -1520,6 +1563,11 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
 
   PyServer(PyServerOptions& options)
   {
+    // TRITONSERVER_ServerNew blocks while loading the model repository.
+    // Internal threads may invoke a registered log callback that acquires
+    // the GIL, holding it here would deadlock. Release it for the duration,
+    // consistent with LoadModel() and Stop().
+    py::gil_scoped_release release;
     ThrowIfError(TRITONSERVER_ServerNew(&triton_object_, options.Ptr()));
     owned_ = true;
   }
@@ -2134,6 +2182,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_log_error", &PyServerOptions::SetLogError)
       .def("set_log_format", &PyServerOptions::SetLogFormat)
       .def("set_log_verbose", &PyServerOptions::SetLogVerbose)
+      .def("set_log_callback", &PyServerOptions::SetLogCallback)
       .def("set_metrics", &PyServerOptions::SetMetrics)
       .def("set_gpu_metrics", &PyServerOptions::SetGpuMetrics)
       .def("set_cpu_metrics", &PyServerOptions::SetCpuMetrics)
