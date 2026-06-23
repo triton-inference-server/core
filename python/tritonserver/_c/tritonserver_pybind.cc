@@ -1472,6 +1472,9 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
     TRITONSERVER_LogCallbackFn_t trampoline =
         [](TRITONSERVER_LogLevel level, const char* filename, int64_t line,
            uint64_t timestamp_us, const char* message, void* userp) {
+          if (!Py_IsInitialized()) {
+            return;
+          }
           py::gil_scoped_acquire gil;
           try {
             auto* fn = reinterpret_cast<py::object*>(userp);
