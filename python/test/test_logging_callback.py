@@ -62,7 +62,7 @@ class TestLogCallback:
     TRITONSERVER_ServerOptionsSetLogCallback and exposed as Options.log_callback.
     """
 
-    def test_binding_receives_structured_record(options):
+    def test_binding_receives_structured_record(self, options):
         callback, records = _create_callback()
         options.set_log_callback(callback)
 
@@ -80,7 +80,7 @@ class TestLogCallback:
         assert line == 42
         assert message == "callback-record"
 
-    def test_binding_clear_stops_delivery(options):
+    def test_binding_clear_stops_delivery(self, options):
         callback, records = _create_callback()
         options.set_log_callback(callback)
         options.set_log_callback(None)  # clear
@@ -88,7 +88,7 @@ class TestLogCallback:
         _emit(triton_bindings.TRITONSERVER_LogLevel.ERROR, "should-be-dropped")
         assert not records
 
-    def test_binding_callback_exceptions_do_not_propagate(options):
+    def test_binding_callback_exceptions_do_not_propagate(self, options):
         # A throwing callback must not crash logging or raise to the caller.
         def _raise(*args):
             raise RuntimeError("error in callback")
@@ -96,7 +96,7 @@ class TestLogCallback:
         options.set_log_callback(_raise)
         _emit(triton_bindings.TRITONSERVER_LogLevel.ERROR, "trigger-throwing-callback")
 
-    def test_option_applies_callback():
+    def test_option_applies_callback(self):
         callback, records = _create_callback()
         options = tritonserver.Options(
             # Not started, so the repository path is only stored, never read.
