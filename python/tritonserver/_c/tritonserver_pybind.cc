@@ -1455,7 +1455,8 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
   {
     // The logger is process-global and outlives any Options/Server instance.
     // Intentionally leak the holder to avoid interpreter-finalization ordering
-    // issues. The most recent registration wins, consistent with other log options.
+    // issues. The most recent registration wins, consistent with other log
+    // options.
     static py::object* log_callback_holder = new py::object();
 
     if (callback.is_none()) {
@@ -1468,7 +1469,8 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
     *log_callback_holder = std::move(callback);
 
     // Acquires the GIL before entering Python since the logging thread does
-    // not hold it. Exceptions must not propagate into Triton's C++ logging path.
+    // not hold it. Exceptions must not propagate into Triton's C++ logging
+    // path.
     TRITONSERVER_LogCallbackFn_t trampoline =
         [](TRITONSERVER_LogLevel level, const char* filename, int64_t line,
            uint64_t timestamp_us, const char* message, void* userp) {
@@ -1481,7 +1483,8 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
             (*fn)(level, filename, line, timestamp_us, message);
           }
           catch (py::error_already_set& e) {
-            // Report via Python's unraisable hook and clear the error indicator.
+            // Report via Python's unraisable hook and clear the error
+            // indicator.
             e.discard_as_unraisable("Triton log callback");
           }
           catch (...) {

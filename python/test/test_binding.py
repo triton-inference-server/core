@@ -166,12 +166,14 @@ class TritonPythonModel:
         return responses
 '''
 
+
 def _is_model_ready(server, name, version=-1):
     # A never-loaded or unloaded model reports not-ready by raising TritonError.
     try:
         return server.model_is_ready(name, version)
     except triton_bindings.TritonError:
         return False
+
 
 # ======================================= Test cases ===========================
 class TestBindings:
