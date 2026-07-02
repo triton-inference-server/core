@@ -34,7 +34,7 @@ import subprocess
 import sys
 import zipfile
 from distutils.dir_util import copy_tree
-from tempfile import mkstemp
+from tempfile import mkdtemp, mkstemp
 
 # ANSI colors for CI log readability (rendered by GitLab CI, harmlessly
 # inert in non-ANSI viewers). Suppressed when stderr is redirected to a
@@ -219,6 +219,76 @@ def _wheel_has_so(wheel_path):
     return False
 
 
+# The pybind extension links against the lightweight core *stub*
+# (libtritonserver.so -- the OUTPUT_NAME of triton-core-serverstub) purely to
+# satisfy symbols at build/link time. At runtime the in-process API must load
+# the REAL implementation shipped in the Triton container at
+# _TRITON_RUNTIME_LIBDIR. libtritonserver.so must therefore NEVER be vendored
+# into the wheel: if auditwheel grafts it, it grafts the ~77 KB stub (whose
+# functions are empty), the extension calls into the stub, and pybind decodes a
+# garbage return pointer as a UTF-8 string -> UnicodeDecodeError on the first
+# TRITONSERVER_* call (e.g. TRITONSERVER_ServerOptions()). See TRI-1527.
+_TRITON_CORE_SONAME = "libtritonserver.so"
+_TRITON_RUNTIME_LIBDIR = "/opt/tritonserver/lib"
+
+
+def _ensure_runtime_libdir_rpath(wheel_path, dist_dir):
+    """Guarantee the extension can still find the excluded libtritonserver.so.
+
+    ``auditwheel repair --exclude libtritonserver.so`` leaves it as an
+    unvendored NEEDED entry but rewrites RUNPATH to point only at the graft
+    ``*.libs`` directory, dropping the original ``/opt/tritonserver/lib`` build
+    rpath. Re-add it (via patchelf) so the real in-container library resolves
+    at runtime, then repack the wheel with ``wheel pack`` so RECORD hashes stay
+    valid. No-op if the rpath is already present.
+    """
+    fail_if(
+        shutil.which("patchelf") is None,
+        "patchelf is required to set the runtime rpath but is not on PATH",
+    )
+    tmp = mkdtemp()
+    try:
+        r = subprocess.run(
+            ["python3", "-m", "wheel", "unpack", wheel_path, "-d", tmp],
+            capture_output=True,
+            text=True,
+        )
+        fail_if(r.returncode != 0, f"wheel unpack failed: {r.stderr}")
+        unpacked = next(p for p in pathlib.Path(tmp).iterdir() if p.is_dir())
+        changed = False
+        for so in unpacked.rglob("*.so"):
+            needed = subprocess.run(
+                ["patchelf", "--print-needed", str(so)],
+                capture_output=True,
+                text=True,
+            ).stdout.split()
+            if _TRITON_CORE_SONAME not in needed:
+                continue
+            rpath = subprocess.run(
+                ["patchelf", "--print-rpath", str(so)],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            entries = [e for e in rpath.split(":") if e]
+            if _TRITON_RUNTIME_LIBDIR not in entries:
+                entries.append(_TRITON_RUNTIME_LIBDIR)
+                subprocess.run(
+                    ["patchelf", "--set-rpath", ":".join(entries), str(so)],
+                    check=True,
+                )
+                changed = True
+        if changed:
+            os.remove(wheel_path)
+            r = subprocess.run(
+                ["python3", "-m", "wheel", "pack", str(unpacked), "-d", dist_dir],
+                capture_output=True,
+                text=True,
+            )
+            fail_if(r.returncode != 0, f"wheel repack failed: {r.stderr}")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def _repair_wheel_with_auditwheel(whl_dir, dest_dir):
     """Apply the correct PEP 425 platform-compatibility tag to each wheel.
 
@@ -280,8 +350,20 @@ def _repair_wheel_with_auditwheel(whl_dir, dest_dir):
                 f"auditwheel repair -> PEP 513/599/600 manylinux{_RESET}",
                 file=sys.stderr,
             )
+            before = {w for w in os.listdir(dist_dir) if w.endswith(".whl")}
             r = subprocess.run(
-                ["auditwheel", "repair", wheel_path, "--wheel-dir", dist_dir],
+                [
+                    "auditwheel",
+                    "repair",
+                    wheel_path,
+                    # Do not vendor libtritonserver.so -- it is resolved from
+                    # the Triton container at runtime, not shipped in the wheel
+                    # (vendoring grafts the empty core stub). See TRI-1527.
+                    "--exclude",
+                    _TRITON_CORE_SONAME,
+                    "--wheel-dir",
+                    dist_dir,
+                ],
                 capture_output=True,
                 text=True,
             )
@@ -289,6 +371,11 @@ def _repair_wheel_with_auditwheel(whl_dir, dest_dir):
                 sys.stderr.write(r.stderr)
                 fail_if(True, "auditwheel repair failed")
             os.remove(wheel_path)
+            # auditwheel drops the original /opt/tritonserver/lib rpath; re-add
+            # it so the excluded libtritonserver.so resolves at runtime.
+            for w in os.listdir(dist_dir):
+                if w.endswith(".whl") and w not in before:
+                    _ensure_runtime_libdir_rpath(os.path.join(dist_dir, w), dist_dir)
         else:
             print(
                 f"{_CYAN}=== No native extension in "
