@@ -2730,8 +2730,15 @@ TRITONSERVER_ServerModelIsReady(
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
+  // A model that cannot be resolved (never loaded, unloaded, or unregistered)
+  // is simply not ready. Before the ModelIdentifier readiness refactor the
+  // lookup failure was swallowed and this returned ready=false; preserve that
+  // public contract instead of surfacing the lookup error to the caller.
   std::shared_ptr<tc::Model> model;
-  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
+  if (!lserver->GetModel(model_name, model_version, &model).IsOk()) {
+    *ready = false;
+    return nullptr;  // Success -- not ready, not an error
+  }
   RETURN_IF_STATUS_ERROR(lserver->ModelIsReady(*model, ready));
   return nullptr;  // Success
 }
