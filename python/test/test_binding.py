@@ -167,14 +167,6 @@ class TritonPythonModel:
 '''
 
 
-def _is_model_ready(server, name, version=-1):
-    # A never-loaded or unloaded model reports not-ready by raising TritonError.
-    try:
-        return server.model_is_ready(name, version)
-    except triton_bindings.TritonError:
-        return False
-
-
 # ======================================= Test cases ===========================
 class TestBindings:
     @pytest.fixture(autouse=True, scope="function")
@@ -997,7 +989,7 @@ class TestBindings:
         assert server.model_is_ready("wired_addsub", -1)
 
         # Model Repository
-        assert not _is_model_ready(server, self._model_name)
+        assert not (server.model_is_ready(self._model_name, -1))
         # unregister
         server.unregister_model_repository(self._test_model_repo)
         with pytest.raises(triton_bindings.TritonError):
@@ -1009,9 +1001,9 @@ class TestBindings:
 
         # unload
         server.unload_model("wired_addsub")
-        assert not _is_model_ready(server, "wired_addsub")
+        assert not (server.model_is_ready("wired_addsub", -1))
         server.unload_model_and_dependents(self._model_name)
-        assert not _is_model_ready(server, self._model_name)
+        assert not (server.model_is_ready(self._model_name, -1))
 
     def test_custom_metric(self):
         options = triton_bindings.TRITONSERVER_ServerOptions()
