@@ -2730,16 +2730,18 @@ TRITONSERVER_ServerModelIsReady(
 {
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
-  // When the server is not ready the model cannot be ready either, so report
-  // ready=false without treating it as an error. Any other lookup failure is a
-  // real error and is surfaced to the caller.
   std::shared_ptr<tc::Model> model;
   tc::Status get_model_status =
       lserver->GetModel(model_name, model_version, &model);
   if (!get_model_status.IsOk()) {
-    if (get_model_status.StatusCode() == tc::Status::Code::UNAVAILABLE) {
+    // When the server is not ready or the model cannot be found, the model
+    // cannot be ready either, so report ready=false without treating it as an
+    // error. Any other lookup failure is a real error and is surfaced to the
+    // caller.
+    if (get_model_status.StatusCode() == tc::Status::Code::UNAVAILABLE ||
+        get_model_status.StatusCode() == tc::Status::Code::NOT_FOUND) {
       *ready = false;
-      return nullptr;  // Success -- server not ready, so model not ready
+      return nullptr;
     }
     RETURN_IF_STATUS_ERROR(get_model_status);
   }
