@@ -32,6 +32,7 @@
 #include <deque>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 
 #include "constants.h"
 #include "cuda_utils.h"
@@ -1928,7 +1929,11 @@ ParseLongLongParameter(
   try {
     *parsed_value = std::stoll(value);
   }
-  catch (const std::invalid_argument& ia) {
+  // std::stoll throws std::invalid_argument for non-numeric values and
+  // std::out_of_range for numeric values that exceed int64_t (both derive
+  // from std::logic_error). Catch both so an unparsable value is reported as
+  // an error instead of escaping to the C API and aborting the process.
+  catch (const std::logic_error& e) {
     return Status(
         Status::Code::INVALID_ARG,
         "failed to convert " + key + " '" + value + "' to integral number");
@@ -1947,10 +1952,14 @@ GetProfileIndex(const std::string& profile_name, int* profile_index)
   try {
     *profile_index = stoi(profile_name);
   }
-  catch (const std::invalid_argument& ia) {
+  // std::stoi throws std::invalid_argument for non-numeric names and
+  // std::out_of_range for numeric names that exceed int (both derive from
+  // std::logic_error). Catch both so an unparsable profile name is reported
+  // as an error instead of escaping to the C API and aborting the process.
+  catch (const std::logic_error& e) {
     return Status(
         Status::Code::INVALID_ARG,
-        "unable to parse '" + profile_name + "': " + ia.what());
+        "unable to parse '" + profile_name + "': " + e.what());
   }
 
   return Status::Success;
