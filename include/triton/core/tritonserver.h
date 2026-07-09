@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -2377,7 +2377,10 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
 /// \param model_version The version of the model to get readiness
 /// for.  If -1 then the server will choose a version based on the
 /// model's policy.
-/// \param ready Returns true if server is ready, false otherwise.
+/// \param ready Returns true if the model is ready, false otherwise. A model
+/// that cannot be found, or that is unavailable because the server is not
+/// ready, is reported as not ready (false) rather than as an error; any other
+/// lookup failure is returned as an error.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerModelIsReady(
