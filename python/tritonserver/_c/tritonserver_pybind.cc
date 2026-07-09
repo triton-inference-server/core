@@ -1472,7 +1472,7 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
     // not hold it. Exceptions must not propagate into Triton's C++ logging
     // path.
     TRITONSERVER_LogCallbackFn_t trampoline =
-        [](TRITONSERVER_LogLevel level, const char* filename, int64_t line,
+        [](TRITONSERVER_LogLevel level, const char* filename, int line,
            uint64_t timestamp_us, const char* message, void* userp) {
           if (!Py_IsInitialized()) {
             return;

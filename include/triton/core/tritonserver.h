@@ -323,7 +323,7 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
 /// Invoked synchronously on the producing thread. Must be lightweight,
 /// thread-safe, and must never throw.
 typedef void (*TRITONSERVER_LogCallbackFn_t)(
-    TRITONSERVER_LogLevel level, const char* filename, int64_t line,
+    TRITONSERVER_LogLevel level, const char* filename, int line,
     uint64_t timestamp_us, const char* message, void* userp);
 
 /// TRITONSERVER_Error
@@ -2162,13 +2162,13 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 /// Pass nullptr to clear a previously registered callback.
 ///
 /// \param options The server options object.
-/// \param callback The callback to invoke per log record, or nullptr to clear.
+/// \param log_fn The callback to invoke per log record, or nullptr to clear.
 /// \param userp The user data pointer.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogCallback(
     struct TRITONSERVER_ServerOptions* options,
-    TRITONSERVER_LogCallbackFn_t callback, void* userp);
+    TRITONSERVER_LogCallbackFn_t log_fn, void* userp);
 
 /// Enable or disable metrics collection in a server options.
 ///

@@ -1568,18 +1568,18 @@ TRITONSERVER_ServerOptionsSetLogFormat(
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogCallback(
-    TRITONSERVER_ServerOptions* options, TRITONSERVER_LogCallbackFn_t callback,
+    TRITONSERVER_ServerOptions* options, TRITONSERVER_LogCallbackFn_t log_fn,
     void* userp)
 {
 #ifdef TRITON_ENABLE_LOGGING
-  if (callback == nullptr) {
+  if (log_fn == nullptr) {
     // Clear any previously registered callback.
     LOG_SET_CALLBACK(triton::common::Logger::LogCallbackFn());
     return nullptr;  // Success
   }
 
   triton::common::Logger::LogCallbackFn fn =
-      [callback, userp](
+      [log_fn, userp](
           triton::common::Logger::Level level, bool is_verbose,
           const char* file, int line, uint64_t timestamp_us,
           const char* message) {
@@ -1600,9 +1600,7 @@ TRITONSERVER_ServerOptionsSetLogCallback(
               break;
           }
         }
-        callback(
-            c_level, file, static_cast<int64_t>(line), timestamp_us, message,
-            userp);
+        log_fn(c_level, file, line, timestamp_us, message, userp);
       };
   LOG_SET_CALLBACK(fn);
   return nullptr;  // Success
