@@ -475,6 +475,10 @@ TRITONSERVER_ServerOptionsSetLogFormat()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetLogCallback()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetMetrics()
 {
 }
