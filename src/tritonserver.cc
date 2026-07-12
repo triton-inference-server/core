@@ -351,6 +351,20 @@ class TritonServerOptions {
   const std::string& CacheDir() const { return cache_dir_; }
   void SetCacheDir(const std::string& dir) { cache_dir_ = dir; }
 
+#ifdef TRITON_ENABLE_LOGGING
+  // Staged log callback option. This only records the callback setting.
+  // TRITONSERVER_ServerNew installs it on the global logger.
+  // If empty, the default stdout/stderr/file sink is used.
+  const triton::common::Logger::LogCallbackFn& LogCallbackOption() const
+  {
+    return log_callback_;
+  }
+  void SetLogCallbackOption(triton::common::Logger::LogCallbackFn cb)
+  {
+    log_callback_ = std::move(cb);
+  }
+#endif  // TRITON_ENABLE_LOGGING
+
  private:
   std::string server_id_;
   std::set<std::string> repo_paths_;
@@ -385,6 +399,9 @@ class TritonServerOptions {
 #ifdef TRITON_ENABLE_METRICS
   tc::MetricsConfigMap metrics_config_map_;
 #endif  // TRITON_ENABLE_METRICS
+#ifdef TRITON_ENABLE_LOGGING
+  triton::common::Logger::LogCallbackFn log_callback_;
+#endif  // TRITON_ENABLE_LOGGING
 };
 
 TritonServerOptions::TritonServerOptions()
@@ -1572,37 +1589,41 @@ TRITONSERVER_ServerOptionsSetLogCallback(
     void* userp)
 {
 #ifdef TRITON_ENABLE_LOGGING
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+
   if (log_fn == nullptr) {
-    // Clear any previously registered callback.
-    LOG_SET_CALLBACK(triton::common::Logger::LogCallbackFn());
+    // Clear any previously staged callback.
+    loptions->SetLogCallbackOption(triton::common::Logger::LogCallbackFn());
     return nullptr;  // Success
   }
 
-  triton::common::Logger::LogCallbackFn fn =
-      [log_fn, userp](
-          triton::common::Logger::Level level, bool is_verbose,
-          const char* file, int line, uint64_t timestamp_us,
-          const char* message) {
-        TRITONSERVER_LogLevel c_level;
-        if (is_verbose) {
-          c_level = TRITONSERVER_LOG_VERBOSE;
-        } else {
-          switch (level) {
-            case triton::common::Logger::Level::kERROR:
-              c_level = TRITONSERVER_LOG_ERROR;
-              break;
-            case triton::common::Logger::Level::kWARNING:
-              c_level = TRITONSERVER_LOG_WARN;
-              break;
-            case triton::common::Logger::Level::kINFO:
-            default:
-              c_level = TRITONSERVER_LOG_INFO;
-              break;
-          }
-        }
-        log_fn(c_level, file, line, timestamp_us, message, userp);
-      };
-  LOG_SET_CALLBACK(fn);
+  // Stage the log callback option. TRITONSERVER_ServerNew installs it on the
+  // global logger.
+  loptions->SetLogCallbackOption([log_fn, userp](
+                                     triton::common::Logger::Level level,
+                                     bool is_verbose, const char* file,
+                                     int line, uint64_t timestamp_us,
+                                     const char* message) {
+    TRITONSERVER_LogLevel c_level;
+    if (is_verbose) {
+      c_level = TRITONSERVER_LOG_VERBOSE;
+    } else {
+      switch (level) {
+        case triton::common::Logger::Level::kERROR:
+          c_level = TRITONSERVER_LOG_ERROR;
+          break;
+        case triton::common::Logger::Level::kWARNING:
+          c_level = TRITONSERVER_LOG_WARN;
+          break;
+        case triton::common::Logger::Level::kINFO:
+        default:
+          c_level = TRITONSERVER_LOG_INFO;
+          break;
+      }
+    }
+    log_fn(c_level, file, line, timestamp_us, message, userp);
+  });
   return nullptr;  // Success
 #else
   return TRITONSERVER_ErrorNew(
@@ -2463,6 +2484,12 @@ TRITONSERVER_ServerNew(
       reinterpret_cast<TritonServerOptions*>(options);
 
   NVTX_INITIALIZE;
+
+#ifdef TRITON_ENABLE_LOGGING
+  // Installs the log callback. This is set exactly once before any worker or
+  // logging threads start and is never modified afterward.
+  LOG_SET_CALLBACK(loptions->LogCallbackOption());
+#endif  // TRITON_ENABLE_LOGGING
 
 #ifdef TRITON_ENABLE_METRICS
   // NOTE: Metrics must be enabled before backends are setup

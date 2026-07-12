@@ -2161,6 +2161,12 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 /// to route Triton's logs into its own logging pipeline.
 /// Pass nullptr to clear a previously registered callback.
 ///
+/// The callback is staged on the options object and installed on the
+/// process-global logger by TRITONSERVER_ServerNew, exactly once, before any
+/// worker or logging threads start.
+/// It takes effect only when the server is created, and the logger
+/// configuration is never modified afterward.
+///
 /// \param options The server options object.
 /// \param log_fn The callback to invoke per log record, or nullptr to clear.
 /// \param userp The user data pointer.
