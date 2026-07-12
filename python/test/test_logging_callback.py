@@ -25,22 +25,36 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+import os
+
 import pytest
 import tritonserver
 from tritonserver import _c as triton_bindings
 
-
-@pytest.fixture(autouse=True)
-def _clear_log_callback():
-    # Logging is process-global in Triton, clear the callback after each test so
-    # one test's callback cannot leak into the next.
-    yield
-    triton_bindings.TRITONSERVER_ServerOptions().set_log_callback(None)
+LogLevel = triton_bindings.TRITONSERVER_LogLevel
 
 
-@pytest.fixture
-def options():
-    return triton_bindings.TRITONSERVER_ServerOptions()
+def _make_repo(path):
+    # An existing (empty) model repository is enough for an EXPLICIT-mode server:
+    # no models are loaded, so no backend is needed.
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def _make_server(repo_dir, callback):
+    """Create a minimal in-process server. Construction runs
+    TRITONSERVER_ServerNew, which installs `callback` (if any) on the global
+    logger before any worker/logging thread starts."""
+    options = triton_bindings.TRITONSERVER_ServerOptions()
+    options.set_model_repository_path(repo_dir)
+    options.set_model_control_mode(
+        triton_bindings.TRITONSERVER_ModelControlMode.EXPLICIT
+    )
+    options.set_strict_model_config(False)
+    options.set_exit_timeout(5)
+    if callback is not None:
+        options.set_log_callback(callback)
+    return triton_bindings.TRITONSERVER_Server(options)
 
 
 def _create_callback():
@@ -57,57 +71,63 @@ def _emit(level, message, filename="logcb_test.py", line=1):
     triton_bindings.TRITONSERVER_LogMessage(level, filename, line, message)
 
 
+def _messages(records):
+    return [message for *_, message in records]
+
+
+@pytest.fixture
+def repo_dir(tmp_path):
+    return _make_repo(str(tmp_path / "models"))
+
+
 class TestLogCallback:
-    """Tests for the structured log callback added via
-    TRITONSERVER_ServerOptionsSetLogCallback and exposed as Options.log_callback.
-    """
-
-    def test_binding_receives_structured_record(self, options):
+    def test_server_install_forwards_structured_record(self, repo_dir):
         callback, records = _create_callback()
-        options.set_log_callback(callback)
+        _make_server(repo_dir, callback)
 
-        _emit(
-            triton_bindings.TRITONSERVER_LogLevel.ERROR,
-            "callback-record",
-            filename="model.cc",
-            line=42,
-        )
+        _emit(LogLevel.ERROR, "callback-record", filename="model.cc", line=42)
 
-        assert records, "log callback was not invoked"
-        level, filename, line, _ts, message = records[-1]
-        assert level == triton_bindings.TRITONSERVER_LogLevel.ERROR
+        matches = [r for r in records if r[4] == "callback-record"]
+        assert matches, "log callback was not invoked"
+        level, filename, line, _ts, message = matches[-1]
+        assert level == LogLevel.ERROR
         assert filename == "model.cc"
         assert line == 42
         assert message == "callback-record"
 
-    def test_binding_clear_stops_delivery(self, options):
+    def test_server_without_callback_uses_default_sink(self, tmp_path):
         callback, records = _create_callback()
-        options.set_log_callback(callback)
-        options.set_log_callback(None)  # clear
+        # First server installs the recording callback.
+        _make_server(_make_repo(str(tmp_path / "a")), callback)
+        _emit(LogLevel.ERROR, "before-clear")
+        assert "before-clear" in _messages(records)
 
-        _emit(triton_bindings.TRITONSERVER_LogLevel.ERROR, "should-be-dropped")
-        assert not records
+        # A later server with no callback overwrites it with the default sink.
+        _make_server(_make_repo(str(tmp_path / "b")), None)
+        records.clear()
+        _emit(LogLevel.ERROR, "after-clear")
+        assert "after-clear" not in _messages(records)
 
-    def test_binding_callback_exceptions_do_not_propagate(self, options):
-        # A throwing callback must not crash logging or raise to the caller.
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+    def test_throwing_callback_does_not_propagate(self, repo_dir):
+        # A throwing callback must not crash logging or raise to the caller,
+        # including for the server's own startup logs.
         def _raise(*args):
             raise RuntimeError("error in callback")
 
-        options.set_log_callback(_raise)
-        _emit(triton_bindings.TRITONSERVER_LogLevel.ERROR, "trigger-throwing-callback")
+        _make_server(repo_dir, _raise)
+        _emit(LogLevel.ERROR, "trigger-throwing-callback")
 
-    def test_option_applies_callback(self):
+    def test_high_level_option_installs_callback(self, repo_dir):
         callback, records = _create_callback()
-        options = tritonserver.Options(
-            # Not started, so the repository path is only stored, never read.
-            model_repository="/tmp/triton-log-callback-test",
-            # log_info keeps all levels enabled (the logger default), so this
-            # does not disable any level process-wide for other tests.
-            log_info=True,
+        server = tritonserver.Server(
+            model_repository=repo_dir,
+            model_control_mode=tritonserver.ModelControlMode.EXPLICIT,
+            log_info=True,  # enable INFO so the emitted record is not filtered
             log_callback=callback,
-        )
-        # Apply the dataclass options to the global logger without starting a server.
-        options._create_tritonserver_server_options()
-
-        _emit(triton_bindings.TRITONSERVER_LogLevel.INFO, "via-options")
-        assert any(message == "via-options" for *_, message in records)
+        ).start()
+        try:
+            _emit(LogLevel.INFO, "via-options")
+            assert "via-options" in _messages(records)
+        finally:
+            server.stop()
