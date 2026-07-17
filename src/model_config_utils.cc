@@ -1976,7 +1976,7 @@ CollectInt64Fields(
   const google::protobuf::Reflection* refl = message->GetReflection();
   for (int i = 0; i < desc->field_count(); ++i) {
     const google::protobuf::FieldDescriptor* field = desc->field(i);
-    const std::string fullname = prefix + "::" + field->name();
+    const std::string fullname = prefix + "::" + std::string(field->name());
     switch (field->type()) {
       case google::protobuf::FieldDescriptor::TYPE_MESSAGE: {
         if (field->is_repeated()) {
@@ -2201,9 +2201,15 @@ ModelConfigToJson(
   std::string config_json_str;
   ::google::protobuf::util::JsonPrintOptions options;
   options.preserve_proto_field_names = true;
-  options.always_print_primitive_fields = true;
-  ::google::protobuf::util::MessageToJsonString(
+  options.always_print_fields_with_no_presence = true;
+  const auto to_json_status = ::google::protobuf::util::MessageToJsonString(
       config, &config_json_str, options);
+  if (!to_json_status.ok()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to convert model configuration to JSON: " +
+            std::string(to_json_status.message()));
+  }
 
   // We need to verify that every field 64-bit field in the
   // ModelConfig protobuf is being handled. We hardcode the known
