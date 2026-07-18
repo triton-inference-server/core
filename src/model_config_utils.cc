@@ -26,6 +26,7 @@
 
 #include "model_config_utils.h"
 
+#include <google/protobuf/text_format.h>
 #include <google/protobuf/util/json_util.h>
 #include <google/protobuf/util/message_differencer.h>
 
@@ -754,7 +755,21 @@ GetNormalizedModelConfig(
   RETURN_IF_ERROR(
       AutoCompleteBackendFields(model_name, std::string(path), config));
 
-  LOG_PROTOBUF_VERBOSE(1, "Server side auto-completed config: ", (*config));
+  // Not using LOG_PROTOBUF_VERBOSE: it serializes via protobuf DebugString(),
+  // which protobuf v33 deliberately makes unstable (injects a
+  // "goo.gle/debugstr" marker) to discourage parsing. That marker is not valid
+  // text format and pollutes the logged config. Serialize with
+  // TextFormat::PrintToString for stable, parseable output.
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::string auto_completed_config;
+    google::protobuf::TextFormat::PrintToString(
+        *config, &auto_completed_config);
+    triton::common::LogMessage(
+        __FILE__, __LINE__, triton::common::Logger::Level::kINFO,
+        "Server side auto-completed config: ", false)
+            .stream()
+        << auto_completed_config;
+  }
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
 
