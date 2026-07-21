@@ -313,7 +313,9 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
 /// Allows an embedding application to route Triton's logs into its own
 /// pipeline instead of parsing formatted stderr/file output.
 ///
-/// \param level The log level.
+/// \param level The log level. Verbose records are delivered as
+/// TRITONSERVER_LOG_VERBOSE (the common logger's is_verbose flag is mapped to
+/// this level by the C wrapper).
 /// \param filename The file name of the location of the log message.
 /// \param line The line number of the log message.
 /// \param timestamp_us The timestamp associated with the log record.
@@ -2161,12 +2163,10 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 /// to route Triton's logs into its own logging pipeline.
 /// Pass nullptr to clear a previously registered callback.
 ///
-/// The callback is staged on the options object and installed on the
-/// process-global logger by TRITONSERVER_ServerNew, exactly once, before any
-/// worker or logging threads start.
-/// It takes effect only when the server is created, and the logger
-/// configuration is never modified afterward.
-///
+/// The callback is staged on the options object. Each TRITONSERVER_ServerNew
+/// installs (or clears, if nullptr) the callback currently set on its options
+/// before any worker or logging threads start. As a result, the callback takes
+/// effect only when the server is created, not when this function is called.
 /// \param options The server options object.
 /// \param log_fn The callback to invoke per log record, or nullptr to clear.
 /// \param userp The user data pointer.

@@ -230,6 +230,8 @@ class Options:
         See :c:func:`TRITONSERVER_ServerOptionsSetLogVerbose`
 
     log_callback : Optional[Callable], default None
+        **Experimental.** May change or be removed in a future release.
+
         Callable invoked for each enabled log record as
         ``callback(level, filename, line, timestamp_us, message)`` where
         ``level`` is a :class:`LogLevel`, ``timestamp_us`` is a timestamp

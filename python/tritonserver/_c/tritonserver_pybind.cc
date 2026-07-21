@@ -1453,20 +1453,17 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
   // While registered, bypasses Triton's default stderr/file sink entirely.
   void SetLogCallback(py::object callback)
   {
-    // The logger is process-global and outlives any Options/Server instance.
-    // Intentionally leak the holder to avoid interpreter-finalization ordering
-    // issues. The most recent registration wins, consistent with other log
-    // options.
-    static py::object* log_callback_holder = new py::object();
-
     if (callback.is_none()) {
       ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
           triton_object_, nullptr, nullptr));
-      *log_callback_holder = py::none();
       return;
     }
 
-    *log_callback_holder = std::move(callback);
+    // Each registration gets its own holder, passed to the callback as `userp`,
+    // so updating the callback never mutates one already installed on a running
+    // server. A new callback takes effect only when TRITONSERVER_ServerNew
+    // installs its options.
+    auto* holder = new py::object(std::move(callback));
 
     // Acquires the GIL before entering Python since the logging thread does
     // not hold it. Exceptions must not propagate into Triton's C++ logging
@@ -1492,8 +1489,7 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
         };
 
     ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
-        triton_object_, trampoline,
-        reinterpret_cast<void*>(log_callback_holder)));
+        triton_object_, trampoline, reinterpret_cast<void*>(holder)));
   }
 
   void SetMetrics(bool metrics)
