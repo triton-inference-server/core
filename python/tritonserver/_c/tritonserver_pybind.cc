@@ -1459,10 +1459,6 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
       return;
     }
 
-    // Each registration gets its own holder, passed to the callback as `userp`,
-    // so updating the callback never mutates one already installed on a running
-    // server. A new callback takes effect only when TRITONSERVER_ServerNew
-    // installs its options.
     auto* holder = new py::object(std::move(callback));
 
     // Acquires the GIL before entering Python since the logging thread does
