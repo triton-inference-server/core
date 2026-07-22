@@ -2167,6 +2167,7 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 /// installs (or clears, if nullptr) the callback currently set on its options
 /// before any worker or logging threads start. As a result, the callback takes
 /// effect only when the server is created, not when this function is called.
+///
 /// \param options The server options object.
 /// \param log_fn The callback to invoke per log record, or nullptr to clear.
 /// \param userp The user data pointer.
