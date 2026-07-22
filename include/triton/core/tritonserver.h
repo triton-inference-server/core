@@ -314,8 +314,6 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
 /// pipeline instead of parsing formatted stderr/file output.
 ///
 /// \param level The log level. Verbose records are delivered as
-/// TRITONSERVER_LOG_VERBOSE (the common logger's is_verbose flag is mapped to
-/// this level by the C wrapper).
 /// \param filename The file name of the location of the log message.
 /// \param line The line number of the log message.
 /// \param timestamp_us The timestamp associated with the log record.
