@@ -1450,7 +1450,8 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
 
   // Registers a Python callable to receive structured log records as
   // callback(level, filename, line, timestamp_us, message).
-  // If registered successfully, bypasses Triton's default stderr/file sink entirely.
+  // If registered successfully, bypasses Triton's default stderr/file sink
+  // entirely.
   void SetLogCallback(py::object callback)
   {
     if (callback.is_none()) {

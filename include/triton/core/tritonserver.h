@@ -313,7 +313,7 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
 /// Allows an embedding application to route Triton's logs into its own
 /// pipeline instead of parsing formatted stderr/file output.
 ///
-/// \param level The log level. Verbose records are delivered as
+/// \param level The log level.
 /// \param filename The file name of the location of the log message.
 /// \param line The line number of the log message.
 /// \param timestamp_us The timestamp associated with the log record.
