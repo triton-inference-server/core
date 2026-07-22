@@ -352,9 +352,6 @@ class TritonServerOptions {
   void SetCacheDir(const std::string& dir) { cache_dir_ = dir; }
 
 #ifdef TRITON_ENABLE_LOGGING
-  // Log callback is staged on the options object.
-  // TRITONSERVER_ServerNew installs it on the global logger.
-  // If the callback is empty, the default stdout/stderr/file sink is used.
   const triton::common::Logger::LogCallbackFn& LogCallback() const
   {
     return log_callback_;
