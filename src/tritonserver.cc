@@ -2484,8 +2484,6 @@ TRITONSERVER_ServerNew(
 #ifdef TRITON_ENABLE_LOGGING
   // Installs the callback staged on this options object (an empty callback
   // clears it) before any backend or worker thread is started.
-  // Each call to ServerNew installs the currently staged callback from its
-  // options.
   LOG_SET_CALLBACK(loptions->LogCallback());
 #endif  // TRITON_ENABLE_LOGGING
 
