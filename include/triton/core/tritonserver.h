@@ -2160,8 +2160,8 @@ TRITONSERVER_ServerOptionsSetLogVerbose(
 
 /// Registers a callback to receive Triton log records as structured fields,
 /// bypassing the default stderr/file sink. Allows an embedding application
-/// to route Triton's logs into its own logging pipeline.
-/// Pass nullptr to clear a previously registered callback.
+/// to route Triton's logs into its own logging pipeline. Pass nullptr to clear
+/// a previously registered callback.
 ///
 /// The callback is staged on the options object. Each TRITONSERVER_ServerNew
 /// installs (or clears, if nullptr) the callback currently set on its options
