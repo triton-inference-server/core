@@ -77,9 +77,13 @@ def _messages(records):
 
 @pytest.fixture
 def repo_dir(tmp_path):
+    return _make_repo(str(tmp_path / "models"))
+
+
+class TestLogCallback:
     def test_server_install_forwards_structured_record(self, repo_dir):
         callback, records = _create_callback()
-        server = _make_server(repo_dir, callback)
+        _make_server(repo_dir, callback)
 
         _emit(LogLevel.ERROR, "callback-record", filename="model.cc", line=42)
 
