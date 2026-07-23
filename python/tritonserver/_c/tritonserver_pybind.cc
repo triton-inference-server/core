@@ -1460,7 +1460,11 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
       return;
     }
 
-    auto* holder = new py::object(std::move(callback));
+    // Each registration gets its own holder, passed to the callback as `userp`,
+    // so updating the callback never mutates one already installed on a running
+    // server. It takes effect only when TRITONSERVER_ServerNew installs its
+    // options.
+    auto holder = std::make_unique<py::object>(std::move(callback));
 
     // Acquires the GIL before entering Python since the logging thread does
     // not hold it. Exceptions must not propagate into Triton's C++ logging
@@ -1485,8 +1489,14 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
           }
         };
 
+    // On failure the unique_ptr cleans up the holder. On success the staged
+    // callback references it by raw pointer, so release ownership since the
+    // process-global logger needs the holder to remain for the lifetime of the
+    // process. This ensures the logger always has a valid reference and
+    // prevents premature cleanup
     ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
-        triton_object_, trampoline, reinterpret_cast<void*>(holder)));
+        triton_object_, trampoline, reinterpret_cast<void*>(holder.get())));
+    holder.release();
   }
 
   void SetMetrics(bool metrics)
