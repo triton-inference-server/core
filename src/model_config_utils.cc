@@ -26,6 +26,7 @@
 
 #include "model_config_utils.h"
 
+#include <google/protobuf/text_format.h>
 #include <google/protobuf/util/json_util.h>
 #include <google/protobuf/util/message_differencer.h>
 
@@ -754,7 +755,21 @@ GetNormalizedModelConfig(
   RETURN_IF_ERROR(
       AutoCompleteBackendFields(model_name, std::string(path), config));
 
-  LOG_PROTOBUF_VERBOSE(1, "Server side auto-completed config: ", (*config));
+  // Not using LOG_PROTOBUF_VERBOSE: it serializes via protobuf DebugString(),
+  // which protobuf v33 deliberately makes unstable (injects a
+  // "goo.gle/debugstr" marker) to discourage parsing. That marker is not valid
+  // text format and pollutes the logged config. Serialize with
+  // TextFormat::PrintToString for stable, parseable output.
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::string auto_completed_config;
+    google::protobuf::TextFormat::PrintToString(
+        *config, &auto_completed_config);
+    triton::common::LogMessage(
+        __FILE__, __LINE__, triton::common::Logger::Level::kINFO,
+        "Server side auto-completed config: ", false)
+            .stream()
+        << auto_completed_config;
+  }
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
 
@@ -1976,7 +1991,7 @@ CollectInt64Fields(
   const google::protobuf::Reflection* refl = message->GetReflection();
   for (int i = 0; i < desc->field_count(); ++i) {
     const google::protobuf::FieldDescriptor* field = desc->field(i);
-    const std::string fullname = prefix + "::" + field->name();
+    const std::string fullname = prefix + "::" + std::string(field->name());
     switch (field->type()) {
       case google::protobuf::FieldDescriptor::TYPE_MESSAGE: {
         if (field->is_repeated()) {
@@ -2201,9 +2216,15 @@ ModelConfigToJson(
   std::string config_json_str;
   ::google::protobuf::util::JsonPrintOptions options;
   options.preserve_proto_field_names = true;
-  options.always_print_primitive_fields = true;
-  ::google::protobuf::util::MessageToJsonString(
+  options.always_print_fields_with_no_presence = true;
+  const auto to_json_status = ::google::protobuf::util::MessageToJsonString(
       config, &config_json_str, options);
+  if (!to_json_status.ok()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to convert model configuration to JSON: " +
+            std::string(to_json_status.message()));
+  }
 
   // We need to verify that every field 64-bit field in the
   // ModelConfig protobuf is being handled. We hardcode the known
