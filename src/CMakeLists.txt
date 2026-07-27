@@ -93,6 +93,11 @@ endif() # TRITON_ENABLE_METRICS
 # GCS
 #
 if(${TRITON_ENABLE_GCS})
+  # Upstream installs a config per component, so this is the storage client's
+  # own google_cloud_cpp_storageConfig.cmake. ConanCenter's packaging instead
+  # consolidates everything into google-cloud-cpp-config.cmake, which is why
+  # this name has to match whoever provides the package -- Triton's recipe
+  # (server/conan/recipes/google-cloud-cpp) preserves the upstream layout.
   find_package(google_cloud_cpp_storage REQUIRED)
   message(STATUS "Using google-cloud-cpp ${google_cloud_cpp_storage_VERSION}")
 endif() # TRITON_ENABLE_GCS
@@ -110,11 +115,13 @@ endif()
 # Azure Storage
 #
 if(${TRITON_ENABLE_AZURE_STORAGE})
-  find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
-  message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
-
-  find_package(azure-identity-cpp CONFIG REQUIRED)
-  message(STATUS "Using Azure identity ${azure-identity-cpp_VERSION}")
+  # azure-sdk-for-cpp ships a single AzureSDKConfig.cmake covering every
+  # component, rather than the separate azure-storage-blobs-cpp and
+  # azure-identity-cpp configs the individual upstream repos install. Both
+  # Azure::azure-storage-blobs and Azure::azure-identity, linked below, come
+  # from this one package.
+  find_package(AzureSDK CONFIG REQUIRED)
+  message(STATUS "Using Azure SDK ${AzureSDK_VERSION}")
 endif()
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
