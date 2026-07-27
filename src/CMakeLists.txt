@@ -60,10 +60,18 @@ endif() # TRITON_ENABLE_GPU
 #
 # Boost
 #
-# Minimum of 1.78 required for use of boost::span. This can eventually be
-# relaxed and replaced with std::span in C++20.
-cmake_policy (SET CMP0167 OLD)
-find_package(Boost 1.78 REQUIRED COMPONENTS)
+# Only header-only libraries are used -- algorithm/string, core/span,
+# functional/hash and interprocess -- hence the empty COMPONENTS list.
+#
+# No minimum version is declared here. boost::span needs 1.78 or newer, but the
+# version is pinned by whoever provides the package (TRITON_BOOST_VERSION in the
+# server build), so repeating a floor here would just be a second place to
+# update. boost::span can go away entirely once this builds as C++20 and
+# std::span is available.
+#
+# CMP0167 is deliberately left at its default (NEW from CMake 3.30), so Boost's
+# own BoostConfig.cmake is used rather than CMake's deprecated FindBoost module.
+find_package(Boost REQUIRED COMPONENTS)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -245,7 +253,7 @@ add_library(
   TritonCore::triton-core ALIAS triton-core
 )
 
-target_compile_features(triton-core PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+target_compile_features(triton-core PRIVATE cxx_std_${CMAKE_CXX_STANDARD})
 target_compile_options(
   triton-core
   PRIVATE
