@@ -127,6 +127,10 @@ if(${TRITON_ENABLE_GPU})
       ${GTEST_INCLUDE_DIRS}
       ${CNMEM_PATH}/include
       ${Boost_INCLUDE_DIRS}
+      # These tests compile core sources directly rather than consuming them
+      # through triton-core, whose include paths are PRIVATE. re2 comes in via
+      # filesystem/implementations/common.h.
+      $<TARGET_PROPERTY:re2::re2,INTERFACE_INCLUDE_DIRECTORIES>
   )
 
   target_compile_definitions(
@@ -143,6 +147,7 @@ if(${TRITON_ENABLE_GPU})
     response_cache_test
     PRIVATE
       triton-common-error        # from repo-common
+      triton-common-json         # from repo-common, carries rapidjson
       triton-common-logging      # from repo-common
       triton-common-model-config # from repo-common
       proto-library              # from repo-common
@@ -239,6 +244,9 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
       ${CNMEM_PATH}/include
+      # pinned_memory_manager.h includes boost/interprocess, as
+      # response_cache_test and repo_agent_test already account for.
+      ${Boost_INCLUDE_DIRS}
   )
 
   target_compile_definitions(
@@ -304,6 +312,7 @@ if(${TRITON_ENABLE_GPU})
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
       ${CNMEM_PATH}/include
+      ${Boost_INCLUDE_DIRS}
   )
 
   target_compile_definitions(
@@ -413,6 +422,7 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${GTEST_INCLUDE_DIRS}
     ${Boost_INCLUDE_DIRS}
+    $<TARGET_PROPERTY:re2::re2,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
 target_link_libraries(
@@ -466,6 +476,9 @@ if(${TRITON_ENABLE_METRICS})
       ${CMAKE_CURRENT_SOURCE_DIR}/..
       ${CMAKE_CURRENT_SOURCE_DIR}/../../include
       ${GTEST_INCLUDE_DIRS}
+      # metrics.cc and pinned_memory_manager.cc both reach boost/interprocess
+      # through pinned_memory_manager.h.
+      ${Boost_INCLUDE_DIRS}
   )
 
   target_compile_definitions(

@@ -107,6 +107,10 @@ endif() # TRITON_ENABLE_GCS
 #
 if(${TRITON_ENABLE_S3})
   find_package(ZLIB REQUIRED)
+  # AWSSDK is the config name either way, but the component target it exports is
+  # not: upstream's own build installs aws-cpp-sdk-s3, while ConanCenter names
+  # its components after the package and exports AWS::aws-sdk-cpp-s3. The
+  # namespaced form is what is linked below.
   find_package(AWSSDK REQUIRED COMPONENTS s3)
   message(STATUS "Using aws-sdk-cpp ${AWSSDK_VERSION}")
 endif()
@@ -323,7 +327,7 @@ endif() # TRITON_ENABLE_GCS
 if(${TRITON_ENABLE_S3})
   target_include_directories(
     triton-core
-    PRIVATE $<TARGET_PROPERTY:aws-cpp-sdk-s3,INTERFACE_INCLUDE_DIRECTORIES>
+    PRIVATE $<TARGET_PROPERTY:AWS::aws-sdk-cpp-s3,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif()
 
@@ -494,7 +498,7 @@ if(${TRITON_ENABLE_S3})
   target_link_libraries(
     triton-core
     PRIVATE
-      aws-cpp-sdk-s3
+      AWS::aws-sdk-cpp-s3
   )
 endif() # TRITON_ENABLE_S3
 
