@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -472,6 +472,10 @@ TRITONSERVER_ServerOptionsSetLogVerbose()
 }
 TRITONAPI_DECLSPEC void
 TRITONSERVER_ServerOptionsSetLogFormat()
+{
+}
+TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerOptionsSetLogCallback()
 {
 }
 TRITONAPI_DECLSPEC void

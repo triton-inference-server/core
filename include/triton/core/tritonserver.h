@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -308,6 +308,23 @@ TRITONSERVER_DECLSPEC bool TRITONSERVER_LogIsEnabled(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_LogMessage(
     TRITONSERVER_LogLevel level, const char* filename, const int line,
     const char* msg);
+
+/// Log callback function type for receiving structured log records.
+/// Allows an embedding application to route Triton's logs into its own
+/// pipeline instead of parsing formatted stderr/file output.
+///
+/// \param level The log level.
+/// \param filename The file name of the location of the log message.
+/// \param line The line number of the log message.
+/// \param timestamp_us The timestamp associated with the log record.
+/// \param message The raw, unescaped log text. The host owns any formatting.
+/// \param userp The user data pointer.
+///
+/// Invoked synchronously on the producing thread. Must be lightweight,
+/// thread-safe, and must never throw.
+typedef void (*TRITONSERVER_LogCallbackFn_t)(
+    TRITONSERVER_LogLevel level, const char* filename, int line,
+    uint64_t timestamp_us, const char* message, void* userp);
 
 /// TRITONSERVER_Error
 ///
@@ -2139,6 +2156,25 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetLogVerbose(
     struct TRITONSERVER_ServerOptions* options, int level);
 
+/// Registers a callback to receive Triton log records as structured fields,
+/// bypassing the default stderr/file sink. Allows an embedding application
+/// to route Triton's logs into its own logging pipeline. Pass nullptr to clear
+/// a previously registered callback.
+///
+/// The callback is staged on the options object. Each TRITONSERVER_ServerNew
+/// installs (or clears, if nullptr) the callback currently set on its options
+/// before any worker or logging threads start. As a result, the callback takes
+/// effect only when the server is created, not when this function is called.
+///
+/// \param options The server options object.
+/// \param log_fn The callback to invoke per log record, or nullptr to clear.
+/// \param userp The user data pointer.
+/// \return a TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogCallback(
+    struct TRITONSERVER_ServerOptions* options,
+    TRITONSERVER_LogCallbackFn_t log_fn, void* userp);
+
 /// Enable or disable metrics collection in a server options.
 ///
 /// \param options The server options object.
@@ -2377,7 +2413,10 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_ServerIsReady(
 /// \param model_version The version of the model to get readiness
 /// for.  If -1 then the server will choose a version based on the
 /// model's policy.
-/// \param ready Returns true if server is ready, false otherwise.
+/// \param ready Returns true if the model is ready, false otherwise. A model
+/// that cannot be found, or that is unavailable because the server is not
+/// ready, is reported as not ready (false) rather than as an error; any other
+/// lookup failure is returned as an error.
 /// \return a TRITONSERVER_Error indicating success or failure.
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error*
 TRITONSERVER_ServerModelIsReady(

@@ -351,6 +351,17 @@ class TritonServerOptions {
   const std::string& CacheDir() const { return cache_dir_; }
   void SetCacheDir(const std::string& dir) { cache_dir_ = dir; }
 
+#ifdef TRITON_ENABLE_LOGGING
+  const triton::common::Logger::LogCallbackFn& LogCallback() const
+  {
+    return log_callback_;
+  }
+  void SetLogCallback(triton::common::Logger::LogCallbackFn cb)
+  {
+    log_callback_ = std::move(cb);
+  }
+#endif  // TRITON_ENABLE_LOGGING
+
  private:
   std::string server_id_;
   std::set<std::string> repo_paths_;
@@ -385,6 +396,9 @@ class TritonServerOptions {
 #ifdef TRITON_ENABLE_METRICS
   tc::MetricsConfigMap metrics_config_map_;
 #endif  // TRITON_ENABLE_METRICS
+#ifdef TRITON_ENABLE_LOGGING
+  triton::common::Logger::LogCallbackFn log_callback_;
+#endif  // TRITON_ENABLE_LOGGING
 };
 
 TritonServerOptions::TritonServerOptions()
@@ -1567,6 +1581,53 @@ TRITONSERVER_ServerOptionsSetLogFormat(
 }
 
 TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerOptionsSetLogCallback(
+    TRITONSERVER_ServerOptions* options, TRITONSERVER_LogCallbackFn_t log_fn,
+    void* userp)
+{
+#ifdef TRITON_ENABLE_LOGGING
+  TritonServerOptions* loptions =
+      reinterpret_cast<TritonServerOptions*>(options);
+
+  if (log_fn == nullptr) {
+    // Clear any previously staged callback.
+    loptions->SetLogCallback(triton::common::Logger::LogCallbackFn());
+    return nullptr;  // Success
+  }
+
+  // Stage the callback on the options. TRITONSERVER_ServerNew installs it on
+  // the global logger.
+  loptions->SetLogCallback([log_fn, userp](
+                               triton::common::Logger::Level level,
+                               bool is_verbose, const char* file, int line,
+                               uint64_t timestamp_us, const char* message) {
+    TRITONSERVER_LogLevel c_level;
+    if (is_verbose) {
+      c_level = TRITONSERVER_LOG_VERBOSE;
+    } else {
+      switch (level) {
+        case triton::common::Logger::Level::kERROR:
+          c_level = TRITONSERVER_LOG_ERROR;
+          break;
+        case triton::common::Logger::Level::kWARNING:
+          c_level = TRITONSERVER_LOG_WARN;
+          break;
+        case triton::common::Logger::Level::kINFO:
+        default:
+          c_level = TRITONSERVER_LOG_INFO;
+          break;
+      }
+    }
+    log_fn(c_level, file, line, timestamp_us, message, userp);
+  });
+  return nullptr;  // Success
+#else
+  return TRITONSERVER_ErrorNew(
+      TRITONSERVER_ERROR_UNSUPPORTED, "logging not supported");
+#endif  // TRITON_ENABLE_LOGGING
+}
+
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
 TRITONSERVER_ServerOptionsSetMetrics(
     TRITONSERVER_ServerOptions* options, bool metrics)
 {
@@ -2420,6 +2481,12 @@ TRITONSERVER_ServerNew(
 
   NVTX_INITIALIZE;
 
+#ifdef TRITON_ENABLE_LOGGING
+  // Installs the callback staged on this options object (an empty callback
+  // clears it) before any backend or worker thread is started.
+  LOG_SET_CALLBACK(loptions->LogCallback());
+#endif  // TRITON_ENABLE_LOGGING
+
 #ifdef TRITON_ENABLE_METRICS
   // NOTE: Metrics must be enabled before backends are setup
   if (loptions->Metrics()) {
@@ -2731,7 +2798,20 @@ TRITONSERVER_ServerModelIsReady(
   tc::InferenceServer* lserver = reinterpret_cast<tc::InferenceServer*>(server);
 
   std::shared_ptr<tc::Model> model;
-  RETURN_IF_STATUS_ERROR(lserver->GetModel(model_name, model_version, &model));
+  tc::Status get_model_status =
+      lserver->GetModel(model_name, model_version, &model);
+  if (!get_model_status.IsOk()) {
+    // When the server is not ready or the model cannot be found, the model
+    // cannot be ready either, so report ready=false without treating it as an
+    // error. Any other lookup failure is a real error and is surfaced to the
+    // caller.
+    if (get_model_status.StatusCode() == tc::Status::Code::UNAVAILABLE ||
+        get_model_status.StatusCode() == tc::Status::Code::NOT_FOUND) {
+      *ready = false;
+      return nullptr;
+    }
+    RETURN_IF_STATUS_ERROR(get_model_status);
+  }
   RETURN_IF_STATUS_ERROR(lserver->ModelIsReady(*model, ready));
   return nullptr;  // Success
 }
