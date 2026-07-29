@@ -37,7 +37,8 @@ namespace triton { namespace core {
 
 // Keep this unit test scoped to InstanceQueue. The production Payload
 // implementation pulls in backend/scheduler symbols that are unrelated to the
-// queue accounting exercised here, so provide the minimal behavior Dequeue uses.
+// queue accounting exercised here, so provide the minimal behavior Dequeue
+// uses.
 Payload::Payload()
     : op_type_(Operation::INFER_RUN),
       requests_(std::vector<std::unique_ptr<InferenceRequest>>()),
@@ -105,8 +106,8 @@ MakeInferPayload()
   return payload;
 }
 
-// Reproduces the waiting-consumer bookkeeping that RateLimiter performs around a
-// single per-model InstanceQueue and asserts it does not drift when Dequeue
+// Reproduces the waiting-consumer bookkeeping that RateLimiter performs around
+// a single per-model InstanceQueue and asserts it does not drift when Dequeue
 // merges payloads.
 //
 // RateLimiter drives the counter with exactly two moves on this queue:
@@ -115,8 +116,8 @@ MakeInferPayload()
 // When Dequeue merges k payloads into one, the k payloads were each decremented
 // at enqueue but only a single increment is issued for the dequeue call, so the
 // count leaks -(k-1) per merge. Over many merge-heavy rounds this drives
-// waiting_consumer_count_ negative, which throttles the dynamic batcher onto its
-// slow 500 ms poll fallback (the dispatch gates require
+// waiting_consumer_count_ negative, which throttles the dynamic batcher onto
+// its slow 500 ms poll fallback (the dispatch gates require
 // WaitingConsumerCount() > 0), degrading throughput.
 //
 // With the fix (Dequeue credits back one count per merged payload) the counter
