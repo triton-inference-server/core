@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,14 +28,18 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <future>
 #include <map>
 #include <memory>
 
+#include "constants.h"
 #include "filesystem/api.h"
 #include "gtest/gtest.h"
+#include "model_config_utils.h"
 #include "server_message.h"
 #include "shared_library.h"
 
@@ -2357,6 +2361,165 @@ TEST_F(TritonRepoAgentAPITest, TRITONREPOAGENT_AgentState)
       }
     }
   }
+}
+
+
+// Exercises AutoCompleteBackendFields() against on-disk model layouts. The
+// PyTorch cases pin the contract that a model using the Python-based runtime
+// ("model.py") never receives an autofilled default_model_filename: such a
+// model resolves its own file and treats a sibling "model.pt"/"model.pt2" as
+// the weights companion to the model class, not as the model itself.
+class AutoCompleteBackendFieldsTest : public ::testing::Test {
+ protected:
+  void SetUp() override
+  {
+    char dir_template[] = "/tmp/model_config_autofill_XXXXXX";
+    char* dir = mkdtemp(dir_template);
+    ASSERT_NE(dir, nullptr);
+    model_path_ = dir;
+    version_path_ = model_path_ + "/1";
+    ASSERT_TRUE(std::filesystem::create_directory(version_path_));
+  }
+
+  void TearDown() override { std::filesystem::remove_all(model_path_); }
+
+  void TouchVersionFile(const std::string& filename)
+  {
+    std::ofstream file(version_path_ + "/" + filename);
+    file << "content";
+    ASSERT_TRUE(file.good());
+  }
+
+  void AutoComplete(inference::ModelConfig* config)
+  {
+    tc::Status status =
+        tc::AutoCompleteBackendFields("test_model", model_path_, config);
+    ASSERT_TRUE(status.IsOk()) << status.Message();
+  }
+
+  std::string model_path_;
+  std::string version_path_;
+};
+
+// A model with backend "pytorch" + runtime "model.py" and both "model.py"
+// and a weights "model.pt" in the version directory must not have "model.pt"
+// autofilled as the default model filename, otherwise the runtime attempts
+// torch.jit.load() on the weights file.
+TEST_F(AutoCompleteBackendFieldsTest, PythonRuntimeLibTorchKeepsFilenameEmpty)
+{
+  TouchVersionFile(tc::kPythonFilename);
+  TouchVersionFile(tc::kPyTorchLibTorchFilename);
+
+  inference::ModelConfig config;
+  config.set_backend(tc::kPyTorchBackend);
+  config.set_runtime(tc::kPythonFilename);
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.backend(), tc::kPyTorchBackend);
+  EXPECT_EQ(config.platform(), tc::kPyTorchLibTorchPlatform);
+  EXPECT_EQ(config.default_model_filename(), "");
+}
+
+TEST_F(AutoCompleteBackendFieldsTest, PythonRuntimeAotiKeepsFilenameEmpty)
+{
+  TouchVersionFile(tc::kPythonFilename);
+  TouchVersionFile(tc::kPyTorchAotiFilename);
+
+  inference::ModelConfig config;
+  config.set_backend(tc::kPyTorchBackend);
+  config.set_platform(tc::kPyTorchAotiPlatform);
+  config.set_runtime(tc::kPythonFilename);
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.platform(), tc::kPyTorchAotiPlatform);
+  EXPECT_EQ(config.default_model_filename(), "");
+}
+
+// Default-runtime models keep the pre-existing autofill behavior.
+TEST_F(AutoCompleteBackendFieldsTest, LibTorchBackendAutofillsFilename)
+{
+  TouchVersionFile(tc::kPyTorchLibTorchFilename);
+
+  inference::ModelConfig config;
+  config.set_backend(tc::kPyTorchBackend);
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.platform(), tc::kPyTorchLibTorchPlatform);
+  EXPECT_EQ(config.default_model_filename(), tc::kPyTorchLibTorchFilename);
+}
+
+TEST_F(AutoCompleteBackendFieldsTest, AotiPlatformAutofillsFilename)
+{
+  TouchVersionFile(tc::kPyTorchAotiFilename);
+
+  inference::ModelConfig config;
+  config.set_backend(tc::kPyTorchBackend);
+  config.set_platform(tc::kPyTorchAotiPlatform);
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.default_model_filename(), tc::kPyTorchAotiFilename);
+}
+
+// An explicit user-provided filename is never overwritten, runtime or not.
+TEST_F(AutoCompleteBackendFieldsTest, ExplicitFilenamePreserved)
+{
+  TouchVersionFile(tc::kPythonFilename);
+  TouchVersionFile("custom.pt");
+
+  inference::ModelConfig config;
+  config.set_backend(tc::kPyTorchBackend);
+  config.set_runtime(tc::kPythonFilename);
+  config.set_default_model_filename("custom.pt");
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.default_model_filename(), "custom.pt");
+}
+
+// With no backend/platform given, the version directory is inspected.
+TEST_F(AutoCompleteBackendFieldsTest, SniffLibTorchFromVersionDir)
+{
+  TouchVersionFile(tc::kPyTorchLibTorchFilename);
+
+  inference::ModelConfig config;
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.backend(), tc::kPyTorchBackend);
+  EXPECT_EQ(config.platform(), tc::kPyTorchLibTorchPlatform);
+  EXPECT_EQ(config.default_model_filename(), "");
+}
+
+TEST_F(AutoCompleteBackendFieldsTest, SniffAotiFromVersionDir)
+{
+  TouchVersionFile(tc::kPyTorchAotiFilename);
+
+  inference::ModelConfig config;
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.backend(), tc::kPyTorchAotiBackend);
+  EXPECT_EQ(config.platform(), tc::kPyTorchAotiPlatform);
+  EXPECT_EQ(config.default_model_filename(), tc::kPyTorchAotiFilename);
+}
+
+// The alternate "libtorch" platform spelling selects the PyTorch backend and
+// does not trigger filename autofill (platform is non-empty and not AOTI).
+TEST_F(AutoCompleteBackendFieldsTest, AltLibTorchPlatformSetsBackend)
+{
+  TouchVersionFile(tc::kPyTorchLibTorchFilename);
+
+  inference::ModelConfig config;
+  config.set_platform(tc::kPyTorchLibTorchPlatformAlt);
+
+  AutoComplete(&config);
+
+  EXPECT_EQ(config.backend(), tc::kPyTorchBackend);
+  EXPECT_EQ(config.default_model_filename(), "");
 }
 
 }  // namespace
