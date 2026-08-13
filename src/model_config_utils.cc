@@ -1259,17 +1259,23 @@ AutoCompleteBackendFields(
   // When we know the backend is PyTorch, we set the platform and default model
   // filename as necessary.
   if (config->backend() == kPyTorchBackend) {
+    // A non-default runtime resolves its own model file. The Python-based
+    // PyTorch runtime ("model.py") treats a sibling "model.pt" as the weights
+    // companion to the model class, so autofilling this field would make it
+    // load the weights file as the model itself.
+    const bool use_autofill_filename =
+        config->default_model_filename().empty() &&
+        (config->runtime() != kPythonFilename);
     if (config->platform().empty()) {
       // The default platform for the PyTorch backend is LibTorch until it is
       // deprecated. AOTI must be explicitly specified to maximize backwards
       // compatibility.
       config->set_platform(kPyTorchLibTorchPlatform);
-      if (config->default_model_filename().empty()) {
+      if (use_autofill_filename) {
         config->set_default_model_filename(kPyTorchLibTorchFilename);
       }
     } else if (
-        config->platform() == kPyTorchAotiPlatform &&
-        config->default_model_filename().empty()) {
+        (config->platform() == kPyTorchAotiPlatform) && use_autofill_filename) {
       config->set_default_model_filename(kPyTorchAotiFilename);
     }
     return Status::Success;
