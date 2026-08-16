@@ -97,6 +97,7 @@ class FileSystem {
   virtual Status MakeTemporaryDirectory(
       std::string dir_path, std::string* temp_dir) = 0;
   virtual Status DeletePath(const std::string& path) = 0;
+  virtual ~FileSystem() = default;
 };
 
 // Helper function to take care of lack of trailing slashes
