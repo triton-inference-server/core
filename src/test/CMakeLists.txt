@@ -588,12 +588,16 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/..
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include
     ${GTEST_INCLUDE_DIRS}
+    # instance_queue.h -> payload.h -> backend_model_instance.h includes
+    # boost/core/span.hpp, so the headers have to be reachable here.
+    ${Boost_INCLUDE_DIRS}
 )
 
 target_link_libraries(
   instance_queue_test
   PRIVATE
     triton-common-error        # from repo-common
+    triton-common-json         # from repo-common, carries rapidjson
     triton-common-logging      # from repo-common
     triton-common-model-config # from repo-common
     proto-library              # from repo-common
