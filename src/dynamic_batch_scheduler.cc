@@ -673,6 +673,23 @@ void
 DynamicBatchScheduler::DelegateResponse(
     std::unique_ptr<InferenceRequest>& request)
 {
+  // Reserve this request's slot in the completion queue now, while we are
+  // still in scheduler-receive order. FinalizeResponses() stalls on an empty
+  // front slot, which is what holds later responses back until earlier ones
+  // are ready. Filling the slot only at completion time would order the queue
+  // by completion instead, defeating preserve_ordering.
+  //
+  // Only reserve when ordering is required: when just the response cache is
+  // enabled the delegator sends directly and would never fill the slot,
+  // leaking it for the lifetime of the model.
+  std::vector<std::pair<std::unique_ptr<InferenceResponse>, uint32_t>>*
+      queue_slot = nullptr;
+  if (preserve_ordering_) {
+    std::lock_guard<std::mutex> lock(completion_queue_mtx_);
+    completion_queue_.emplace_back();
+    queue_slot = &completion_queue_.back();
+  }
+
   // Cache plumbing
   const std::string& key = request->CacheKey();
   const bool is_key_set = request->CacheKeyIsSet();
@@ -680,7 +697,7 @@ DynamicBatchScheduler::DelegateResponse(
   const uint64_t lookup_start_ns = request->CacheLookupStartNs();
 
   request->SetResponseDelegator(
-      [this, key, is_key_set, lookup_end_ns, lookup_start_ns](
+      [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
         if (response_cache_enabled_ && !is_key_set) {
           // Logical error, the key should be set if caching is enabled
@@ -735,8 +752,6 @@ DynamicBatchScheduler::DelegateResponse(
         if (preserve_ordering_) {
           {
             std::lock_guard<std::mutex> lock(completion_queue_mtx_);
-            completion_queue_.emplace_back();
-            auto queue_slot = &completion_queue_.back();
             queue_slot->emplace_back(std::move(response), flags);
           }
           FinalizeResponses();
