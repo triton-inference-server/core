@@ -60,10 +60,18 @@ endif() # TRITON_ENABLE_GPU
 #
 # Boost
 #
-# Minimum of 1.78 required for use of boost::span. This can eventually be
-# relaxed and replaced with std::span in C++20.
-cmake_policy (SET CMP0167 OLD)
-find_package(Boost 1.78 REQUIRED COMPONENTS)
+# Only header-only libraries are used -- algorithm/string, core/span,
+# functional/hash and interprocess -- hence the empty COMPONENTS list.
+#
+# No minimum version is declared here. boost::span needs 1.78 or newer, but the
+# version is pinned by whoever provides the package (TRITON_BOOST_VERSION in the
+# server build), so repeating a floor here would just be a second place to
+# update. boost::span can go away entirely once this builds as C++20 and
+# std::span is available.
+#
+# CMP0167 is deliberately left at its default (NEW from CMake 3.30), so Boost's
+# own BoostConfig.cmake is used rather than CMake's deprecated FindBoost module.
+find_package(Boost REQUIRED COMPONENTS)
 message(STATUS "Using Boost ${Boost_VERSION}")
 
 #
@@ -85,6 +93,11 @@ endif() # TRITON_ENABLE_METRICS
 # GCS
 #
 if(${TRITON_ENABLE_GCS})
+  # Upstream installs a config per component, so this is the storage client's
+  # own google_cloud_cpp_storageConfig.cmake. ConanCenter's packaging instead
+  # consolidates everything into google-cloud-cpp-config.cmake, which is why
+  # this name has to match whoever provides the package -- Triton's recipe
+  # (server/conan/recipes/google-cloud-cpp) preserves the upstream layout.
   find_package(google_cloud_cpp_storage REQUIRED)
   message(STATUS "Using google-cloud-cpp ${google_cloud_cpp_storage_VERSION}")
 endif() # TRITON_ENABLE_GCS
@@ -94,6 +107,10 @@ endif() # TRITON_ENABLE_GCS
 #
 if(${TRITON_ENABLE_S3})
   find_package(ZLIB REQUIRED)
+  # AWSSDK is the config name either way, but the component target it exports is
+  # not: upstream's own build installs aws-cpp-sdk-s3, while ConanCenter names
+  # its components after the package and exports AWS::aws-sdk-cpp-s3. The
+  # namespaced form is what is linked below.
   find_package(AWSSDK REQUIRED COMPONENTS s3)
   message(STATUS "Using aws-sdk-cpp ${AWSSDK_VERSION}")
 endif()
@@ -102,11 +119,13 @@ endif()
 # Azure Storage
 #
 if(${TRITON_ENABLE_AZURE_STORAGE})
-  find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
-  message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
-
-  find_package(azure-identity-cpp CONFIG REQUIRED)
-  message(STATUS "Using Azure identity ${azure-identity-cpp_VERSION}")
+  # azure-sdk-for-cpp ships a single AzureSDKConfig.cmake covering every
+  # component, rather than the separate azure-storage-blobs-cpp and
+  # azure-identity-cpp configs the individual upstream repos install. Both
+  # Azure::azure-storage-blobs and Azure::azure-identity, linked below, come
+  # from this one package.
+  find_package(AzureSDK CONFIG REQUIRED)
+  message(STATUS "Using Azure SDK ${AzureSDK_VERSION}")
 endif()
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
@@ -245,7 +264,7 @@ add_library(
   TritonCore::triton-core ALIAS triton-core
 )
 
-target_compile_features(triton-core PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+target_compile_features(triton-core PRIVATE cxx_std_${CMAKE_CXX_STANDARD})
 target_compile_options(
   triton-core
   PRIVATE
@@ -308,7 +327,7 @@ endif() # TRITON_ENABLE_GCS
 if(${TRITON_ENABLE_S3})
   target_include_directories(
     triton-core
-    PRIVATE $<TARGET_PROPERTY:aws-cpp-sdk-s3,INTERFACE_INCLUDE_DIRECTORIES>
+    PRIVATE $<TARGET_PROPERTY:AWS::aws-sdk-cpp-s3,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif()
 
@@ -479,7 +498,7 @@ if(${TRITON_ENABLE_S3})
   target_link_libraries(
     triton-core
     PRIVATE
-      aws-cpp-sdk-s3
+      AWS::aws-sdk-cpp-s3
   )
 endif() # TRITON_ENABLE_S3
 
