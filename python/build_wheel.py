@@ -487,7 +487,7 @@ if __name__ == "__main__":
     )
 
     shutil.copyfile("LICENSE.txt", os.path.join(FLAGS.whl_dir, "LICENSE.txt"))
-    shutil.copyfile("setup.py", os.path.join(FLAGS.whl_dir, "setup.py"))
+    shutil.copyfile("hatch_build.py", os.path.join(FLAGS.whl_dir, "hatch_build.py"))
     shutil.copyfile("pyproject.toml", os.path.join(FLAGS.whl_dir, "pyproject.toml"))
     # pyproject.toml resolves the wheel version from the TRITON_VERSION file
     # next to it. Write the chosen version into the wheel build root; do NOT
