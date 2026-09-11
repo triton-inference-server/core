@@ -36,7 +36,7 @@ option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 #
 # Specifying min required C++ standard
 #
-set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
 
 #
 # Triton Server API
