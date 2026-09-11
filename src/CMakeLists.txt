@@ -133,7 +133,7 @@ set(
   infer_trace.cc
   instance_queue.cc
   label_provider.cc
-  memory.cc
+  triton_memory.cc
   metric_model_reporter.cc
   metrics.cc
   metric_family.cc
@@ -180,7 +180,7 @@ set(
   infer_trace.h
   instance_queue.h
   label_provider.h
-  memory.h
+  triton_memory.h
   metric_model_reporter.h
   metrics.h
   metric_family.h
