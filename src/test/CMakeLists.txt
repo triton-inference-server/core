@@ -75,13 +75,13 @@ set(
 set(
   MEMORY_SRCS
   ../buffer_attributes.cc
-  ../memory.cc
+  ../triton_memory.cc
 )
 
 set(
   MEMORY_HDRS
   ../buffer_attributes.h
-  ../memory.h
+  ../triton_memory.h
 )
 
 #
