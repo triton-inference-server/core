@@ -699,13 +699,17 @@ DynamicBatchScheduler::DelegateResponse(
   request->SetResponseDelegator(
       [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
-        if (response_cache_enabled_) {
+        if (response_cache_enabled_ && !is_key_set) {
           // Logical error, the key should be set if caching is enabled
           // for this model
-          if (!is_key_set) {
-            LOG_ERROR << "Request cache key was not set correctly.";
-          }
+          LOG_ERROR << "Request cache key was not set correctly.";
+        }
 
+        // Error and cancelled responses carry no outputs. Caching one would
+        // serve an empty response as a hit to the next matching request.
+        const bool cacheable =
+            (response != nullptr) && response->ResponseStatus().IsOk();
+        if (response_cache_enabled_ && cacheable) {
           // Cache insertion happens here because we need the backend to have
           // computed the inference response first in the case of cache miss
           auto cache = model_->Server()->CacheManager()->Cache();

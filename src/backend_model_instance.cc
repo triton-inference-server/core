@@ -565,10 +565,58 @@ TritonModelInstance::PrepareRequestsOrRespond(
   return status;
 }
 
+void
+TritonModelInstance::FinishCancelledRequests(
+    std::vector<std::unique_ptr<InferenceRequest>>& requests)
+{
+  // Batch positions map to sequence slots, so requests cannot be removed. The
+  // sequence batcher cancels its own requests while they are queued.
+  if (model_->Config().has_sequence_batching()) {
+    return;
+  }
+
+  const static Status cancelled_status = Status(Status::Code::CANCELLED);
+
+  size_t next = 0;
+  for (size_t idx = 0; idx < requests.size(); ++idx) {
+    std::unique_ptr<InferenceRequest>& request = requests[idx];
+
+    if ((request != nullptr) && request->IsCancelled()) {
+      InferenceRequest::RespondIfError(
+          request, cancelled_status, true /* release_requests */,
+          FailureReason::CANCELED);
+
+      if (request != nullptr) {
+        LOG_ERROR << request->LogRequest()
+                  << "failed to release cancelled request";
+      }
+      continue;
+    }
+
+    if (next != idx) {
+      requests[next] = std::move(request);
+    }
+    ++next;
+  }
+
+  requests.resize(next);
+}
+
 Status
 TritonModelInstance::Schedule(
     std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
+  // Drop requests cancelled while waiting for an execution slot.
+  // Last point of control before the backend is invoked and is
+  // common to every scheduler.
+  FinishCancelledRequests(requests);
+
+  // Every request may have been cancelled. The backend must not be invoked
+  // with an empty batch.
+  if (requests.empty()) {
+    return Status::Success;
+  }
+
   // Prepare requests for execution, respond to requests if any error occur.
   RETURN_IF_ERROR(PrepareRequestsOrRespond(requests));
 
