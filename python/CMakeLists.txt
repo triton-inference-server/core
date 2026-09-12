@@ -36,6 +36,7 @@ file(COPY test/  DESTINATION ./test/.)
 set(WHEEL_DEPENDS
       ${CMAKE_CURRENT_BINARY_DIR}/TRITON_VERSION
       ${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt
+      ${CMAKE_CURRENT_BINARY_DIR}/pyproject.toml
       ${CMAKE_CURRENT_BINARY_DIR}/hatch_build.py
       ${CMAKE_CURRENT_BINARY_DIR}/tritonserver
       python-bindings
