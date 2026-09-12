@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -25,43 +24,34 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
 import subprocess
 
-from setuptools import Distribution, setup
-from setuptools.command.build_py import build_py
+from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 
-class BuildPyCommand(build_py):
-    def run(self):
-        build_py.run(self)
-        # Generate stub files:
-        package_name = self.distribution.metadata.name
+class CustomBuildHook(BuildHookInterface):
+    """Tag the tritonserver wheel as platform-specific and emit type stubs.
+
+    The wheel ships an arch-specific CPython extension
+    (tritonserver/_c/triton_bindings.cpython-<xy>-<arch>-linux-gnu.so) that
+    build_wheel.py stages into the package rather than having the backend
+    compile it. Hatchling therefore sees only data files and would emit a
+    pure-Python "py3-none-any" wheel, which auditwheel rejects.
+
+    pure_python=False plus infer_tag=True makes hatchling derive the
+    cp<XY>-cp<XY>-linux_<arch> tag from the running interpreter, reproducing
+    what the setuptools BinaryDistribution shim did. See TRI-983.
+
+    stubgen regenerates the _c type stubs next to the extension so they are
+    collected into the wheel, replacing the setuptools build_py subclass.
+    """
+
+    def initialize(self, version, build_data):
+        build_data["pure_python"] = False
+        build_data["infer_tag"] = True
+        # Written into the package tree (self.root is the wheel build root)
+        # so hatchling collects the stubs alongside the extension.
         subprocess.run(
-            ["stubgen", "-p", f"{package_name}._c", "-o", f"{self.build_lib}"],
+            ["stubgen", "-p", "tritonserver._c", "-o", self.root],
             check=True,
         )
-
-
-# The wheel ships an arch-specific CPython extension
-# (tritonserver/_c/triton_bindings.cpython-<xy>-<arch>-linux-gnu.so)
-# that is copied into the package_data at build time rather than
-# declared via setup(ext_modules=...). Without a declared ext_module
-# setuptools treats the distribution as pure-Python and emits
-# "Root-Is-Purelib: true" in the WHEEL metadata + a "py3-none-any"
-# tag, which auditwheel rightly rejects.
-#
-# Signaling has_ext_modules()=True via a custom Distribution subclass
-# is the canonical way to tell setuptools the wheel is binary without
-# triggering a fake compilation step. setuptools then:
-#   - sets Root-Is-Purelib to false (required for auditwheel repair),
-#   - auto-derives the correct cp<XY>-cp<XY>-linux_<arch> tag from
-#     the current interpreter and sysconfig.get_platform().
-# See TRI-983.
-class BinaryDistribution(Distribution):
-    def has_ext_modules(self):
-        return True
-
-
-if __name__ == "__main__":
-    setup(distclass=BinaryDistribution, cmdclass={"build_py": BuildPyCommand})
