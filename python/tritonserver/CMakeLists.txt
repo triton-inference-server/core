@@ -1,4 +1,4 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -58,7 +58,7 @@ target_link_libraries(
   triton-core-serverapi           # from repo-core
   triton-core-serverstub          # from repo-core
 )
-target_compile_features(python-bindings PRIVATE cxx_std_17)
+target_compile_features(python-bindings PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 
 set_property(TARGET python-bindings PROPERTY OUTPUT_NAME triton_bindings)
 # Add Triton library default path in 'rpath' for runtime library lookup

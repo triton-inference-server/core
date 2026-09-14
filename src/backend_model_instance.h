@@ -33,13 +33,13 @@
 #include <thread>
 
 #include "constants.h"
-#include "memory.h"
 #include "metric_model_reporter.h"
 #include "model_config.pb.h"
 #include "model_config_utils.h"
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/sync_queue.h"
+#include "triton_memory.h"
 
 namespace triton { namespace core {
 

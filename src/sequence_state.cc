@@ -29,9 +29,9 @@
 #include <cstdint>
 
 #include "cuda_utils.h"
-#include "memory.h"
 #include "model_config_utils.h"
 #include "triton/common/logging.h"
+#include "triton_memory.h"
 
 namespace triton { namespace core {
 

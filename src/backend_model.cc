@@ -682,7 +682,7 @@ TritonModel::PrepareInstances(
 
         // Note that the local variables should be captured by value
         creation_results.emplace_back(
-            std::async(launch_policy, [=, &instance_mu]() {
+            std::async(launch_policy, [=, this, &instance_mu]() {
               // The requested instance did not match an existing instance.
               // Create a new instance.
               std::shared_ptr<TritonModelInstance> new_instance;
