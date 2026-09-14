@@ -565,21 +565,21 @@ TritonModelInstance::PrepareRequestsOrRespond(
   return status;
 }
 
-void
-TritonModelInstance::FinishCancelledRequests(
+size_t
+TritonModelInstance::DropCancelledRequests(
     std::vector<std::unique_ptr<InferenceRequest>>& requests)
 {
   // Batch positions map to sequence slots, so requests cannot be removed. The
   // sequence batcher cancels its own requests while they are queued.
   if (model_->Config().has_sequence_batching()) {
-    return;
+    return requests.size();
   }
 
   const static Status cancelled_status = Status(Status::Code::CANCELLED);
 
-  size_t next = 0;
-  for (size_t idx = 0; idx < requests.size(); ++idx) {
-    std::unique_ptr<InferenceRequest>& request = requests[idx];
+  size_t write_idx = 0;
+  for (size_t read_idx = 0; read_idx < requests.size(); ++read_idx) {
+    std::unique_ptr<InferenceRequest>& request = requests[read_idx];
 
     if ((request != nullptr) && request->IsCancelled()) {
       InferenceRequest::RespondIfError(
@@ -593,27 +593,23 @@ TritonModelInstance::FinishCancelledRequests(
       continue;
     }
 
-    if (next != idx) {
-      requests[next] = std::move(request);
+    if (write_idx != read_idx) {
+      requests[write_idx] = std::move(request);
     }
-    ++next;
+    ++write_idx;
   }
 
-  requests.resize(next);
+  requests.resize(write_idx);
+  return requests.size();
 }
 
 Status
 TritonModelInstance::Schedule(
     std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
-  // Drop requests cancelled while waiting for an execution slot.
-  // Last point of control before the backend is invoked and is
-  // common to every scheduler.
-  FinishCancelledRequests(requests);
-
-  // Every request may have been cancelled. The backend must not be invoked
-  // with an empty batch.
-  if (requests.empty()) {
+  // Drop requests cancelled while waiting for an execution slot. This is the
+  // final cancellation check shared by all schedulers before backend execution.
+  if (DropCancelledRequests(requests) == 0) {
     return Status::Success;
   }
 
