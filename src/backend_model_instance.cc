@@ -569,9 +569,11 @@ size_t
 TritonModelInstance::DropCancelledRequests(
     std::vector<std::unique_ptr<InferenceRequest>>& requests)
 {
-  // Batch positions map to sequence slots, so requests cannot be removed. The
-  // sequence batcher cancels its own requests while they are queued.
-  if (model_->Config().has_sequence_batching()) {
+  // Direct sequence payload positions map to sequence slots and cannot be
+  // compacted. Oldest-first payloads are dynamically batched, so cancelled
+  // requests can be removed without changing sequence-slot positions.
+  if (model_->Config().has_sequence_batching() &&
+      !model_->Config().sequence_batching().has_oldest()) {
     return requests.size();
   }
 
