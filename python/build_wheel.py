@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -487,7 +487,7 @@ if __name__ == "__main__":
     )
 
     shutil.copyfile("LICENSE.txt", os.path.join(FLAGS.whl_dir, "LICENSE.txt"))
-    shutil.copyfile("setup.py", os.path.join(FLAGS.whl_dir, "setup.py"))
+    shutil.copyfile("hatch_build.py", os.path.join(FLAGS.whl_dir, "hatch_build.py"))
     shutil.copyfile("pyproject.toml", os.path.join(FLAGS.whl_dir, "pyproject.toml"))
     # pyproject.toml resolves the wheel version from the TRITON_VERSION file
     # next to it. Write the chosen version into the wheel build root; do NOT
@@ -507,7 +507,11 @@ if __name__ == "__main__":
     if os.path.isdir(_dist):
         shutil.rmtree(_dist)
     print("=== Building wheel")
-    args = ["python3", "-m", "build"]
+    # --wheel: only the wheel is consumed downstream (auditwheel repair +
+    # dist copy). Without it `build` makes an sdist first and builds the
+    # wheel from it, so generated inputs such as TRITON_VERSION must also
+    # be inside the sdist for dynamic version resolution to work.
+    args = ["python3", "-m", "build", "--wheel"]
 
     # Release-semantic X.Y.Z -> PyPI-clean (no variant label).
     # Anything else -> PEP 817 variant label. The pipeline id is already
