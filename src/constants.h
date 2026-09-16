@@ -93,6 +93,14 @@ constexpr char kInitialStateFolder[] = "initial_state";
 constexpr char kPendingRequestMetric[] = "inf_pending_request_count";
 constexpr char kModelLoadTimeMetric[] = "model_load_time";
 constexpr char kFirstResponseHistogram[] = "first_response_histogram";
+constexpr char kRequestDurationHistogram[] = "request_duration_histogram";
+constexpr char kQueueDurationHistogram[] = "queue_duration_histogram";
+constexpr char kComputeInputDurationHistogram[] =
+    "compute_input_duration_histogram";
+constexpr char kComputeInferDurationHistogram[] =
+    "compute_infer_duration_histogram";
+constexpr char kComputeOutputDurationHistogram[] =
+    "compute_output_duration_histogram";
 
 constexpr uint64_t NANOS_PER_SECOND = 1000000000;
 constexpr uint64_t NANOS_PER_MILLIS = 1000000;

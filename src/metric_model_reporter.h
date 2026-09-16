@@ -60,10 +60,17 @@ struct MetricReporterConfig {
   // Create and use Summaries for per-model latency related metrics
   bool latency_summaries_enabled_ = false;
   // Default bucket boundaries used for each histogram metric. Each value
-  // represents a boundary. For example, {100, 500, 2000, 5000} are latencies.
-  // in milliseconds in first_response_histogram.
+  // represents a boundary. For example, {100, 500, 2000, 5000} are latencies
+  // in milliseconds for first_response_histogram. Other duration histograms
+  // use microseconds as their unit.
   std::unordered_map<std::string, prometheus::Histogram::BucketBoundaries>
-      histogram_options_ = {{kFirstResponseHistogram, {100, 500, 2000, 5000}}};
+      histogram_options_ = {
+          {kFirstResponseHistogram, {100, 500, 2000, 5000}},
+          {kRequestDurationHistogram, {1000, 5000, 25000, 50000, 100000}},
+          {kQueueDurationHistogram, {100, 1000, 5000, 10000, 50000}},
+          {kComputeInputDurationHistogram, {100, 500, 1000, 5000, 10000}},
+          {kComputeInferDurationHistogram, {1000, 5000, 25000, 50000, 100000}},
+          {kComputeOutputDurationHistogram, {100, 500, 1000, 5000, 10000}}};
 
   // Quantiles used for any summary metrics. Each pair of values represents
   // { quantile, error }. For example, {0.90, 0.01} means to compute the
@@ -82,7 +89,15 @@ struct MetricReporterConfig {
   // "ModelMetrics" with the full name displayed from metrics reporting while a
   // different name is used internally. All new histograms must update the map.
   const std::unordered_map<std::string, std::string> metric_map_ = {
-      {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram}};
+      {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram},
+      {"nv_inference_request_duration_histogram_us", kRequestDurationHistogram},
+      {"nv_inference_queue_duration_histogram_us", kQueueDurationHistogram},
+      {"nv_inference_compute_input_duration_histogram_us",
+       kComputeInputDurationHistogram},
+      {"nv_inference_compute_infer_duration_histogram_us",
+       kComputeInferDurationHistogram},
+      {"nv_inference_compute_output_duration_histogram_us",
+       kComputeOutputDurationHistogram}};
 #endif  // TRITON_ENABLE_METRICS
 };
 
