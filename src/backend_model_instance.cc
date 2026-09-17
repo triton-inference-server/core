@@ -565,10 +565,56 @@ TritonModelInstance::PrepareRequestsOrRespond(
   return status;
 }
 
+size_t
+TritonModelInstance::DropCancelledRequests(
+    std::vector<std::unique_ptr<InferenceRequest>>& requests)
+{
+  // Direct sequence payload positions map to sequence slots and cannot be
+  // compacted. Oldest-first payloads are dynamically batched, so cancelled
+  // requests can be removed without changing sequence-slot positions.
+  if (model_->Config().has_sequence_batching() &&
+      !model_->Config().sequence_batching().has_oldest()) {
+    return requests.size();
+  }
+
+  const static Status cancelled_status = Status(Status::Code::CANCELLED);
+
+  size_t write_idx = 0;
+  for (size_t read_idx = 0; read_idx < requests.size(); ++read_idx) {
+    std::unique_ptr<InferenceRequest>& request = requests[read_idx];
+
+    if ((request != nullptr) && request->IsCancelled()) {
+      InferenceRequest::RespondIfError(
+          request, cancelled_status, true /* release_requests */,
+          FailureReason::CANCELED);
+
+      if (request != nullptr) {
+        LOG_ERROR << request->LogRequest()
+                  << "failed to release cancelled request";
+      }
+      continue;
+    }
+
+    if (write_idx != read_idx) {
+      requests[write_idx] = std::move(request);
+    }
+    ++write_idx;
+  }
+
+  requests.resize(write_idx);
+  return requests.size();
+}
+
 Status
 TritonModelInstance::Schedule(
     std::vector<std::unique_ptr<InferenceRequest>>&& requests)
 {
+  // Drop requests cancelled while waiting for an execution slot. This is the
+  // final cancellation check shared by all schedulers before backend execution.
+  if (DropCancelledRequests(requests) == 0) {
+    return Status::Success;
+  }
+
   // Prepare requests for execution, respond to requests if any error occur.
   RETURN_IF_ERROR(PrepareRequestsOrRespond(requests));
 

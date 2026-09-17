@@ -223,6 +223,10 @@ class TritonModelInstance {
       std::vector<std::unique_ptr<InferenceRequest>>& requests);
   Status PrepareRequestsOrRespond(
       std::vector<std::unique_ptr<InferenceRequest>>& requests);
+  // Respond to and remove cancelled requests, returning the number remaining.
+  // No-op for models using direct sequence batching
+  size_t DropCancelledRequests(
+      std::vector<std::unique_ptr<InferenceRequest>>& requests);
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
 
   std::shared_ptr<TritonBackendThread> triton_backend_thread_;
