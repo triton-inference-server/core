@@ -34,33 +34,11 @@
 #include <unordered_map>
 
 #include "infer_parameter.h"
+#include "metrics.h"
 #include "prometheus/registry.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
-
-//
-// TritonServerMetricArgs
-//
-// Implementation for TRITONSERVER_MetricArgs.
-//
-class TritonServerMetricArgs {
- public:
-  TritonServerMetricArgs() = default;
-
-  void* SetHistogramArgs(const double* buckets, uint64_t bucket_count)
-  {
-    kind_ = TRITONSERVER_METRIC_KIND_HISTOGRAM;
-    buckets_ = std::vector<double>(buckets, buckets + bucket_count);
-    return nullptr;
-  }
-  TRITONSERVER_MetricKind kind() const { return kind_; }
-  const std::vector<double>& buckets() const { return buckets_; }
-
- private:
-  TRITONSERVER_MetricKind kind_;
-  std::vector<double> buckets_;
-};
 
 //
 // Implementation for TRITONSERVER_MetricFamily.
@@ -93,14 +71,9 @@ class MetricFamily {
 
   void* family_;
   TRITONSERVER_MetricKind kind_;
+  std::shared_ptr<MetricsStorage> storage_;
   // Synchronize access of related metric objects
   std::mutex metric_mtx_;
-  // Prometheus returns the existing metric pointer if the metric with the same
-  // set of labels are requested, as a result, different Metric objects may
-  // refer to the same prometheus metric. So we must track the reference count
-  // of the metric and request prometheus to remove it only when all references
-  // are released.
-  std::unordered_map<void*, size_t> prom_metric_ref_cnt_;
   // Maintain references to metrics created from this metric family to
   // invalidate their references if a family is deleted before its metric
   std::set<Metric*> child_metrics_;

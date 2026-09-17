@@ -46,9 +46,114 @@
 
 namespace triton { namespace core {
 
+void*
+MetricsStorage::Add(
+    TRITONSERVER_MetricKind kind, void* family,
+    std::map<std::string, std::string> label_map,
+    const TritonServerMetricArgs* args)
+{
+  void* prom_metric = nullptr;
+  switch (kind) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      if (args != nullptr) {
+        throw std::invalid_argument(
+            "Unexpected args found in counter Metric constructor.");
+      }
+      auto counter_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family);
+      auto counter_ptr = &counter_family_ptr->Add(label_map);
+      prom_metric = reinterpret_cast<void*>(counter_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      if (args != nullptr) {
+        throw std::invalid_argument(
+            "Unexpected args found in gauge Metric constructor.");
+      }
+      auto gauge_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family);
+      auto gauge_ptr = &gauge_family_ptr->Add(label_map);
+      prom_metric = reinterpret_cast<void*>(gauge_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      if (args == nullptr) {
+        throw std::invalid_argument(
+            "Bucket boundaries not found in Metric args.");
+      }
+      if (args->kind() != TRITONSERVER_METRIC_KIND_HISTOGRAM) {
+        throw std::invalid_argument("Metric args not set to histogram kind.");
+      }
+      auto histogram_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family);
+      auto histogram_ptr =
+          &histogram_family_ptr->Add(label_map, args->buckets());
+      prom_metric = reinterpret_cast<void*>(histogram_ptr);
+      break;
+    }
+    default:
+      throw std::invalid_argument(
+          "Unsupported family kind passed to Metric constructor.");
+  }
+
+  std::lock_guard<std::mutex> lk(metric_mtx_);
+  ++prom_metric_ref_cnt_[prom_metric];
+
+  return prom_metric;
+}
+
+void
+MetricsStorage::Remove(
+    TRITONSERVER_MetricKind kind, void* family, void* prom_metric)
+{
+  {
+    std::lock_guard<std::mutex> lk(metric_mtx_);
+    const auto it = prom_metric_ref_cnt_.find(prom_metric);
+    if (it != prom_metric_ref_cnt_.end()) {
+      --it->second;
+      if (it->second == 0) {
+        prom_metric_ref_cnt_.erase(it);
+      } else {
+        // Done as it is not the last reference
+        return;
+      }
+    }
+  }
+
+  switch (kind) {
+    case TRITONSERVER_METRIC_KIND_COUNTER: {
+      auto counter_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family);
+      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(prom_metric);
+      counter_family_ptr->Remove(counter_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_GAUGE: {
+      auto gauge_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family);
+      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(prom_metric);
+      gauge_family_ptr->Remove(gauge_ptr);
+      break;
+    }
+    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
+      auto histogram_family_ptr =
+          reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family);
+      auto histogram_ptr =
+          reinterpret_cast<prometheus::Histogram*>(prom_metric);
+      histogram_family_ptr->Remove(histogram_ptr);
+      break;
+    }
+    default:
+      // Invalid kind should be caught in constructor
+      LOG_ERROR << "Unsupported kind in Metric destructor.";
+      break;
+  }
+}
+
 Metrics::Metrics()
     : registry_(std::make_shared<prometheus::Registry>()),
       serializer_(new prometheus::TextSerializer()),
+      metrics_storage_(std::make_shared<MetricsStorage>()),
       inf_success_family_(
           prometheus::BuildCounter()
               .Name("nv_inference_request_success")
@@ -1038,6 +1143,13 @@ Metrics::GetRegistry()
 {
   auto singleton = Metrics::GetSingleton();
   return singleton->registry_;
+}
+
+std::shared_ptr<MetricsStorage>
+Metrics::GetMetricsStorage()
+{
+  auto singleton = Metrics::GetSingleton();
+  return singleton->metrics_storage_;
 }
 
 const std::string
