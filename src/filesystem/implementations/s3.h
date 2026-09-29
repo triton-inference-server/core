@@ -102,6 +102,17 @@ struct S3Credential {
   S3Credential(triton::common::TritonJson::Value& cred_json);
 };
 
+// Parse the S3_USE_VIRTUAL_ADDRESSING environment variable. Returns true only
+// for the exact value "true"; unset or any other value yields false. Shared by
+// both the environment-variable and JSON credential constructors so the
+// truthiness rule is defined in exactly one place.
+inline bool
+S3UseVirtualAddressingFromEnv()
+{
+  const char* value = std::getenv("S3_USE_VIRTUAL_ADDRESSING");
+  return (value != nullptr && std::string(value) == "true");
+}
+
 S3Credential::S3Credential()
 {
   const auto to_str = [](const char* s) -> std::string {
@@ -112,13 +123,12 @@ S3Credential::S3Credential()
   const char* region = std::getenv("AWS_DEFAULT_REGION");
   const char* session_token = std::getenv("AWS_SESSION_TOKEN");
   const char* profile = std::getenv("AWS_PROFILE");
-  const char* use_virtual_addressing = std::getenv("S3_USE_VIRTUAL_ADDRESSING");
   secret_key_ = to_str(secret_key);
   key_id_ = to_str(key_id);
   region_ = to_str(region);
   session_token_ = to_str(session_token);
   profile_name_ = to_str(profile);
-  use_virtual_addressing_ = (to_str(use_virtual_addressing) == "true");
+  use_virtual_addressing_ = S3UseVirtualAddressingFromEnv();
 }
 
 S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
@@ -136,17 +146,19 @@ S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
   if (cred_json.Find("profile", &profile_json))
     profile_json.AsString(&profile_name_);
   if (cred_json.Find("use_virtual_addressing", &use_virtual_addressing_json)) {
-    use_virtual_addressing_json.AsBool(&use_virtual_addressing_);
+    // An explicit field in the credential block takes precedence. If it is not
+    // a JSON bool, AsBool leaves use_virtual_addressing_ unchanged (false);
+    // warn so a misconfigured value is not silently ignored.
+    if (!use_virtual_addressing_json.AsBool(&use_virtual_addressing_).IsOk()) {
+      LOG_WARNING << "S3 credential field \"use_virtual_addressing\" is not a "
+                     "boolean; ignoring it and using path-style addressing";
+    }
   } else {
     // Fall back to the environment variable when the credential file does not
     // specify the field. This keeps S3_USE_VIRTUAL_ADDRESSING effective even
     // when TRITON_CLOUD_CREDENTIAL_PATH is set (the credential-file path does
     // not otherwise consult environment variables).
-    const char* use_virtual_addressing =
-        std::getenv("S3_USE_VIRTUAL_ADDRESSING");
-    use_virtual_addressing_ =
-        (use_virtual_addressing != nullptr &&
-         std::string(use_virtual_addressing) == "true");
+    use_virtual_addressing_ = S3UseVirtualAddressingFromEnv();
   }
 }
 
