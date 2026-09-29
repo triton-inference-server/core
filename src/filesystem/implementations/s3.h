@@ -96,6 +96,7 @@ struct S3Credential {
   std::string region_;
   std::string session_token_;
   std::string profile_name_;
+  bool use_virtual_addressing_ = false;
 
   S3Credential();  // from env var
   S3Credential(triton::common::TritonJson::Value& cred_json);
@@ -111,17 +112,19 @@ S3Credential::S3Credential()
   const char* region = std::getenv("AWS_DEFAULT_REGION");
   const char* session_token = std::getenv("AWS_SESSION_TOKEN");
   const char* profile = std::getenv("AWS_PROFILE");
+  const char* use_virtual_addressing = std::getenv("S3_USE_VIRTUAL_ADDRESSING");
   secret_key_ = to_str(secret_key);
   key_id_ = to_str(key_id);
   region_ = to_str(region);
   session_token_ = to_str(session_token);
   profile_name_ = to_str(profile);
+  use_virtual_addressing_ = (to_str(use_virtual_addressing) == "true");
 }
 
 S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
 {
   triton::common::TritonJson::Value secret_key_json, key_id_json, region_json,
-      session_token_json, profile_json;
+      session_token_json, profile_json, use_virtual_addressing_json;
   if (cred_json.Find("secret_key", &secret_key_json))
     secret_key_json.AsString(&secret_key_);
   if (cred_json.Find("key_id", &key_id_json))
@@ -132,6 +135,8 @@ S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
     session_token_json.AsString(&session_token_);
   if (cred_json.Find("profile", &profile_json))
     profile_json.AsString(&profile_name_);
+  if (cred_json.Find("use_virtual_addressing", &use_virtual_addressing_json))
+    use_virtual_addressing_json.AsBool(&use_virtual_addressing_);
 }
 
 class S3FileSystem : public FileSystem {
@@ -325,11 +330,11 @@ S3FileSystem::S3FileSystem(
     client_ = std::make_unique<s3::S3Client>(
         credentials, config,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAdressing*/ false);
+        /*useVirtualAdressing*/ s3_cred.use_virtual_addressing_);
   } else {
     client_ = std::make_unique<s3::S3Client>(
         config, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAdressing*/ false);
+        /*useVirtualAdressing*/ s3_cred.use_virtual_addressing_);
   }
 }
 
