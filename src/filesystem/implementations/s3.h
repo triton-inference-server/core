@@ -135,8 +135,19 @@ S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
     session_token_json.AsString(&session_token_);
   if (cred_json.Find("profile", &profile_json))
     profile_json.AsString(&profile_name_);
-  if (cred_json.Find("use_virtual_addressing", &use_virtual_addressing_json))
+  if (cred_json.Find("use_virtual_addressing", &use_virtual_addressing_json)) {
     use_virtual_addressing_json.AsBool(&use_virtual_addressing_);
+  } else {
+    // Fall back to the environment variable when the credential file does not
+    // specify the field. This keeps S3_USE_VIRTUAL_ADDRESSING effective even
+    // when TRITON_CLOUD_CREDENTIAL_PATH is set (the credential-file path does
+    // not otherwise consult environment variables).
+    const char* use_virtual_addressing =
+        std::getenv("S3_USE_VIRTUAL_ADDRESSING");
+    use_virtual_addressing_ =
+        (use_virtual_addressing != nullptr &&
+         std::string(use_virtual_addressing) == "true");
+  }
 }
 
 class S3FileSystem : public FileSystem {
