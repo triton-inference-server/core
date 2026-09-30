@@ -33,7 +33,6 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from distutils.dir_util import copy_tree
 from tempfile import mkdtemp, mkstemp
 
 # ANSI colors for CI log readability (rendered by GitLab CI, harmlessly
@@ -66,7 +65,7 @@ def touch(path):
 
 
 def cpdir(src, dest):
-    copy_tree(src, dest, preserve_symlinks=1)
+    shutil.copytree(src, dest, symlinks=True, dirs_exist_ok=True)
 
 
 def sed(pattern, replace, source, dest=None):
