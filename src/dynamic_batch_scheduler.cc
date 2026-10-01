@@ -428,13 +428,17 @@ DynamicBatchScheduler::BatcherThread(const int nice)
       }
     }
 
-    if (curr_payload_->GetState() == Payload::State::READY) {
-      auto callback = [this]() { cv_.notify_one(); };
-      curr_payload_->SetCallback(callback);
-      {
-        std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
+    bool payload_ready = false;
+    {
+      std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
+      payload_ready = (curr_payload_->GetState() == Payload::State::READY);
+      if (payload_ready) {
+        auto callback = [this]() { cv_.notify_one(); };
+        curr_payload_->SetCallback(callback);
         CustomBatchFini();
       }
+    }
+    if (payload_ready) {
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
     }
 

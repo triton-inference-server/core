@@ -23,40 +23,35 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <future>
-#include <iostream>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
 #include "dynamic_batch_scheduler.h"
+#include "gtest/gtest.h"
 #include "server.h"
+
+extern "C" bool SchedulerTestWaitForBatchIncludes(
+    size_t count, uint32_t timeout_ms);
+
+namespace {
 
 using namespace triton::core;
 using namespace std::chrono_literals;
-
-DynamicBatchScheduler* scheduler_under_test;
-size_t expected_queued_batch_size;
-size_t expected_request_count;
-int accounting_stage;
-
-extern "C" __attribute__((noinline)) void
-SchedulerAccountingCheckpoint()
-{
-  std::atomic_signal_fence(std::memory_order_seq_cst);
-}
 
 void
 Require(bool condition, const std::string& message)
 {
   if (!condition) {
-    std::cerr << message << '\n';
-    std::exit(1);
+    throw std::runtime_error(message);
   }
 }
 
@@ -66,12 +61,10 @@ Require(const Status& status)
   Require(status.IsOk(), status.Message());
 }
 
-int
-main(int argc, char** argv)
+void
+RunRegression(const std::string& mode)
 {
-  Require(argc == 3, "Usage: scheduler_regression_test MODEL_REPOSITORY MODE");
-  const auto models = std::filesystem::absolute(argv[1]);
-  const std::string mode = argv[2];
+  const std::filesystem::path models(SCHEDULER_TEST_MODEL_REPOSITORY);
   InferenceServer server;
   server.SetModelRepositoryPaths({(models / "empty").string()});
   server.SetModelControlMode(ModelControlMode::MODE_EXPLICIT);
@@ -102,6 +95,11 @@ main(int argc, char** argv)
   group->set_kind(inference::ModelInstanceGroup::KIND_CPU);
   group->set_count(1);
   group->set_passive(true);
+  if (mode == "accounting") {
+    (*config.mutable_parameters())["TRITON_BATCH_STRATEGY_PATH"]
+        .set_string_value(
+            (models / "scheduler_test/libtriton_scheduler_test.so").string());
+  }
   std::unique_ptr<TritonModel> model;
   Require(TritonModel::Create(
       &server, (models / "scheduler_test").string(), backend_config, {},
@@ -122,11 +120,11 @@ main(int argc, char** argv)
     const std::array<float, 8> data{};
     inference::ModelDynamicBatching batching;
     batching.add_preferred_batch_size(8);
-    batching.mutable_default_queue_policy()->set_max_queue_size(1);
+    batching.set_max_queue_delay_microseconds(5 * 1000 * 1000);
+    batching.mutable_default_queue_policy()->set_max_queue_size(2);
     std::unique_ptr<Scheduler> scheduler;
     Require(DynamicBatchScheduler::Create(
         model.get(), nullptr, 0, true, 8, {}, batching, &scheduler));
-    scheduler_under_test = static_cast<DynamicBatchScheduler*>(scheduler.get());
     auto request = [&](int64_t batch_size) {
       auto result = std::make_unique<InferenceRequest>(model.get(), 1);
       const std::vector<int64_t> shape{batch_size, 1};
@@ -139,47 +137,61 @@ main(int argc, char** argv)
       Require(result->PrepareForInference());
       return result;
     };
+    auto consume = [&]() {
+      return std::async(std::launch::async, [&]() {
+        std::deque<TritonModelInstance*> instances{primary.get()};
+        std::shared_ptr<Payload> payload;
+        limiter->DequeuePayload(instances, &payload);
+        return payload;
+      });
+    };
 
     auto accepted = request(8);
     Require(scheduler->Enqueue(accepted));
     Require(
         accepted == nullptr, "Successful admission must transfer ownership");
+    auto pending = request(1);
+    Require(scheduler->Enqueue(pending));
     for (int i = 0; i < 7; ++i) {
       auto rejected = request(1);
       const auto status = scheduler->Enqueue(rejected);
       Require(!status.IsOk(), "A full request queue must reject admission");
       Require(rejected != nullptr, "Rejected admission must retain ownership");
     }
-    accounting_stage = 1;
-    expected_queued_batch_size = 8;
-    expected_request_count = 1;
-    SchedulerAccountingCheckpoint();
+    EXPECT_EQ(scheduler->InflightInferenceCount(), 2);
 
-    auto consumer = std::async(std::launch::async, [&]() {
-      std::deque<TritonModelInstance*> instances{primary.get()};
-      std::shared_ptr<Payload> payload;
-      limiter->DequeuePayload(instances, &payload);
-      return payload;
-    });
+    auto consumer = consume();
     Require(
-        consumer.wait_for(5s) == std::future_status::ready,
-        "The admitted request must drain");
+        consumer.wait_for(10s) == std::future_status::ready,
+        "The admitted batch must drain");
     auto payload = consumer.get();
     Require(
         payload != nullptr && payload->BatchSize() == 8,
-        "The drained payload must contain the admitted batch");
+        "The first payload must contain the admitted batch");
     limiter->PayloadRelease(payload);
-    accounting_stage = 2;
-    expected_queued_batch_size = 0;
-    expected_request_count = 0;
-    SchedulerAccountingCheckpoint();
 
+    auto final_consumer = consume();
+    Require(
+        SchedulerTestWaitForBatchIncludes(2, 5000),
+        "The batcher must examine the pending request");
     auto later = request(1);
     Require(scheduler->Enqueue(later));
-    accounting_stage = 3;
-    expected_queued_batch_size = 1;
-    expected_request_count = 1;
-    SchedulerAccountingCheckpoint();
+    EXPECT_EQ(scheduler->InflightInferenceCount(), 2);
+
+    // Below preferred size eight, admission should leave the batcher waiting.
+    // Restoring rejected-request credits makes this enqueue wake it instead.
+    EXPECT_FALSE(SchedulerTestWaitForBatchIncludes(3, 200))
+        << "Rejected admissions caused a wake-up below the preferred batch "
+           "size";
+
+    // Drain both remaining requests before joining the scheduler thread.
+    Require(
+        final_consumer.wait_for(10s) == std::future_status::ready,
+        "The final requests must drain before scheduler teardown");
+    payload = final_consumer.get();
+    EXPECT_EQ(payload->BatchSize(), 2);
+    EXPECT_EQ(payload->RequestCount(), 2);
+    limiter->PayloadRelease(payload);
   } else if ((mode == "instance-removal") || (mode == "model-removal")) {
     std::promise<void> started;
     auto waiter = std::async(std::launch::async, [&]() {
@@ -200,14 +212,12 @@ main(int argc, char** argv)
     Require(
         waiter.wait_for(5s) == std::future_status::ready,
         "Removal must release the blocked slot check");
-    Require(!waiter.get(), "Removal must not report available capacity");
-    Require(
-        !limiter->PayloadSlotAvailable(model.get(), primary.get(), false, true),
-        "A removed instance must have no consumer credit");
-    Require(
-        !limiter->PayloadSlotAvailable(model.get(), primary.get(), false),
-        "A slot check after removal must return false");
-  } else if ((mode == "capacity") || (mode == "lookup")) {
+    EXPECT_FALSE(waiter.get());
+    EXPECT_FALSE(
+        limiter->PayloadSlotAvailable(model.get(), primary.get(), false, true));
+    EXPECT_FALSE(
+        limiter->PayloadSlotAvailable(model.get(), primary.get(), false));
+  } else {
     auto extra = create("extra");
     auto extra_two = create("extra_two");
     std::atomic<bool> done{false};
@@ -236,14 +246,36 @@ main(int argc, char** argv)
     }
     done.store(true);
     reader.join();
-    Require(
-        limiter->PayloadSlotAvailable(model.get(), nullptr, true, true),
-        "Remaining instance must retain prefetch capacity");
-    Require(
-        !limiter->PayloadSlotAvailable(model.get(), extra.get(), false, true),
-        "Removed instance lookup must return no capacity");
-  } else {
-    Require(false, "Unknown regression mode: " + mode);
+    EXPECT_TRUE(
+        limiter->PayloadSlotAvailable(model.get(), nullptr, true, true));
+    EXPECT_FALSE(
+        limiter->PayloadSlotAvailable(model.get(), extra.get(), false, true));
   }
-  std::cout << mode << " passed\n";
 }
+
+TEST(SchedulerRegression, AccountingAfterRejections)
+{
+  RunRegression("accounting");
+}
+
+TEST(SchedulerRegression, BlockingWaitDuringInstanceRemoval)
+{
+  RunRegression("instance-removal");
+}
+
+TEST(SchedulerRegression, BlockingWaitDuringModelRemoval)
+{
+  RunRegression("model-removal");
+}
+
+TEST(SchedulerRegression, CapacityDuringInstanceChanges)
+{
+  RunRegression("capacity");
+}
+
+TEST(SchedulerRegression, LookupDuringInstanceChanges)
+{
+  RunRegression("lookup");
+}
+
+}  // namespace
