@@ -121,7 +121,12 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
     auto p_it = payload_queues_.find(model);
     if (p_it != payload_queues_.end()) {
       std::lock_guard<std::mutex> lk(p_it->second->mu_);
-      p_it->second->specific_queues_.erase(triton_model_instance);
+      auto& queues = p_it->second->specific_queues_;
+      auto s_it = queues.find(triton_model_instance);
+      if (s_it != queues.end()) {
+        s_it->second->Close();
+        queues.erase(s_it);
+      }
     }
   }
 }
@@ -150,33 +155,44 @@ RateLimiter::UnregisterModel(const TritonModel* model)
 
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
-    if (payload_queues_.find(model) != payload_queues_.end()) {
-      payload_queues_.erase(model);
+    auto p_it = payload_queues_.find(model);
+    if (p_it != payload_queues_.end()) {
+      {
+        std::lock_guard<std::mutex> lk(p_it->second->mu_);
+        p_it->second->queue_->Close();
+        for (auto& queue : p_it->second->specific_queues_) {
+          queue.second->Close();
+        }
+      }
+      payload_queues_.erase(p_it);
     }
   }
 }
 
-void
+bool
 RateLimiter::WaitForConsumer(
     const TritonModel* model, const TritonModelInstance* model_instance)
 {
-  PayloadQueue* payload_queue = nullptr;
+  std::shared_ptr<InstanceQueue> queue;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
-    if (payload_queues_.find(model) == payload_queues_.end()) {
-      LOG_ERROR << "Unable to find the payload queue for the model "
-                << model->Name();
-      return;
+    auto p_it = payload_queues_.find(model);
+    if (p_it == payload_queues_.end()) {
+      return false;
     }
-    payload_queue = payload_queues_[model].get();
+    auto* payload_queue = p_it->second.get();
+    if (model_instance == nullptr) {
+      queue = payload_queue->queue_;
+    } else {
+      std::lock_guard<std::mutex> lk(payload_queue->mu_);
+      auto s_it = payload_queue->specific_queues_.find(model_instance);
+      if (s_it == payload_queue->specific_queues_.end()) {
+        return false;
+      }
+      queue = s_it->second;
+    }
   }
-
-  auto* queue = payload_queue->queue_.get();
-  if (model_instance != nullptr) {
-    std::lock_guard<std::mutex> lk(payload_queue->mu_);
-    queue = payload_queue->specific_queues_[model_instance].get();
-  }
-  queue->WaitForConsumer();
+  return queue->WaitForConsumer();
 }
 
 
@@ -199,8 +215,10 @@ RateLimiter::WaitingConsumerCount(
     return payload_queue->queue_->WaitingConsumerCount();
   } else {
     std::lock_guard<std::mutex> lk(payload_queue->mu_);
-    return payload_queue->specific_queues_[model_instance]
-        ->WaitingConsumerCount();
+    auto s_it = payload_queue->specific_queues_.find(model_instance);
+    return (s_it == payload_queue->specific_queues_.end())
+               ? 0
+               : s_it->second->WaitingConsumerCount();
   }
 }
 
@@ -232,7 +250,7 @@ RateLimiter::PayloadSlotAvailable(
     if (force_non_blocking) {
       result = (WaitingConsumerCount(model, model_instance) > 0);
     } else {
-      WaitForConsumer(model, model_instance);
+      result = WaitForConsumer(model, model_instance);
     }
   }
   return result;
@@ -498,7 +516,7 @@ RateLimiter::InitializePayloadQueues(const TritonModelInstance* instance)
         payload_queue->specific_queues_.end()) {
       payload_queue->specific_queues_.emplace(
           instance,
-          new InstanceQueue(
+          std::make_shared<InstanceQueue>(
               config.max_batch_size(), max_queue_delay_microseconds * 1000));
     }
   }

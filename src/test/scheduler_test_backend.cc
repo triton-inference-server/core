@@ -1,4 +1,4 @@
-// Copyright 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -23,46 +23,12 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#pragma once
+#include "triton/core/tritonbackend.h"
 
-#include "payload.h"
-
-namespace triton { namespace core {
-
-//
-// InstanceQueue
-//
-// A queue implementation holding Payloads ready to be scheduled on
-// model instance.
-class InstanceQueue {
- public:
-  explicit InstanceQueue(size_t max_batch_size, uint64_t max_queue_delay_ns);
-
-  size_t Size();
-  bool Empty();
-  void Enqueue(const std::shared_ptr<Payload>& payload);
-  void Dequeue(
-      std::shared_ptr<Payload>* payload,
-      std::vector<std::shared_ptr<Payload>>* merged_payloads);
-
-  void IncrementConsumerCount();
-  void DecrementConsumerCount();
-  bool WaitForConsumer();
-  void Close();
-  int WaitingConsumerCount();
-
- private:
-  size_t max_batch_size_;
-  uint64_t max_queue_delay_ns_;
-
-  std::deque<std::shared_ptr<Payload>> payload_queue_;
-  std::shared_ptr<Payload> staged_payload_;
-  std::mutex mu_;
-
-  int waiting_consumer_count_;
-  bool closed_;
-  std::mutex waiting_consumer_mu_;
-  std::condition_variable waiting_consumer_cv_;
-};
-
-}}  // namespace triton::core
+// Passive instances let the tests drive the rate limiter without execution.
+extern "C" TRITONSERVER_Error*
+TRITONBACKEND_ModelInstanceExecute(
+    TRITONBACKEND_ModelInstance*, TRITONBACKEND_Request**, const uint32_t)
+{
+  return nullptr;
+}

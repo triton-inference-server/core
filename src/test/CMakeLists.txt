@@ -755,3 +755,52 @@ install(
   TARGETS input_byte_size_test
   RUNTIME DESTINATION bin
 )
+
+# Internal C++ symbols are hidden by triton-core's export script. Compile the
+# same sources and reuse its build settings for the scheduler regression probe.
+get_target_property(scheduler_test_sources triton-core SOURCES)
+get_target_property(scheduler_test_source_dir triton-core SOURCE_DIR)
+list(TRANSFORM scheduler_test_sources PREPEND "${scheduler_test_source_dir}/")
+add_executable(scheduler_regression_test EXCLUDE_FROM_ALL
+  scheduler_regression_test.cc ${scheduler_test_sources})
+target_compile_features(scheduler_regression_test
+  PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+target_compile_options(scheduler_regression_test PRIVATE
+  $<TARGET_PROPERTY:triton-core,COMPILE_OPTIONS> -g -O1)
+target_compile_definitions(scheduler_regression_test
+  PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_DEFINITIONS>)
+target_include_directories(scheduler_regression_test
+  PRIVATE $<TARGET_PROPERTY:triton-core,INCLUDE_DIRECTORIES>)
+target_link_directories(scheduler_regression_test
+  PRIVATE $<TARGET_PROPERTY:triton-core,LINK_DIRECTORIES>)
+target_link_libraries(scheduler_regression_test
+  PRIVATE $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>)
+
+set(scheduler_test_models "${CMAKE_CURRENT_BINARY_DIR}/scheduler_test_models")
+file(MAKE_DIRECTORY "${scheduler_test_models}/empty"
+  "${scheduler_test_models}/scheduler_test/1")
+add_library(scheduler_test_backend SHARED EXCLUDE_FROM_ALL scheduler_test_backend.cc)
+target_include_directories(scheduler_test_backend
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+set_target_properties(scheduler_test_backend PROPERTIES
+  OUTPUT_NAME triton_scheduler_test
+  LIBRARY_OUTPUT_DIRECTORY "${scheduler_test_models}/scheduler_test")
+add_dependencies(scheduler_regression_test scheduler_test_backend)
+
+enable_testing()
+foreach(mode instance-removal model-removal capacity lookup)
+  add_test(NAME SchedulerRegression.${mode}
+    COMMAND scheduler_regression_test "${scheduler_test_models}" ${mode})
+  set_tests_properties(SchedulerRegression.${mode} PROPERTIES TIMEOUT 30)
+endforeach()
+find_program(SCHEDULER_TEST_GDB gdb)
+if(SCHEDULER_TEST_GDB)
+  add_test(NAME SchedulerRegression.accounting
+    COMMAND ${SCHEDULER_TEST_GDB} --batch
+      -x "${CMAKE_CURRENT_SOURCE_DIR}/scheduler_regression_test.gdb"
+      --args $<TARGET_FILE:scheduler_regression_test>
+      "${scheduler_test_models}" accounting)
+  set_tests_properties(SchedulerRegression.accounting PROPERTIES TIMEOUT 30)
+else()
+  message(STATUS "Install GDB to run SchedulerRegression.accounting")
+endif()
