@@ -144,6 +144,14 @@ InstanceQueue::WaitForConsumer()
       lock, [this]() { return waiting_consumer_count_ > 0; });
 }
 
+bool
+InstanceQueue::WaitForConsumer(const std::chrono::microseconds& timeout)
+{
+  std::unique_lock<std::mutex> lock(waiting_consumer_mu_);
+  return waiting_consumer_cv_.wait_for(
+      lock, timeout, [this]() { return waiting_consumer_count_ > 0; });
+}
+
 int
 InstanceQueue::WaitingConsumerCount()
 {

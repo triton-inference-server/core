@@ -115,7 +115,8 @@ class DynamicBatchScheduler : public Scheduler {
   // For queued requests under policy REJECT, they will be rejected if timed-out
   // while waiting for a slot. The timeout will be checked every
   // 'wait_microseconds'. The 'wait_microseconds' should be non-zero.
-  void WaitForPayloadSlotAvailable(
+  // Returns false if the scheduler is exiting before a slot is available.
+  bool WaitForPayloadSlotAvailable(
       std::unique_lock<std::mutex>* lock, uint64_t wait_microseconds);
 
   // Custom batching function calls

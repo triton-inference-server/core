@@ -25,6 +25,8 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <chrono>
+
 #include "payload.h"
 
 namespace triton { namespace core {
@@ -48,6 +50,8 @@ class InstanceQueue {
   void IncrementConsumerCount();
   void DecrementConsumerCount();
   void WaitForConsumer();
+  // Returns false on timeout. The predicate and wait use the consumer mutex.
+  bool WaitForConsumer(const std::chrono::microseconds& timeout);
   int WaitingConsumerCount();
 
  private:

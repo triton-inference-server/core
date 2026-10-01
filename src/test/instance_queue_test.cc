@@ -26,6 +26,8 @@
 
 #include "instance_queue.h"
 
+#include <chrono>
+#include <future>
 #include <iterator>
 #include <memory>
 #include <vector>
@@ -194,6 +196,75 @@ TEST(InstanceQueueTest, ConsumerCountUnchangedWithoutMerge)
 
   queue.IncrementConsumerCount();  // consumer re-parks
   EXPECT_EQ(queue.WaitingConsumerCount(), 1);
+}
+
+TEST(InstanceQueueTest, TimedWaitSeesConsumerBeforeWaiting)
+{
+  InstanceQueue queue(1, 0);
+  queue.IncrementConsumerCount();
+  EXPECT_TRUE(queue.WaitForConsumer(std::chrono::microseconds(0)));
+  // Waiting observes availability without reserving the consumer.
+  EXPECT_EQ(queue.WaitingConsumerCount(), 1);
+}
+
+TEST(InstanceQueueTest, TimedWaitExpiresWithoutConsumer)
+{
+  InstanceQueue queue(1, 0);
+  EXPECT_FALSE(queue.WaitForConsumer(std::chrono::milliseconds(10)));
+  EXPECT_EQ(queue.WaitingConsumerCount(), 0);
+}
+
+TEST(InstanceQueueTest, TimedWaitWakesWhenConsumerBecomesAvailable)
+{
+  InstanceQueue queue(1, 0);
+  auto waiter = std::async(std::launch::async, [&queue]() {
+    return queue.WaitForConsumer(std::chrono::seconds(2));
+  });
+  EXPECT_EQ(
+      waiter.wait_for(std::chrono::milliseconds(50)),
+      std::future_status::timeout);
+  queue.IncrementConsumerCount();
+  EXPECT_EQ(
+      waiter.wait_for(std::chrono::milliseconds(250)),
+      std::future_status::ready);
+  EXPECT_TRUE(waiter.get());
+}
+
+TEST(InstanceQueueTest, TimedWaitRequiresPositiveConsumerCount)
+{
+  InstanceQueue queue(1, 0);
+  queue.DecrementConsumerCount();
+  auto waiter = std::async(std::launch::async, [&queue]() {
+    return queue.WaitForConsumer(std::chrono::seconds(2));
+  });
+  queue.IncrementConsumerCount();
+  EXPECT_EQ(
+      waiter.wait_for(std::chrono::milliseconds(50)),
+      std::future_status::timeout);
+  queue.IncrementConsumerCount();
+  EXPECT_EQ(
+      waiter.wait_for(std::chrono::milliseconds(250)),
+      std::future_status::ready);
+  EXPECT_TRUE(waiter.get());
+}
+
+TEST(InstanceQueueTest, ConsumerNotificationRacingWithTimedWaitIsNotLost)
+{
+  for (int i = 0; i < 100; ++i) {
+    InstanceQueue queue(1, 0);
+    std::promise<void> start;
+    auto waiter = std::async(std::launch::async, [&queue, &start]() {
+      start.set_value();
+      return queue.WaitForConsumer(std::chrono::seconds(2));
+    });
+    start.get_future().wait();
+    queue.IncrementConsumerCount();
+    EXPECT_EQ(
+        waiter.wait_for(std::chrono::milliseconds(250)),
+        std::future_status::ready)
+        << "iteration " << i;
+    EXPECT_TRUE(waiter.get());
+  }
 }
 
 }  // namespace
