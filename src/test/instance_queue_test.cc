@@ -107,7 +107,7 @@ TEST(InstanceQueueTest, ConsumerCountStableAcrossMerges)
 
     // One consumer dequeues the whole burst as a single merged batch.
     std::shared_ptr<Payload> payload;
-    std::vector<std::shared_ptr<Payload> > merged_payloads;
+    std::vector<std::shared_ptr<Payload>> merged_payloads;
     queue.Dequeue(&payload, &merged_payloads);
 
     ASSERT_NE(payload, nullptr);
@@ -142,7 +142,7 @@ TEST(InstanceQueueTest, ConsumerCountUnchangedWithoutMerge)
   queue.DecrementConsumerCount();
 
   std::shared_ptr<Payload> payload;
-  std::vector<std::shared_ptr<Payload> > merged_payloads;
+  std::vector<std::shared_ptr<Payload>> merged_payloads;
   queue.Dequeue(&payload, &merged_payloads);
 
   ASSERT_NE(payload, nullptr);
@@ -294,7 +294,7 @@ class PayloadSlotWaitTest : public ::testing::TestWithParam<bool> {
     }
   }
 
-  std::future<std::shared_ptr<Payload> > Dequeue()
+  std::future<std::shared_ptr<Payload>> Dequeue()
   {
     return std::async(std::launch::async, [this]() {
       std::deque<TritonModelInstance*> instances{instance_.get()};
