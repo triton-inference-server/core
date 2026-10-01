@@ -48,8 +48,6 @@ namespace triton { namespace core {
 
 // Scheduler that implements dynamic batching.
 class DynamicBatchScheduler : public Scheduler {
-  friend class DynamicBatchSchedulerTest;
-
  public:
   // Create a scheduler to support a given number of runners and a run
   // function to call when a request is scheduled.
