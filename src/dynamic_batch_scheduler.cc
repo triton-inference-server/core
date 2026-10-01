@@ -254,11 +254,12 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     {
       std::lock_guard<std::mutex> lock(mu_);
 
-      queued_batch_size_ += std::max(1U, request->BatchSize());
+      const auto batch_size = std::max(1U, request->BatchSize());
 
       // Assuming no error is returned, this call takes ownership of
       // 'request' and so we can't use it after this point.
       RETURN_IF_ERROR(queue_.Enqueue(request->Priority(), request));
+      queued_batch_size_ += batch_size;
 
       // If there are any idle runners and the queued batch size is greater or
       // equal to next preferred batch size, then wake batcher up to service
