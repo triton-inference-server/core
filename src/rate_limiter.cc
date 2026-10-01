@@ -227,10 +227,10 @@ RateLimiter::PayloadSlotAvailable(
       // can be pre-fetched. For per-model batcher the cap is
       // twice the number of model instances. For per-instance
       // batcher the cap is 2.
-      size_t multiplier = (model_instance == nullptr)
-                              ? payload_queue->specific_queues_.size()
-                              : 1;
-      auto slot_available = [payload_queue, multiplier]() {
+      auto slot_available = [payload_queue, model_instance]() {
+        size_t multiplier = (model_instance == nullptr)
+                                ? payload_queue->specific_queues_.size()
+                                : 1;
         return payload_queue->queue_->Size() < (2 * multiplier);
       };
       if (!force_non_blocking && (wait_microseconds != 0)) {

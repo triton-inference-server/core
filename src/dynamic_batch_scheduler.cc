@@ -280,6 +280,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
             (payload_saturated_ || IsStaleState(payload_state) ||
              (queued_batch_size_ >= next_preferred_batch_size_));
       }
+
       // Start the consumer wait even if the first queued request arrives while
       // all backends are busy. Consumer notifications target the rate limiter.
       wake_batcher |= queue_was_empty && !queue_.SupportPrefetching();
