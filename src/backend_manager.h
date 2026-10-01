@@ -44,6 +44,8 @@ namespace triton { namespace core {
 // Proxy to a backend shared library.
 //
 class TritonBackend {
+  friend class DynamicBatchSchedulerTest;
+
  public:
   struct Attribute {
     Attribute()

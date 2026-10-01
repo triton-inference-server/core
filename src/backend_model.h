@@ -46,6 +46,8 @@ class InferenceServer;
 // Inheriting from Model to implement backend APIs
 //
 class TritonModel : public Model {
+  friend class DynamicBatchSchedulerTest;
+
  public:
   typedef TRITONSERVER_Error* (*TritonModelBatchInclFn_t)(
       TRITONBACKEND_Request* request, void* userp, bool* should_include);

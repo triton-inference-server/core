@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <future>
@@ -33,6 +32,7 @@
 #include <mutex>
 #include <queue>
 #include <set>
+#include <stop_token>
 #include <thread>
 
 #include "backend_model.h"
@@ -48,6 +48,8 @@ namespace triton { namespace core {
 
 // Scheduler that implements dynamic batching.
 class DynamicBatchScheduler : public Scheduler {
+  friend class DynamicBatchSchedulerTest;
+
  public:
   // Create a scheduler to support a given number of runners and a run
   // function to call when a request is scheduled.
@@ -148,7 +150,7 @@ class DynamicBatchScheduler : public Scheduler {
   bool stop_;
 
   std::thread scheduler_thread_;
-  std::atomic<bool> scheduler_thread_exit_;
+  std::stop_source scheduler_thread_stop_;
 
   // Mutex and condvar for signaling scheduler thread
   std::mutex mu_;

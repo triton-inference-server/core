@@ -50,6 +50,8 @@ class InferenceRequest;
 // Represents a model instance.
 //
 class TritonModelInstance {
+  friend class DynamicBatchSchedulerTest;
+
  public:
   struct SecondaryDevice {
     SecondaryDevice(const std::string kind, const int64_t id)

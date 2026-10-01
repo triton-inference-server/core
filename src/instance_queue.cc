@@ -145,11 +145,20 @@ InstanceQueue::WaitForConsumer()
 }
 
 bool
-InstanceQueue::WaitForConsumer(const std::chrono::microseconds& timeout)
+InstanceQueue::WaitForConsumer(
+    const std::chrono::microseconds& timeout, std::stop_token stop_token)
 {
+  // Register before locking: an already-requested stop invokes this inline.
+  std::stop_callback on_stop(stop_token, [this]() {
+    std::lock_guard<std::mutex> lock(waiting_consumer_mu_);
+    waiting_consumer_cv_.notify_all();
+  });
   std::unique_lock<std::mutex> lock(waiting_consumer_mu_);
-  return waiting_consumer_cv_.wait_for(
-      lock, timeout, [this]() { return waiting_consumer_count_ > 0; });
+  const bool ready =
+      waiting_consumer_cv_.wait_for(lock, timeout, [this, stop_token]() {
+        return (waiting_consumer_count_ > 0) || stop_token.stop_requested();
+      });
+  return ready && !stop_token.stop_requested();
 }
 
 int

@@ -560,6 +560,8 @@ add_executable(
   ../instance_queue.cc
 )
 
+target_compile_features(instance_queue_test PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+
 set_target_properties(
   instance_queue_test
   PROPERTIES
@@ -593,6 +595,29 @@ install(
   TARGETS instance_queue_test
   RUNTIME DESTINATION bin
 )
+
+#
+# Regression tests for dynamic batcher slot waits. Reuse the core objects to
+# access internal C++ symbols that libtritonserver does not export.
+#
+add_executable(
+  dynamic_batch_scheduler_test
+  dynamic_batch_scheduler_test.cc
+  $<TARGET_OBJECTS:triton-core>
+)
+
+target_compile_features(dynamic_batch_scheduler_test PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+target_compile_definitions(dynamic_batch_scheduler_test PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_DEFINITIONS>)
+target_include_directories(dynamic_batch_scheduler_test PRIVATE $<TARGET_PROPERTY:triton-core,INCLUDE_DIRECTORIES>)
+target_link_libraries(
+  dynamic_batch_scheduler_test
+  PRIVATE
+    $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(TARGETS dynamic_batch_scheduler_test RUNTIME DESTINATION bin)
 
 #
 # Backend Output Detail Unittest

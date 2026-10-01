@@ -161,7 +161,7 @@ RateLimiter::UnregisterModel(const TritonModel* model)
 bool
 RateLimiter::WaitForConsumer(
     const TritonModel* model, const TritonModelInstance* model_instance,
-    const uint64_t wait_microseconds)
+    const uint64_t wait_microseconds, std::stop_token stop_token)
 {
   PayloadQueue* payload_queue = nullptr;
   {
@@ -178,7 +178,8 @@ RateLimiter::WaitForConsumer(
                     ? payload_queue->queue_.get()
                     : payload_queue->specific_queues_[model_instance].get();
   if (wait_microseconds != 0) {
-    return queue->WaitForConsumer(std::chrono::microseconds(wait_microseconds));
+    return queue->WaitForConsumer(
+        std::chrono::microseconds(wait_microseconds), stop_token);
   }
   queue->WaitForConsumer();
   return true;
@@ -212,7 +213,7 @@ bool
 RateLimiter::PayloadSlotAvailable(
     const TritonModel* model, const TritonModelInstance* model_instance,
     const bool support_prefetching, const bool force_non_blocking,
-    const uint64_t wait_microseconds)
+    const uint64_t wait_microseconds, std::stop_token stop_token)
 {
   bool result;
   if (support_prefetching) {
@@ -221,30 +222,36 @@ RateLimiter::PayloadSlotAvailable(
       std::lock_guard<std::mutex> lk(payload_queues_mu_);
       payload_queue = payload_queues_[model].get();
     }
-    {
+    // The logic below sets cap on the number of payloads that
+    // can be pre-fetched. For per-model batcher the cap is
+    // twice the number of model instances. For per-instance
+    // batcher the cap is 2.
+    auto slot_available = [payload_queue, model_instance]() {
+      size_t multiplier = (model_instance == nullptr)
+                              ? payload_queue->specific_queues_.size()
+                              : 1;
+      return payload_queue->queue_->Size() < (2 * multiplier);
+    };
+    if (!force_non_blocking && (wait_microseconds != 0)) {
+      std::stop_callback on_stop(stop_token, [payload_queue]() {
+        std::lock_guard<std::mutex> lk(payload_queue->mu_);
+        payload_queue->slot_cv_.notify_all();
+      });
       std::unique_lock<std::mutex> lk(payload_queue->mu_);
-      // The logic below sets cap on the number of payloads that
-      // can be pre-fetched. For per-model batcher the cap is
-      // twice the number of model instances. For per-instance
-      // batcher the cap is 2.
-      auto slot_available = [payload_queue, model_instance]() {
-        size_t multiplier = (model_instance == nullptr)
-                                ? payload_queue->specific_queues_.size()
-                                : 1;
-        return payload_queue->queue_->Size() < (2 * multiplier);
-      };
-      if (!force_non_blocking && (wait_microseconds != 0)) {
-        result = payload_queue->slot_cv_.wait_for(
-            lk, std::chrono::microseconds(wait_microseconds), slot_available);
-      } else {
-        result = slot_available();
-      }
+      result = payload_queue->slot_cv_.wait_for(
+          lk, std::chrono::microseconds(wait_microseconds),
+          [&]() { return slot_available() || stop_token.stop_requested(); });
+      result &= !stop_token.stop_requested();
+    } else {
+      std::lock_guard<std::mutex> lk(payload_queue->mu_);
+      result = slot_available();
     }
   } else {
     if (force_non_blocking) {
       result = (WaitingConsumerCount(model, model_instance) > 0);
     } else {
-      result = WaitForConsumer(model, model_instance, wait_microseconds);
+      result =
+          WaitForConsumer(model, model_instance, wait_microseconds, stop_token);
     }
   }
   return result;

@@ -76,6 +76,8 @@ enum class ServerReadyState {
 
 // Inference server information.
 class InferenceServer {
+  friend class DynamicBatchSchedulerTest;
+
  public:
   // Construct an inference server.
   InferenceServer();

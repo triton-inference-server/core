@@ -26,6 +26,7 @@
 #pragma once
 
 #include <chrono>
+#include <stop_token>
 
 #include "payload.h"
 
@@ -50,8 +51,10 @@ class InstanceQueue {
   void IncrementConsumerCount();
   void DecrementConsumerCount();
   void WaitForConsumer();
-  // Returns false on timeout. The predicate and wait use the consumer mutex.
-  bool WaitForConsumer(const std::chrono::microseconds& timeout);
+  // Returns false on timeout or cancellation.
+  bool WaitForConsumer(
+      const std::chrono::microseconds& timeout,
+      std::stop_token stop_token = {});
   int WaitingConsumerCount();
 
  private:
