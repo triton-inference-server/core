@@ -161,37 +161,49 @@ RunRegression(const std::string& mode)
     EXPECT_EQ(scheduler->InflightInferenceCount(), 2);
 
     auto consumer = consume();
-    Require(
-        consumer.wait_for(10s) == std::future_status::ready,
-        "The admitted batch must drain");
-    auto payload = consumer.get();
-    Require(
-        payload != nullptr && payload->BatchSize() == 8,
-        "The first payload must contain the admitted batch");
-    limiter->PayloadRelease(payload);
+    try {
+      Require(
+          consumer.wait_for(10s) == std::future_status::ready,
+          "The admitted batch must drain");
+      auto payload = consumer.get();
+      Require(
+          payload != nullptr && payload->BatchSize() == 8,
+          "The first payload must contain the admitted batch");
+      limiter->PayloadRelease(payload);
 
-    auto final_consumer = consume();
-    Require(
-        SchedulerTestWaitForBatchIncludes(2, 5000),
-        "The batcher must examine the pending request");
-    auto later = request(1);
-    Require(scheduler->Enqueue(later));
-    EXPECT_EQ(scheduler->InflightInferenceCount(), 2);
+      consumer = consume();
+      Require(
+          SchedulerTestWaitForBatchIncludes(2, 5000),
+          "The batcher must examine the pending request");
+      auto later = request(1);
+      Require(scheduler->Enqueue(later));
+      EXPECT_EQ(scheduler->InflightInferenceCount(), 2);
 
-    // Below preferred size eight, admission should leave the batcher waiting.
-    // Restoring rejected-request credits makes this enqueue wake it instead.
-    EXPECT_FALSE(SchedulerTestWaitForBatchIncludes(3, 200))
-        << "Rejected admissions caused a wake-up below the preferred batch "
-           "size";
+      // Below preferred size eight, admission should leave the batcher waiting.
+      // Restoring rejected-request credits makes this enqueue wake it instead.
+      EXPECT_FALSE(SchedulerTestWaitForBatchIncludes(3, 200))
+          << "Rejected admissions caused a wake-up below the preferred batch "
+             "size";
 
-    // Drain both remaining requests before joining the scheduler thread.
-    Require(
-        final_consumer.wait_for(10s) == std::future_status::ready,
-        "The final requests must drain before scheduler teardown");
-    payload = final_consumer.get();
-    EXPECT_EQ(payload->BatchSize(), 2);
-    EXPECT_EQ(payload->RequestCount(), 2);
-    limiter->PayloadRelease(payload);
+      // Drain both remaining requests before joining the scheduler thread.
+      Require(
+          consumer.wait_for(10s) == std::future_status::ready,
+          "The final requests must drain before scheduler teardown");
+      payload = consumer.get();
+      EXPECT_EQ(payload->BatchSize(), 2);
+      EXPECT_EQ(payload->RequestCount(), 2);
+      limiter->PayloadRelease(payload);
+    }
+    catch (...) {
+      if (consumer.valid() &&
+          (consumer.wait_for(0s) != std::future_status::ready)) {
+        auto wake =
+            limiter->GetPayload(Payload::Operation::INIT, primary.get());
+        Require(limiter->EnqueuePayload(model.get(), wake));
+        consumer.wait();
+      }
+      throw;
+    }
   } else if ((mode == "instance-removal") || (mode == "model-removal")) {
     std::promise<void> started;
     auto waiter = std::async(std::launch::async, [&]() {

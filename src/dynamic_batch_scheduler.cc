@@ -366,6 +366,9 @@ DynamicBatchScheduler::BatcherThread(const int nice)
         }
 
         WaitForPayloadSlotAvailable(&lock, default_wait_microseconds);
+        if (scheduler_thread_exit_.load()) {
+          break;
+        }
 
         {
           std::lock_guard<std::mutex> exec_lock(
@@ -467,9 +470,10 @@ DynamicBatchScheduler::WaitForPayloadSlotAvailable(
 
   while (!slot_available) {
     slot_available = cv_.wait_for(slot_lock, wait_timeout, [this]() {
-      return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
-          model_, model_instance_, queue_.SupportPrefetching(),
-          true /* force_non_blocking */);
+      return scheduler_thread_exit_.load() ||
+             model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+                 model_, model_instance_, queue_.SupportPrefetching(),
+                 true /* force_non_blocking */);
     });
     if (!slot_available) {
       // Reject and release timeout requests from queue.
