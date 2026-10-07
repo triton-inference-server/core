@@ -187,10 +187,8 @@ InferRequestComplete(
   if (flags & TRITONSERVER_REQUEST_RELEASE_ALL) {
     TRITONSERVER_InferenceRequestDelete(request);
     auto* tracker = reinterpret_cast<RequestTracker*>(userp);
-    {
-      std::lock_guard<std::mutex> lk(tracker->mu);
-      ++tracker->released;
-    }
+    std::lock_guard<std::mutex> lk(tracker->mu);
+    ++tracker->released;
     tracker->cv.notify_all();
   }
 }
@@ -200,17 +198,15 @@ InferResponseComplete(
     TRITONSERVER_InferenceResponse* response, const uint32_t flags, void* userp)
 {
   auto* tracker = reinterpret_cast<RequestTracker*>(userp);
-  {
-    std::lock_guard<std::mutex> lk(tracker->mu);
-    if (response != nullptr) {
-      if (TRITONSERVER_InferenceResponseError(response) != nullptr) {
-        ++tracker->errored;
-      }
-      TRITONSERVER_InferenceResponseDelete(response);
+  std::lock_guard<std::mutex> lk(tracker->mu);
+  if (response != nullptr) {
+    if (TRITONSERVER_InferenceResponseError(response) != nullptr) {
+      ++tracker->errored;
     }
-    if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
-      ++tracker->completed;
-    }
+    TRITONSERVER_InferenceResponseDelete(response);
+  }
+  if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
+    ++tracker->completed;
   }
   tracker->cv.notify_all();
 }
@@ -261,11 +257,15 @@ parameters [ { key: "execute_delay_ms" value: { string_value: ")" +
 
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerNew(&server_, server_options));
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerOptionsDelete(server_options));
+
+    FAIL_TEST_IF_ERR(TRITONSERVER_ResponseAllocatorNew(
+        &allocator_, ResponseAlloc, ResponseRelease, nullptr /* start_fn */));
   }
 
   static void TearDownTestSuite()
   {
     FAIL_TEST_IF_ERR(TRITONSERVER_ServerDelete(server_));
+    FAIL_TEST_IF_ERR(TRITONSERVER_ResponseAllocatorDelete(allocator_));
     std::error_code ec;
     std::filesystem::remove_all(repo_dir_, ec);
   }
@@ -302,14 +302,6 @@ parameters [ { key: "execute_delay_ms" value: { string_value: ")" +
     }
     ASSERT_TRUE(live && ready)
         << "Timed out waiting for healthy inference server and models";
-
-    FAIL_TEST_IF_ERR(TRITONSERVER_ResponseAllocatorNew(
-        &allocator_, ResponseAlloc, ResponseRelease, nullptr /* start_fn */));
-  }
-
-  void TearDown() override
-  {
-    FAIL_TEST_IF_ERR(TRITONSERVER_ResponseAllocatorDelete(allocator_));
   }
 
   bool SendRequest(const char* model_name, RequestTracker* tracker)
@@ -373,14 +365,22 @@ parameters [ { key: "execute_delay_ms" value: { string_value: ")" +
         << " released=" << tracker->released;
   }
 
+  // Requests still in flight when a test fails use these, so they must outlive
+  // the server.
   static TRITONSERVER_Server* server_;
   static std::filesystem::path repo_dir_;
-  TRITONSERVER_ResponseAllocator* allocator_ = nullptr;
-  std::vector<int32_t> input0_data_ = std::vector<int32_t>(16, 1);
+  static TRITONSERVER_ResponseAllocator* allocator_;
+  static std::vector<int32_t> input0_data_;
+  static RequestTracker filler_tracker_;
+  static RequestTracker batched_tracker_;
 };
 
 TRITONSERVER_Server* DynamicBatchSchedulerTest::server_ = nullptr;
 std::filesystem::path DynamicBatchSchedulerTest::repo_dir_;
+TRITONSERVER_ResponseAllocator* DynamicBatchSchedulerTest::allocator_ = nullptr;
+std::vector<int32_t> DynamicBatchSchedulerTest::input0_data_(16, 1);
+RequestTracker DynamicBatchSchedulerTest::filler_tracker_;
+RequestTracker DynamicBatchSchedulerTest::batched_tracker_;
 
 // libstdc++'s operator new pairs with std::free, hence the same here.
 void
@@ -417,14 +417,12 @@ operator delete(void* ptr) noexcept
 
 TEST_F(DynamicBatchSchedulerTest, MergedPayloadExecMutexNotUsedAfterFree)
 {
-  RequestTracker filler_tracker, batched_tracker;
-
   ArmDetector();
 
   // Fill the rate limiter's payload pool: the filler model has no dynamic
   // batching, so each request owns a payload and payloads are never merged.
   for (size_t i = 0; i < kFillerRequestCount; ++i) {
-    ASSERT_TRUE(SendRequest(kFillerModelName, &filler_tracker))
+    ASSERT_TRUE(SendRequest(kFillerModelName, &filler_tracker_))
         << "Failed to send filler request " << i;
   }
 
@@ -440,19 +438,19 @@ TEST_F(DynamicBatchSchedulerTest, MergedPayloadExecMutexNotUsedAfterFree)
       break;
     }
     for (size_t i = 0; i < kBurstSize; ++i) {
-      ASSERT_TRUE(SendRequest(kBatchedModelName, &batched_tracker))
+      ASSERT_TRUE(SendRequest(kBatchedModelName, &batched_tracker_))
           << "Failed to send batched request " << i << " of burst " << burst;
     }
     std::this_thread::sleep_until(burst_start + (burst + 1) * kBurstPeriod);
   }
 
-  WaitComplete(&filler_tracker);
-  WaitComplete(&batched_tracker);
+  WaitComplete(&filler_tracker_);
+  WaitComplete(&batched_tracker_);
 
   const DetectorResult result = DisarmDetectorAndVerify();
 
-  EXPECT_EQ(filler_tracker.errored, 0);
-  EXPECT_EQ(batched_tracker.errored, 0);
+  EXPECT_EQ(filler_tracker_.errored, 0);
+  EXPECT_EQ(batched_tracker_.errored, 0);
   ASSERT_GT(result.quarantined, 0u)
       << "no sizeof(std::mutex) deletes seen: sized deallocation (the GCC "
          "default) is required for the interposed delete to run";
