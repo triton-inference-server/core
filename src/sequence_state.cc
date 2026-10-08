@@ -35,14 +35,18 @@
 
 namespace triton { namespace core {
 
-SequenceState::SequenceState() : data_(new MemoryReference) {}
+SequenceState::SequenceState()
+    : data_(new MemoryReference), other_state_(nullptr)
+{
+}
 
 SequenceState::SequenceState(
     const std::string& name, const inference::DataType datatype,
     const int64_t* shape, const uint64_t dim_count, bool use_single_buffer,
     bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape, shape + dim_count),
-      data_(new MemoryReference), use_single_buffer_(use_single_buffer),
+      data_(new MemoryReference), other_state_(nullptr),
+      use_single_buffer_(use_single_buffer),
       use_growable_memory_(use_growable_memory)
 {
 }
@@ -52,7 +56,8 @@ SequenceState::SequenceState(
     const std::vector<int64_t>& shape, bool use_single_buffer,
     bool use_growable_memory)
     : name_(name), datatype_(datatype), shape_(shape),
-      data_(new MemoryReference), use_single_buffer_(use_single_buffer),
+      data_(new MemoryReference), other_state_(nullptr),
+      use_single_buffer_(use_single_buffer),
       use_growable_memory_(use_growable_memory)
 {
 }
@@ -294,36 +299,37 @@ SequenceStates::OutputState(
   }
 
   std::vector<int64_t> new_shape(shape, shape + dim_count);
-  *output_states_[name]->MutableDType() = datatype;
-  *output_states_[name]->MutableShape() = new_shape;
+  auto& output_state_r = output_state_itr->second;
+  *output_state_r->MutableDType() = datatype;
+  *output_state_r->MutableShape() = new_shape;
 
-  auto& output_state_r = output_states_[name];
-  size_t iter_advance =
-      std::distance(output_states_.begin(), output_states_.find(name));
-
-  // Find the input state corresponding to this output state.
-  auto input_states_itr = input_states_.begin();
-  std::advance(input_states_itr, iter_advance);
-  auto& input_state_r = input_states_[input_states_itr->first];
-  bool use_single_buffer = output_states_[name]->UseSingleBuffer();
-
-  if (output_state != nullptr) {
-    *output_state = output_states_[name].get();
+  SequenceState* input_state = output_state_r->OtherState();
+  if (input_state == nullptr) {
+    return Status(
+        Status::Code::INTERNAL,
+        "state '" + name + "' does not have a corresponding input state.");
   }
 
-  output_state_r->SetStateUpdateCallback(
-      [&output_state_r, &input_state_r, use_single_buffer]() {
+  SequenceState* output_state_ptr = output_state_r.get();
+  bool use_single_buffer = output_state_r->UseSingleBuffer();
+
+  if (output_state != nullptr) {
+    *output_state = output_state_ptr;
+  }
+
+  output_state_ptr->SetStateUpdateCallback(
+      [output_state_ptr, input_state, use_single_buffer]() {
         // Swap the internal memory if the size of the input and output state is
         // equal
 
         if (!use_single_buffer) {
-          if (output_state_r->Data()->TotalByteSize() ==
-              input_state_r->Data()->TotalByteSize()) {
-            std::shared_ptr<Memory> temp_memory = input_state_r->Data();
-            RETURN_IF_ERROR(input_state_r->RemoveAllData());
-            RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-            RETURN_IF_ERROR(output_state_r->RemoveAllData());
-            RETURN_IF_ERROR(output_state_r->SetData(temp_memory));
+          if (output_state_ptr->Data()->TotalByteSize() ==
+              input_state->Data()->TotalByteSize()) {
+            std::shared_ptr<Memory> temp_memory = input_state->Data();
+            RETURN_IF_ERROR(input_state->RemoveAllData());
+            RETURN_IF_ERROR(input_state->SetData(output_state_ptr->Data()));
+            RETURN_IF_ERROR(output_state_ptr->RemoveAllData());
+            RETURN_IF_ERROR(output_state_ptr->SetData(temp_memory));
           } else {
             // If the size of output state is different from the input state,
             // allocate a new memory for the input state with the same size as
@@ -333,27 +339,27 @@ SequenceStates::OutputState(
 
             const std::shared_ptr<MutableMemory>& input_memory =
                 reinterpret_cast<const std::shared_ptr<MutableMemory>&>(
-                    input_state_r->Data());
+                    input_state->Data());
 
             input_memory->MutableBuffer(&memory_type, &memory_type_id);
             std::shared_ptr<AllocatedMemory> memory =
                 std::make_shared<AllocatedMemory>(
-                    output_state_r->Data()->TotalByteSize(), memory_type,
+                    output_state_ptr->Data()->TotalByteSize(), memory_type,
                     memory_type_id);
-            RETURN_IF_ERROR(input_state_r->RemoveAllData());
-            RETURN_IF_ERROR(input_state_r->SetData(output_state_r->Data()));
-            RETURN_IF_ERROR(output_state_r->RemoveAllData());
-            RETURN_IF_ERROR(output_state_r->SetData(memory));
+            RETURN_IF_ERROR(input_state->RemoveAllData());
+            RETURN_IF_ERROR(input_state->SetData(output_state_ptr->Data()));
+            RETURN_IF_ERROR(output_state_ptr->RemoveAllData());
+            RETURN_IF_ERROR(output_state_ptr->SetData(memory));
           }
 
           // Update the shape and data type of the output state if it doesn't
           // match the input state.
-          if (input_state_r->Shape() != output_state_r->Shape()) {
-            *input_state_r->MutableShape() = output_state_r->Shape();
+          if (input_state->Shape() != output_state_ptr->Shape()) {
+            *input_state->MutableShape() = output_state_ptr->Shape();
           }
 
-          if (input_state_r->DType() != output_state_r->DType()) {
-            *input_state_r->MutableDType() = output_state_r->DType();
+          if (input_state->DType() != output_state_ptr->DType()) {
+            *input_state->MutableDType() = output_state_ptr->DType();
           }
         }
 
@@ -418,7 +424,7 @@ SequenceStates::CopyAsNull(
 
     for (auto& from_output_state : from->OutputStates()) {
       auto& from_output_state_tensor = from_output_state.second;
-      lsequence_states->output_states_.emplace(
+      const auto& output_pair = lsequence_states->output_states_.emplace(
           std::piecewise_construct,
           std::forward_as_tuple(from_output_state.first),
           std::forward_as_tuple(new SequenceState(
@@ -426,6 +432,18 @@ SequenceStates::CopyAsNull(
               from_output_state_tensor->DType(),
               from_output_state_tensor->Shape(), false /* reused_buffer */,
               false /* use_growable_memory */)));
+
+      SequenceState* from_input_state = from_output_state_tensor->OtherState();
+      if (from_input_state != nullptr) {
+        const auto& input_itr =
+            lsequence_states->input_states_.find(from_input_state->Name());
+        if (input_itr != lsequence_states->input_states_.end()) {
+          auto& output_tensor = output_pair.first->second;
+          auto& input_tensor = input_itr->second;
+          output_tensor->SetOtherState(input_tensor.get());
+          input_tensor->SetOtherState(output_tensor.get());
+        }
+      }
     }
   }
   *to = std::move(lsequence_states);
