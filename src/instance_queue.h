@@ -47,7 +47,8 @@ class InstanceQueue {
 
   void IncrementConsumerCount();
   void DecrementConsumerCount();
-  void WaitForConsumer();
+  bool WaitForConsumer();
+  void Close();
   int WaitingConsumerCount();
 
  private:
@@ -59,6 +60,7 @@ class InstanceQueue {
   std::mutex mu_;
 
   int waiting_consumer_count_;
+  bool closed_;
   std::mutex waiting_consumer_mu_;
   std::condition_variable waiting_consumer_cv_;
 };
