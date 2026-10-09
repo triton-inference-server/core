@@ -25,7 +25,6 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <future>
@@ -33,6 +32,7 @@
 #include <mutex>
 #include <queue>
 #include <set>
+#include <stop_token>
 #include <thread>
 
 #include "backend_model.h"
@@ -115,7 +115,8 @@ class DynamicBatchScheduler : public Scheduler {
   // For queued requests under policy REJECT, they will be rejected if timed-out
   // while waiting for a slot. The timeout will be checked every
   // 'wait_microseconds'. The 'wait_microseconds' should be non-zero.
-  void WaitForPayloadSlotAvailable(
+  // Returns false if the scheduler is exiting before a slot is available.
+  bool WaitForPayloadSlotAvailable(
       std::unique_lock<std::mutex>* lock, uint64_t wait_microseconds);
 
   // Custom batching function calls
@@ -147,7 +148,7 @@ class DynamicBatchScheduler : public Scheduler {
   bool stop_;
 
   std::thread scheduler_thread_;
-  std::atomic<bool> scheduler_thread_exit_;
+  std::stop_source scheduler_thread_stop_;
 
   // Mutex and condvar for signaling scheduler thread
   std::mutex mu_;

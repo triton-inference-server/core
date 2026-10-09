@@ -29,6 +29,7 @@
 #include <functional>
 #include <mutex>
 #include <queue>
+#include <stop_token>
 #include <vector>
 
 #include "backend_model.h"
@@ -101,10 +102,16 @@ class RateLimiter {
   /// enabled.
   /// \param force_non_blocking When set true, function will not block for
   /// the availability of the slot.
+  /// \param wait_microseconds When non-zero and force_non_blocking is false,
+  /// wait up to this duration for a slot, including when prefetching is
+  /// enabled. Zero preserves the default behavior: check immediately when
+  /// prefetching is enabled, otherwise wait indefinitely for a consumer.
+  /// \param stop_token Cancels a bounded wait on scheduler shutdown.
   /// \return slot availability in boolean.
   bool PayloadSlotAvailable(
       const TritonModel* model, const TritonModelInstance* model_instance,
-      const bool support_prefetching, const bool force_non_blocking = false);
+      const bool support_prefetching, const bool force_non_blocking = false,
+      const uint64_t wait_microseconds = 0, std::stop_token stop_token = {});
 
   /// Enqueues the payload to rate limiter for scheduling on the given model.
   /// \param model The pointer to TritonModel object to be removed.
@@ -295,8 +302,9 @@ class RateLimiter {
   // Should wait till a consumer registers a pending dequeue request
   // for the given instance(s) of the model. This implies that the
   // call will wait for an idle runner.
-  void WaitForConsumer(
-      const TritonModel* model, const TritonModelInstance* model_instance);
+  bool WaitForConsumer(
+      const TritonModel* model, const TritonModelInstance* model_instance,
+      const uint64_t wait_microseconds, std::stop_token stop_token);
   // Returns the number of consumers who have a pending dequeue request for
   // the given instance(s) of the model.
   int WaitingConsumerCount(
@@ -366,6 +374,7 @@ class RateLimiter {
         specific_queues_;
     std::mutex mu_;
     std::condition_variable cv_;
+    std::condition_variable slot_cv_;
   };
   std::map<const TritonModel*, std::unique_ptr<PayloadQueue>> payload_queues_;
 };

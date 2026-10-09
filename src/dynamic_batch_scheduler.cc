@@ -159,7 +159,6 @@ DynamicBatchScheduler::Create(
       batcher_config.priority_queue_policy());
   std::unique_ptr<DynamicBatchScheduler> sched(dyna_sched);
 
-  sched->scheduler_thread_exit_.store(false);
   if (dynamic_batching_enabled) {
     sched->NewPayload();
     sched->scheduler_thread_ =
@@ -174,7 +173,10 @@ DynamicBatchScheduler::Create(
 DynamicBatchScheduler::~DynamicBatchScheduler()
 {
   // Signal the scheduler thread to exit and then wait for it..
-  scheduler_thread_exit_.store(true);
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    scheduler_thread_stop_.request_stop();
+  }
   cv_.notify_one();
   if (scheduler_thread_.joinable()) {
     scheduler_thread_.join();
@@ -254,6 +256,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     {
       std::lock_guard<std::mutex> lock(mu_);
 
+      const bool queue_was_empty = queue_.Empty();
       queued_batch_size_ += std::max(1U, request->BatchSize());
 
       // Assuming no error is returned, this call takes ownership of
@@ -279,6 +282,10 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
             (payload_saturated_ || IsStaleState(payload_state) ||
              (queued_batch_size_ >= next_preferred_batch_size_));
       }
+
+      // Start the consumer wait even if the first queued request arrives while
+      // all backends are busy. Consumer notifications target the rate limiter.
+      wake_batcher |= queue_was_empty && !queue_.SupportPrefetching();
     }
 
     if (wake_batcher) {
@@ -328,7 +335,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
   const uint64_t default_wait_microseconds = 500 * 1000;
 
-  while (!scheduler_thread_exit_.load()) {
+  while (!scheduler_thread_stop_.stop_requested()) {
     NVTX_RANGE(nvtx_, "DynamicBatcher " + model_name_);
 
     std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
@@ -364,7 +371,9 @@ DynamicBatchScheduler::BatcherThread(const int nice)
           continue;
         }
 
-        WaitForPayloadSlotAvailable(&lock, default_wait_microseconds);
+        if (!WaitForPayloadSlotAvailable(&lock, default_wait_microseconds)) {
+          break;
+        }
 
         {
           std::lock_guard<std::mutex> exec_lock(
@@ -421,7 +430,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
 
       // If no requests are to be handled, wait for notification or
       // for the specified timeout before checking the queue again.
-      if (wait_microseconds > 0) {
+      if ((wait_microseconds > 0) && !scheduler_thread_stop_.stop_requested()) {
         std::chrono::microseconds wait_timeout(wait_microseconds);
         cv_.wait_for(lock, wait_timeout);
       }
@@ -446,7 +455,7 @@ DynamicBatchScheduler::BatcherThread(const int nice)
                  << "...";
 }
 
-void
+bool
 DynamicBatchScheduler::WaitForPayloadSlotAvailable(
     std::unique_lock<std::mutex>* lock, uint64_t wait_microseconds)
 {
@@ -455,18 +464,16 @@ DynamicBatchScheduler::WaitForPayloadSlotAvailable(
   // Enqueue threads above to make progress.
   lock->unlock();
 
-  const std::chrono::microseconds wait_timeout(wait_microseconds);
-  std::mutex slot_mu;
-  std::unique_lock<std::mutex> slot_lock(slot_mu);
   bool slot_available = false;
 
-  while (!slot_available) {
-    slot_available = cv_.wait_for(slot_lock, wait_timeout, [this]() {
-      return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
-          model_, model_instance_, queue_.SupportPrefetching(),
-          true /* force_non_blocking */);
-    });
-    if (!slot_available) {
+  const auto stop_token = scheduler_thread_stop_.get_token();
+  while (!slot_available && !stop_token.stop_requested()) {
+    // The rate limiter waits on the CV and mutex owning the slot predicate:
+    // consumer availability without prefetching, payload queue size otherwise.
+    slot_available = rate_limiter_->PayloadSlotAvailable(
+        model_, model_instance_, queue_.SupportPrefetching(),
+        false /* force_non_blocking */, wait_microseconds, stop_token);
+    if (!slot_available && !stop_token.stop_requested()) {
       // Reject and release timeout requests from queue.
       std::vector<std::deque<std::unique_ptr<InferenceRequest>>>
           rejected_requests, cancelled_requests;
@@ -482,6 +489,7 @@ DynamicBatchScheduler::WaitForPayloadSlotAvailable(
 
   // Recapture the lock.
   lock->lock();
+  return slot_available && !stop_token.stop_requested();
 }
 
 uint64_t
