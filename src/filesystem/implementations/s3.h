@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -96,10 +96,22 @@ struct S3Credential {
   std::string region_;
   std::string session_token_;
   std::string profile_name_;
+  bool use_virtual_addressing_ = false;
 
   S3Credential();  // from env var
   S3Credential(triton::common::TritonJson::Value& cred_json);
 };
+
+// Parse the S3_USE_VIRTUAL_ADDRESSING environment variable. Returns true only
+// for the exact value "true"; unset or any other value yields false. Shared by
+// both the environment-variable and JSON credential constructors so the
+// truthiness rule is defined in exactly one place.
+inline bool
+S3UseVirtualAddressingFromEnv()
+{
+  const char* value = std::getenv("S3_USE_VIRTUAL_ADDRESSING");
+  return (value != nullptr && std::string(value) == "true");
+}
 
 S3Credential::S3Credential()
 {
@@ -116,12 +128,13 @@ S3Credential::S3Credential()
   region_ = to_str(region);
   session_token_ = to_str(session_token);
   profile_name_ = to_str(profile);
+  use_virtual_addressing_ = S3UseVirtualAddressingFromEnv();
 }
 
 S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
 {
   triton::common::TritonJson::Value secret_key_json, key_id_json, region_json,
-      session_token_json, profile_json;
+      session_token_json, profile_json, use_virtual_addressing_json;
   if (cred_json.Find("secret_key", &secret_key_json))
     secret_key_json.AsString(&secret_key_);
   if (cred_json.Find("key_id", &key_id_json))
@@ -132,6 +145,21 @@ S3Credential::S3Credential(triton::common::TritonJson::Value& cred_json)
     session_token_json.AsString(&session_token_);
   if (cred_json.Find("profile", &profile_json))
     profile_json.AsString(&profile_name_);
+  if (cred_json.Find("use_virtual_addressing", &use_virtual_addressing_json)) {
+    // An explicit field in the credential block takes precedence. If it is not
+    // a JSON bool, AsBool leaves use_virtual_addressing_ unchanged (false);
+    // warn so a misconfigured value is not silently ignored.
+    if (!use_virtual_addressing_json.AsBool(&use_virtual_addressing_).IsOk()) {
+      LOG_WARNING << "S3 credential field \"use_virtual_addressing\" is not a "
+                     "boolean; ignoring it and using path-style addressing";
+    }
+  } else {
+    // Fall back to the environment variable when the credential file does not
+    // specify the field. This keeps S3_USE_VIRTUAL_ADDRESSING effective even
+    // when TRITON_CLOUD_CREDENTIAL_PATH is set (the credential-file path does
+    // not otherwise consult environment variables).
+    use_virtual_addressing_ = S3UseVirtualAddressingFromEnv();
+  }
 }
 
 class S3FileSystem : public FileSystem {
@@ -325,11 +353,11 @@ S3FileSystem::S3FileSystem(
     client_ = std::make_unique<s3::S3Client>(
         credentials, config,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAdressing*/ false);
+        /*useVirtualAdressing*/ s3_cred.use_virtual_addressing_);
   } else {
     client_ = std::make_unique<s3::S3Client>(
         config, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*useVirtualAdressing*/ false);
+        /*useVirtualAdressing*/ s3_cred.use_virtual_addressing_);
   }
 }
 
