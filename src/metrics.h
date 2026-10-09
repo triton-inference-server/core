@@ -107,6 +107,49 @@ struct DcgmMetadata {
 };
 #endif  // TRITON_ENABLE_METRICS_GPU
 
+//
+// TritonServerMetricArgs
+//
+// Implementation for TRITONSERVER_MetricArgs.
+//
+class TritonServerMetricArgs {
+ public:
+  TritonServerMetricArgs() = default;
+
+  void* SetHistogramArgs(const double* buckets, uint64_t bucket_count)
+  {
+    kind_ = TRITONSERVER_METRIC_KIND_HISTOGRAM;
+    buckets_ = std::vector<double>(buckets, buckets + bucket_count);
+    return nullptr;
+  }
+  TRITONSERVER_MetricKind kind() const { return kind_; }
+  const std::vector<double>& buckets() const { return buckets_; }
+
+ private:
+  TRITONSERVER_MetricKind kind_;
+  std::vector<double> buckets_;
+};
+
+class MetricsStorage {
+ public:
+  void* Add(
+      TRITONSERVER_MetricKind kind, void* family,
+      std::map<std::string, std::string> label_map,
+      const TritonServerMetricArgs* args);
+
+  void Remove(TRITONSERVER_MetricKind kind, void* family, void* prom_metric);
+
+ private:
+  // Synchronize access of related metric objects
+  std::mutex metric_mtx_;
+  // Prometheus returns the existing metric pointer if the metric with the same
+  // set of labels are requested, as a result, different Metric objects may
+  // refer to the same prometheus metric. So we must track the reference count
+  // of the metric and request prometheus to remove it only when all references
+  // are released.
+  std::unordered_map<void*, size_t> prom_metric_ref_cnt_;
+};
+
 class Metrics {
  public:
   // Return the hash value of the labels
@@ -141,6 +184,9 @@ class Metrics {
 
   // Get the prometheus registry
   static std::shared_ptr<prometheus::Registry> GetRegistry();
+
+  // Get the storage that holds prometheus metrics with reference count
+  static std::shared_ptr<MetricsStorage> GetMetricsStorage();
 
   // Get serialized metrics
   static const std::string SerializedMetrics();
@@ -297,6 +343,7 @@ class Metrics {
 
   std::shared_ptr<prometheus::Registry> registry_;
   std::unique_ptr<prometheus::Serializer> serializer_;
+  std::shared_ptr<MetricsStorage> metrics_storage_;
 
   // DLIS-4761: Refactor into groups of families
   prometheus::Family<prometheus::Counter>& inf_success_family_;
