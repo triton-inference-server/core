@@ -635,6 +635,52 @@ install(
 )
 
 #
+# Unit test for Payload
+#
+# Internal C++ symbols are hidden by triton-core's export script, so compile
+# the server sources into the test and reuse triton-core's build settings.
+get_target_property(payload_test_sources triton-core SOURCES)
+get_target_property(payload_test_source_dir triton-core SOURCE_DIR)
+list(TRANSFORM payload_test_sources PREPEND "${payload_test_source_dir}/")
+add_executable(
+  payload_test
+  payload_test.cc
+  ${payload_test_sources}
+)
+target_compile_features(
+  payload_test PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+target_compile_options(
+  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_OPTIONS>)
+target_compile_definitions(
+  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_DEFINITIONS>)
+target_include_directories(
+  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,INCLUDE_DIRECTORIES>)
+target_link_directories(
+  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,LINK_DIRECTORIES>)
+
+set_target_properties(
+  payload_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_link_libraries(
+  payload_test
+  PRIVATE
+    $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(
+  TARGETS payload_test
+  RUNTIME DESTINATION bin
+)
+
+#
 # Backend Output Detail Unittest
 #
 add_executable(
