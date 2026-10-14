@@ -307,6 +307,16 @@ MetricModelReporter::InitializeHistograms(
   if (config_.latency_histograms_enabled_) {
     histogram_families_[kFirstResponseHistogram] =
         &Metrics::FamilyFirstResponseDuration();
+    histogram_families_[kRequestDurationHistogram] =
+        &Metrics::FamilyRequestDurationHistogram();
+    histogram_families_[kQueueDurationHistogram] =
+        &Metrics::FamilyQueueDurationHistogram();
+    histogram_families_[kComputeInputDurationHistogram] =
+        &Metrics::FamilyComputeInputDurationHistogram();
+    histogram_families_[kComputeInferDurationHistogram] =
+        &Metrics::FamilyComputeInferDurationHistogram();
+    histogram_families_[kComputeOutputDurationHistogram] =
+        &Metrics::FamilyComputeOutputDurationHistogram();
   }
 
   for (auto& iter : histogram_families_) {

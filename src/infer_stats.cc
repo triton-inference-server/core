@@ -144,6 +144,20 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
         "compute_infer_duration", compute_infer_duration_ns / 1000);
     metric_reporter->ObserveSummary(
         "compute_output_duration", compute_output_duration_ns / 1000);
+    // Histogram Latencies
+    // FIXME [DLIS-4762]: request histogram is disabled when cache is enabled.
+    if (!reporter_config.cache_enabled_) {
+      metric_reporter->ObserveHistogram(
+          kRequestDurationHistogram, request_duration_ns / 1000);
+    }
+    metric_reporter->ObserveHistogram(
+        kQueueDurationHistogram, queue_duration_ns / 1000);
+    metric_reporter->ObserveHistogram(
+        kComputeInputDurationHistogram, compute_input_duration_ns / 1000);
+    metric_reporter->ObserveHistogram(
+        kComputeInferDurationHistogram, compute_infer_duration_ns / 1000);
+    metric_reporter->ObserveHistogram(
+        kComputeOutputDurationHistogram, compute_output_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
 }
