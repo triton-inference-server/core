@@ -225,7 +225,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     if (preserve_ordering_) {
       // In order to preserve the order, the response send must be
       // delegated.
-      DelegateResponse(request);
+      DelegateResponse(request, cached_response.get());
     }
 
     // Send cached response and release request
@@ -671,7 +671,8 @@ DynamicBatchScheduler::GetDynamicBatch()
 
 void
 DynamicBatchScheduler::DelegateResponse(
-    std::unique_ptr<InferenceRequest>& request)
+    std::unique_ptr<InferenceRequest>& request,
+    InferenceResponse* cached_response)
 {
   // Reserve this request's slot in the completion queue now, while we are
   // still in scheduler-receive order. FinalizeResponses() stalls on an empty
@@ -696,7 +697,7 @@ DynamicBatchScheduler::DelegateResponse(
   const uint64_t lookup_end_ns = request->CacheLookupEndNs();
   const uint64_t lookup_start_ns = request->CacheLookupStartNs();
 
-  request->SetResponseDelegator(
+  auto delegator =
       [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
           std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
         if (response_cache_enabled_ && !is_key_set) {
@@ -758,7 +759,16 @@ DynamicBatchScheduler::DelegateResponse(
         } else {
           InferenceResponse::Send(std::move(response), flags);
         }
-      });
+      };
+  // Only a preserve_ordering cache hit sends an already-built response.
+  // Every other case leaves the delegator on the request.
+  if ((cached_response != nullptr) && preserve_ordering_) {
+    LOG_STATUS_ERROR(
+        cached_response->SetResponseDelegator(std::move(delegator)),
+        "failed to install delegator on cached response");
+  } else {
+    request->SetResponseDelegator(std::move(delegator));
+  }
 }
 
 void
