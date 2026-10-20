@@ -157,9 +157,8 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
   }
 
 #ifdef TRITON_ENABLE_METRICS
-  // Duration histograms are updated outside mu_. prometheus::Summary::Observe
-  // estimated quantiles under that lock and serialized every completion for
-  // the model.
+  // simplified histograms are updated outside mu_. verbose summaries stay
+  // inside the lock, with the counters above.
   if (metric_reporter != nullptr) {
     // FIXME [DLIS-4762]: request histogram is disabled when cache is enabled.
     if (!cache_enabled) {
