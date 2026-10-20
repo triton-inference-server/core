@@ -40,8 +40,10 @@
 namespace triton { namespace core {
 
 // Geometric bucket boundaries from 1us to 60s with a ratio of 1.2.
-// histogram_quantile linear interpolation is then off by at most about half a
-// bucket, roughly 10% relative error.
+// histogram_quantile places its estimate inside the bucket that holds the
+// rank. If the observations sit on one edge of that bucket and the estimate
+// lands on the other, the relative error can reach the bucket ratio minus
+// one, about 20%.
 std::vector<double> DefaultLatencyHistogramBoundaries();
 
 // How --metrics-config selects latency distribution metrics.
@@ -81,9 +83,12 @@ class ShardedLatencyHistogram {
   };
   Snapshot Collect() const;
 
+  // Samples only. The registry writes one HELP and TYPE line per metric name.
+  void AppendSamples(std::string* out) const;
   void AppendPrometheusText(std::string* out) const;
 
   const std::string& Name() const { return name_; }
+  const std::string& Help() const { return help_; }
 
  private:
   size_t BucketIndex(uint64_t value_us) const;
@@ -95,7 +100,6 @@ class ShardedLatencyHistogram {
 
   struct alignas(64) Shard {
     std::atomic<uint64_t> sum{0};
-    std::atomic<uint64_t> count{0};
     std::unique_ptr<std::atomic<uint64_t>[]> buckets;
   };
   std::unique_ptr<Shard[]> shards_;

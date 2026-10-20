@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -175,7 +176,6 @@ ShardedLatencyHistogram::Observe(uint64_t value_us) noexcept
   Shard& shard = shards_[ShardForThisThread()];
   shard.buckets[BucketIndex(value_us)].fetch_add(1, std::memory_order_relaxed);
   shard.sum.fetch_add(value_us, std::memory_order_relaxed);
-  shard.count.fetch_add(1, std::memory_order_relaxed);
 }
 
 ShardedLatencyHistogram::Snapshot
@@ -186,11 +186,15 @@ ShardedLatencyHistogram::Collect() const
   std::vector<uint64_t> raw(bucket_count_, 0);
   for (size_t shard = 0; shard < kShardCount; ++shard) {
     snapshot.sum += shards_[shard].sum.load(std::memory_order_relaxed);
-    snapshot.count += shards_[shard].count.load(std::memory_order_relaxed);
+    // Count is the sum of these same bucket loads. A separate counter can
+    // move between the two reads and make a finite bucket exceed +Inf.
     for (size_t bucket = 0; bucket < bucket_count_; ++bucket) {
       raw[bucket] +=
           shards_[shard].buckets[bucket].load(std::memory_order_relaxed);
     }
+  }
+  for (uint64_t observations : raw) {
+    snapshot.count += observations;
   }
 
   snapshot.cumulative.resize(boundaries_.size());
@@ -203,17 +207,9 @@ ShardedLatencyHistogram::Collect() const
 }
 
 void
-ShardedLatencyHistogram::AppendPrometheusText(std::string* out) const
+ShardedLatencyHistogram::AppendSamples(std::string* out) const
 {
   const Snapshot snapshot = Collect();
-  *out += "# HELP ";
-  *out += name_;
-  *out += " ";
-  *out += help_;
-  *out += "\n# TYPE ";
-  *out += name_;
-  *out += " histogram\n";
-
   std::string base_labels;
   for (const auto& label : labels_) {
     if (!base_labels.empty()) {
@@ -256,6 +252,19 @@ ShardedLatencyHistogram::AppendPrometheusText(std::string* out) const
   write_sample("_count", "", snapshot.count);
 }
 
+void
+ShardedLatencyHistogram::AppendPrometheusText(std::string* out) const
+{
+  *out += "# HELP ";
+  *out += name_;
+  *out += " ";
+  *out += help_;
+  *out += "\n# TYPE ";
+  *out += name_;
+  *out += " histogram\n";
+  AppendSamples(out);
+}
+
 LatencyHistogramRegistry&
 LatencyHistogramRegistry::Instance()
 {
@@ -292,9 +301,30 @@ LatencyHistogramRegistry::Serialize() const
     std::lock_guard<std::mutex> lock(mu_);
     histograms = histograms_;
   }
-  std::string out;
+  std::map<std::string, std::vector<std::shared_ptr<ShardedLatencyHistogram>>>
+      families;
+  std::vector<std::string> family_order;
   for (const auto& histogram : histograms) {
-    histogram->AppendPrometheusText(&out);
+    auto& family = families[histogram->Name()];
+    if (family.empty()) {
+      family_order.push_back(histogram->Name());
+    }
+    family.push_back(histogram);
+  }
+
+  std::string out;
+  for (const auto& name : family_order) {
+    const auto& family = families[name];
+    out += "# HELP ";
+    out += name;
+    out += " ";
+    out += family.front()->Help();
+    out += "\n# TYPE ";
+    out += name;
+    out += " histogram\n";
+    for (const auto& histogram : family) {
+      histogram->AppendSamples(&out);
+    }
   }
   return out;
 }

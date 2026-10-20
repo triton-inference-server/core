@@ -29,6 +29,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -278,6 +279,42 @@ TEST(ShardedLatencyHistogram, ConcurrentObservationsAreNotLost)
   EXPECT_EQ(snapshot.cumulative[0], expected);
 }
 
+TEST(ShardedLatencyHistogram, CollectStaysConsistentWhileWritersRun)
+{
+  ShardedLatencyHistogram histogram(
+      "nv_inference_request_histogram_us", "request", {}, {10.0, 100.0});
+  std::atomic<bool> run{true};
+  std::vector<std::thread> writers;
+  for (int thread = 0; thread < 4; ++thread) {
+    writers.emplace_back([&histogram, &run] {
+      uint64_t value = 1;
+      while (run.load(std::memory_order_relaxed)) {
+        histogram.Observe(value);
+        value = value == 1 ? 50 : 1;
+      }
+    });
+  }
+
+  for (int i = 0; i < 200; ++i) {
+    const auto snapshot = histogram.Collect();
+    uint64_t previous = 0;
+    for (uint64_t cumulative : snapshot.cumulative) {
+      EXPECT_GE(cumulative, previous);
+      EXPECT_LE(cumulative, snapshot.count);
+      previous = cumulative;
+    }
+    EXPECT_GE(snapshot.count, previous);
+  }
+
+  run.store(false, std::memory_order_relaxed);
+  for (auto& writer : writers) {
+    writer.join();
+  }
+  const auto snapshot = histogram.Collect();
+  EXPECT_GT(snapshot.count, 0u);
+  EXPECT_LE(snapshot.cumulative.back(), snapshot.count);
+}
+
 TEST_F(RegistryGuard, UnregisteredHistogramsAreOmitted)
 {
   EXPECT_EQ(LatencyHistogramRegistry::Instance().Serialize(), "");
@@ -296,6 +333,32 @@ TEST_F(RegistryGuard, UnregisteredHistogramsAreOmitted)
   EXPECT_EQ(LatencyHistogramRegistry::Instance().Serialize().find(
                 "nv_inference_request_histogram_us"),
             std::string::npos);
+}
+
+TEST_F(RegistryGuard, OneHelpAndTypeLinePerMetricName)
+{
+  auto first = std::make_shared<ShardedLatencyHistogram>(
+      "nv_inference_request_histogram_us", "request latency",
+      std::map<std::string, std::string>{{"model", "a"}},
+      std::vector<double>{10.0});
+  auto second = std::make_shared<ShardedLatencyHistogram>(
+      "nv_inference_request_histogram_us", "request latency",
+      std::map<std::string, std::string>{{"model", "b"}},
+      std::vector<double>{10.0});
+  first->Observe(1);
+  second->Observe(2);
+  LatencyHistogramRegistry::Instance().Register(first);
+  LatencyHistogramRegistry::Instance().Register(second);
+
+  const std::string exposed = LatencyHistogramRegistry::Instance().Serialize();
+  const std::string type_line =
+      "# TYPE nv_inference_request_histogram_us histogram";
+  const std::string help_line =
+      "# HELP nv_inference_request_histogram_us request latency";
+  EXPECT_EQ(exposed.find(type_line), exposed.rfind(type_line));
+  EXPECT_EQ(exposed.find(help_line), exposed.rfind(help_line));
+  EXPECT_NE(exposed.find("model=\"a\""), std::string::npos);
+  EXPECT_NE(exposed.find("model=\"b\""), std::string::npos);
 }
 
 }}  // namespace triton::core
