@@ -29,6 +29,7 @@
 #include "triton/common/model_config.h"
 
 #ifdef TRITON_ENABLE_METRICS
+#include "latency_histogram.h"
 #include "metrics.h"
 #include "model.h"
 #include "prometheus/registry.h"
@@ -55,9 +56,13 @@ struct MetricReporterConfig {
 
   // Create and use Counters for per-model latency related metrics
   bool latency_counters_enabled_ = true;
-  // Create and use Histograms for per-model latency related metrics
+  // Create the first-response Prometheus histogram.
   bool latency_histograms_enabled_ = false;
-  // Create and use Summaries for per-model latency related metrics
+  // Create lock-free duration histograms (request, queue, compute, cache).
+  // Set by histogram_latencies=true and by summary_latencies=true.
+  bool latency_duration_histograms_enabled_ = false;
+  // CKMS summaries are no longer created. The field remains so older call
+  // sites that still consult it stay disabled.
   bool latency_summaries_enabled_ = false;
   // Default bucket boundaries used for each histogram metric. Each value
   // represents a boundary. For example, {100, 500, 2000, 5000} are latencies.
@@ -65,10 +70,7 @@ struct MetricReporterConfig {
   std::unordered_map<std::string, prometheus::Histogram::BucketBoundaries>
       histogram_options_ = {{kFirstResponseHistogram, {100, 500, 2000, 5000}}};
 
-  // Quantiles used for any summary metrics. Each pair of values represents
-  // { quantile, error }. For example, {0.90, 0.01} means to compute the
-  // 90th percentile with 1% error on either side, so the approximate 90th
-  // percentile value will be between the 89th and 91st percentiles.
+  // Retained for the unused summary code path. summary_quantiles is ignored.
   prometheus::Summary::Quantiles quantiles_ = {
       {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
 
@@ -82,7 +84,14 @@ struct MetricReporterConfig {
   // "ModelMetrics" with the full name displayed from metrics reporting while a
   // different name is used internally. All new histograms must update the map.
   const std::unordered_map<std::string, std::string> metric_map_ = {
-      {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram}};
+      {"nv_inference_first_response_histogram_ms", kFirstResponseHistogram},
+      {"nv_inference_request_histogram_us", "request_duration"},
+      {"nv_inference_queue_histogram_us", "queue_duration"},
+      {"nv_inference_compute_input_histogram_us", "compute_input_duration"},
+      {"nv_inference_compute_infer_histogram_us", "compute_infer_duration"},
+      {"nv_inference_compute_output_histogram_us", "compute_output_duration"},
+      {"nv_cache_hit_histogram_us", "cache_hit_duration"},
+      {"nv_cache_miss_histogram_us", "cache_miss_duration"}};
 #endif  // TRITON_ENABLE_METRICS
 };
 
@@ -115,6 +124,9 @@ class MetricModelReporter {
   void DecrementGauge(const std::string& name, double value);
   // Lookup histogram metric by name, and observe the value if it exists.
   void ObserveHistogram(const std::string& name, double value);
+  // Observe a lock-free duration histogram. No-op when that histogram was not
+  // created. Safe to call without holding InferenceStatsAggregator::mu_.
+  void ObserveLatencyHistogram(const std::string& name, uint64_t value_us);
   // Lookup summary metric by name, and observe the value if it exists.
   void ObserveSummary(const std::string& name, double value);
 
@@ -140,6 +152,8 @@ class MetricModelReporter {
   void InitializeCounters(const std::map<std::string, std::string>& labels);
   void InitializeGauges(const std::map<std::string, std::string>& labels);
   void InitializeHistograms(const std::map<std::string, std::string>& labels);
+  void InitializeLatencyHistograms(
+      const std::map<std::string, std::string>& labels);
   void InitializeSummaries(const std::map<std::string, std::string>& labels);
 
   // Lookup gauge metric by name. Return gauge if found, nullptr otherwise.
@@ -161,6 +175,8 @@ class MetricModelReporter {
   std::unordered_map<std::string, prometheus::Gauge*> gauges_;
   std::unordered_map<std::string, prometheus::Histogram*> histograms_;
   std::unordered_map<std::string, prometheus::Summary*> summaries_;
+  std::unordered_map<std::string, std::shared_ptr<ShardedLatencyHistogram>>
+      latency_histograms_;
 
   // Config
   MetricReporterConfig config_;

@@ -28,6 +28,8 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
+#include <mutex>
+
 #include "constants.h"
 #include "infer_stats.h"
 #include "triton/common/logging.h"
@@ -53,22 +55,30 @@ MetricReporterConfig::ParseConfig(
     if (pair.first == "counter_latencies" && pair.second == "false") {
       latency_counters_enabled_ = false;
     }
+  }
 
-    if (pair.first == "histogram_latencies" && pair.second == "true") {
-      latency_histograms_enabled_ = true;
-    }
-
-    if (pair.first == "summary_latencies" && pair.second == "true") {
-      latency_summaries_enabled_ = true;
-    }
-
-    // ex: summary_quantiles="0.5:0.05 0.9:0.01 0.99:0.001"
-    if (pair.first == "summary_quantiles") {
-      const auto& quantiles = ParseQuantiles(pair.second);
-      if (!quantiles.empty()) {
-        quantiles_ = quantiles;
-      }
-    }
+  const LatencyMetricToggles toggles =
+      ResolveLatencyMetricToggles(metrics_config);
+  latency_histograms_enabled_ = toggles.first_response_histogram;
+  latency_duration_histograms_enabled_ = toggles.duration_histograms;
+  // CKMS summaries are not created. summary_latencies enables duration
+  // histograms instead. See InitializeLatencyHistograms.
+  latency_summaries_enabled_ = false;
+  if (toggles.saw_summary_latencies) {
+    static std::once_flag summary_flag_once;
+    std::call_once(summary_flag_once, [] {
+      LOG_WARNING << "summary_latencies no longer publishes Prometheus Summary "
+                     "metrics. It enables lock-free "
+                     "nv_inference_*_histogram_us histograms. Compute "
+                     "percentiles with histogram_quantile().";
+    });
+  }
+  if (toggles.saw_summary_quantiles) {
+    static std::once_flag quantiles_once;
+    std::call_once(quantiles_once, [] {
+      LOG_WARNING << "summary_quantiles is ignored. Latency summaries were "
+                     "replaced by lock-free histograms.";
+    });
   }
 
   // Set flag to signal to stats aggregator if caching is enabled or not
@@ -189,11 +199,19 @@ MetricModelReporter::MetricModelReporter(
   InitializeCounters(labels);
   InitializeGauges(labels);
   InitializeHistograms(labels);
+  InitializeLatencyHistograms(labels);
   InitializeSummaries(labels);
 }
 
 MetricModelReporter::~MetricModelReporter()
 {
+  for (auto& iter : latency_histograms_) {
+    if (iter.second) {
+      LatencyHistogramRegistry::Instance().Unregister(iter.second.get());
+    }
+  }
+  latency_histograms_.clear();
+
   // Cleanup metrics for each family
   for (auto& iter : counter_families_) {
     const auto& name = iter.first;
@@ -321,46 +339,70 @@ MetricModelReporter::InitializeHistograms(
 }
 
 void
+MetricModelReporter::InitializeLatencyHistograms(
+    const std::map<std::string, std::string>& labels)
+{
+  if (!config_.latency_duration_histograms_enabled_) {
+    return;
+  }
+
+  auto add = [this, &labels](
+                 const std::string& key, const char* metric_name,
+                 const char* help) {
+    std::vector<double> boundaries = DefaultLatencyHistogramBoundaries();
+    const auto it = config_.histogram_options_.find(key);
+    if (it != config_.histogram_options_.end() && !it->second.empty()) {
+      boundaries.assign(it->second.begin(), it->second.end());
+    }
+    auto histogram = std::make_shared<ShardedLatencyHistogram>(
+        metric_name, help, labels, std::move(boundaries));
+    LatencyHistogramRegistry::Instance().Register(histogram);
+    latency_histograms_.emplace(key, std::move(histogram));
+  };
+
+  // FIXME [DLIS-4762]: the request histogram is omitted when the response
+  // cache is enabled. A cache miss is reported by the backend and then again
+  // after cache insertion, which would insert two samples for one request.
+  if (!config_.cache_enabled_) {
+    add(
+        "request_duration", "nv_inference_request_histogram_us",
+        "Histogram of inference request duration in microseconds (includes "
+        "cached requests)");
+  }
+  add(
+      "queue_duration", "nv_inference_queue_histogram_us",
+      "Histogram of inference queuing duration in microseconds (includes "
+      "cached requests)");
+  add(
+      "compute_input_duration", "nv_inference_compute_input_histogram_us",
+      "Histogram of compute input duration in microseconds (does not include "
+      "cached requests)");
+  add(
+      "compute_infer_duration", "nv_inference_compute_infer_histogram_us",
+      "Histogram of compute inference duration in microseconds (does not "
+      "include cached requests)");
+  add(
+      "compute_output_duration", "nv_inference_compute_output_histogram_us",
+      "Histogram of inference compute output duration in microseconds (does "
+      "not include cached requests)");
+  if (config_.cache_enabled_) {
+    add(
+        "cache_hit_duration", "nv_cache_hit_histogram_us",
+        "Histogram of cache hit duration per model, in microseconds");
+    add(
+        "cache_miss_duration", "nv_cache_miss_histogram_us",
+        "Histogram of cache miss duration per model, in microseconds");
+  }
+}
+
+void
 MetricModelReporter::InitializeSummaries(
     const std::map<std::string, std::string>& labels)
 {
-  // Latency metrics will be initialized based on config
-  if (config_.latency_summaries_enabled_) {
-    // Request
-    if (!config_.cache_enabled_) {
-      // FIXME: request_duration summary is currently disabled when cache is
-      // enabled to avoid publishing misleading metrics.
-      summary_families_["request_duration"] =
-          &Metrics::FamilyInferenceRequestSummary();
-    }
-    summary_families_["queue_duration"] =
-        &Metrics::FamilyInferenceQueueSummary();
-    // Compute
-    summary_families_["compute_input_duration"] =
-        &Metrics::FamilyInferenceComputeInputSummary();
-    summary_families_["compute_infer_duration"] =
-        &Metrics::FamilyInferenceComputeInferSummary();
-    summary_families_["compute_output_duration"] =
-        &Metrics::FamilyInferenceComputeOutputSummary();
-    // Only create cache metrics if cache is enabled to reduce metric output
-    if (config_.cache_enabled_) {
-      // Note that counts and sums are included in summaries
-      summary_families_["cache_hit_duration"] =
-          &Metrics::FamilyCacheHitSummary();
-      summary_families_["cache_miss_duration"] =
-          &Metrics::FamilyCacheMissSummary();
-    }
-  }
-
-  // Create metrics for each family
-  for (auto& iter : summary_families_) {
-    const auto& name = iter.first;
-    auto family_ptr = iter.second;
-    if (family_ptr) {
-      summaries_[name] = CreateMetric<prometheus::Summary>(
-          *family_ptr, labels, config_.quantiles_);
-    }
-  }
+  // Prometheus Summary observations ran CKMS quantile estimation under the
+  // per-model stats mutex and dominated request latency when enabled. Duration
+  // percentiles are published as lock-free histograms instead.
+  (void)labels;
 }
 
 void
@@ -481,6 +523,20 @@ MetricModelReporter::ObserveHistogram(const std::string& name, double value)
     return;
   }
   histogram->Observe(value);
+}
+
+void
+MetricModelReporter::ObserveLatencyHistogram(
+    const std::string& name, uint64_t value_us)
+{
+  if (!config_.latency_duration_histograms_enabled_) {
+    return;
+  }
+  const auto it = latency_histograms_.find(name);
+  if (it == latency_histograms_.end() || it->second == nullptr) {
+    return;
+  }
+  it->second->Observe(value_us);
 }
 
 void

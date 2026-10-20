@@ -31,6 +31,8 @@
 
 #include <thread>
 
+#include "latency_histogram.h"
+
 #include "constants.h"
 #include "pinned_memory_manager.h"
 #include "prometheus/detail/utils.h"
@@ -1044,8 +1046,15 @@ const std::string
 Metrics::SerializedMetrics()
 {
   auto singleton = Metrics::GetSingleton();
-  return singleton->serializer_->Serialize(
+  std::string metrics = singleton->serializer_->Serialize(
       singleton->registry_.get()->Collect());
+  if (!metrics.empty() && metrics.back() != '\n') {
+    metrics.push_back('\n');
+  }
+  // Duration histograms are lock-free and are not stored in the prometheus-cpp
+  // registry, which would take a mutex on every observation.
+  metrics += LatencyHistogramRegistry::Instance().Serialize();
+  return metrics;
 }
 
 Metrics*
