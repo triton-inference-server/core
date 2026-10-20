@@ -320,6 +320,9 @@ TEST(ShardedLatencyHistogram, CollectStaysConsistentWhileWritersRun)
     });
   }
 
+  while (histogram.Collect().count == 0) {
+    std::this_thread::yield();
+  }
   for (int i = 0; i < 200; ++i) {
     const auto snapshot = histogram.Collect();
     uint64_t previous = 0;
