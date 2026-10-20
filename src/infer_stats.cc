@@ -138,6 +138,20 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
           "compute_infer_duration", compute_infer_duration_ns / 1000);
       metric_reporter->IncrementCounter(
           "compute_output_duration", compute_output_duration_ns / 1000);
+      // Verbose summaries run CKMS under this lock. simplified histograms
+      // are recorded after the lock is released.
+      if (!cache_enabled) {
+        metric_reporter->ObserveSummary(
+            "request_duration", request_duration_ns / 1000);
+      }
+      metric_reporter->ObserveSummary(
+          "queue_duration", queue_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "compute_input_duration", compute_input_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "compute_infer_duration", compute_infer_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "compute_output_duration", compute_output_duration_ns / 1000);
     }
 #endif  // TRITON_ENABLE_METRICS
   }
@@ -198,6 +212,11 @@ InferenceStatsAggregator::UpdateSuccessCacheHit(
       metric_reporter->IncrementCounter("cache_hit_count", 1);
       metric_reporter->IncrementCounter(
           "cache_hit_duration", cache_hit_duration_ns / 1000);
+      // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+      metric_reporter->ObserveSummary(
+          "queue_duration", queue_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "cache_hit_duration", cache_hit_duration_ns / 1000);
     }
 #endif  // TRITON_ENABLE_METRICS
   }
@@ -238,6 +257,9 @@ InferenceStatsAggregator::UpdateSuccessCacheMiss(
           "request_duration", cache_miss_duration_ns / 1000);
       metric_reporter->IncrementCounter("cache_miss_count", 1);
       metric_reporter->IncrementCounter(
+          "cache_miss_duration", cache_miss_duration_ns / 1000);
+      // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+      metric_reporter->ObserveSummary(
           "cache_miss_duration", cache_miss_duration_ns / 1000);
     }
 #endif  // TRITON_ENABLE_METRICS

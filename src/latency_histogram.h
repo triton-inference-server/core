@@ -46,16 +46,19 @@ namespace triton { namespace core {
 // one, about 20%.
 std::vector<double> DefaultLatencyHistogramBoundaries();
 
-// How --metrics-config selects latency distribution metrics.
-// summary_latencies used to build Prometheus Summaries (CKMS). Those summaries
-// are no longer created; the flag enables the lock-free duration histograms
-// instead. histogram_latencies enables the same duration histograms and the
-// existing first-response histogram.
+// summary_latencies selects how much latency distribution detail to publish.
+// false and none match the historical default. true and verbose match the
+// historical CKMS summaries. simplified is the lock-free histogram path.
+enum class SummaryLatencyLevel { kNone, kSimplified, kVerbose };
+
+// histogram_latencies only enables the existing first-response histogram.
+// It does not change summary_latencies.
 struct LatencyMetricToggles {
-  bool duration_histograms = false;
+  SummaryLatencyLevel summary_level = SummaryLatencyLevel::kNone;
   bool first_response_histogram = false;
-  bool saw_summary_latencies = false;
-  bool saw_summary_quantiles = false;
+  // Set when summary_latencies is not one of the accepted values. The last
+  // accepted value still applies; this string is the rejected one.
+  std::string rejected_summary_latencies;
 };
 
 LatencyMetricToggles ResolveLatencyMetricToggles(

@@ -57,27 +57,47 @@ MetricReporterConfig::ParseConfig(
     }
   }
 
+  bool saw_summary_quantiles = false;
+  for (const auto& pair : metrics_config) {
+    // ex: summary_quantiles="0.5:0.05,0.9:0.01,0.99:0.001"
+    if (pair.first == "summary_quantiles") {
+      saw_summary_quantiles = true;
+      const auto& quantiles = ParseQuantiles(pair.second);
+      if (!quantiles.empty()) {
+        quantiles_ = quantiles;
+      }
+    }
+  }
+
   const LatencyMetricToggles toggles =
       ResolveLatencyMetricToggles(metrics_config);
   latency_histograms_enabled_ = toggles.first_response_histogram;
-  latency_duration_histograms_enabled_ = toggles.duration_histograms;
-  // CKMS summaries are not created. summary_latencies enables duration
-  // histograms instead. See InitializeLatencyHistograms.
-  latency_summaries_enabled_ = false;
-  if (toggles.saw_summary_latencies) {
-    static std::once_flag summary_flag_once;
-    std::call_once(summary_flag_once, [] {
-      LOG_WARNING << "summary_latencies no longer publishes Prometheus Summary "
-                     "metrics. It enables lock-free "
-                     "nv_inference_*_histogram_us histograms. Compute "
-                     "percentiles with histogram_quantile().";
+  latency_duration_histograms_enabled_ =
+      toggles.summary_level == SummaryLatencyLevel::kSimplified;
+  latency_summaries_enabled_ =
+      toggles.summary_level == SummaryLatencyLevel::kVerbose;
+  if (!toggles.rejected_summary_latencies.empty()) {
+    LOG_WARNING << "Ignoring summary_latencies="
+                << toggles.rejected_summary_latencies
+                << ". Accepted values are none, simplified, and verbose. "
+                   "false is an alias of none, and true is an alias of "
+                   "verbose.";
+  }
+  if (latency_summaries_enabled_) {
+    static std::once_flag verbose_once;
+    std::call_once(verbose_once, [] {
+      LOG_WARNING << "summary_latencies=true (verbose) records a Prometheus "
+                     "summary on every request while holding the per-model "
+                     "statistics lock. That can sharply reduce throughput. "
+                     "summary_latencies=simplified records a lock-free "
+                     "histogram instead.";
     });
   }
-  if (toggles.saw_summary_quantiles) {
+  if (saw_summary_quantiles && !latency_summaries_enabled_) {
     static std::once_flag quantiles_once;
     std::call_once(quantiles_once, [] {
-      LOG_WARNING << "summary_quantiles is ignored. Latency summaries were "
-                     "replaced by lock-free histograms.";
+      LOG_WARNING << "summary_quantiles applies only when summary_latencies "
+                     "is true or verbose.";
     });
   }
 
@@ -399,10 +419,43 @@ void
 MetricModelReporter::InitializeSummaries(
     const std::map<std::string, std::string>& labels)
 {
-  // Prometheus Summary observations ran CKMS quantile estimation under the
-  // per-model stats mutex and dominated request latency when enabled. Duration
-  // percentiles are published as lock-free histograms instead.
-  (void)labels;
+  // Latency metrics will be initialized based on config
+  if (config_.latency_summaries_enabled_) {
+    // Request
+    if (!config_.cache_enabled_) {
+      // FIXME: request_duration summary is currently disabled when cache is
+      // enabled to avoid publishing misleading metrics.
+      summary_families_["request_duration"] =
+          &Metrics::FamilyInferenceRequestSummary();
+    }
+    summary_families_["queue_duration"] =
+        &Metrics::FamilyInferenceQueueSummary();
+    // Compute
+    summary_families_["compute_input_duration"] =
+        &Metrics::FamilyInferenceComputeInputSummary();
+    summary_families_["compute_infer_duration"] =
+        &Metrics::FamilyInferenceComputeInferSummary();
+    summary_families_["compute_output_duration"] =
+        &Metrics::FamilyInferenceComputeOutputSummary();
+    // Only create cache metrics if cache is enabled to reduce metric output
+    if (config_.cache_enabled_) {
+      // Note that counts and sums are included in summaries
+      summary_families_["cache_hit_duration"] =
+          &Metrics::FamilyCacheHitSummary();
+      summary_families_["cache_miss_duration"] =
+          &Metrics::FamilyCacheMissSummary();
+    }
+  }
+
+  // Create metrics for each family
+  for (auto& iter : summary_families_) {
+    const auto& name = iter.first;
+    auto family_ptr = iter.second;
+    if (family_ptr) {
+      summaries_[name] = CreateMetric<prometheus::Summary>(
+          *family_ptr, labels, config_.quantiles_);
+    }
+  }
 }
 
 void

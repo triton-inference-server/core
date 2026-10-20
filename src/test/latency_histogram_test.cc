@@ -125,37 +125,62 @@ TEST(DefaultLatencyHistogramBoundaries, GeometricFrom1UsTo60s)
 TEST(LatencyMetricToggles, DisabledByDefault)
 {
   const LatencyMetricToggles toggles = ResolveLatencyMetricToggles({});
-  EXPECT_FALSE(toggles.duration_histograms);
+  EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kNone);
   EXPECT_FALSE(toggles.first_response_histogram);
-  EXPECT_FALSE(toggles.saw_summary_latencies);
-  EXPECT_FALSE(toggles.saw_summary_quantiles);
+  EXPECT_TRUE(toggles.rejected_summary_latencies.empty());
 }
 
-TEST(LatencyMetricToggles, SummaryFlagEnablesDurationHistogramsOnly)
+TEST(LatencyMetricToggles, TrueAndVerboseKeepSummaries)
+{
+  for (const char* value : {"true", "verbose"}) {
+    const LatencyMetricToggles toggles =
+        ResolveLatencyMetricToggles({{"summary_latencies", value}});
+    EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kVerbose) << value;
+    EXPECT_FALSE(toggles.first_response_histogram);
+    EXPECT_TRUE(toggles.rejected_summary_latencies.empty());
+  }
+}
+
+TEST(LatencyMetricToggles, SimplifiedEnablesHistogramsOnly)
 {
   const LatencyMetricToggles toggles =
-      ResolveLatencyMetricToggles({{"summary_latencies", "true"}});
-  EXPECT_TRUE(toggles.duration_histograms);
+      ResolveLatencyMetricToggles({{"summary_latencies", "simplified"}});
+  EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kSimplified);
   EXPECT_FALSE(toggles.first_response_histogram);
-  EXPECT_TRUE(toggles.saw_summary_latencies);
 }
 
-TEST(LatencyMetricToggles, HistogramFlagEnablesDurationAndFirstResponse)
+TEST(LatencyMetricToggles, FalseAndNoneDisableDistributionMetrics)
+{
+  for (const char* value : {"false", "none"}) {
+    const LatencyMetricToggles toggles =
+        ResolveLatencyMetricToggles({{"summary_latencies", value}});
+    EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kNone) << value;
+  }
+}
+
+TEST(LatencyMetricToggles, HistogramFlagEnablesFirstResponseOnly)
 {
   const LatencyMetricToggles toggles =
       ResolveLatencyMetricToggles({{"histogram_latencies", "true"}});
-  EXPECT_TRUE(toggles.duration_histograms);
+  EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kNone);
   EXPECT_TRUE(toggles.first_response_histogram);
-  EXPECT_FALSE(toggles.saw_summary_latencies);
 }
 
-TEST(LatencyMetricToggles, SummaryQuantilesAreNotedButDoNotEnableMetrics)
+TEST(LatencyMetricToggles, UnknownSummaryValueIsRejected)
+{
+  const LatencyMetricToggles toggles =
+      ResolveLatencyMetricToggles({{"summary_latencies", "high"}});
+  EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kNone);
+  EXPECT_EQ(toggles.rejected_summary_latencies, "high");
+}
+
+TEST(LatencyMetricToggles, LastAcceptedSummaryValueWins)
 {
   const LatencyMetricToggles toggles = ResolveLatencyMetricToggles(
-      {{"summary_quantiles", "0.5:0.05,0.99:0.001"}});
-  EXPECT_TRUE(toggles.saw_summary_quantiles);
-  EXPECT_FALSE(toggles.duration_histograms);
-  EXPECT_FALSE(toggles.first_response_histogram);
+      {{"summary_latencies", "verbose"},
+       {"summary_latencies", "simplified"}});
+  EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kSimplified);
+  EXPECT_TRUE(toggles.rejected_summary_latencies.empty());
 }
 
 TEST(ShardedLatencyHistogram, ExactBucketsCountAndSum)

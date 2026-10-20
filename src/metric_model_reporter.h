@@ -57,12 +57,11 @@ struct MetricReporterConfig {
   // Create and use Counters for per-model latency related metrics
   bool latency_counters_enabled_ = true;
   // Create the first-response Prometheus histogram.
+  // Set only by histogram_latencies=true.
   bool latency_histograms_enabled_ = false;
-  // Create lock-free duration histograms (request, queue, compute, cache).
-  // Set by histogram_latencies=true and by summary_latencies=true.
+  // Lock-free duration histograms. Set by summary_latencies=simplified.
   bool latency_duration_histograms_enabled_ = false;
-  // CKMS summaries are no longer created. The field remains so older call
-  // sites that still consult it stay disabled.
+  // Prometheus CKMS summaries. Set by summary_latencies=true or verbose.
   bool latency_summaries_enabled_ = false;
   // Default bucket boundaries used for each histogram metric. Each value
   // represents a boundary. For example, {100, 500, 2000, 5000} are latencies.
@@ -70,7 +69,8 @@ struct MetricReporterConfig {
   std::unordered_map<std::string, prometheus::Histogram::BucketBoundaries>
       histogram_options_ = {{kFirstResponseHistogram, {100, 500, 2000, 5000}}};
 
-  // Retained for the unused summary code path. summary_quantiles is ignored.
+  // Used when summary_latencies is true or verbose. summary_quantiles
+  // overrides these pairs. Ignored by simplified and none.
   prometheus::Summary::Quantiles quantiles_ = {
       {0.5, 0.05}, {0.9, 0.01}, {0.95, 0.001}, {0.99, 0.001}, {0.999, 0.001}};
 

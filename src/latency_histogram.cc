@@ -134,14 +134,21 @@ ResolveLatencyMetricToggles(
   LatencyMetricToggles toggles;
   for (const auto& setting : settings) {
     if (setting.first == "histogram_latencies" && setting.second == "true") {
-      toggles.duration_histograms = true;
       toggles.first_response_histogram = true;
-    } else if (
-        setting.first == "summary_latencies" && setting.second == "true") {
-      toggles.duration_histograms = true;
-      toggles.saw_summary_latencies = true;
-    } else if (setting.first == "summary_quantiles") {
-      toggles.saw_summary_quantiles = true;
+    } else if (setting.first == "summary_latencies") {
+      const std::string& value = setting.second;
+      if (value == "false" || value == "none") {
+        toggles.summary_level = SummaryLatencyLevel::kNone;
+        toggles.rejected_summary_latencies.clear();
+      } else if (value == "simplified") {
+        toggles.summary_level = SummaryLatencyLevel::kSimplified;
+        toggles.rejected_summary_latencies.clear();
+      } else if (value == "true" || value == "verbose") {
+        toggles.summary_level = SummaryLatencyLevel::kVerbose;
+        toggles.rejected_summary_latencies.clear();
+      } else {
+        toggles.rejected_summary_latencies = value;
+      }
     }
   }
   return toggles;
