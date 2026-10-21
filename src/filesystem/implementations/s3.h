@@ -28,6 +28,9 @@
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 
+#include <mutex>
+#include <set>
+
 #include "common.h"
 
 // [FIXME: DLIS-4973]
@@ -197,6 +200,9 @@ class S3FileSystem : public FileSystem {
   Status CleanPath(const std::string& s3_path, std::string* clean_path);
   std::unique_ptr<s3::S3Client> client_;  // init after Aws::InitAPI is called
   re2::RE2 s3_regex_;
+
+  std::mutex checked_buckets_mu_;
+  std::set<std::string> checked_buckets_;
 };
 
 Status
@@ -366,6 +372,12 @@ S3FileSystem::CheckClient(const std::string& s3_path)
 {
   std::string bucket, object_path;
   RETURN_IF_ERROR(ParsePath(s3_path, &bucket, &object_path));
+  {
+    std::lock_guard<std::mutex> lock(checked_buckets_mu_);
+    if (checked_buckets_.find(bucket) != checked_buckets_.end()) {
+      return Status::Success;
+    }
+  }
   // check if can connect to the bucket
   s3::Model::HeadBucketRequest head_request;
   head_request.WithBucket(bucket.c_str());
@@ -378,6 +390,8 @@ S3FileSystem::CheckClient(const std::string& s3_path)
         "Exception: '" +
             err.GetExceptionName() + "' Message: '" + err.GetMessage() + "'");
   }
+  std::lock_guard<std::mutex> lock(checked_buckets_mu_);
+  checked_buckets_.insert(bucket);
   return Status::Success;
 }
 
@@ -428,27 +442,27 @@ S3FileSystem::IsDirectory(const std::string& path, bool* is_dir)
   std::string bucket, object_path;
   RETURN_IF_ERROR(ParsePath(path, &bucket, &object_path));
 
-  // Check if the bucket exists
-  s3::Model::HeadBucketRequest head_request;
-  head_request.WithBucket(bucket.c_str());
-
-  auto head_bucket_outcome = client_->HeadBucket(head_request);
-  if (!head_bucket_outcome.IsSuccess()) {
-    return Status(
-        Status::Code::INTERNAL,
-        "Could not get MetaData for bucket with name " + bucket +
-            " due to exception: " +
-            head_bucket_outcome.GetError().GetExceptionName() +
-            ", error message: " + head_bucket_outcome.GetError().GetMessage());
-  }
-
-  // Root case - bucket exists and object path is empty
+  // Root case - the path is a directory if the bucket exists
   if (object_path.empty()) {
+    s3::Model::HeadBucketRequest head_request;
+    head_request.WithBucket(bucket.c_str());
+
+    auto head_bucket_outcome = client_->HeadBucket(head_request);
+    if (!head_bucket_outcome.IsSuccess()) {
+      return Status(
+          Status::Code::INTERNAL,
+          "Could not get MetaData for bucket with name " + bucket +
+              " due to exception: " +
+              head_bucket_outcome.GetError().GetExceptionName() +
+              ", error message: " +
+              head_bucket_outcome.GetError().GetMessage());
+    }
     *is_dir = true;
     return Status::Success;
   }
 
-  // List the objects in the bucket
+  // List the objects in the bucket. A missing bucket fails the listing, so
+  // no separate HeadBucket check is needed.
   s3::Model::ListObjectsV2Request list_objects_request;
   list_objects_request.SetBucket(bucket.c_str());
   list_objects_request.SetPrefix(AppendSlash(object_path).c_str());
