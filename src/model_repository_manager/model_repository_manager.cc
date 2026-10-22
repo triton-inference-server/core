@@ -28,11 +28,13 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <atomic>
 #include <boost/algorithm/string.hpp>
 #include <deque>
 #include <filesystem>
 #include <future>
 #include <stdexcept>
+#include <system_error>
 #include <thread>
 
 #include "backend_model.h"
@@ -524,12 +526,13 @@ ModelRepositoryManager::ModelRepositoryManager(
     const std::set<std::string>& repository_paths, const bool autofill,
     const std::string& model_config_name, const bool polling_enabled,
     const bool model_control_enabled, const double min_compute_capability,
-    const bool enable_model_namespacing,
+    const bool enable_model_namespacing, const unsigned int poll_thread_count,
     std::unique_ptr<ModelLifeCycle> life_cycle)
     : autofill_(autofill), model_config_name_(model_config_name),
       polling_enabled_(polling_enabled),
       model_control_enabled_(model_control_enabled),
       min_compute_capability_(min_compute_capability),
+      poll_thread_count_(std::max(1u, poll_thread_count)),
       dependency_graph_(&global_map_),
       enable_model_namespacing_(enable_model_namespacing),
       repository_paths_(repository_paths),
@@ -586,7 +589,7 @@ ModelRepositoryManager::Create(
           repository_paths, !strict_model_config, model_config_name,
           polling_enabled, model_control_enabled,
           life_cycle_options.min_compute_capability, enable_model_namespacing,
-          std::move(life_cycle)));
+          life_cycle_options.model_load_thread_count, std::move(life_cycle)));
   *model_repository_manager = std::move(local_manager);
 
   // Support loading all models on startup in explicit model control mode with
@@ -1467,46 +1470,93 @@ ModelRepositoryManager::Poll(
     }
   }
 
-  // Poll each of the models. If error happens during polling the model,
-  // its state will fallback to the state before the polling.
+  struct PollResult {
+    const ModelIdentifier* model_id_;
+    const std::string* path_;
+    Status status_;
+    std::unique_ptr<ModelInfo> model_info_;
+  };
+  std::vector<PollResult> results;
+  results.reserve(model_to_path.size());
   for (const auto& pair : model_to_path) {
-    std::unique_ptr<ModelInfo> model_info;
-    const auto& model_name = pair.first.name_;
-    // Load with parameters will be appiled to all models with the same
+    results.push_back({&pair.first, &pair.second, Status::Success, nullptr});
+  }
+  auto initialize = [this, &models](PollResult* result) {
+    // Load with parameters will be applied to all models with the same
     // name (namespace can be different), unless namespace is specified
     // in the future.
-    const auto& mit = models.find(model_name);
-    static std::vector<const InferenceParameter*> empty_params;
-    auto status = InitializeModelInfo(
-        pair.first, pair.second,
-        ((mit == models.end()) ? empty_params : mit->second), &model_info);
+    const auto& mit = models.find(result->model_id_->name_);
+    static const std::vector<const InferenceParameter*> empty_params;
+    try {
+      result->status_ = InitializeModelInfo(
+          *result->model_id_, *result->path_,
+          ((mit == models.end()) ? empty_params : mit->second),
+          &result->model_info_);
+    }
+    catch (const std::exception& e) {
+      result->model_info_.reset();
+      result->status_ = Status(
+          Status::Code::INTERNAL,
+          std::string("unexpected exception: ") + e.what());
+    }
+  };
+  std::atomic<size_t> next{0};
+  auto run_tasks = [&results, &next, &initialize]() {
+    for (size_t idx = next++; idx < results.size(); idx = next++) {
+      initialize(&results[idx]);
+    }
+  };
+  std::vector<std::thread> workers;
+  const size_t worker_count =
+      std::min<size_t>(poll_thread_count_, results.size());
+  for (size_t i = 1; i < worker_count; ++i) {
+    try {
+      workers.emplace_back(run_tasks);
+    }
+    catch (const std::system_error& e) {
+      // Fewer threads only make the poll slower
+      LOG_WARNING << "failed to create model poll thread: " << e.what();
+      break;
+    }
+  }
+  run_tasks();
+  for (auto& worker : workers) {
+    worker.join();
+  }
 
-    const auto& iitr = infos_.Find(pair.first);
+  // Poll each of the models. If error happens during polling the model,
+  // its state will fallback to the state before the polling.
+  for (auto& result : results) {
+    const auto& model_id = *result.model_id_;
+    const auto& status = result.status_;
+    auto& model_info = result.model_info_;
+
+    const auto& iitr = infos_.Find(model_id);
     const bool invalid_add = (!status.IsOk()) && (iitr == infos_.end());
     if (!invalid_add) {
-      const auto& ret = updated_infos->Emplace(pair.first, nullptr);
+      const auto& ret = updated_infos->Emplace(model_id, nullptr);
       if (!ret.second) {
         return Status(
             Status::Code::ALREADY_EXISTS,
-            "unexpected model info for model '" + pair.first.str() + "'");
+            "unexpected model info for model '" + model_id.str() + "'");
       }
 
       // Classify load state and set updated info
       if (model_info == nullptr) {
         ret.first->second.reset(new ModelInfo(*iitr->second));
-        unmodified->insert(pair.first);
+        unmodified->insert(model_id);
       } else {
         ret.first->second = std::move(model_info);
         if (iitr != infos_.end()) {
-          modified->insert(pair.first);
+          modified->insert(model_id);
         } else {
-          added->insert(pair.first);
+          added->insert(model_id);
         }
       }
     }
 
     if (!status.IsOk()) {
-      LOG_ERROR << "Poll failed for model directory '" << pair.first
+      LOG_ERROR << "Poll failed for model directory '" << model_id
                 << "': " << status.Message();
       *all_models_polled = false;
     }
