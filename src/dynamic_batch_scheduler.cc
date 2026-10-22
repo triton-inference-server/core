@@ -338,13 +338,17 @@ DynamicBatchScheduler::BatcherThread(const int nice)
     // Hold the lock for as short a time as possible.
     {
       std::unique_lock<std::mutex> lock(mu_);
+      bool need_new_payload = false;
       {
         std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
-        auto payload_state = curr_payload_->GetState();
-        if (payload_saturated_ || IsStaleState(payload_state)) {
-          NewPayload();
-          next_preferred_batch_size_ = 0;
-        }
+        need_new_payload =
+            payload_saturated_ || IsStaleState(curr_payload_->GetState());
+      }
+      // NewPayload() may release the last reference to the current payload and
+      // destroy its exec mutex, so it must not run while 'exec_lock' holds it.
+      if (need_new_payload) {
+        NewPayload();
+        next_preferred_batch_size_ = 0;
       }
 
       if (delay_cnt > 0) {
