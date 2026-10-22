@@ -1506,22 +1506,32 @@ ModelRepositoryManager::Poll(
       initialize(&results[idx]);
     }
   };
-  std::vector<std::thread> workers;
-  const size_t worker_count =
-      std::min<size_t>(poll_thread_count_, results.size());
-  for (size_t i = 1; i < worker_count; ++i) {
+  {
+    std::vector<std::thread> workers;
+    struct JoinGuard {
+      std::vector<std::thread>& threads_;
+      ~JoinGuard()
+      {
+        for (auto& thread : threads_) {
+          if (thread.joinable()) {
+            thread.join();
+          }
+        }
+      }
+    } join_guard{workers};
+    const size_t worker_count =
+        std::min<size_t>(poll_thread_count_, results.size());
     try {
-      workers.emplace_back(run_tasks);
+      workers.reserve(worker_count);
+      for (size_t i = 1; i < worker_count; ++i) {
+        workers.emplace_back(run_tasks);
+      }
     }
-    catch (const std::system_error& e) {
+    catch (const std::exception& e) {
       // Fewer threads only make the poll slower
       LOG_WARNING << "failed to create model poll thread: " << e.what();
-      break;
     }
-  }
-  run_tasks();
-  for (auto& worker : workers) {
-    worker.join();
+    run_tasks();
   }
 
   // Poll each of the models. If error happens during polling the model,
