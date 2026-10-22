@@ -225,7 +225,7 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     if (preserve_ordering_) {
       // In order to preserve the order, the response send must be
       // delegated.
-      DelegateResponse(request);
+      DelegateResponse(request, cached_response.get());
     }
 
     // Send cached response and release request
@@ -680,7 +680,8 @@ DynamicBatchScheduler::GetDynamicBatch()
 
 void
 DynamicBatchScheduler::DelegateResponse(
-    std::unique_ptr<InferenceRequest>& request)
+    std::unique_ptr<InferenceRequest>& request,
+    InferenceResponse* cached_response)
 {
   // Reserve this request's slot in the completion queue now, while we are
   // still in scheduler-receive order. FinalizeResponses() stalls on an empty
@@ -704,70 +705,82 @@ DynamicBatchScheduler::DelegateResponse(
   const bool is_key_set = request->CacheKeyIsSet();
   const uint64_t lookup_end_ns = request->CacheLookupEndNs();
   const uint64_t lookup_start_ns = request->CacheLookupStartNs();
+  // Set only for a preserve_ordering cache hit. That entry is already
+  // stored, so the delegator must not insert it again.
+  const bool already_cached = (cached_response != nullptr);
 
-  request->SetResponseDelegator(
-      [this, queue_slot, key, is_key_set, lookup_end_ns, lookup_start_ns](
-          std::unique_ptr<InferenceResponse>&& response, const uint32_t flags) {
-        if (response_cache_enabled_ && !is_key_set) {
-          // Logical error, the key should be set if caching is enabled
-          // for this model
-          LOG_ERROR << "Request cache key was not set correctly.";
-        }
+  auto delegator = [this, queue_slot, key, is_key_set, lookup_end_ns,
+                    lookup_start_ns, already_cached](
+                       std::unique_ptr<InferenceResponse>&& response,
+                       const uint32_t flags) {
+    if (response_cache_enabled_ && !is_key_set) {
+      // Logical error, the key should be set if caching is enabled
+      // for this model
+      LOG_ERROR << "Request cache key was not set correctly.";
+    }
 
-        // Error and cancelled responses carry no outputs. Caching one would
-        // serve an empty response as a hit to the next matching request.
-        const bool cacheable =
-            (response != nullptr) && response->ResponseStatus().IsOk();
-        if (response_cache_enabled_ && cacheable) {
-          // Cache insertion happens here because we need the backend to have
-          // computed the inference response first in the case of cache miss
-          auto cache = model_->Server()->CacheManager()->Cache();
-
-#ifdef TRITON_ENABLE_STATS
-          const uint64_t insert_start_ns = CaptureTimeNs();
-#endif  // TRITON_ENABLE_STATS
-
-          auto status = cache->Insert(response.get(), key);
+    // Error and cancelled responses carry no outputs. Caching one would
+    // serve an empty response as a hit to the next matching request.
+    const bool cacheable =
+        (response != nullptr) && response->ResponseStatus().IsOk();
+    if (response_cache_enabled_ && cacheable && !already_cached) {
+      // Cache insertion happens here because we need the backend to have
+      // computed the inference response first in the case of cache miss
+      auto cache = model_->Server()->CacheManager()->Cache();
 
 #ifdef TRITON_ENABLE_STATS
-          const uint64_t insert_end_ns = CaptureTimeNs();
+      const uint64_t insert_start_ns = CaptureTimeNs();
 #endif  // TRITON_ENABLE_STATS
 
-          bool cache_miss =
-              (status.StatusCode() != Status::Code::ALREADY_EXISTS);
-          if (cache_miss) {
+      auto status = cache->Insert(response.get(), key);
+
 #ifdef TRITON_ENABLE_STATS
-            uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
-            // Logical error, this shouldn't happen
-            if (lookup_start_ns > lookup_end_ns) {
-              lookup_ns = 0;
-              LOG_ERROR << "Request lookup duration was not set correctly.";
-            }
-
-            uint64_t insert_ns = insert_end_ns - insert_start_ns;
-            uint64_t cache_miss_ns = lookup_ns + insert_ns;
-            // Use model_ to update stats directly because request object can be
-            // released by the backend before getting to this callback.
-            model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
-                model_->MetricReporter().get(), cache_miss_ns);
+      const uint64_t insert_end_ns = CaptureTimeNs();
 #endif  // TRITON_ENABLE_STATS
-            if (!status.IsOk()) {
-              LOG_ERROR << "Failed to insert key [" << key
-                        << "] into response cache: " << status.Message();
-            }
-          }  // Otherwise do nothing; we update cache hit statistics on Lookup
+
+      bool cache_miss = (status.StatusCode() != Status::Code::ALREADY_EXISTS);
+      if (cache_miss) {
+#ifdef TRITON_ENABLE_STATS
+        uint64_t lookup_ns = lookup_end_ns - lookup_start_ns;
+        // Logical error, this shouldn't happen
+        if (lookup_start_ns > lookup_end_ns) {
+          lookup_ns = 0;
+          LOG_ERROR << "Request lookup duration was not set correctly.";
         }
 
-        if (preserve_ordering_) {
-          {
-            std::lock_guard<std::mutex> lock(completion_queue_mtx_);
-            queue_slot->emplace_back(std::move(response), flags);
-          }
-          FinalizeResponses();
-        } else {
-          InferenceResponse::Send(std::move(response), flags);
+        uint64_t insert_ns = insert_end_ns - insert_start_ns;
+        uint64_t cache_miss_ns = lookup_ns + insert_ns;
+        // Use model_ to update stats directly because request object can be
+        // released by the backend before getting to this callback.
+        model_->MutableStatsAggregator()->UpdateSuccessCacheMiss(
+            model_->MetricReporter().get(), cache_miss_ns);
+#endif  // TRITON_ENABLE_STATS
+        if (!status.IsOk()) {
+          LOG_ERROR << "Failed to insert key [" << key
+                    << "] into response cache: " << status.Message();
         }
-      });
+      }  // Otherwise do nothing; we update cache hit statistics on Lookup
+    }
+
+    if (preserve_ordering_) {
+      {
+        std::lock_guard<std::mutex> lock(completion_queue_mtx_);
+        queue_slot->emplace_back(std::move(response), flags);
+      }
+      FinalizeResponses();
+    } else {
+      InferenceResponse::Send(std::move(response), flags);
+    }
+  };
+  // Only a preserve_ordering cache hit sends an already-built response.
+  // Every other case leaves the delegator on the request.
+  if ((cached_response != nullptr) && preserve_ordering_) {
+    LOG_STATUS_ERROR(
+        cached_response->SetResponseDelegator(std::move(delegator)),
+        "failed to install delegator on cached response");
+  } else {
+    request->SetResponseDelegator(std::move(delegator));
+  }
 }
 
 void
