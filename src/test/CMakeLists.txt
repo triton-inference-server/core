@@ -552,13 +552,31 @@ install(
 )
 
 #
-# Unit test for InstanceQueue
+# InstanceQueue and payload-slot wait regression tests
 #
+set(INSTANCE_QUEUE_TEST_MODELS ${CMAKE_CURRENT_BINARY_DIR}/instance_queue_test_models)
+file(MAKE_DIRECTORY ${INSTANCE_QUEUE_TEST_MODELS}/empty ${INSTANCE_QUEUE_TEST_MODELS}/test/1)
+add_library(payload_slot_test_backend SHARED instance_queue_test.cc)
+target_compile_definitions(payload_slot_test_backend PRIVATE TRITON_INSTANCE_QUEUE_TEST_BACKEND)
+target_include_directories(payload_slot_test_backend PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../include)
+set_target_properties(
+  payload_slot_test_backend
+  PROPERTIES
+    OUTPUT_NAME triton_test
+    LIBRARY_OUTPUT_DIRECTORY ${INSTANCE_QUEUE_TEST_MODELS}/test
+)
+
+# libtritonserver does not export internal C++ symbols.
+set(INSTANCE_QUEUE_TEST_CORE_SOURCES ${SERVER_SRCS})
+list(TRANSFORM INSTANCE_QUEUE_TEST_CORE_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/../")
 add_executable(
   instance_queue_test
   instance_queue_test.cc
-  ../instance_queue.cc
+  ${INSTANCE_QUEUE_TEST_CORE_SOURCES}
 )
+add_dependencies(instance_queue_test payload_slot_test_backend)
+target_compile_features(instance_queue_test PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
+target_compile_definitions(instance_queue_test PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_DEFINITIONS>)
 
 set_target_properties(
   instance_queue_test
@@ -572,27 +590,21 @@ set_target_properties(
 target_include_directories(
   instance_queue_test
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/..
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${GTEST_INCLUDE_DIRS}
+    $<TARGET_PROPERTY:triton-core,INCLUDE_DIRECTORIES>
 )
 
 target_link_libraries(
   instance_queue_test
   PRIVATE
-    triton-common-error        # from repo-common
-    triton-common-logging      # from repo-common
-    triton-common-model-config # from repo-common
-    proto-library              # from repo-common
+    $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>
     GTest::gtest
     GTest::gtest_main
-    protobuf::libprotobuf
 )
 
-install(
-  TARGETS instance_queue_test
-  RUNTIME DESTINATION bin
-)
+install(TARGETS instance_queue_test RUNTIME DESTINATION bin)
+install(TARGETS payload_slot_test_backend LIBRARY DESTINATION bin/instance_queue_test_models/test)
+install(DIRECTORY ${INSTANCE_QUEUE_TEST_MODELS}/empty DESTINATION bin/instance_queue_test_models)
+install(DIRECTORY ${INSTANCE_QUEUE_TEST_MODELS}/test/1 DESTINATION bin/instance_queue_test_models/test)
 
 #
 # Backend Output Detail Unittest
