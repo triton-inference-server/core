@@ -295,7 +295,7 @@ class RateLimiter {
   // Should wait till a consumer registers a pending dequeue request
   // for the given instance(s) of the model. This implies that the
   // call will wait for an idle runner.
-  void WaitForConsumer(
+  bool WaitForConsumer(
       const TritonModel* model, const TritonModelInstance* model_instance);
   // Returns the number of consumers who have a pending dequeue request for
   // the given instance(s) of the model.
@@ -359,10 +359,11 @@ class RateLimiter {
   struct PayloadQueue {
     explicit PayloadQueue(size_t max_batch_size, uint64_t max_queue_delay_ns)
     {
-      queue_.reset(new InstanceQueue(max_batch_size, max_queue_delay_ns));
+      queue_ =
+          std::make_shared<InstanceQueue>(max_batch_size, max_queue_delay_ns);
     }
-    std::unique_ptr<InstanceQueue> queue_;
-    std::map<const TritonModelInstance*, std::unique_ptr<InstanceQueue>>
+    std::shared_ptr<InstanceQueue> queue_;
+    std::map<const TritonModelInstance*, std::shared_ptr<InstanceQueue>>
         specific_queues_;
     std::mutex mu_;
     std::condition_variable cv_;

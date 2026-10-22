@@ -254,11 +254,12 @@ DynamicBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& request)
     {
       std::lock_guard<std::mutex> lock(mu_);
 
-      queued_batch_size_ += std::max(1U, request->BatchSize());
+      const auto batch_size = std::max(1U, request->BatchSize());
 
       // Assuming no error is returned, this call takes ownership of
       // 'request' and so we can't use it after this point.
       RETURN_IF_ERROR(queue_.Enqueue(request->Priority(), request));
+      queued_batch_size_ += batch_size;
 
       // If there are any idle runners and the queued batch size is greater or
       // equal to next preferred batch size, then wake batcher up to service
@@ -365,6 +366,9 @@ DynamicBatchScheduler::BatcherThread(const int nice)
         }
 
         WaitForPayloadSlotAvailable(&lock, default_wait_microseconds);
+        if (scheduler_thread_exit_.load()) {
+          break;
+        }
 
         {
           std::lock_guard<std::mutex> exec_lock(
@@ -427,13 +431,17 @@ DynamicBatchScheduler::BatcherThread(const int nice)
       }
     }
 
-    if (curr_payload_->GetState() == Payload::State::READY) {
-      auto callback = [this]() { cv_.notify_one(); };
-      curr_payload_->SetCallback(callback);
-      {
-        std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
+    bool payload_ready = false;
+    {
+      std::lock_guard<std::mutex> exec_lock(*(curr_payload_->GetExecMutex()));
+      payload_ready = (curr_payload_->GetState() == Payload::State::READY);
+      if (payload_ready) {
+        auto callback = [this]() { cv_.notify_one(); };
+        curr_payload_->SetCallback(callback);
         CustomBatchFini();
       }
+    }
+    if (payload_ready) {
       model_->Server()->GetRateLimiter()->EnqueuePayload(model_, curr_payload_);
     }
 
@@ -462,9 +470,10 @@ DynamicBatchScheduler::WaitForPayloadSlotAvailable(
 
   while (!slot_available) {
     slot_available = cv_.wait_for(slot_lock, wait_timeout, [this]() {
-      return model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
-          model_, model_instance_, queue_.SupportPrefetching(),
-          true /* force_non_blocking */);
+      return scheduler_thread_exit_.load() ||
+             model_->Server()->GetRateLimiter()->PayloadSlotAvailable(
+                 model_, model_instance_, queue_.SupportPrefetching(),
+                 true /* force_non_blocking */);
     });
     if (!slot_available) {
       // Reject and release timeout requests from queue.
