@@ -3644,4 +3644,31 @@ TRITONSERVER_ServerOptionsSetMetricsConfig(
 #endif  // TRITON_ENABLE_METRICS
 }
 
+TRITONAPI_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerSequenceStateCheckpoint(
+    TRITONSERVER_Server* server, const char* name, int64_t version,
+    TRITONSERVER_SequenceStateCheckpointOperation operation, uint64_t id,
+    const char* path, uint64_t* occupied, uint64_t* bytes)
+{
+  try {
+    if (!server || !name || !occupied || !bytes ||
+        ((operation != TRITONSERVER_SEQUENCE_STATE_CHECKPOINT_STATUS) &&
+         !path)) {
+      return TRITONSERVER_ErrorNew(
+          TRITONSERVER_ERROR_INVALID_ARG,
+          "invalid SequenceStateCheckpoint arguments");
+    }
+    std::shared_ptr<tc::Model> model;
+    RETURN_IF_STATUS_ERROR(
+        reinterpret_cast<tc::InferenceServer*>(server)->GetModel(
+            name, version, &model));
+    RETURN_IF_STATUS_ERROR(model->SequenceStateCheckpoint(
+        operation, id, path ? path : "", occupied, bytes));
+    return nullptr;
+  }
+  catch (const std::exception& e) {
+    return TRITONSERVER_ErrorNew(TRITONSERVER_ERROR_INTERNAL, e.what());
+  }
+}
+
 }  // extern C

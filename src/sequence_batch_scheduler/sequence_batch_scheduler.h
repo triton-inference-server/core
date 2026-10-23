@@ -1,4 +1,4 @@
-// Copyright 2018-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -34,6 +34,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "backend_model.h"
 #include "backend_model_instance.h"
@@ -42,6 +43,7 @@
 #include "scheduler.h"
 #include "scheduler_utils.h"
 #include "sequence_state.h"
+#include "sequence_state_checkpoint.h"
 #include "sequence_utils.h"
 #include "status.h"
 #include "triton/common/model_config.h"
@@ -54,6 +56,11 @@ class SequenceBatch;
 // inferences.
 class SequenceBatchScheduler : public Scheduler {
  public:
+  Status SequenceStateCheckpoint(
+      TRITONSERVER_SequenceStateCheckpointOperation operation, uint64_t id,
+      const std::string& path, uint64_t* occupied,
+      uint64_t* state_bytes) override;
+  bool SequenceStateCheckpointEnabled() const { return checkpoint_enabled_; }
   using ControlInputs = std::vector<std::shared_ptr<InferenceRequest::Input>>;
 
   ~SequenceBatchScheduler();
@@ -136,6 +143,18 @@ class SequenceBatchScheduler : public Scheduler {
   {
   }
 
+  bool checkpoint_enabled_{false};
+  size_t checkpoint_state_byte_size_{0};
+  std::string checkpoint_state_layout_;
+  SequenceStateFingerprint checkpoint_fingerprint_{};
+  std::mutex checkpoint_admission_mu_;
+  std::mutex checkpoint_control_mu_;
+  std::unordered_set<InferenceRequest::SequenceId> checkpoint_closed_;
+  std::unordered_set<InferenceRequest::SequenceId> checkpoint_restored_;
+  std::unordered_set<InferenceRequest::SequenceId> checkpoint_suspended_;
+  Status ConfigureCheckpointing(
+      const inference::ModelConfig& config,
+      const std::vector<std::shared_ptr<TritonModelInstance>>& instances);
   void StartBackgroundThreads();
   void StopBackgroundThreads();
 
@@ -399,6 +418,16 @@ class DirectSequenceBatch : public SequenceBatch {
  private:
   void BatcherThread(const int nice);
   void NewPayload();
+  friend class SequenceBatchScheduler;
+  struct CheckpointCommand {
+    int32_t drain_slot;
+    std::function<Status()> run;
+    std::promise<Status> result;
+  };
+  Status RunCheckpointCommand(int32_t drain_slot, std::function<Status()> run);
+  void CheckpointBoundary();
+  std::shared_ptr<CheckpointCommand> checkpoint_command_;
+  std::vector<int32_t> clear_state_after_execution_;
 
   std::shared_ptr<Payload> curr_payload_;
 

@@ -120,6 +120,8 @@ SequenceBatchScheduler::Create(
 
   auto& config = model->Config();
 
+  RETURN_IF_ERROR(sched->ConfigureCheckpointing(config, new_instances));
+
   // Sequencer
   if (config.sequence_batching().iterative_sequence()) {
     sched->sequencer_.reset(new IterativeSequencer(sched.get()));
@@ -186,6 +188,10 @@ SequenceBatchScheduler::Update(
     const std::vector<std::shared_ptr<TritonModelInstance>>& added_instances,
     const std::vector<std::shared_ptr<TritonModelInstance>>& removed_instances)
 {
+  if (checkpoint_enabled_)
+    return Status(
+        Status::Code::UNSUPPORTED,
+        "sequence state checkpointing does not support instance updates");
   std::lock_guard<std::mutex> lk(mu_);
 
   // Add the new batchers.
@@ -663,6 +669,10 @@ SequenceBatchScheduler::CreateBooleanControlTensors(
 Status
 SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 {
+  std::unique_lock<std::mutex> admission(
+      checkpoint_admission_mu_, std::defer_lock);
+  if (checkpoint_enabled_)
+    admission.lock();
   // Queue timer starts at the beginning of the queueing and
   // scheduling process
   irequest->CaptureQueueStartNs();
@@ -709,6 +719,20 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
 
   auto sb_itr = sequence_to_batcherseqslot_map_.find(correlation_id);
   auto bl_itr = sequence_to_backlog_map_.find(correlation_id);
+  if (checkpoint_enabled_) {
+    if (checkpoint_closed_.count(correlation_id))
+      return Status(
+          Status::Code::UNAVAILABLE,
+          "sequence admission is closed by a checkpoint operation");
+    if (seq_start && checkpoint_restored_.count(correlation_id))
+      return Status(
+          Status::Code::INVALID_ARG,
+          "a restored sequence must continue without the START flag");
+    if (seq_start && checkpoint_suspended_.count(correlation_id))
+      return Status(
+          Status::Code::INVALID_ARG,
+          "discard or resume the suspended sequence before reusing its ID");
+  }
 
   sequencer_->AddReleaseCallback(
       irequest,
@@ -845,6 +869,8 @@ SequenceBatchScheduler::Enqueue(std::unique_ptr<InferenceRequest>& irequest)
   // correlation.
   if (seq_end) {
     sequence_to_batcherseqslot_map_.erase(correlation_id);
+    if (checkpoint_enabled_)
+      checkpoint_restored_.erase(correlation_id);
   }
 
   // Enqueue request into batcher and sequence slot.  Don't hold the
@@ -894,6 +920,7 @@ SequenceBatchScheduler::ReleaseSequenceSlot(
     // from trying to release the same slot again on this instance of the
     // correlation id.
     sequence_to_batcherseqslot_map_.erase(corr_id);
+    checkpoint_restored_.erase(corr_id);
     // Clean up the correlation id to sequence timeout timestamp mapping, to
     // avoid removal of a newer sequence from the backlog upon previous timeout
     // if the same id is re-used by the newer sequence.
@@ -1055,6 +1082,10 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 
     // Reap idle assigned sequence
     if (now_us >= idle_timestamp) {
+      std::unique_lock<std::mutex> checkpoint_admission(
+          checkpoint_admission_mu_, std::defer_lock);
+      if (checkpoint_enabled_)
+        checkpoint_admission.lock();
       uint64_t wait_microseconds = max_sequence_idle_microseconds_;
       BatcherSequenceSlotMap force_end_sequences;
       {
@@ -1073,6 +1104,12 @@ SequenceBatchScheduler::ReaperThread(const int nice)
 
           const InferenceRequest::SequenceId& idle_correlation_id =
               cid_itr->first;
+          if (checkpoint_closed_.count(idle_correlation_id)) {
+            wait_microseconds =
+                std::min(wait_microseconds, backlog_idle_wait_microseconds);
+            ++cid_itr;
+            continue;
+          }
           LOG_VERBOSE(1) << "Reaper: CORRID " << idle_correlation_id
                          << ": max sequence idle exceeded";
 
@@ -1087,6 +1124,7 @@ SequenceBatchScheduler::ReaperThread(const int nice)
             force_end_sequences[idle_correlation_id] = idle_sb_itr->second;
 
             sequence_to_batcherseqslot_map_.erase(idle_correlation_id);
+            checkpoint_restored_.erase(idle_correlation_id);
             cid_itr = correlation_id_timestamps_.erase(cid_itr);
           } else {
             // If the idle correlation ID is in the backlog, then just
@@ -1588,6 +1626,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
     {
       std::unique_lock<std::mutex> lock(mu_);
 
+      if (base_->SequenceStateCheckpointEnabled() || checkpoint_command_)
+        CheckpointBoundary();
       if (delay_cnt > 0) {
         wait_microseconds = 10 * 1000;
         // Debugging/testing... wait until queues together contain at
@@ -1646,6 +1686,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
             }
 
             if (release_seq_slot) {
+              if (base_->SequenceStateCheckpointEnabled())
+                sequence_states_[seq_slot].reset();
               SequenceBatchScheduler::BatcherSequenceSlot batcher_seq_slot(
                   model_instance_, seq_slot);
               seq_slot_correlation_ids_[seq_slot] =
@@ -1810,6 +1852,8 @@ DirectSequenceBatch::BatcherThread(const int nice)
           // there is no backlog show that the slot is no longer
           // active.
           if (end_of_sequence) {
+            if (base_->SequenceStateCheckpointEnabled())
+              clear_state_after_execution_.push_back(seq_slot);
             LOG_VERBOSE(1) << "End sequence CORRID "
                            << seq_slot_correlation_ids_[seq_slot]
                            << " in batcher " << model_instance_->Name()

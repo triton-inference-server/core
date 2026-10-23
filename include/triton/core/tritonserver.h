@@ -2825,6 +2825,33 @@ TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_MetricObserve(
 TRITONSERVER_DECLSPEC struct TRITONSERVER_Error* TRITONSERVER_GetMetricKind(
     struct TRITONSERVER_Metric* metric, TRITONSERVER_MetricKind* kind);
 
+/// Operations supported by TRITONSERVER_ServerSequenceStateCheckpoint.
+typedef enum tritonserver_sequence_state_checkpoint_operation_enum {
+  TRITONSERVER_SEQUENCE_STATE_CHECKPOINT_SUSPEND,
+  TRITONSERVER_SEQUENCE_STATE_CHECKPOINT_RESUME,
+  TRITONSERVER_SEQUENCE_STATE_CHECKPOINT_DISCARD,
+  TRITONSERVER_SEQUENCE_STATE_CHECKPOINT_STATUS
+} TRITONSERVER_SequenceStateCheckpointOperation;
+
+/// Persist or restore implicit state for a sequence. This call blocks until
+/// the operation completes and must not be called from a request callback.
+///
+/// \param server The inference server object.
+/// \param model_name The model name.
+/// \param model_version The model version, or -1 for the latest version.
+/// \param operation The checkpoint operation to perform.
+/// \param sequence_id The nonzero numeric sequence ID. Ignored for STATUS.
+/// \param checkpoint_path Local checkpoint path. Ignored for STATUS.
+/// \param occupied_slots Returns the number of occupied scheduler slots.
+/// \param live_state_bytes Returns bytes owned by live sequence state buffers.
+/// \return A TRITONSERVER_Error indicating success or failure.
+TRITONSERVER_DECLSPEC TRITONSERVER_Error*
+TRITONSERVER_ServerSequenceStateCheckpoint(
+    TRITONSERVER_Server* server, const char* model_name, int64_t model_version,
+    TRITONSERVER_SequenceStateCheckpointOperation operation,
+    uint64_t sequence_id, const char* checkpoint_path, uint64_t* occupied_slots,
+    uint64_t* live_state_bytes);
+
 #ifdef __cplusplus
 }
 #endif

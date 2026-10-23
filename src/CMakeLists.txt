@@ -148,6 +148,7 @@ set(
   repo_agent.cc
   scheduler_utils.cc
   sequence_batch_scheduler/sequence_batch_scheduler.cc
+  sequence_batch_scheduler/sequence_state_checkpoint.cc
   sequence_batch_scheduler/sequence_utils.cc
   sequence_state.cc
   server.cc
@@ -435,6 +436,7 @@ ENDFOREACH(p)
 
 # re2 requires Threads::Threads to be available in the
 # list of targets
+find_package(OpenSSL REQUIRED)
 find_package(Threads)
 find_package(re2 REQUIRED)
 
@@ -451,6 +453,7 @@ target_link_libraries(
     triton-common-table-printer      # from repo-common
     protobuf::libprotobuf
     re2::re2
+    OpenSSL::Crypto
 )
 
 target_link_libraries(
