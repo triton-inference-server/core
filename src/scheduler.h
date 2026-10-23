@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2018-2026, NVIDIA CORPORATION. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -72,6 +72,15 @@ class Scheduler {
 
   // Return the number of in-flight inferences tracked by the scheduler.
   virtual size_t InflightInferenceCount() = 0;
+
+  virtual Status SequenceStateCheckpoint(
+      TRITONSERVER_SequenceStateCheckpointOperation operation, uint64_t id,
+      const std::string& path, uint64_t* occupied, uint64_t* state_bytes)
+  {
+    return Status(
+        Status::Code::UNSUPPORTED,
+        "sequence state checkpointing requires sequence batching");
+  }
 
   // Instruct the scheduler to stop processing future requests unless they are
   // considered as in-flight.

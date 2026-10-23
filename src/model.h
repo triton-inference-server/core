@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -223,6 +223,14 @@ class Model {
   Status Enqueue(std::unique_ptr<InferenceRequest>& request)
   {
     return scheduler_->Enqueue(request);
+  }
+
+  Status SequenceStateCheckpoint(
+      TRITONSERVER_SequenceStateCheckpointOperation operation, uint64_t id,
+      const std::string& path, uint64_t* occupied, uint64_t* state_bytes)
+  {
+    return scheduler_->SequenceStateCheckpoint(
+        operation, id, path, occupied, state_bytes);
   }
 
   // Return the number of in-flight inferences.

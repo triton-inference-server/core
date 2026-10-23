@@ -651,6 +651,10 @@ TRITONSERVER_ServerInferAsync()
 {
 }
 TRITONAPI_DECLSPEC void
+TRITONSERVER_ServerSequenceStateCheckpoint()
+{
+}
+TRITONAPI_DECLSPEC void
 TRITONBACKEND_ApiVersion()
 {
 }
