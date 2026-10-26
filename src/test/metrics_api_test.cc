@@ -33,6 +33,7 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "latency_histogram.h"
 #include "metric_family.h"
 #include "triton/common/logging.h"
 #include "triton/core/tritonserver.h"
