@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -314,6 +314,21 @@ class InferenceResponse {
   Status ClassificationLabel(
       const Output& output, const uint32_t class_index,
       const char** label) const;
+
+  // Install the delegator used by Send(). Used only for one cache hit with
+  // preserve_ordering. A second call leaves the first delegator in place.
+  Status SetResponseDelegator(
+      std::function<void(
+          std::unique_ptr<InferenceResponse>&&, const uint32_t)>&& delegator)
+  {
+    if (response_delegator_ != nullptr) {
+      return Status(
+          Status::Code::ALREADY_EXISTS,
+          "response delegator can be set only once");
+    }
+    response_delegator_ = std::move(delegator);
+    return Status::Success;
+  }
 
   // Send the response with success status. Calling this function
   // releases ownership of the response object and gives it to the
