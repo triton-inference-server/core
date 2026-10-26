@@ -29,6 +29,7 @@
 
 #include "metric_family.h"
 
+#include "latency_histogram.h"
 #include "metrics.h"
 #include "triton/common/logging.h"
 
@@ -40,6 +41,12 @@ namespace triton { namespace core {
 MetricFamily::MetricFamily(
     TRITONSERVER_MetricKind kind, const char* name, const char* description)
 {
+  if ((name != nullptr) && IsReservedLatencyHistogramName(name)) {
+    throw std::invalid_argument(
+        std::string("Metric name is reserved for Triton latency histograms: ") +
+        name);
+  }
+
   auto registry = Metrics::GetRegistry();
 
   switch (kind) {

@@ -385,32 +385,32 @@ MetricModelReporter::InitializeLatencyHistograms(
   // after cache insertion, which would insert two samples for one request.
   if (!config_.cache_enabled_) {
     add(
-        "request_duration", "nv_inference_request_histogram_us",
+        "request_duration", LatencyHistogramName::kRequest,
         "Histogram of inference request duration in microseconds (includes "
         "cached requests)");
   }
   add(
-      "queue_duration", "nv_inference_queue_histogram_us",
+      "queue_duration", LatencyHistogramName::kQueue,
       "Histogram of inference queuing duration in microseconds (includes "
       "cached requests)");
   add(
-      "compute_input_duration", "nv_inference_compute_input_histogram_us",
+      "compute_input_duration", LatencyHistogramName::kComputeInput,
       "Histogram of compute input duration in microseconds (does not include "
       "cached requests)");
   add(
-      "compute_infer_duration", "nv_inference_compute_infer_histogram_us",
+      "compute_infer_duration", LatencyHistogramName::kComputeInfer,
       "Histogram of compute inference duration in microseconds (does not "
       "include cached requests)");
   add(
-      "compute_output_duration", "nv_inference_compute_output_histogram_us",
+      "compute_output_duration", LatencyHistogramName::kComputeOutput,
       "Histogram of inference compute output duration in microseconds (does "
       "not include cached requests)");
   if (config_.cache_enabled_) {
     add(
-        "cache_hit_duration", "nv_cache_hit_histogram_us",
+        "cache_hit_duration", LatencyHistogramName::kCacheHit,
         "Histogram of cache hit duration per model, in microseconds");
     add(
-        "cache_miss_duration", "nv_cache_miss_histogram_us",
+        "cache_miss_duration", LatencyHistogramName::kCacheMiss,
         "Histogram of cache miss duration per model, in microseconds");
   }
 }

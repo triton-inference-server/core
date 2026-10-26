@@ -28,6 +28,7 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include <iostream>
+#include <stdexcept>
 #include <thread>
 
 #include "gmock/gmock.h"
@@ -862,6 +863,21 @@ TEST_F(MetricsApiTest, TestChildMetricTracking)
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
   ASSERT_EQ(tc_family->NumMetrics(), 0);
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
+}
+
+TEST(MetricsApiTest, ReservedLatencyHistogramNameRejected)
+{
+  try {
+    tc::MetricFamily family(
+        TRITONSERVER_METRIC_KIND_COUNTER, tc::LatencyHistogramName::kRequest,
+        "custom histogram");
+    FAIL() << "reserved latency histogram name was accepted";
+    (void)family;
+  }
+  catch (const std::invalid_argument& ex) {
+    EXPECT_THAT(ex.what(), HasSubstr("reserved"));
+    EXPECT_THAT(ex.what(), HasSubstr(tc::LatencyHistogramName::kRequest));
+  }
 }
 
 }  // namespace

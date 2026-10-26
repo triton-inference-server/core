@@ -29,6 +29,8 @@
 
 #include "metrics.h"
 
+#include <mutex>
+#include <set>
 #include <thread>
 
 #include "latency_histogram.h"
@@ -1052,8 +1054,22 @@ Metrics::SerializedMetrics()
     metrics.push_back('\n');
   }
   // Duration histograms are lock-free and are not stored in the prometheus-cpp
-  // registry, which would take a mutex on every observation.
-  metrics += LatencyHistogramRegistry::Instance().Serialize();
+  // registry, which would take a mutex on every observation. Skip a family
+  // whose name is already in that registry so the exposition has one
+  // declaration per name.
+  std::vector<std::string> omitted;
+  metrics += LatencyHistogramRegistry::Instance().Serialize(metrics, &omitted);
+  if (!omitted.empty()) {
+    static std::mutex warn_mu;
+    static std::set<std::string> warned;
+    std::lock_guard<std::mutex> lock(warn_mu);
+    for (const auto& name : omitted) {
+      if (warned.insert(name).second) {
+        LOG_WARNING << "Skipping latency histogram '" << name
+                    << "' because that metric name is already registered";
+      }
+    }
+  }
   return metrics;
 }
 

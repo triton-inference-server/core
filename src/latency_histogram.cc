@@ -77,6 +77,30 @@ FormatLe(double boundary)
   return os.str();
 }
 
+bool
+ExpositionDeclaresFamily(const std::string& text, const std::string& name)
+{
+  const std::string type_mark = "# TYPE " + name + " ";
+  const std::string help_mark = "# HELP " + name + " ";
+  if (text.find(type_mark) != std::string::npos ||
+      text.find(help_mark) != std::string::npos) {
+    return true;
+  }
+  size_t pos = 0;
+  while ((pos = text.find(name, pos)) != std::string::npos) {
+    const bool at_line_start = (pos == 0) || (text[pos - 1] == '\n');
+    const size_t end = pos + name.size();
+    const bool at_token_end =
+        (end == text.size()) || (text[end] == '{') || (text[end] == ' ') ||
+        (text[end] == '\n');
+    if (at_line_start && at_token_end) {
+      return true;
+    }
+    pos = end;
+  }
+  return false;
+}
+
 size_t
 ShardForThisThread()
 {
@@ -105,6 +129,22 @@ NormalizeBoundaries(std::vector<double> boundaries)
 }
 
 }  // namespace
+
+bool
+IsReservedLatencyHistogramName(const std::string& name)
+{
+  static constexpr const char* kNames[] = {
+      LatencyHistogramName::kRequest,       LatencyHistogramName::kQueue,
+      LatencyHistogramName::kComputeInput,  LatencyHistogramName::kComputeInfer,
+      LatencyHistogramName::kComputeOutput, LatencyHistogramName::kCacheHit,
+      LatencyHistogramName::kCacheMiss};
+  for (const char* reserved : kNames) {
+    if (name == reserved) {
+      return true;
+    }
+  }
+  return false;
+}
 
 std::vector<double>
 DefaultLatencyHistogramBoundaries()
@@ -301,7 +341,8 @@ LatencyHistogramRegistry::Unregister(const ShardedLatencyHistogram* histogram)
 }
 
 std::string
-LatencyHistogramRegistry::Serialize() const
+LatencyHistogramRegistry::Serialize(
+    const std::string& already_exposed, std::vector<std::string>* omitted) const
 {
   std::vector<std::shared_ptr<ShardedLatencyHistogram>> histograms;
   {
@@ -321,6 +362,12 @@ LatencyHistogramRegistry::Serialize() const
 
   std::string out;
   for (const auto& name : family_order) {
+    if (ExpositionDeclaresFamily(already_exposed, name)) {
+      if (omitted != nullptr) {
+        omitted->push_back(name);
+      }
+      continue;
+    }
     const auto& family = families[name];
     out += "# HELP ";
     out += name;

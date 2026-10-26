@@ -363,6 +363,78 @@ TEST_F(RegistryGuard, UnregisteredHistogramsAreOmitted)
             std::string::npos);
 }
 
+TEST(ReservedLatencyHistogramName, MatchesPublishedFamilies)
+{
+  EXPECT_TRUE(IsReservedLatencyHistogramName(LatencyHistogramName::kRequest));
+  EXPECT_TRUE(IsReservedLatencyHistogramName(LatencyHistogramName::kQueue));
+  EXPECT_TRUE(
+      IsReservedLatencyHistogramName(LatencyHistogramName::kComputeInput));
+  EXPECT_TRUE(
+      IsReservedLatencyHistogramName(LatencyHistogramName::kComputeInfer));
+  EXPECT_TRUE(
+      IsReservedLatencyHistogramName(LatencyHistogramName::kComputeOutput));
+  EXPECT_TRUE(IsReservedLatencyHistogramName(LatencyHistogramName::kCacheHit));
+  EXPECT_TRUE(IsReservedLatencyHistogramName(LatencyHistogramName::kCacheMiss));
+  EXPECT_FALSE(
+      IsReservedLatencyHistogramName("nv_inference_request_summary_us"));
+  EXPECT_FALSE(IsReservedLatencyHistogramName(
+      "nv_inference_request_histogram_us_bucket"));
+  EXPECT_FALSE(IsReservedLatencyHistogramName("custom_histogram_us"));
+}
+
+TEST_F(RegistryGuard, OmitsFamiliesAlreadyDeclared)
+{
+  auto request = std::make_shared<ShardedLatencyHistogram>(
+      LatencyHistogramName::kRequest, "request latency",
+      std::map<std::string, std::string>{{"model", "identity"}},
+      std::vector<double>{10.0});
+  auto queue = std::make_shared<ShardedLatencyHistogram>(
+      LatencyHistogramName::kQueue, "queue latency",
+      std::map<std::string, std::string>{{"model", "identity"}},
+      std::vector<double>{10.0});
+  request->Observe(5);
+  queue->Observe(1);
+  LatencyHistogramRegistry::Instance().Register(request);
+  LatencyHistogramRegistry::Instance().Register(queue);
+
+  const std::string existing =
+      "# HELP nv_inference_request_histogram_us custom\n"
+      "# TYPE nv_inference_request_histogram_us counter\n"
+      "nv_inference_request_histogram_us{model=\"custom\"} 1\n";
+  std::vector<std::string> omitted;
+  const std::string exposed =
+      LatencyHistogramRegistry::Instance().Serialize(existing, &omitted);
+
+  ASSERT_EQ(omitted.size(), 1u);
+  EXPECT_EQ(omitted[0], LatencyHistogramName::kRequest);
+  EXPECT_EQ(exposed.find(LatencyHistogramName::kRequest), std::string::npos);
+  const std::string queue_type =
+      "# TYPE nv_inference_queue_histogram_us histogram";
+  EXPECT_NE(exposed.find(queue_type), std::string::npos);
+  EXPECT_EQ(exposed.find(queue_type), exposed.rfind(queue_type));
+}
+
+TEST_F(RegistryGuard, LongerMetricNameDoesNotHideHistogram)
+{
+  auto request = std::make_shared<ShardedLatencyHistogram>(
+      LatencyHistogramName::kRequest, "request latency",
+      std::map<std::string, std::string>{{"model", "identity"}},
+      std::vector<double>{10.0});
+  request->Observe(5);
+  LatencyHistogramRegistry::Instance().Register(request);
+
+  const std::string existing =
+      "# TYPE nv_inference_request_histogram_us_custom counter\n"
+      "nv_inference_request_histogram_us_custom 1\n";
+  std::vector<std::string> omitted;
+  const std::string exposed =
+      LatencyHistogramRegistry::Instance().Serialize(existing, &omitted);
+  EXPECT_TRUE(omitted.empty());
+  EXPECT_NE(
+      exposed.find("# TYPE nv_inference_request_histogram_us histogram"),
+      std::string::npos);
+}
+
 TEST_F(RegistryGuard, OneHelpAndTypeLinePerMetricName)
 {
   auto first = std::make_shared<ShardedLatencyHistogram>(

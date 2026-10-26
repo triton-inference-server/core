@@ -64,6 +64,23 @@ struct LatencyMetricToggles {
 LatencyMetricToggles ResolveLatencyMetricToggles(
     const std::vector<std::pair<std::string, std::string>>& settings);
 
+// Metric names published by summary_latencies=simplified. Custom metrics
+// cannot reuse them.
+struct LatencyHistogramName {
+  static constexpr const char* kRequest = "nv_inference_request_histogram_us";
+  static constexpr const char* kQueue = "nv_inference_queue_histogram_us";
+  static constexpr const char* kComputeInput =
+      "nv_inference_compute_input_histogram_us";
+  static constexpr const char* kComputeInfer =
+      "nv_inference_compute_infer_histogram_us";
+  static constexpr const char* kComputeOutput =
+      "nv_inference_compute_output_histogram_us";
+  static constexpr const char* kCacheHit = "nv_cache_hit_histogram_us";
+  static constexpr const char* kCacheMiss = "nv_cache_miss_histogram_us";
+};
+
+bool IsReservedLatencyHistogramName(const std::string& name);
+
 // Cumulative Prometheus histogram updated without a mutex. Each thread adds
 // into its own shard with relaxed atomics. Scrapes sum the shards.
 class ShardedLatencyHistogram {
@@ -118,7 +135,12 @@ class LatencyHistogramRegistry {
 
   void Register(std::shared_ptr<ShardedLatencyHistogram> histogram);
   void Unregister(const ShardedLatencyHistogram* histogram);
-  std::string Serialize() const;
+  // Families whose names are already declared in already_exposed are left
+  // out, so the joined exposition still has one HELP and TYPE per name.
+  // Omitted names are appended to omitted when it is not null.
+  std::string Serialize(
+      const std::string& already_exposed = "",
+      std::vector<std::string>* omitted = nullptr) const;
   void Clear();
 
  private:
