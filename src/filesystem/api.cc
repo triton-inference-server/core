@@ -369,7 +369,7 @@ FileSystemManager::SortCache(
              a,
          std::tuple<
              std::string, CredentialType, std::shared_ptr<FileSystemType>>
-             b) { return std::get<0>(a).size() >= std::get<0>(b).size(); });
+             b) { return std::get<0>(a).size() > std::get<0>(b).size(); });
 }
 
 template <class CredentialType, class FileSystemType>
