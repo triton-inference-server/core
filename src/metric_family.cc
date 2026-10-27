@@ -39,6 +39,7 @@ namespace triton { namespace core {
 //
 MetricFamily::MetricFamily(
     TRITONSERVER_MetricKind kind, const char* name, const char* description)
+    : kind_(kind), storage_(Metrics::GetMetricsStorage())
 {
   auto registry = Metrics::GetRegistry();
 
@@ -65,8 +66,6 @@ MetricFamily::MetricFamily(
       throw std::invalid_argument(
           "Unsupported kind passed to MetricFamily constructor.");
   }
-
-  kind_ = kind;
 }
 
 void*
@@ -74,53 +73,11 @@ MetricFamily::Add(
     std::map<std::string, std::string> label_map, Metric* metric,
     const TritonServerMetricArgs* args)
 {
-  void* prom_metric = nullptr;
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      if (args != nullptr) {
-        throw std::invalid_argument(
-            "Unexpected args found in counter Metric constructor.");
-      }
-      auto counter_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
-      auto counter_ptr = &counter_family_ptr->Add(label_map);
-      prom_metric = reinterpret_cast<void*>(counter_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      if (args != nullptr) {
-        throw std::invalid_argument(
-            "Unexpected args found in gauge Metric constructor.");
-      }
-      auto gauge_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
-      auto gauge_ptr = &gauge_family_ptr->Add(label_map);
-      prom_metric = reinterpret_cast<void*>(gauge_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
-      if (args == nullptr) {
-        throw std::invalid_argument(
-            "Bucket boundaries not found in Metric args.");
-      }
-      if (args->kind() != TRITONSERVER_METRIC_KIND_HISTOGRAM) {
-        throw std::invalid_argument("Metric args not set to histogram kind.");
-      }
-      auto histogram_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
-      auto histogram_ptr =
-          &histogram_family_ptr->Add(label_map, args->buckets());
-      prom_metric = reinterpret_cast<void*>(histogram_ptr);
-      break;
-    }
-    default:
-      throw std::invalid_argument(
-          "Unsupported family kind passed to Metric constructor.");
-  }
+  void* prom_metric = storage_->Add(kind_, family_, std::move(label_map), args);
 
   std::lock_guard<std::mutex> lk(metric_mtx_);
-  ++prom_metric_ref_cnt_[prom_metric];
   child_metrics_.insert(metric);
+
   return prom_metric;
 }
 
@@ -137,48 +94,7 @@ MetricFamily::Remove(void* prom_metric, Metric* metric)
     return;
   }
 
-  {
-    std::lock_guard<std::mutex> lk(metric_mtx_);
-    const auto it = prom_metric_ref_cnt_.find(prom_metric);
-    if (it != prom_metric_ref_cnt_.end()) {
-      --it->second;
-      if (it->second == 0) {
-        prom_metric_ref_cnt_.erase(it);
-      } else {
-        // Done as it is not the last reference
-        return;
-      }
-    }
-  }
-
-  switch (kind_) {
-    case TRITONSERVER_METRIC_KIND_COUNTER: {
-      auto counter_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Counter>*>(family_);
-      auto counter_ptr = reinterpret_cast<prometheus::Counter*>(prom_metric);
-      counter_family_ptr->Remove(counter_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_GAUGE: {
-      auto gauge_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Gauge>*>(family_);
-      auto gauge_ptr = reinterpret_cast<prometheus::Gauge*>(prom_metric);
-      gauge_family_ptr->Remove(gauge_ptr);
-      break;
-    }
-    case TRITONSERVER_METRIC_KIND_HISTOGRAM: {
-      auto histogram_family_ptr =
-          reinterpret_cast<prometheus::Family<prometheus::Histogram>*>(family_);
-      auto histogram_ptr =
-          reinterpret_cast<prometheus::Histogram*>(prom_metric);
-      histogram_family_ptr->Remove(histogram_ptr);
-      break;
-    }
-    default:
-      // Invalid kind should be caught in constructor
-      LOG_ERROR << "Unsupported kind in Metric destructor.";
-      break;
-  }
+  storage_->Remove(kind_, family_, prom_metric);
 }
 
 void
