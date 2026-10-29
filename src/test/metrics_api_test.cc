@@ -866,7 +866,7 @@ TEST_F(MetricsApiTest, TestChildMetricTracking)
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
 }
 
-TEST(MetricsApiTest, ReservedLatencyHistogramNameRejected)
+TEST_F(MetricsApiTest, ReservedLatencyHistogramNameRejected)
 {
   try {
     tc::MetricFamily family(
