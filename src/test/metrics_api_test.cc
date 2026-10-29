@@ -1,4 +1,4 @@
-// Copyright (c) 2022-2024, NVIDIA CORPORATION & AFFILIATES. All rights
+// Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights
 // reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,10 +28,12 @@
 #ifdef TRITON_ENABLE_METRICS
 
 #include <iostream>
+#include <stdexcept>
 #include <thread>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "latency_histogram.h"
 #include "metric_family.h"
 #include "triton/common/logging.h"
 #include "triton/core/tritonserver.h"
@@ -862,6 +864,21 @@ TEST_F(MetricsApiTest, TestChildMetricTracking)
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
   ASSERT_EQ(tc_family->NumMetrics(), 0);
   FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family), "delete family");
+}
+
+TEST_F(MetricsApiTest, ReservedLatencyHistogramNameRejected)
+{
+  try {
+    tc::MetricFamily family(
+        TRITONSERVER_METRIC_KIND_COUNTER, tc::LatencyHistogramName::kRequest,
+        "custom histogram");
+    FAIL() << "reserved latency histogram name was accepted";
+    (void)family;
+  }
+  catch (const std::invalid_argument& ex) {
+    EXPECT_THAT(ex.what(), HasSubstr("reserved"));
+    EXPECT_THAT(ex.what(), HasSubstr(tc::LatencyHistogramName::kRequest));
+  }
 }
 
 }  // namespace
