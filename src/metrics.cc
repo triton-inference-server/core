@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -33,9 +33,8 @@
 #include <set>
 #include <thread>
 
-#include "latency_histogram.h"
-
 #include "constants.h"
+#include "latency_histogram.h"
 #include "pinned_memory_manager.h"
 #include "prometheus/detail/utils.h"
 #include "triton/common/logging.h"
@@ -1048,8 +1047,8 @@ const std::string
 Metrics::SerializedMetrics()
 {
   auto singleton = Metrics::GetSingleton();
-  std::string metrics = singleton->serializer_->Serialize(
-      singleton->registry_.get()->Collect());
+  std::string metrics =
+      singleton->serializer_->Serialize(singleton->registry_.get()->Collect());
   if (!metrics.empty() && metrics.back() != '\n') {
     metrics.push_back('\n');
   }

@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -384,33 +384,26 @@ MetricModelReporter::InitializeLatencyHistograms(
   // cache is enabled. A cache miss is reported by the backend and then again
   // after cache insertion, which would insert two samples for one request.
   if (!config_.cache_enabled_) {
-    add(
-        "request_duration", LatencyHistogramName::kRequest,
+    add("request_duration", LatencyHistogramName::kRequest,
         "Histogram of inference request duration in microseconds (includes "
         "cached requests)");
   }
-  add(
-      "queue_duration", LatencyHistogramName::kQueue,
+  add("queue_duration", LatencyHistogramName::kQueue,
       "Histogram of inference queuing duration in microseconds (includes "
       "cached requests)");
-  add(
-      "compute_input_duration", LatencyHistogramName::kComputeInput,
+  add("compute_input_duration", LatencyHistogramName::kComputeInput,
       "Histogram of compute input duration in microseconds (does not include "
       "cached requests)");
-  add(
-      "compute_infer_duration", LatencyHistogramName::kComputeInfer,
+  add("compute_infer_duration", LatencyHistogramName::kComputeInfer,
       "Histogram of compute inference duration in microseconds (does not "
       "include cached requests)");
-  add(
-      "compute_output_duration", LatencyHistogramName::kComputeOutput,
+  add("compute_output_duration", LatencyHistogramName::kComputeOutput,
       "Histogram of inference compute output duration in microseconds (does "
       "not include cached requests)");
   if (config_.cache_enabled_) {
-    add(
-        "cache_hit_duration", LatencyHistogramName::kCacheHit,
+    add("cache_hit_duration", LatencyHistogramName::kCacheHit,
         "Histogram of cache hit duration per model, in microseconds");
-    add(
-        "cache_miss_duration", LatencyHistogramName::kCacheMiss,
+    add("cache_miss_duration", LatencyHistogramName::kCacheMiss,
         "Histogram of cache miss duration per model, in microseconds");
   }
 }

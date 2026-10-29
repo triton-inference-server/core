@@ -90,9 +90,8 @@ ExpositionDeclaresFamily(const std::string& text, const std::string& name)
   while ((pos = text.find(name, pos)) != std::string::npos) {
     const bool at_line_start = (pos == 0) || (text[pos - 1] == '\n');
     const size_t end = pos + name.size();
-    const bool at_token_end =
-        (end == text.size()) || (text[end] == '{') || (text[end] == ' ') ||
-        (text[end] == '\n');
+    const bool at_token_end = (end == text.size()) || (text[end] == '{') ||
+                              (text[end] == ' ') || (text[end] == '\n');
     if (at_line_start && at_token_end) {
       return true;
     }
@@ -105,7 +104,8 @@ size_t
 ShardForThisThread()
 {
   thread_local const size_t shard = [] {
-    const size_t hash = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    const size_t hash =
+        std::hash<std::thread::id>{}(std::this_thread::get_id());
     return hash % ShardedLatencyHistogram::kShardCount;
   }();
   return shard;

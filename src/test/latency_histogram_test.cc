@@ -99,7 +99,10 @@ EmpiricalQuantile(std::vector<uint64_t> samples, double quantile)
 
 class RegistryGuard : public ::testing::Test {
  protected:
-  void SetUp() override { triton::core::LatencyHistogramRegistry::Instance().Clear(); }
+  void SetUp() override
+  {
+    triton::core::LatencyHistogramRegistry::Instance().Clear();
+  }
   void TearDown() override
   {
     triton::core::LatencyHistogramRegistry::Instance().Clear();
@@ -177,8 +180,7 @@ TEST(LatencyMetricToggles, UnknownSummaryValueIsRejected)
 TEST(LatencyMetricToggles, LastAcceptedSummaryValueWins)
 {
   const LatencyMetricToggles toggles = ResolveLatencyMetricToggles(
-      {{"summary_latencies", "verbose"},
-       {"summary_latencies", "simplified"}});
+      {{"summary_latencies", "verbose"}, {"summary_latencies", "simplified"}});
   EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kSimplified);
   EXPECT_TRUE(toggles.rejected_summary_latencies.empty());
 }
@@ -206,23 +208,25 @@ TEST(ShardedLatencyHistogram, ExactBucketsCountAndSum)
   std::string text;
   histogram.AppendPrometheusText(&text);
   EXPECT_NE(
-      text.find(
-          "nv_inference_queue_histogram_us_bucket{model=\"identity\",version=\"1\",le=\"10\"} 2"),
+      text.find("nv_inference_queue_histogram_us_bucket{model=\"identity\","
+                "version=\"1\",le=\"10\"} 2"),
       std::string::npos);
   EXPECT_NE(
-      text.find(
-          "nv_inference_queue_histogram_us_bucket{model=\"identity\",version=\"1\",le=\"+Inf\"} 4"),
+      text.find("nv_inference_queue_histogram_us_bucket{model=\"identity\","
+                "version=\"1\",le=\"+Inf\"} 4"),
       std::string::npos);
   EXPECT_NE(
-      text.find(
-          "nv_inference_queue_histogram_us_sum{model=\"identity\",version=\"1\"} 126"),
+      text.find("nv_inference_queue_histogram_us_sum{model=\"identity\","
+                "version=\"1\"} 126"),
       std::string::npos);
   EXPECT_NE(
-      text.find(
-          "nv_inference_queue_histogram_us_count{model=\"identity\",version=\"1\"} 4"),
+      text.find("nv_inference_queue_histogram_us_count{model=\"identity\","
+                "version=\"1\"} 4"),
       std::string::npos);
   EXPECT_EQ(text.find("quantile="), std::string::npos) << text;
-  EXPECT_NE(text.find("# TYPE nv_inference_queue_histogram_us histogram"), std::string::npos);
+  EXPECT_NE(
+      text.find("# TYPE nv_inference_queue_histogram_us histogram"),
+      std::string::npos);
 }
 
 TEST(ShardedLatencyHistogram, CustomBoundariesAreSorted)
@@ -354,13 +358,16 @@ TEST_F(RegistryGuard, UnregisteredHistogramsAreOmitted)
   histogram->Observe(1);
   LatencyHistogramRegistry::Instance().Register(histogram);
   const std::string exposed = LatencyHistogramRegistry::Instance().Serialize();
-  EXPECT_NE(exposed.find("nv_inference_request_histogram_us_count"), std::string::npos);
+  EXPECT_NE(
+      exposed.find("nv_inference_request_histogram_us_count"),
+      std::string::npos);
   EXPECT_EQ(exposed.find("nv_inference_request_summary"), std::string::npos);
 
   LatencyHistogramRegistry::Instance().Unregister(histogram.get());
-  EXPECT_EQ(LatencyHistogramRegistry::Instance().Serialize().find(
-                "nv_inference_request_histogram_us"),
-            std::string::npos);
+  EXPECT_EQ(
+      LatencyHistogramRegistry::Instance().Serialize().find(
+          "nv_inference_request_histogram_us"),
+      std::string::npos);
 }
 
 TEST(ReservedLatencyHistogramName, MatchesPublishedFamilies)
