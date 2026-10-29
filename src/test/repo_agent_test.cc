@@ -2527,6 +2527,103 @@ TEST_F(AutoCompleteBackendFieldsTest, PyTorchDefaultModelFilenameAutofill)
   }
 }
 
+TEST(BackendType, TensorRTPlatformsShareTheTensorRTBackend)
+{
+  EXPECT_EQ(
+      tc::GetBackendType(tc::kTensorRTBackend), tc::BACKEND_TYPE_TENSORRT);
+  EXPECT_EQ(
+      tc::GetBackendTypeFromPlatform(tc::kTensorRTPlanPlatform),
+      tc::BACKEND_TYPE_TENSORRT);
+  EXPECT_EQ(
+      tc::GetBackendTypeFromPlatform(tc::kTensorRTMCPlatform),
+      tc::BACKEND_TYPE_TENSORRT);
+}
+
+TEST_F(AutoCompleteBackendFieldsTest, TensorRTBundleAutofill)
+{
+  struct TestCase {
+    std::string name;
+    std::vector<std::string> version_files;
+    std::string backend;
+    std::string platform;
+    std::string default_model_filename;
+    std::string expected_backend;
+    std::string expected_platform;
+    std::string expected_filename;
+  };
+
+  const std::vector<TestCase> test_cases = {
+      {"explicit_bundle_preserved",
+       {tc::kTensorRTMCFilename},
+       tc::kTensorRTBackend,
+       tc::kTensorRTMCPlatform,
+       tc::kTensorRTMCFilename,
+       tc::kTensorRTBackend,
+       tc::kTensorRTMCPlatform,
+       tc::kTensorRTMCFilename},
+      {"model_connect_autofills_bundle_filename",
+       {tc::kTensorRTMCFilename},
+       tc::kTensorRTBackend,
+       tc::kTensorRTMCPlatform,
+       "",
+       tc::kTensorRTBackend,
+       tc::kTensorRTMCPlatform,
+       tc::kTensorRTMCFilename},
+      {"bundle_filename_sets_platform",
+       {tc::kTensorRTMCFilename},
+       "",
+       "",
+       tc::kTensorRTMCFilename,
+       tc::kTensorRTBackend,
+       tc::kTensorRTMCPlatform,
+       tc::kTensorRTMCFilename},
+      {"sniff_bundle_from_version_dir",
+       {tc::kTensorRTMCFilename},
+       "",
+       "",
+       "",
+       tc::kTensorRTBackend,
+       tc::kTensorRTMCPlatform,
+       tc::kTensorRTMCFilename},
+      {"plan_still_autofills_plan_filename",
+       {tc::kTensorRTPlanFilename},
+       tc::kTensorRTBackend,
+       "",
+       "",
+       tc::kTensorRTBackend,
+       tc::kTensorRTPlanPlatform,
+       tc::kTensorRTPlanFilename},
+      {"plan_file_wins_when_both_are_present",
+       {tc::kTensorRTPlanFilename, tc::kTensorRTMCFilename},
+       "",
+       "",
+       "",
+       tc::kTensorRTBackend,
+       tc::kTensorRTPlanPlatform,
+       tc::kTensorRTPlanFilename}};
+
+  for (const auto& test_case : test_cases) {
+    SCOPED_TRACE(test_case.name);
+
+    std::filesystem::remove_all(version_path_);
+    ASSERT_TRUE(std::filesystem::create_directory(version_path_));
+    for (const auto& filename : test_case.version_files) {
+      TouchVersionFile(filename);
+    }
+
+    inference::ModelConfig config;
+    config.set_backend(test_case.backend);
+    config.set_platform(test_case.platform);
+    config.set_default_model_filename(test_case.default_model_filename);
+
+    AutoComplete(&config);
+
+    EXPECT_EQ(config.backend(), test_case.expected_backend);
+    EXPECT_EQ(config.platform(), test_case.expected_platform);
+    EXPECT_EQ(config.default_model_filename(), test_case.expected_filename);
+  }
+}
+
 }  // namespace
 
 int
