@@ -44,6 +44,8 @@ constexpr char kTensorFlowBackend[] = "tensorflow";
 
 constexpr char kTensorRTPlanPlatform[] = "tensorrt_plan";
 constexpr char kTensorRTPlanFilename[] = "model.plan";
+constexpr char kTensorRTMCPlatform[] = "model_connect";
+constexpr char kTensorRTMCFilename[] = "model.bundle";
 constexpr char kTensorRTBackend[] = "tensorrt";
 
 constexpr char kOnnxRuntimeOnnxPlatform[] = "onnxruntime_onnx";
