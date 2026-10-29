@@ -30,6 +30,7 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <locale>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -72,6 +73,8 @@ FormatLe(double boundary)
     return std::to_string(static_cast<uint64_t>(boundary));
   }
   std::ostringstream os;
+  // Prometheus requires a '.' decimal point. The process locale may use ','.
+  os.imbue(std::locale::classic());
   os.precision(std::numeric_limits<double>::max_digits10);
   os << boundary;
   return os.str();

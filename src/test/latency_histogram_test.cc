@@ -33,6 +33,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <locale>
 #include <random>
 #include <string>
 #include <thread>
@@ -183,6 +184,29 @@ TEST(LatencyMetricToggles, LastAcceptedSummaryValueWins)
       {{"summary_latencies", "verbose"}, {"summary_latencies", "simplified"}});
   EXPECT_EQ(toggles.summary_level, SummaryLatencyLevel::kSimplified);
   EXPECT_TRUE(toggles.rejected_summary_latencies.empty());
+}
+
+class CommaDecimalPoint : public std::numpunct<char> {
+ protected:
+  char do_decimal_point() const override { return ','; }
+};
+
+TEST(ShardedLatencyHistogram, FractionalBoundsUseDotDecimal)
+{
+  const std::locale original = std::locale::global(
+      std::locale(std::locale::classic(), new CommaDecimalPoint));
+  struct RestoreLocale {
+    std::locale original;
+    ~RestoreLocale() { std::locale::global(original); }
+  } restore{original};
+
+  ShardedLatencyHistogram histogram(
+      "nv_inference_queue_histogram_us", "queue latency", {}, {1.2});
+  histogram.Observe(1);
+  std::string text;
+  histogram.AppendPrometheusText(&text);
+  EXPECT_NE(text.find("le=\"1."), std::string::npos) << text;
+  EXPECT_EQ(text.find("le=\"1,"), std::string::npos) << text;
 }
 
 TEST(ShardedLatencyHistogram, ExactBucketsCountAndSum)
