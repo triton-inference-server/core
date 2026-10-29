@@ -593,6 +593,12 @@ target_include_directories(
     $<TARGET_PROPERTY:triton-core,INCLUDE_DIRECTORIES>
 )
 
+target_link_directories(
+  instance_queue_test
+  PRIVATE
+    $<TARGET_PROPERTY:triton-core,LINK_DIRECTORIES>
+)
+
 target_link_libraries(
   instance_queue_test
   PRIVATE
