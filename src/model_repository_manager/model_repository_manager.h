@@ -541,7 +541,7 @@ class ModelRepositoryManager {
       const std::set<std::string>& repository_paths, const bool autofill,
       const std::string& model_config_name, const bool polling_enabled,
       const bool model_control_enabled, const double min_compute_capability,
-      const bool enable_model_namespacing,
+      const bool enable_model_namespacing, const unsigned int poll_thread_count,
       std::unique_ptr<ModelLifeCycle> life_cycle);
 
   /// The internal function that are called in Create() and PollAndUpdate().
@@ -649,6 +649,7 @@ class ModelRepositoryManager {
   const bool polling_enabled_;
   const bool model_control_enabled_;
   const double min_compute_capability_;
+  const unsigned int poll_thread_count_;
 
   std::mutex mu_;
 
