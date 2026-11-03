@@ -447,6 +447,8 @@ if(${TRITON_ENABLE_METRICS})
     ../metric_family.h
     ../metrics.cc
     ../metrics.h
+    ../latency_histogram.cc
+    ../latency_histogram.h
     ../infer_parameter.cc
     ../infer_parameter.h
   )
@@ -510,6 +512,44 @@ if(${TRITON_ENABLE_METRICS})
     RUNTIME DESTINATION bin
   )
 endif() # TRITON_ENABLE_METRICS
+
+#
+# Lock-free latency histogram. Does not link libtritonserver.
+#
+add_executable(
+  latency_histogram_test
+  latency_histogram_test.cc
+  ../latency_histogram.cc
+  ../latency_histogram.h
+)
+
+set_target_properties(
+  latency_histogram_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  latency_histogram_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  latency_histogram_test
+  PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(
+  TARGETS latency_histogram_test
+  RUNTIME DESTINATION bin
+)
 
 #
 # Unit test for Model Repository Register API

@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -104,45 +104,74 @@ InferenceStatsAggregator::UpdateSuccessWithDuration(
   const uint64_t request_duration_ns = request_end_ns - request_start_ns;
   const uint64_t queue_duration_ns = compute_start_ns - queue_start_ns;
 
-  std::lock_guard<std::mutex> lock(mu_);
+#ifdef TRITON_ENABLE_METRICS
+  bool cache_enabled = false;
+  if (metric_reporter != nullptr) {
+    cache_enabled = metric_reporter->Config().cache_enabled_;
+  }
+#endif  // TRITON_ENABLE_METRICS
 
-  inference_count_ += batch_size;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
 
-  infer_stats_.success_count_++;
-  infer_stats_.request_duration_ns_ += request_duration_ns;
-  infer_stats_.queue_duration_ns_ += queue_duration_ns;
-  infer_stats_.compute_input_duration_ns_ += compute_input_duration_ns;
-  infer_stats_.compute_infer_duration_ns_ += compute_infer_duration_ns;
-  infer_stats_.compute_output_duration_ns_ += compute_output_duration_ns;
+    inference_count_ += batch_size;
+
+    infer_stats_.success_count_++;
+    infer_stats_.request_duration_ns_ += request_duration_ns;
+    infer_stats_.queue_duration_ns_ += queue_duration_ns;
+    infer_stats_.compute_input_duration_ns_ += compute_input_duration_ns;
+    infer_stats_.compute_infer_duration_ns_ += compute_infer_duration_ns;
+    infer_stats_.compute_output_duration_ns_ += compute_output_duration_ns;
 
 #ifdef TRITON_ENABLE_METRICS
-  if (metric_reporter != nullptr) {
-    metric_reporter->IncrementCounter("inf_success", 1);
-    metric_reporter->IncrementCounter("inf_count", batch_size);
-    // Counter Latencies
-    metric_reporter->IncrementCounter(
-        "request_duration", request_duration_ns / 1000);
-    metric_reporter->IncrementCounter(
-        "queue_duration", queue_duration_ns / 1000);
-    metric_reporter->IncrementCounter(
-        "compute_input_duration", compute_input_duration_ns / 1000);
-    metric_reporter->IncrementCounter(
-        "compute_infer_duration", compute_infer_duration_ns / 1000);
-    metric_reporter->IncrementCounter(
-        "compute_output_duration", compute_output_duration_ns / 1000);
-    // Summary Latencies
-    const auto& reporter_config = metric_reporter->Config();
-    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
-    if (!reporter_config.cache_enabled_) {
+    if (metric_reporter != nullptr) {
+      metric_reporter->IncrementCounter("inf_success", 1);
+      metric_reporter->IncrementCounter("inf_count", batch_size);
+      // Counter Latencies
+      metric_reporter->IncrementCounter(
+          "request_duration", request_duration_ns / 1000);
+      metric_reporter->IncrementCounter(
+          "queue_duration", queue_duration_ns / 1000);
+      metric_reporter->IncrementCounter(
+          "compute_input_duration", compute_input_duration_ns / 1000);
+      metric_reporter->IncrementCounter(
+          "compute_infer_duration", compute_infer_duration_ns / 1000);
+      metric_reporter->IncrementCounter(
+          "compute_output_duration", compute_output_duration_ns / 1000);
+      // Verbose summaries run CKMS under this lock. simplified histograms
+      // are recorded after the lock is released.
+      if (!cache_enabled) {
+        metric_reporter->ObserveSummary(
+            "request_duration", request_duration_ns / 1000);
+      }
       metric_reporter->ObserveSummary(
+          "queue_duration", queue_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "compute_input_duration", compute_input_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "compute_infer_duration", compute_infer_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "compute_output_duration", compute_output_duration_ns / 1000);
+    }
+#endif  // TRITON_ENABLE_METRICS
+  }
+
+#ifdef TRITON_ENABLE_METRICS
+  // simplified histograms are updated outside mu_. verbose summaries stay
+  // inside the lock, with the counters above.
+  if (metric_reporter != nullptr) {
+    // FIXME [DLIS-4762]: request histogram is disabled when cache is enabled.
+    if (!cache_enabled) {
+      metric_reporter->ObserveLatencyHistogram(
           "request_duration", request_duration_ns / 1000);
     }
-    metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
-    metric_reporter->ObserveSummary(
+    metric_reporter->ObserveLatencyHistogram(
+        "queue_duration", queue_duration_ns / 1000);
+    metric_reporter->ObserveLatencyHistogram(
         "compute_input_duration", compute_input_duration_ns / 1000);
-    metric_reporter->ObserveSummary(
+    metric_reporter->ObserveLatencyHistogram(
         "compute_infer_duration", compute_infer_duration_ns / 1000);
-    metric_reporter->ObserveSummary(
+    metric_reporter->ObserveLatencyHistogram(
         "compute_output_duration", compute_output_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
@@ -161,32 +190,42 @@ InferenceStatsAggregator::UpdateSuccessCacheHit(
   const uint64_t request_duration_ns = request_end_ns - request_start_ns;
   const uint64_t queue_duration_ns = cache_lookup_start_ns - queue_start_ns;
 
-  std::lock_guard<std::mutex> lock(mu_);
+  {
+    std::lock_guard<std::mutex> lock(mu_);
 
-  infer_stats_.success_count_++;
-  infer_stats_.request_duration_ns_ += request_duration_ns;
-  infer_stats_.queue_duration_ns_ += queue_duration_ns;
-  infer_stats_.cache_hit_count_++;
-  infer_stats_.cache_hit_duration_ns_ += cache_hit_duration_ns;
+    infer_stats_.success_count_++;
+    infer_stats_.request_duration_ns_ += request_duration_ns;
+    infer_stats_.queue_duration_ns_ += queue_duration_ns;
+    infer_stats_.cache_hit_count_++;
+    infer_stats_.cache_hit_duration_ns_ += cache_hit_duration_ns;
 
 #ifdef TRITON_ENABLE_METRICS
+    if (metric_reporter != nullptr) {
+      // inf_count not recorded on a cache hit
+      metric_reporter->IncrementCounter("inf_success", 1);
+      // Counter Latencies
+      metric_reporter->IncrementCounter(
+          "request_duration", request_duration_ns / 1000);
+      metric_reporter->IncrementCounter(
+          "queue_duration", queue_duration_ns / 1000);
+      metric_reporter->IncrementCounter("cache_hit_count", 1);
+      metric_reporter->IncrementCounter(
+          "cache_hit_duration", cache_hit_duration_ns / 1000);
+      // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+      metric_reporter->ObserveSummary(
+          "queue_duration", queue_duration_ns / 1000);
+      metric_reporter->ObserveSummary(
+          "cache_hit_duration", cache_hit_duration_ns / 1000);
+    }
+#endif  // TRITON_ENABLE_METRICS
+  }
+
+#ifdef TRITON_ENABLE_METRICS
+  // FIXME [DLIS-4762]: request histogram is disabled when cache is enabled.
   if (metric_reporter != nullptr) {
-    // inf_count not recorded on a cache hit
-    metric_reporter->IncrementCounter("inf_success", 1);
-    // Counter Latencies
-    metric_reporter->IncrementCounter(
-        "request_duration", request_duration_ns / 1000);
-    metric_reporter->IncrementCounter(
+    metric_reporter->ObserveLatencyHistogram(
         "queue_duration", queue_duration_ns / 1000);
-    metric_reporter->IncrementCounter("cache_hit_count", 1);
-    metric_reporter->IncrementCounter(
-        "cache_hit_duration", cache_hit_duration_ns / 1000);
-    // Summary Latencies
-    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
-    // metric_reporter->ObserveSummary(
-    //    "request_duration", request_duration_ns / 1000);
-    metric_reporter->ObserveSummary("queue_duration", queue_duration_ns / 1000);
-    metric_reporter->ObserveSummary(
+    metric_reporter->ObserveLatencyHistogram(
         "cache_hit_duration", cache_hit_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS
@@ -200,30 +239,36 @@ void
 InferenceStatsAggregator::UpdateSuccessCacheMiss(
     MetricModelReporter* metric_reporter, const uint64_t cache_miss_duration_ns)
 {
-  std::lock_guard<std::mutex> lock(mu_);
+  {
+    std::lock_guard<std::mutex> lock(mu_);
 
-  infer_stats_.request_duration_ns_ += cache_miss_duration_ns;
-  infer_stats_.cache_miss_count_++;
-  infer_stats_.cache_miss_duration_ns_ += cache_miss_duration_ns;
+    infer_stats_.request_duration_ns_ += cache_miss_duration_ns;
+    infer_stats_.cache_miss_count_++;
+    infer_stats_.cache_miss_duration_ns_ += cache_miss_duration_ns;
 
 #ifdef TRITON_ENABLE_METRICS
-  if (metric_reporter != nullptr) {
-    // Add cache insertion time to request duration since insertion
-    // happens after inference backend sets the request duration, and
-    // cache lookup time was already included before the inference backend
-    // was called
-    metric_reporter->IncrementCounter(
-        "request_duration", cache_miss_duration_ns / 1000);
-    metric_reporter->IncrementCounter("cache_miss_count", 1);
-    metric_reporter->IncrementCounter(
-        "cache_miss_duration", cache_miss_duration_ns / 1000);
+    if (metric_reporter != nullptr) {
+      // Add cache insertion time to request duration since insertion
+      // happens after inference backend sets the request duration, and
+      // cache lookup time was already included before the inference backend
+      // was called
+      metric_reporter->IncrementCounter(
+          "request_duration", cache_miss_duration_ns / 1000);
+      metric_reporter->IncrementCounter("cache_miss_count", 1);
+      metric_reporter->IncrementCounter(
+          "cache_miss_duration", cache_miss_duration_ns / 1000);
+      // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
+      metric_reporter->ObserveSummary(
+          "cache_miss_duration", cache_miss_duration_ns / 1000);
+    }
+#endif  // TRITON_ENABLE_METRICS
+  }
 
-    // FIXME [DLIS-4762]: request summary is disabled when cache is enabled.
-    //       Need to account for adding cache miss duration on top of
-    //       request_duration from backend within a single observation.
-    // metric_reporter->ObserveSummary(
-    //    "request_duration", cache_miss_duration_ns / 1000);
-    metric_reporter->ObserveSummary(
+#ifdef TRITON_ENABLE_METRICS
+  // FIXME [DLIS-4762]: request histogram is disabled when cache is enabled.
+  // A second observation here would count the cache miss as its own sample.
+  if (metric_reporter != nullptr) {
+    metric_reporter->ObserveLatencyHistogram(
         "cache_miss_duration", cache_miss_duration_ns / 1000);
   }
 #endif  // TRITON_ENABLE_METRICS

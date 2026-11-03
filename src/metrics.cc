@@ -1,4 +1,4 @@
-// Copyright 2018-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -29,9 +29,12 @@
 
 #include "metrics.h"
 
+#include <mutex>
+#include <set>
 #include <thread>
 
 #include "constants.h"
+#include "latency_histogram.h"
 #include "pinned_memory_manager.h"
 #include "prometheus/detail/utils.h"
 #include "triton/common/logging.h"
@@ -1044,8 +1047,29 @@ const std::string
 Metrics::SerializedMetrics()
 {
   auto singleton = Metrics::GetSingleton();
-  return singleton->serializer_->Serialize(
-      singleton->registry_.get()->Collect());
+  std::string metrics =
+      singleton->serializer_->Serialize(singleton->registry_.get()->Collect());
+  if (!metrics.empty() && metrics.back() != '\n') {
+    metrics.push_back('\n');
+  }
+  // Duration histograms are lock-free and are not stored in the prometheus-cpp
+  // registry, which would take a mutex on every observation. Skip a family
+  // whose name is already in that registry so the exposition has one
+  // declaration per name.
+  std::vector<std::string> omitted;
+  metrics += LatencyHistogramRegistry::Instance().Serialize(metrics, &omitted);
+  if (!omitted.empty()) {
+    static std::mutex warn_mu;
+    static std::set<std::string> warned;
+    std::lock_guard<std::mutex> lock(warn_mu);
+    for (const auto& name : omitted) {
+      if (warned.insert(name).second) {
+        LOG_WARNING << "Skipping latency histogram '" << name
+                    << "' because that metric name is already registered";
+      }
+    }
+  }
+  return metrics;
 }
 
 Metrics*

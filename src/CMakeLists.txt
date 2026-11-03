@@ -131,6 +131,7 @@ set(
   infer_response.cc
   infer_stats.cc
   infer_trace.cc
+  latency_histogram.cc
   instance_queue.cc
   label_provider.cc
   triton_memory.cc
@@ -178,6 +179,7 @@ set(
   infer_response.h
   infer_stats.h
   infer_trace.h
+  latency_histogram.h
   instance_queue.h
   label_provider.h
   triton_memory.h

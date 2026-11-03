@@ -1,4 +1,4 @@
-// Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,6 +28,8 @@
 
 #ifdef TRITON_ENABLE_METRICS
 
+#include <mutex>
+
 #include "constants.h"
 #include "infer_stats.h"
 #include "triton/common/logging.h"
@@ -53,22 +55,50 @@ MetricReporterConfig::ParseConfig(
     if (pair.first == "counter_latencies" && pair.second == "false") {
       latency_counters_enabled_ = false;
     }
+  }
 
-    if (pair.first == "histogram_latencies" && pair.second == "true") {
-      latency_histograms_enabled_ = true;
-    }
-
-    if (pair.first == "summary_latencies" && pair.second == "true") {
-      latency_summaries_enabled_ = true;
-    }
-
-    // ex: summary_quantiles="0.5:0.05 0.9:0.01 0.99:0.001"
+  bool saw_summary_quantiles = false;
+  for (const auto& pair : metrics_config) {
+    // ex: summary_quantiles="0.5:0.05,0.9:0.01,0.99:0.001"
     if (pair.first == "summary_quantiles") {
+      saw_summary_quantiles = true;
       const auto& quantiles = ParseQuantiles(pair.second);
       if (!quantiles.empty()) {
         quantiles_ = quantiles;
       }
     }
+  }
+
+  const LatencyMetricToggles toggles =
+      ResolveLatencyMetricToggles(metrics_config);
+  latency_histograms_enabled_ = toggles.first_response_histogram;
+  latency_duration_histograms_enabled_ =
+      toggles.summary_level == SummaryLatencyLevel::kSimplified;
+  latency_summaries_enabled_ =
+      toggles.summary_level == SummaryLatencyLevel::kVerbose;
+  if (!toggles.rejected_summary_latencies.empty()) {
+    LOG_WARNING << "Ignoring summary_latencies="
+                << toggles.rejected_summary_latencies
+                << ". Accepted values are none, simplified, and verbose. "
+                   "false is an alias of none, and true is an alias of "
+                   "verbose.";
+  }
+  if (latency_summaries_enabled_) {
+    static std::once_flag verbose_once;
+    std::call_once(verbose_once, [] {
+      LOG_WARNING << "summary_latencies=true (verbose) records a Prometheus "
+                     "summary on every request while holding the per-model "
+                     "statistics lock. That can sharply reduce throughput. "
+                     "summary_latencies=simplified records a lock-free "
+                     "histogram instead.";
+    });
+  }
+  if (saw_summary_quantiles && !latency_summaries_enabled_) {
+    static std::once_flag quantiles_once;
+    std::call_once(quantiles_once, [] {
+      LOG_WARNING << "summary_quantiles applies only when summary_latencies "
+                     "is true or verbose.";
+    });
   }
 
   // Set flag to signal to stats aggregator if caching is enabled or not
@@ -189,11 +219,19 @@ MetricModelReporter::MetricModelReporter(
   InitializeCounters(labels);
   InitializeGauges(labels);
   InitializeHistograms(labels);
+  InitializeLatencyHistograms(labels);
   InitializeSummaries(labels);
 }
 
 MetricModelReporter::~MetricModelReporter()
 {
+  for (auto& iter : latency_histograms_) {
+    if (iter.second) {
+      LatencyHistogramRegistry::Instance().Unregister(iter.second.get());
+    }
+  }
+  latency_histograms_.clear();
+
   // Cleanup metrics for each family
   for (auto& iter : counter_families_) {
     const auto& name = iter.first;
@@ -317,6 +355,56 @@ MetricModelReporter::InitializeHistograms(
       histograms_[name] =
           CreateMetric<prometheus::Histogram>(*family_ptr, labels, buckets);
     }
+  }
+}
+
+void
+MetricModelReporter::InitializeLatencyHistograms(
+    const std::map<std::string, std::string>& labels)
+{
+  if (!config_.latency_duration_histograms_enabled_) {
+    return;
+  }
+
+  auto add = [this, &labels](
+                 const std::string& key, const char* metric_name,
+                 const char* help) {
+    std::vector<double> boundaries = DefaultLatencyHistogramBoundaries();
+    const auto it = config_.histogram_options_.find(key);
+    if (it != config_.histogram_options_.end() && !it->second.empty()) {
+      boundaries.assign(it->second.begin(), it->second.end());
+    }
+    auto histogram = std::make_shared<ShardedLatencyHistogram>(
+        metric_name, help, labels, std::move(boundaries));
+    LatencyHistogramRegistry::Instance().Register(histogram);
+    latency_histograms_.emplace(key, std::move(histogram));
+  };
+
+  // FIXME [DLIS-4762]: the request histogram is omitted when the response
+  // cache is enabled. A cache miss is reported by the backend and then again
+  // after cache insertion, which would insert two samples for one request.
+  if (!config_.cache_enabled_) {
+    add("request_duration", LatencyHistogramName::kRequest,
+        "Histogram of inference request duration in microseconds (includes "
+        "cached requests)");
+  }
+  add("queue_duration", LatencyHistogramName::kQueue,
+      "Histogram of inference queuing duration in microseconds (includes "
+      "cached requests)");
+  add("compute_input_duration", LatencyHistogramName::kComputeInput,
+      "Histogram of compute input duration in microseconds (does not include "
+      "cached requests)");
+  add("compute_infer_duration", LatencyHistogramName::kComputeInfer,
+      "Histogram of compute inference duration in microseconds (does not "
+      "include cached requests)");
+  add("compute_output_duration", LatencyHistogramName::kComputeOutput,
+      "Histogram of inference compute output duration in microseconds (does "
+      "not include cached requests)");
+  if (config_.cache_enabled_) {
+    add("cache_hit_duration", LatencyHistogramName::kCacheHit,
+        "Histogram of cache hit duration per model, in microseconds");
+    add("cache_miss_duration", LatencyHistogramName::kCacheMiss,
+        "Histogram of cache miss duration per model, in microseconds");
   }
 }
 
@@ -481,6 +569,20 @@ MetricModelReporter::ObserveHistogram(const std::string& name, double value)
     return;
   }
   histogram->Observe(value);
+}
+
+void
+MetricModelReporter::ObserveLatencyHistogram(
+    const std::string& name, uint64_t value_us)
+{
+  if (!config_.latency_duration_histograms_enabled_) {
+    return;
+  }
+  const auto it = latency_histograms_.find(name);
+  if (it == latency_histograms_.end() || it->second == nullptr) {
+    return;
+  }
+  it->second->Observe(value_us);
 }
 
 void
