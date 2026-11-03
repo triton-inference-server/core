@@ -32,7 +32,7 @@ namespace triton { namespace core {
 
 InstanceQueue::InstanceQueue(size_t max_batch_size, uint64_t max_queue_delay_ns)
     : max_batch_size_(max_batch_size), max_queue_delay_ns_(max_queue_delay_ns),
-      waiting_consumer_count_(0)
+      waiting_consumer_count_(0), closed_(false)
 {
 }
 
@@ -136,19 +136,30 @@ InstanceQueue::DecrementConsumerCount()
   waiting_consumer_cv_.notify_one();
 }
 
-void
+bool
 InstanceQueue::WaitForConsumer()
 {
   std::unique_lock<std::mutex> lock(waiting_consumer_mu_);
   waiting_consumer_cv_.wait(
-      lock, [this]() { return waiting_consumer_count_ > 0; });
+      lock, [this]() { return closed_ || (waiting_consumer_count_ > 0); });
+  return !closed_;
+}
+
+void
+InstanceQueue::Close()
+{
+  {
+    std::lock_guard<std::mutex> lock(waiting_consumer_mu_);
+    closed_ = true;
+  }
+  waiting_consumer_cv_.notify_all();
 }
 
 int
 InstanceQueue::WaitingConsumerCount()
 {
   std::lock_guard<std::mutex> lock(waiting_consumer_mu_);
-  return waiting_consumer_count_;
+  return closed_ ? 0 : waiting_consumer_count_;
 }
 
 }}  // namespace triton::core
