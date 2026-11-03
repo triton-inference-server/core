@@ -1,4 +1,4 @@
-# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -945,7 +945,11 @@ class TestBindings:
                 byte_size,
                 memory_type,
                 memory_type_id,
+                owner,
             ) = out
+            assert isinstance(
+                owner, triton_bindings.TRITONSERVER_InferenceResponseOutputBuffer
+            )
             ctypes_buffer = ctypes.create_string_buffer(byte_size)
             ctypes.memmove(ctypes_buffer, out_buffer, byte_size)
             numpy_buffer = numpy.frombuffer(ctypes_buffer, dtype=numpy.byte)

@@ -746,6 +746,23 @@ class PyTrace : public PyWrapper<struct TRITONSERVER_InferenceTrace> {
   std::unique_ptr<CallbackResource> callback_resource_{nullptr};
 };
 
+// Memory of a response output. It is shared between the Triton response that
+// refers to it and the Python objects that read it, so that the response can
+// be deleted as soon as its outputs have been extracted. A live response keeps
+// its model alive, which blocks server shutdown until the response is gone.
+class PyOutputBuffer {
+ public:
+  explicit PyOutputBuffer(size_t byte_size) : data_(malloc(byte_size)) {}
+  ~PyOutputBuffer() { free(data_); }
+  PyOutputBuffer(const PyOutputBuffer&) = delete;
+  PyOutputBuffer& operator=(const PyOutputBuffer&) = delete;
+
+  void* Data() const { return data_; }
+
+ private:
+  void* data_;
+};
+
 class PyInferenceResponse
     : public PyWrapper<struct TRITONSERVER_InferenceResponse> {
  public:
@@ -827,9 +844,12 @@ class PyInferenceResponse
     return val;
   }
 
+  // The last element is the object owning the output memory, or None. The
+  // memory stays valid as long as that object is alive, independently of the
+  // response.
   std::tuple<
       std::string, TRITONSERVER_DataType, py::array_t<int64_t>, uintptr_t,
-      size_t, TRITONSERVER_MemoryType, int64_t>
+      size_t, TRITONSERVER_MemoryType, int64_t, py::object>
   Output(uint32_t index)
   {
     const char* name = nullptr;
@@ -844,6 +864,12 @@ class PyInferenceResponse
     ThrowIfError(TRITONSERVER_InferenceResponseOutput(
         triton_object_, index, &name, &datatype, &shape, &dim_count, &base,
         &byte_size, &memory_type, &memory_type_id, &userp));
+    // 'userp' is the 'buffer_userp' set by the response allocator.
+    py::object owner = py::none();
+    if (userp != nullptr) {
+      owner =
+          py::cast(*reinterpret_cast<std::shared_ptr<PyOutputBuffer>*>(userp));
+    }
     return {
         name,
         datatype,
@@ -851,7 +877,8 @@ class PyInferenceResponse
         reinterpret_cast<uintptr_t>(base),
         byte_size,
         memory_type,
-        memory_type_id};
+        memory_type_id,
+        owner};
   }
 
   std::string OutputClassificationLabel(uint32_t index, size_t class_index)
@@ -958,7 +985,13 @@ class PyInferenceRequest
       TRITONSERVER_MemoryType* actual_memory_type,
       int64_t* actual_memory_type_id)
   {
-    *buffer = malloc(byte_size * sizeof(uint8_t));
+    // The response holds one reference to the buffer through 'buffer_userp',
+    // Python objects reading the output hold their own (see
+    // PyInferenceResponse::Output). The memory is freed with the last one.
+    auto* owner = new std::shared_ptr<PyOutputBuffer>(
+        std::make_shared<PyOutputBuffer>(byte_size));
+    *buffer = (*owner)->Data();
+    *buffer_userp = owner;
     *actual_memory_type = TRITONSERVER_MEMORY_CPU;
     *actual_memory_type_id = 0;
     return nullptr;
@@ -971,7 +1004,7 @@ class PyInferenceRequest
     if (memory_type != TRITONSERVER_MEMORY_CPU || memory_type_id != 0) {
       throw InvalidArgumentError("invalid memory type or id to be released");
     }
-    free(buffer);
+    delete reinterpret_cast<std::shared_ptr<PyOutputBuffer>*>(buffer_userp);
     return nullptr;
   }
 
@@ -2123,6 +2156,8 @@ PYBIND11_MODULE(triton_bindings, m)
       m, "TRITONSERVER_ResponseCompleteFlag")
       .value("FINAL", TRITONSERVER_RESPONSE_COMPLETE_FINAL)
       .export_values();
+  py::class_<PyOutputBuffer, std::shared_ptr<PyOutputBuffer>>(
+      m, "TRITONSERVER_InferenceResponseOutputBuffer");
   py::class_<PyInferenceResponse, std::shared_ptr<PyInferenceResponse>>(
       m, "TRITONSERVER_InferenceResponse")
       .def(

@@ -1,4 +1,4 @@
-# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -312,10 +312,6 @@ class TestServer:
         server = tritonserver.Server(server_options).start()
         assert server.ready()
 
-    @pytest.mark.xfail(
-        run=False,
-        reason="Some request/response object may not be released which may cause server stop to fail",
-    )
     def test_stop(self, server_options):
         server = tritonserver.Server(server_options).start(wait_until_ready=True)
 
@@ -345,6 +341,50 @@ class TestServer:
             numpy.testing.assert_array_equal(fp16_input, fp16_output)
 
         server.stop()
+
+    def test_stop_with_live_responses(self, server_options):
+        # Responses, output tensors and response iterators that are still
+        # referenced must not keep the model alive, otherwise the server can
+        # not unload it and stop() only returns after the exit timeout.
+        server = tritonserver.Server(server_options).start(wait_until_ready=True)
+
+        assert server.ready()
+
+        server.load(
+            "test",
+            {
+                "config": json.dumps(
+                    {
+                        "backend": "python",
+                        "parameters": {"decoupled": {"string_value": "False"}},
+                        "instance_group": [{"kind": "KIND_CPU"}],
+                    }
+                )
+            },
+        )
+
+        fp16_input = numpy.random.rand(1, 100).astype(dtype=numpy.float16)
+
+        iterator = server.model("test").infer(
+            inputs={"fp16_input": fp16_input},
+            output_memory_type="cpu",
+            raise_on_error=True,
+        )
+        responses = list(iterator)
+        outputs = [
+            numpy.from_dlpack(response.outputs["fp16_output"]) for response in responses
+        ]
+        assert len(outputs) == 1
+
+        start_time = time.time()
+        server.stop()
+        assert time.time() - start_time < server_options.exit_timeout
+
+        # The output memory must outlive the response and the server.
+        del responses
+        gc.collect()
+        for fp16_output in outputs:
+            numpy.testing.assert_array_equal(fp16_input, fp16_output)
 
     def test_model_repository_not_specified(self):
         with pytest.raises(tritonserver.InvalidArgumentError):

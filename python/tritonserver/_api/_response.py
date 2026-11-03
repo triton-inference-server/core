@@ -1,4 +1,4 @@
-# Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -143,13 +143,17 @@ class InferenceResponse:
                     byte_size,
                     memory_type,
                     memory_type_id,
+                    owner,
                 ) = response.output(output_index)
+                # The output memory is owned by 'owner', not by the response,
+                # so the response (which keeps the model alive) can be
+                # released as soon as this method returns.
                 memory_buffer = MemoryBuffer(
                     data_ptr=data_ptr,
                     memory_type=memory_type,
                     memory_type_id=memory_type_id,
                     size=byte_size,
-                    owner=response,
+                    owner=owner,
                 )
                 tensor = Tensor(data_type, shape, memory_buffer)
                 outputs[name] = tensor
@@ -221,6 +225,10 @@ class AsyncResponseIterator:
             response,
             flags,
         )
+        if response.final:
+            # The request keeps the model alive, release it once the last
+            # response has been received so the model can be unloaded.
+            self._request = None
         return response
 
     def __aiter__(self):
@@ -242,7 +250,9 @@ class AsyncResponseIterator:
         return response
 
     def cancel(self):
-        self._request.cancel()
+        request = self._request
+        if request is not None:
+            request.cancel()
 
 
 class ResponseIterator:
@@ -283,6 +293,10 @@ class ResponseIterator:
             response,
             flags,
         )
+        if response.final:
+            # The request keeps the model alive, release it once the last
+            # response has been received so the model can be unloaded.
+            self._request = None
         return response
 
     def __iter__(self):
@@ -304,4 +318,6 @@ class ResponseIterator:
         return response
 
     def cancel(self):
-        self._request.cancel()
+        request = self._request
+        if request is not None:
+            request.cancel()
