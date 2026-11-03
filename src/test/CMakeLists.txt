@@ -31,6 +31,30 @@ cmake_minimum_required(VERSION 3.31.8)
 #
 find_package(GTest REQUIRED)
 
+# Loading cloud credentials must tolerate equal-length credential names.
+# The test uses POSIX child processes to isolate the filesystem credential cache.
+if(TRITON_ENABLE_S3 AND NOT WIN32)
+  add_executable(filesystem_test filesystem_test.cc)
+  target_compile_features(filesystem_test PRIVATE cxx_std_17)
+  target_include_directories(
+    filesystem_test
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../include ${GTEST_INCLUDE_DIRS}
+  )
+  target_link_libraries(
+    filesystem_test
+    PRIVATE triton-core GTest::gtest GTest::gtest_main
+  )
+  set_target_properties(
+    filesystem_test
+    PROPERTIES
+      SKIP_BUILD_RPATH TRUE
+      BUILD_WITH_INSTALL_RPATH TRUE
+      INSTALL_RPATH_USE_LINK_PATH FALSE
+      INSTALL_RPATH ""
+  )
+  install(TARGETS filesystem_test RUNTIME DESTINATION bin)
+endif()
+
 #
 # CudaMemoryManger
 #
