@@ -1519,8 +1519,8 @@ TRITONSERVER_InferenceResponseDelete(
 
 /// Return the error status of an inference response. Return a
 /// TRITONSERVER_Error object on failure, return nullptr on success.
-/// The returned error object is owned by 'inference_response' and so
-/// should not be deleted by the caller.
+/// The returned error object is owned by the caller and must be deleted
+/// using TRITONSERVER_ErrorDelete.
 ///
 /// \param inference_response The response object.
 /// \return a TRITONSERVER_Error indicating the success or failure
