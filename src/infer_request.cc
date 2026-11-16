@@ -231,6 +231,12 @@ InferenceRequest::ModelName() const
   return model_raw_->Name();
 }
 
+const std::string&
+InferenceRequest::ModelNamespace() const
+{
+  return model_raw_->ModelId().namespace_;
+}
+
 int64_t
 InferenceRequest::ActualModelVersion() const
 {
