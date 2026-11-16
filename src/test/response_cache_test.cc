@@ -29,6 +29,7 @@
 #include "cache_manager.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
+#include "model.h"
 #include "triton/common/logging.h"
 #include "triton_memory.h"
 
@@ -81,8 +82,7 @@ InferenceRequest::Input::Input(
 {
 }
 
-// Use const global var as locals can't be returned in ModelName(),
-// and we don't care about the model for the unit test
+// These tests use a fixed model name and vary the namespace separately.
 const std::string MODEL = "model";
 
 const std::string&
@@ -94,8 +94,9 @@ InferenceRequest::ModelName() const
 const std::string&
 InferenceRequest::ModelNamespace() const
 {
-  static const std::string model_namespace;
-  return model_namespace;
+  static const std::string no_namespace;
+  return (model_raw_ == nullptr) ? no_namespace
+                                 : model_raw_->ModelId().namespace_;
 }
 
 Status
@@ -1160,6 +1161,33 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheHashInputMetadata)
   EXPECT_NE(key, hash({4, 1}, inference::TYPE_INT32));
   EXPECT_NE(key, hash({4}, inference::TYPE_INT32));
   EXPECT_NE(key, hash({2, 2}, inference::TYPE_FP32));
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheHashModelNamespace)
+{
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  inference::ModelConfig config;
+  config.set_name("model");
+  tc::Model model_a(0.0, "", tc::ModelIdentifier("repoA", "model"), 1, config);
+  tc::Model model_b(0.0, "", tc::ModelIdentifier("repoB", "model"), 1, config);
+  tc::Model same_namespace(
+      0.0, "", tc::ModelIdentifier("repoA", "model"), 1, config);
+  tc::Model no_namespace(0.0, "", tc::ModelIdentifier("", "model"), 1, config);
+  const std::vector<helpers::Tensor> inputs{{"INPUT", {1, 2, 3, 4}}};
+  auto hash = [&](tc::Model* model) {
+    std::unique_ptr<tc::InferenceRequest> request(helpers::GenerateRequest(
+        model, 1, inference::TYPE_INT32, TRITONSERVER_MEMORY_CPU, 0, inputs,
+        "namespace-test"));
+    std::string key;
+    helpers::CheckStatus(cache->Hash(*request, &key));
+    return key;
+  };
+
+  const auto key = hash(&model_a);
+  EXPECT_NE(key, hash(&model_b));
+  EXPECT_EQ(key, hash(&same_namespace));
+  EXPECT_NE(key, hash(&no_namespace));
 }
 
 TEST_F(RequestResponseCacheTest, TestLocalCacheHashRequestMetadata)
