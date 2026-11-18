@@ -1,4 +1,4 @@
-// Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -34,12 +34,12 @@
 #include "infer_response.h"
 #include "infer_stats.h"
 #include "infer_trace.h"
-#include "memory.h"
 #include "response_allocator.h"
 #include "sequence_state.h"
 #include "status.h"
 #include "triton/common/logging.h"
 #include "triton/common/model_config.h"
+#include "triton_memory.h"
 #include "tritonserver_apis.h"
 
 namespace triton { namespace core {
@@ -632,7 +632,8 @@ class InferenceRequest {
   // required for the direct sequence batcher. The returned copy will
   // contain only the minimum content required for a null request.
   // The statistics of the copy will not be collected.
-  static InferenceRequest* CopyAsNull(const InferenceRequest& from);
+  static Status CopyAsNull(
+      const InferenceRequest& from, std::unique_ptr<InferenceRequest>* to);
 
   uint64_t QueueStartNs() const { return queue_start_ns_; }
   uint64_t CaptureQueueStartNs()

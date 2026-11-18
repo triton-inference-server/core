@@ -1,4 +1,4 @@
-# Copyright 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -36,7 +36,7 @@ option(TRITON_CORE_HEADERS_ONLY "Build only headers and stub" ON)
 #
 # Specifying min required C++ standard
 #
-set(TRITON_MIN_CXX_STANDARD 17 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
+set(TRITON_MIN_CXX_STANDARD 20 CACHE STRING "The minimum C++ standard which features are requested to build this target.")
 
 #
 # Triton Server API
@@ -126,22 +126,11 @@ add_library(
 )
 target_compile_features(triton-core-serverstub PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  message("Using MSVC as compiler, default target on Windows 10. "
-		  "If the target system is not Windows 10, please update _WIN32_WINNT "
-		  "to corresponding value.")
-  target_compile_options(
-    triton-core-serverstub
-    PRIVATE
-      /Wall /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
-  )
-else()
-  target_compile_options(
-    triton-core-serverstub
-    PRIVATE
-      -Wall -Wextra -Wno-unused-parameter -Werror
-  )
-endif()
+target_compile_options(
+  triton-core-serverstub
+  PRIVATE
+    -Wall -Wextra -Wno-unused-parameter -Werror
+)
 
 set_target_properties(
   triton-core-serverstub
@@ -255,13 +244,9 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(_CMAKE_ARGS_OPENSSL_ROOT_DIR "-DOPENSSL_ROOT_DIR:PATH=${OPENSSL_ROOT_DIR}")
   endif()
 
-  # Location where protobuf-config.cmake will be installed varies by
-  # platform
-  if (WIN32)
-    set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/cmake")
-  else()
-    set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/${LIB_DIR}/cmake/protobuf")
-  endif()
+  # Location where protobuf-config.cmake will be installed
+  set(_FINDPACKAGE_PROTOBUF_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/${LIB_DIR}/cmake/protobuf")
+  set(_FINDPACKAGE_UTF8_RANGE_CONFIG_DIR "${TRITON_THIRD_PARTY_INSTALL_PREFIX}/protobuf/${LIB_DIR}/cmake/utf8_range")
 
   if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(TRITON_INSTALL_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/install)
@@ -286,6 +271,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Dazure-storage-blobs-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-storage-blobs-cpp
       -Dazure-storage-common-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-storage-common-cpp
       -Dazure-core-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-core-cpp
+      -Dazure-identity-cpp_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/azure-sdk/share/azure-identity-cpp
     )
   endif() # TRITON_ENABLE_AZURE_STORAGE
   if(${TRITON_ENABLE_METRICS})
@@ -301,6 +287,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/triton-core"
     CMAKE_CACHE_ARGS
       -DProtobuf_DIR:PATH=${_FINDPACKAGE_PROTOBUF_CONFIG_DIR}
+      -Dutf8_range_DIR:PATH=${_FINDPACKAGE_UTF8_RANGE_CONFIG_DIR}
       ${_CMAKE_ARGS_OPENSSL_ROOT_DIR}
       ${_CMAKE_ARGS_CMAKE_TOOLCHAIN_FILE}
       ${_CMAKE_ARGS_VCPKG_TARGET_TRIPLET}

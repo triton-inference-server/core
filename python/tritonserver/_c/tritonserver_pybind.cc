@@ -1,4 +1,4 @@
-// Copyright 2023-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -975,21 +975,27 @@ class PyInferenceRequest
     return nullptr;
   }
 
-  void SetResponseCallback()
+  void SetResponseCallback(const std::shared_ptr<PyInferenceRequest>& request)
   {
-    // The caller is responsible for keeping the request wrapper alive until
-    // response complete final is received via GetNextResponse().
+    // Keep the request wrapper alive until RESPONSE_COMPLETE_FINAL is
+    // received, so that AddNextResponse never operates on a freed object.
+    std::shared_ptr<PyInferenceRequest>* request_ptr =
+        new std::shared_ptr<PyInferenceRequest>(request);
     ThrowIfError(TRITONSERVER_InferenceRequestSetResponseCallback(
         triton_object_, allocator_.get(),
         nullptr /* response_allocator_userp */, ResponseCallback,
-        reinterpret_cast<void*>(this) /* response_userp */));
+        reinterpret_cast<void*>(request_ptr) /* response_userp */));
   }
   static void ResponseCallback(
       struct TRITONSERVER_InferenceResponse* response, const uint32_t flags,
       void* userp)
   {
-    reinterpret_cast<PyInferenceRequest*>(userp)->AddNextResponse(
-        response, flags);
+    auto* request_ptr =
+        reinterpret_cast<std::shared_ptr<PyInferenceRequest>*>(userp);
+    (*request_ptr)->AddNextResponse(response, flags);
+    if (flags & TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
+      delete request_ptr;
+    }
   }
 
   // Trivial setters / getters
@@ -1214,22 +1220,22 @@ class PyInferenceRequest
     // There are two cases:
     // 1. GetNextResponse() hasn't been called and the future is not set.
     // 2. GetNextResponse() has been called and the future is set.
+    py::object response_future_local;
     {
       std::lock_guard lock(response_mu_);
       if (response_future_.ptr() == nullptr) {
         responses_.push_back(std::move(py_response));
         return;
       }
+      response_future_local = std::move(response_future_);
     }
-    // There is no need to hold the 'response_mu_' after knowing the frontend is
-    // waiting, given the frontend does not call GetNextResponse() concurrently,
-    // the frontend will wait until a result is set for the ruture.
-    // GIL must be held when the 'response_future_local' goes out of scope which
-    // decrements the future reference count, and during PyFutureSetResult().
+    // GIL must be held when decreasing the reference count of the future Python
+    // object and while setting the result.
     {
       py::gil_scoped_acquire gil;
-      py::object response_future_local(std::move(response_future_));
-      PyFutureSetResult(response_future_local, py_response);
+      // Use a GIL-scoped local so dec_ref runs with GIL held.
+      py::object response_future_for_use(std::move(response_future_local));
+      PyFutureSetResult(response_future_for_use, py_response);
     }
   }
 
@@ -1241,11 +1247,20 @@ class PyInferenceRequest
     py::tuple py_res = py::make_tuple(
         (py_response.first.get() ? py::cast(py_response.first) : py::none()),
         py_response.second);
+
+    auto set_result_if_pending = [](const py::object& future,
+                                    const py::object& result) {
+      if (!future.attr("done")().cast<bool>()) {
+        future.attr("set_result")(result);
+      }
+    };
+
     if (py::hasattr(py_future, "get_loop")) {
+      // Schedule a callback that re-checks future.done() on the loop thread.
       py_future.attr("get_loop")().attr("call_soon_threadsafe")(
-          py_future.attr("set_result"), std::move(py_res));
+          py::cpp_function(set_result_if_pending), py_future, py_res);
     } else {
-      py_future.attr("set_result")(std::move(py_res));
+      set_result_if_pending(py_future, py_res);
     }
   }
 
@@ -1432,6 +1447,58 @@ class PyServerOptions : public PyWrapper<struct TRITONSERVER_ServerOptions> {
     ThrowIfError(
         TRITONSERVER_ServerOptionsSetLogVerbose(triton_object_, level));
   }
+
+  // Registers a Python callable to receive structured log records as
+  // callback(level, filename, line, timestamp_us, message).
+  // If registered successfully, bypasses Triton's default stderr/file sink
+  // entirely.
+  void SetLogCallback(py::object callback)
+  {
+    if (callback.is_none()) {
+      ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
+          triton_object_, nullptr, nullptr));
+      return;
+    }
+
+    // Each registration gets its own holder, passed to the callback as `userp`,
+    // so updating the callback never mutates one already installed on a running
+    // server. It takes effect only when TRITONSERVER_ServerNew installs its
+    // options.
+    auto holder = std::make_unique<py::object>(std::move(callback));
+
+    // Acquires the GIL before entering Python since the logging thread does
+    // not hold it. Exceptions must not propagate into Triton's C++ logging
+    // path.
+    TRITONSERVER_LogCallbackFn_t trampoline =
+        [](TRITONSERVER_LogLevel level, const char* filename, int line,
+           uint64_t timestamp_us, const char* message, void* userp) {
+          if (!Py_IsInitialized()) {
+            return;
+          }
+          py::gil_scoped_acquire gil;
+          try {
+            auto* fn = reinterpret_cast<py::object*>(userp);
+            (*fn)(level, filename, line, timestamp_us, message);
+          }
+          catch (py::error_already_set& e) {
+            // Report via Python's unraisable hook and clear the error
+            // indicator.
+            e.discard_as_unraisable("Triton log callback");
+          }
+          catch (...) {
+          }
+        };
+
+    // On failure the unique_ptr cleans up the holder. On success the staged
+    // callback references it by raw pointer, so release ownership since the
+    // process-global logger needs the holder to remain for the lifetime of the
+    // process. This ensures the logger always has a valid reference and
+    // prevents premature cleanup
+    ThrowIfError(TRITONSERVER_ServerOptionsSetLogCallback(
+        triton_object_, trampoline, reinterpret_cast<void*>(holder.get())));
+    holder.release();
+  }
+
   void SetMetrics(bool metrics)
   {
     ThrowIfError(TRITONSERVER_ServerOptionsSetMetrics(triton_object_, metrics));
@@ -1505,6 +1572,11 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
 
   PyServer(PyServerOptions& options)
   {
+    // TRITONSERVER_ServerNew blocks while loading the model repository.
+    // Internal threads may invoke a registered log callback that acquires
+    // the GIL, holding it here would deadlock. Release it for the duration,
+    // consistent with LoadModel() and Stop().
+    py::gil_scoped_release release;
     ThrowIfError(TRITONSERVER_ServerNew(&triton_object_, options.Ptr()));
     owned_ = true;
   }
@@ -1677,7 +1749,7 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   {
     request->SetReleaseCallback(request);
     request->SetResponseAllocator();
-    request->SetResponseCallback();
+    request->SetResponseCallback(request);
     ThrowIfError(TRITONSERVER_ServerInferAsync(
         triton_object_, request->Ptr(), trace.Ptr()));
     // Ownership of the internal C object is transferred.
@@ -1688,7 +1760,7 @@ class PyServer : public PyWrapper<struct TRITONSERVER_Server> {
   {
     request->SetReleaseCallback(request);
     request->SetResponseAllocator();
-    request->SetResponseCallback();
+    request->SetResponseCallback(request);
     ThrowIfError(
         TRITONSERVER_ServerInferAsync(triton_object_, request->Ptr(), nullptr));
   }
@@ -2119,6 +2191,7 @@ PYBIND11_MODULE(triton_bindings, m)
       .def("set_log_error", &PyServerOptions::SetLogError)
       .def("set_log_format", &PyServerOptions::SetLogFormat)
       .def("set_log_verbose", &PyServerOptions::SetLogVerbose)
+      .def("set_log_callback", &PyServerOptions::SetLogCallback)
       .def("set_metrics", &PyServerOptions::SetMetrics)
       .def("set_gpu_metrics", &PyServerOptions::SetGpuMetrics)
       .def("set_cpu_metrics", &PyServerOptions::SetCpuMetrics)

@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -23,8 +23,6 @@
 // OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#include "memory.h"
-
 #include <cuda_runtime_api.h>
 
 #include "cuda_block_manager.h"
@@ -33,6 +31,7 @@
 #include "gtest/gtest.h"
 #include "pinned_memory_manager.h"
 #include "triton/core/tritonserver.h"
+#include "triton_memory.h"
 
 namespace tc = triton::core;
 

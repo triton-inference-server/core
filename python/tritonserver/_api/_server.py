@@ -1,4 +1,4 @@
-# Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -33,7 +33,7 @@ import ctypes
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Callable, Optional
 
 from tritonserver._api._model import Model
 from tritonserver._c.triton_bindings import InvalidArgumentError
@@ -229,6 +229,17 @@ class Options:
         Verbose logging level. Level zero disables logging.
         See :c:func:`TRITONSERVER_ServerOptionsSetLogVerbose`
 
+    log_callback : Optional[Callable], default None
+        **Experimental.** May change or be removed in a future release.
+
+        Callable invoked for each enabled log record as
+        ``callback(level, filename, line, timestamp_us, message)`` where
+        ``level`` is a :class:`LogLevel`, ``timestamp_us`` is a timestamp
+        associated with the log record, and ``message`` is the raw log text.
+        When set, records are routed only to the callback and Triton's
+        default stderr/file output is bypassed (the host owns the single stream).
+        See :c:func:`TRITONSERVER_ServerOptionsSetLogCallback`
+
     metrics : bool, default True
         Enable or disable metric collection.
         See :c:func:`TRITONSERVER_ServerOptionsSetMetrics`
@@ -312,6 +323,7 @@ class Options:
     log_error: bool = False
     log_format: LogFormat = LogFormat.DEFAULT
     log_verbose: uint = 0
+    log_callback: Optional[Callable] = None
 
     metrics: bool = True
     gpu_metrics: bool = True
@@ -398,6 +410,8 @@ class Options:
         options.set_log_error(self.log_error)
         options.set_log_format(self.log_format)
         options.set_log_verbose(self.log_verbose)
+        if self.log_callback is not None:
+            options.set_log_callback(self.log_callback)
         options.set_metrics(self.metrics)
         options.set_cpu_metrics(self.cpu_metrics)
         options.set_gpu_metrics(self.gpu_metrics)

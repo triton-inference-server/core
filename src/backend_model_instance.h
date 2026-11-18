@@ -1,4 +1,4 @@
-// Copyright 2020-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -33,13 +33,13 @@
 #include <thread>
 
 #include "constants.h"
-#include "memory.h"
 #include "metric_model_reporter.h"
 #include "model_config.pb.h"
 #include "model_config_utils.h"
 #include "server_message.h"
 #include "status.h"
 #include "triton/common/sync_queue.h"
+#include "triton_memory.h"
 
 namespace triton { namespace core {
 
@@ -222,6 +222,10 @@ class TritonModelInstance {
   Status PrepareRequestsForExecution(
       std::vector<std::unique_ptr<InferenceRequest>>& requests);
   Status PrepareRequestsOrRespond(
+      std::vector<std::unique_ptr<InferenceRequest>>& requests);
+  // Respond to and remove cancelled requests, returning the number remaining.
+  // No-op for models using direct sequence batching
+  size_t DropCancelledRequests(
       std::vector<std::unique_ptr<InferenceRequest>>& requests);
   void Execute(std::vector<TRITONBACKEND_Request*>& triton_requests);
 

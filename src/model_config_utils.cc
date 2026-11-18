@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -26,12 +26,14 @@
 
 #include "model_config_utils.h"
 
+#include <google/protobuf/text_format.h>
 #include <google/protobuf/util/json_util.h>
 #include <google/protobuf/util/message_differencer.h>
 
 #include <deque>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 
 #include "constants.h"
 #include "cuda_utils.h"
@@ -353,9 +355,12 @@ ValidateIOShape(
       }
     }
 
-    const int64_t dims_size = triton::common::GetElementCount(io.dims());
-    const int64_t reshape_size =
-        triton::common::GetElementCount(io.reshape().shape());
+    int64_t dims_size = 0;
+    int64_t reshape_size = 0;
+    RETURN_IF_ERROR(
+        GetElementCount(io.dims(), io.name() + " dims", &dims_size));
+    RETURN_IF_ERROR(GetElementCount(
+        io.reshape().shape(), io.name() + " reshape", &reshape_size));
 
     // dims and reshape must both have same element count
     // or both have variable-size dimension.
@@ -372,12 +377,12 @@ ValidateIOShape(
     // each pair of the trunks separated by variable-size dimension has
     // the same element count. For instance, from [2, 4, -1, 6] to [8, -1, 1, 6]
     // is valid reshape as 2 * 4 = 8 and 6 = 1 * 6.
-    if (dims_size == -1) {
+    if (dims_size == triton::common::WILDCARD_SIZE) {
       std::vector<int64_t> dim_element_cnts;
       std::vector<int64_t> reshape_element_cnts;
       int64_t current_cnt = 1;
       for (const auto& dim : io.dims()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           dim_element_cnts.push_back(current_cnt);
@@ -388,7 +393,7 @@ ValidateIOShape(
 
       current_cnt = 1;
       for (const auto& dim : io.reshape().shape()) {
-        if (dim != -1) {
+        if (dim != triton::common::WILDCARD_DIM) {
           current_cnt *= dim;
         } else {
           reshape_element_cnts.push_back(current_cnt);
@@ -750,7 +755,21 @@ GetNormalizedModelConfig(
   RETURN_IF_ERROR(
       AutoCompleteBackendFields(model_name, std::string(path), config));
 
-  LOG_PROTOBUF_VERBOSE(1, "Server side auto-completed config: ", (*config));
+  // Not using LOG_PROTOBUF_VERBOSE: it serializes via protobuf DebugString(),
+  // which protobuf v33 deliberately makes unstable (injects a
+  // "goo.gle/debugstr" marker) to discourage parsing. That marker is not valid
+  // text format and pollutes the logged config. Serialize with
+  // TextFormat::PrintToString for stable, parseable output.
+  if (LOG_VERBOSE_IS_ON(1)) {
+    std::string auto_completed_config;
+    google::protobuf::TextFormat::PrintToString(
+        *config, &auto_completed_config);
+    triton::common::LogMessage(
+        __FILE__, __LINE__, triton::common::Logger::Level::kINFO,
+        "Server side auto-completed config: ", false)
+            .stream()
+        << auto_completed_config;
+  }
 
   RETURN_IF_ERROR(NormalizeModelConfig(min_compute_capability, config));
 
@@ -1072,7 +1091,7 @@ AutoCompleteBackendFields(
 
   // Trying to fill the 'backend', 'default_model_filename' field.
 
-  // TensorFlow
+  // TensorFlow <-- TensorFlow backend is deprecated -->
   // For TF backend, the platform is required
   if (config->platform().empty()) {
     // Check 'backend', 'default_model_filename', and the actual directory
@@ -1199,31 +1218,65 @@ AutoCompleteBackendFields(
 
   // PyTorch
   if (config->backend().empty()) {
-    if ((config->platform() == kPyTorchLibTorchPlatform) ||
-        (config->default_model_filename() == kPyTorchLibTorchFilename)) {
+    // Determine if the backend is PyTorch by testing the platform and
+    // default model name against known PyTorch values.
+    if (config->platform() == kPyTorchLibTorchPlatform ||
+        config->platform() == kPyTorchLibTorchPlatformAlt ||
+        config->default_model_filename() == kPyTorchLibTorchFilename) {
       config->set_backend(kPyTorchBackend);
     } else if (
-        config->platform().empty() &&
-        config->default_model_filename().empty() && has_version) {
-      bool is_dir = false;
+        config->platform() == kPyTorchAotiPlatform ||
+        config->default_model_filename() == kPyTorchAotiFilename) {
+      config->set_backend(kPyTorchAotiBackend);
+    } else if (
+        has_version && config->default_model_filename().empty() &&
+        config->platform().empty() && !version_path.empty()) {
+      // When default model filename and platform are not given, we check the
+      // version directory for known PyTorch files to determine the backend and
+      // platform.
+      bool is_dir{false};
       if (version_dir_content.find(kPyTorchLibTorchFilename) !=
           version_dir_content.end()) {
         RETURN_IF_ERROR(IsDirectory(
             JoinPath({version_path, kPyTorchLibTorchFilename}), &is_dir));
         if (!is_dir) {
           config->set_backend(kPyTorchBackend);
+          config->set_platform(kPyTorchLibTorchPlatform);
+        }
+      } else if (
+          version_dir_content.find(kPyTorchAotiFilename) !=
+          version_dir_content.end()) {
+        RETURN_IF_ERROR(IsDirectory(
+            JoinPath({version_path, kPyTorchAotiFilename}), &is_dir));
+        if (!is_dir) {
+          config->set_backend(kPyTorchAotiBackend);
+          config->set_platform(kPyTorchAotiPlatform);
         }
       }
     }
   }
+
+  // When we know the backend is PyTorch, we set the platform and default model
+  // filename as necessary.
   if (config->backend() == kPyTorchBackend) {
+    // A non-default runtime resolves its own model file. The Python-based
+    // PyTorch runtime ("model.py") treats a sibling "model.pt" as the weights
+    // companion to the model class, so autofilling this field would make it
+    // load the weights file as the model itself.
+    const bool use_autofill_filename =
+        config->default_model_filename().empty() &&
+        (config->runtime() != kPythonFilename);
     if (config->platform().empty()) {
-      // do not introduce new platforms, new runtimes may ignore this field.
+      // The default platform for the PyTorch backend is LibTorch until it is
+      // deprecated. AOTI must be explicitly specified to maximize backwards
+      // compatibility.
       config->set_platform(kPyTorchLibTorchPlatform);
-    }
-    if (config->runtime() != kPythonFilename &&
-        config->default_model_filename().empty()) {
-      config->set_default_model_filename(kPyTorchLibTorchFilename);
+      if (use_autofill_filename) {
+        config->set_default_model_filename(kPyTorchLibTorchFilename);
+      }
+    } else if (
+        (config->platform() == kPyTorchAotiPlatform) && use_autofill_filename) {
+      config->set_default_model_filename(kPyTorchAotiFilename);
     }
     return Status::Success;
   }
@@ -1897,7 +1950,11 @@ ParseLongLongParameter(
   try {
     *parsed_value = std::stoll(value);
   }
-  catch (const std::invalid_argument& ia) {
+  // std::stoll throws std::invalid_argument for non-numeric values and
+  // std::out_of_range for numeric values that exceed int64_t (both derive
+  // from std::logic_error). Catch both so an unparsable value is reported as
+  // an error instead of escaping to the C API and aborting the process.
+  catch (const std::logic_error& e) {
     return Status(
         Status::Code::INVALID_ARG,
         "failed to convert " + key + " '" + value + "' to integral number");
@@ -1916,10 +1973,14 @@ GetProfileIndex(const std::string& profile_name, int* profile_index)
   try {
     *profile_index = stoi(profile_name);
   }
-  catch (const std::invalid_argument& ia) {
+  // std::stoi throws std::invalid_argument for non-numeric names and
+  // std::out_of_range for numeric names that exceed int (both derive from
+  // std::logic_error). Catch both so an unparsable profile name is reported
+  // as an error instead of escaping to the C API and aborting the process.
+  catch (const std::logic_error& e) {
     return Status(
         Status::Code::INVALID_ARG,
-        "unable to parse '" + profile_name + "': " + ia.what());
+        "unable to parse '" + profile_name + "': " + e.what());
   }
 
   return Status::Success;
@@ -1936,7 +1997,7 @@ CollectInt64Fields(
   const google::protobuf::Reflection* refl = message->GetReflection();
   for (int i = 0; i < desc->field_count(); ++i) {
     const google::protobuf::FieldDescriptor* field = desc->field(i);
-    const std::string fullname = prefix + "::" + field->name();
+    const std::string fullname = prefix + "::" + std::string(field->name());
     switch (field->type()) {
       case google::protobuf::FieldDescriptor::TYPE_MESSAGE: {
         if (field->is_repeated()) {
@@ -2161,9 +2222,15 @@ ModelConfigToJson(
   std::string config_json_str;
   ::google::protobuf::util::JsonPrintOptions options;
   options.preserve_proto_field_names = true;
-  options.always_print_primitive_fields = true;
-  ::google::protobuf::util::MessageToJsonString(
+  options.always_print_fields_with_no_presence = true;
+  const auto to_json_status = ::google::protobuf::util::MessageToJsonString(
       config, &config_json_str, options);
+  if (!to_json_status.ok()) {
+    return Status(
+        Status::Code::INTERNAL,
+        "failed to convert model configuration to JSON: " +
+            std::string(to_json_status.message()));
+  }
 
   // We need to verify that every field 64-bit field in the
   // ModelConfig protobuf is being handled. We hardcode the known
@@ -2369,6 +2436,10 @@ GetBackendTypeFromPlatform(const std::string& platform_name)
     return BackendType::BACKEND_TYPE_PYTORCH;
   }
 
+  if (platform_name == kPyTorchAotiPlatform) {
+    return BackendType::BACKEND_TYPE_TORCHAOTI;
+  }
+
   return BackendType::BACKEND_TYPE_UNKNOWN;
 }
 
@@ -2393,6 +2464,10 @@ GetBackendType(const std::string& backend_name)
 
   if (backend_name == kPyTorchBackend) {
     return BackendType::BACKEND_TYPE_PYTORCH;
+  }
+
+  if (backend_name == kPyTorchAotiBackend) {
+    return BackendType::BACKEND_TYPE_TORCHAOTI;
   }
 
   return BackendType::BACKEND_TYPE_UNKNOWN;

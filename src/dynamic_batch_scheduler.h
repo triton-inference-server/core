@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -103,7 +103,12 @@ class DynamicBatchScheduler : public Scheduler {
   void BatcherThread(const int nice);
   void NewPayload();
   uint64_t GetDynamicBatch();
-  void DelegateResponse(std::unique_ptr<InferenceRequest>& request);
+  // 'cached_response' is set only for a preserve_ordering cache hit. That
+  // response already exists, so it receives the delegator. Otherwise the
+  // request receives it, and a later response copies it.
+  void DelegateResponse(
+      std::unique_ptr<InferenceRequest>& request,
+      InferenceResponse* cached_response = nullptr);
   void CacheLookUp(
       std::unique_ptr<InferenceRequest>& request,
       std::unique_ptr<InferenceResponse>& cached_response);

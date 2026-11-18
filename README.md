@@ -69,9 +69,8 @@ $ cmake -DCMAKE_INSTALL_PREFIX:PATH=`pwd`/install -DTRITON_CORE_HEADERS_ONLY=OFF
 $ make install
 ```
 
-When the build completes, the install directory will contain the
-Triton core shared library (install/lib/libtritonserver.so on Linux,
-install/bin/tritonserver.dll on Windows), and the core library headers
+When the build completes, the install directory will contain the Triton core
+shared library (install/lib/libtritonserver.so), and the core library headers
 files in install/include/triton/core.
 
 ### Build a Release Branch

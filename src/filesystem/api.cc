@@ -1,4 +1,4 @@
-// Copyright 2019-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -47,6 +47,7 @@
 
 #include <filesystem>
 #include <mutex>
+#include <string>
 
 namespace triton { namespace core {
 
@@ -62,6 +63,8 @@ LocalizedPath::~LocalizedPath()
 }
 
 namespace {
+
+namespace fs = std::filesystem;
 
 class FileSystemManager {
  public:
@@ -399,17 +402,47 @@ IsAbsolutePath(const std::string& path)
   return !path.empty() && (path[0] == '/');
 }
 
-bool
+Status
 IsChildPathEscapingParentPath(
-    const std::string& child_path, const std::string& parent_path)
+    const std::string& child_path, const std::string& parent_path,
+    bool* is_escaped)
 {
-  const std::string absolute_child_path =
-      std::filesystem::weakly_canonical(child_path).string();
-  const std::string absolute_parent_path =
-      std::filesystem::canonical(parent_path).string();
-  // Can use starts_with() over rfind() in C++20.
-  bool is_escape = absolute_child_path.rfind(absolute_parent_path, 0) != 0;
-  return is_escape;
+  if (parent_path.empty() || child_path.empty()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Parent path and child path must be non-empty");
+  }
+  std::string canonical_child_path;
+  std::string canonical_parent_path;
+  try {
+    canonical_child_path = fs::weakly_canonical(child_path).string();
+  }
+  catch (const std::exception& ex) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Failed to canonicalize child path '" + child_path + "': " + ex.what());
+  }
+  try {
+    canonical_parent_path = fs::canonical(parent_path).string();
+  }
+  catch (const std::exception& e) {
+    return Status(
+        Status::Code::INVALID_ARG, "Failed to canonicalize parent path '" +
+                                       parent_path + "': " + e.what());
+  }
+  // Determine if the parent path is the prefix of the child path.
+  // Ensure that the paths are identical or the first mismatch character in the
+  // child path is a path separator ('/') to avoid partial matching
+  // (i.e. "/parent" and "/parent_dir").
+  if (canonical_child_path.find(canonical_parent_path, 0) == 0 &&
+      ((canonical_child_path.size() > canonical_parent_path.size() &&
+        canonical_child_path[canonical_parent_path.size()] == '/') ||
+       (canonical_child_path.size() == canonical_parent_path.size()))) {
+    *is_escaped = false;
+    return Status::Success;
+  }
+  *is_escaped = true;
+  return Status::Success;
 }
 
 std::string

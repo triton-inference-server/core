@@ -1,4 +1,4 @@
-// Copyright 2018-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 #include "model_repository_manager.h"
 
 #include <algorithm>
+#include <boost/algorithm/string.hpp>
 #include <deque>
 #include <filesystem>
 #include <future>
@@ -62,6 +63,29 @@ AddToSet(const std::set<T>& src, std::set<T>* dest)
 
 static std::string file_prefix = "file:";
 
+Status
+ValidateModelName(const std::string& name)
+{
+  // Trim the model name to remove leading and trailing whitespace
+  std::string trimmed_name = boost::trim_copy(name);
+
+  // Check if the trimmed name is empty or only consisted of whitespaces
+  if (trimmed_name.empty()) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "Model name cannot be empty. Please enter a valid name to deploy.");
+  }
+
+  // Check if the trimmed name contains path traversal characters
+  if (trimmed_name == ".." || trimmed_name.find('/') != std::string::npos) {
+    return Status(
+        Status::Code::INVALID_ARG,
+        "invalid model name '" + name +
+            "', model name must not contain path traversal characters");
+  }
+  return Status::Success;
+}
+
 // Internal repo agent used for model file override
 class LocalizeRepoAgent : public TritonRepoAgent {
  public:
@@ -83,8 +107,16 @@ class LocalizeRepoAgent : public TritonRepoAgent {
           RETURN_TRITONSERVER_ERROR_IF_ERROR(
               agent_model->AcquireMutableLocation(
                   TRITONREPOAGENT_ARTIFACT_FILESYSTEM, &temp_dir_cstr));
-          const std::string temp_dir =
-              std::filesystem::canonical(temp_dir_cstr).string();
+          std::string temp_dir;
+          try {
+            temp_dir = std::filesystem::canonical(temp_dir_cstr).string();
+          }
+          catch (const std::exception& e) {
+            const std::string err_msg = std::string("Nonexistent path '") +
+                                        temp_dir_cstr + "': " + e.what();
+            return TRITONSERVER_ErrorNew(
+                TRITONSERVER_ERROR_INTERNAL, err_msg.c_str());
+          }
           const auto& files =
               *reinterpret_cast<std::vector<const InferenceParameter*>*>(
                   agent_model->State());
@@ -112,20 +144,34 @@ class LocalizeRepoAgent : public TritonRepoAgent {
                         .c_str());
               }
 
+              const std::string file_relpath =
+                  file->Name().substr(file_prefix.size());
+              std::string file_path;
+              try {
+                file_path = std::filesystem::weakly_canonical(
+                                JoinPath({temp_dir, file_relpath}))
+                                .string();
+              }
+              catch (const std::exception& e) {
+                const std::string err_msg =
+                    std::string("Invalid file parameter '") + file_relpath +
+                    "': " + e.what();
+                return TRITONSERVER_ErrorNew(
+                    TRITONSERVER_ERROR_INVALID_ARG, err_msg.c_str());
+              }
+
               // Resolve any relative paths or symlinks, and enforce that target
               // directory stays within model directory for security.
-              const std::string file_path =
-                  std::filesystem::weakly_canonical(
-                      JoinPath(
-                          {temp_dir, file->Name().substr(file_prefix.size())}))
-                      .string();
-              if (file_path.rfind(temp_dir, 0) != 0) {
+              bool escapes{true};
+              RETURN_TRITONSERVER_ERROR_IF_ERROR(
+                  IsChildPathEscapingParentPath(file_path, temp_dir, &escapes));
+              if (escapes) {
+                const std::string msg =
+                    std::string("Invalid file parameter '") + file->Name() +
+                    "' with normalized path '" + file_path +
+                    "' must stay within model directory.";
                 return TRITONSERVER_ErrorNew(
-                    TRITONSERVER_ERROR_INVALID_ARG,
-                    (std::string("Invalid file parameter '") + file->Name() +
-                     "' with normalized path '" + file_path +
-                     "' must stay within model directory.")
-                        .c_str());
+                    TRITONSERVER_ERROR_INVALID_ARG, msg.c_str());
               }
 
               // Save model override file to the instructed directory using the
@@ -773,6 +819,9 @@ ModelRepositoryManager::LoadUnloadModel(
   }
 
   const auto& model_name = models.begin()->first;
+  if (type == ActionType::LOAD) {
+    RETURN_IF_ERROR(ValidateModelName(model_name));
+  }
 
   // Need ModelIdentifier to retrieve model state in lifecycle object,
   // which will not be available after graph update. So make a copy first

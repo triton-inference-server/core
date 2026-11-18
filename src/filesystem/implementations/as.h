@@ -1,4 +1,4 @@
-// Copyright 2019-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -25,11 +25,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
+#include <azure/identity.hpp>
 #include <azure/storage/blobs.hpp>
 #include <azure/storage/common/storage_credential.hpp>
 
 #include "common.h"
-// [WIP] below needed?
 #undef LOG_INFO
 #undef LOG_WARNING
 
@@ -39,9 +39,18 @@ namespace as = Azure::Storage;
 namespace asb = Azure::Storage::Blobs;
 const std::string AS_URL_PATTERN = "as://([^/]+)/([^/?]+)(?:/([^?]*))?(\\?.*)?";
 
+/// Supported authentication modes for Azure Storage access.
+///  - "key": Shared Key (account key) — default, backwards-compatible.
+///  - "managed_identity": Azure Managed Identity (system- or user-assigned).
+///  - "default": Azure DefaultAzureCredential chain
+///    (environment → managed identity → CLI → etc.).
 struct ASCredential {
   std::string account_str_;
+  /// Authentication type: "key" (default), "managed_identity", or "default".
+  std::string auth_type_;
   std::string account_key_;
+  /// Optional client ID for user-assigned Managed Identity.
+  std::string client_id_;
 
   ASCredential();  // from env var
   ASCredential(triton::common::TritonJson::Value& cred_json);
@@ -53,18 +62,34 @@ ASCredential::ASCredential()
     return (s != nullptr ? std::string(s) : "");
   };
   const char* account_str = std::getenv("AZURE_STORAGE_ACCOUNT");
+  const char* auth_type = std::getenv("AZURE_STORAGE_AUTH_TYPE");
   const char* account_key = std::getenv("AZURE_STORAGE_KEY");
+  const char* client_id = std::getenv("AZURE_STORAGE_CLIENT_ID");
   account_str_ = to_str(account_str);
+  auth_type_ = to_str(auth_type);
   account_key_ = to_str(account_key);
+  client_id_ = to_str(client_id);
+
+  // When no explicit auth type is set, infer from available credentials:
+  // if an account key is present use "key", otherwise remain empty (which
+  // the filesystem constructor treats as "key" for backwards compatibility).
+  if (auth_type_.empty() && !account_key_.empty()) {
+    auth_type_ = "key";
+  }
 }
 
 ASCredential::ASCredential(triton::common::TritonJson::Value& cred_json)
 {
-  triton::common::TritonJson::Value account_str_json, account_key_json;
+  triton::common::TritonJson::Value account_str_json, account_key_json,
+      auth_type_json, client_id_json;
   if (cred_json.Find("account_str", &account_str_json))
     account_str_json.AsString(&account_str_);
+  if (cred_json.Find("auth_type", &auth_type_json))
+    auth_type_json.AsString(&auth_type_);
   if (cred_json.Find("account_key", &account_key_json))
     account_key_json.AsString(&account_key_);
+  if (cred_json.Find("client_id", &client_id_json))
+    client_id_json.AsString(&client_id_);
 }
 
 class ASFileSystem : public FileSystem {
@@ -152,12 +177,44 @@ ASFileSystem::ASFileSystem(const std::string& path, const ASCredential& as_cred)
     std::string service_url(
         "https://" + account_name + ".blob.core.windows.net");
 
-    if (!as_cred.account_key_.empty()) {
-      // Shared Key
+    if (as_cred.auth_type_ == "managed_identity") {
+      // Azure Managed Identity authentication (system- or user-assigned).
+      // Token caching and refresh are handled by the Azure Identity SDK.
+      LOG_VERBOSE(1) << "Using Azure Managed Identity authentication for "
+                     << account_name;
+      std::shared_ptr<Azure::Identity::ManagedIdentityCredential> token_cred;
+      if (!as_cred.client_id_.empty()) {
+        // User-assigned Managed Identity: pass the client ID directly
+        // to the credential constructor.
+        token_cred =
+            std::make_shared<Azure::Identity::ManagedIdentityCredential>(
+                as_cred.client_id_);
+        LOG_VERBOSE(1) << "Using user-assigned Managed Identity with client ID "
+                       << as_cred.client_id_;
+      } else {
+        // System-assigned Managed Identity.
+        token_cred =
+            std::make_shared<Azure::Identity::ManagedIdentityCredential>();
+        LOG_VERBOSE(1) << "Using system-assigned Managed Identity";
+      }
+      client_ =
+          std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
+    } else if (as_cred.auth_type_ == "default") {
+      // DefaultAzureCredential chains multiple credential sources:
+      // environment variables → managed identity → Azure CLI → etc.
+      LOG_VERBOSE(1) << "Using Azure DefaultAzureCredential for "
+                     << account_name;
+      auto token_cred =
+          std::make_shared<Azure::Identity::DefaultAzureCredential>();
+      client_ =
+          std::make_shared<asb::BlobServiceClient>(service_url, token_cred);
+    } else if (!as_cred.account_key_.empty()) {
+      // Shared Key authentication (backwards-compatible default).
       auto cred = std::make_shared<as::StorageSharedKeyCredential>(
           account_name, as_cred.account_key_);
       client_ = std::make_shared<asb::BlobServiceClient>(service_url, cred);
     } else {
+      // Anonymous access (no credential provided).
       client_ = std::make_shared<asb::BlobServiceClient>(service_url);
     }
   }

@@ -108,7 +108,12 @@ VersionsToLoad(
       int64_t version = std::stoll(subdir);
       existing_versions.insert(version);
     }
-    catch (const std::invalid_argument& ia) {
+    // std::stoll throws std::invalid_argument for non-numeric names and
+    // std::out_of_range for numeric names that exceed int64_t (both derive
+    // from std::logic_error). Catch both so an unparsable version directory
+    // is skipped gracefully instead of escaping to the C API and aborting the
+    // process.
+    catch (const std::logic_error& e) {
       LOG_WARNING << "ignore version directory '" << subdir
                   << "' which fails to convert to integral number";
     }

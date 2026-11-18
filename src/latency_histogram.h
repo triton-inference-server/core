@@ -1,0 +1,153 @@
+// Copyright 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions
+// are met:
+//  * Redistributions of source code must retain the above copyright
+//    notice, this list of conditions and the following disclaimer.
+//  * Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimer in the
+//    documentation and/or other materials provided with the distribution.
+//  * Neither the name of NVIDIA CORPORATION nor the names of its
+//    contributors may be used to endorse or promote products derived
+//    from this software without specific prior written permission.
+//
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+// EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+// PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+// OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include <atomic>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace triton { namespace core {
+
+// Geometric bucket boundaries from 1us to 60s with a ratio of 1.2.
+// histogram_quantile places its estimate inside the bucket that holds the
+// rank. If the observations sit on one edge of that bucket and the estimate
+// lands on the other, the relative error can reach the bucket ratio minus
+// one, about 20%.
+std::vector<double> DefaultLatencyHistogramBoundaries();
+
+// summary_latencies selects how much latency distribution detail to publish.
+// false and none match the historical default. true and verbose match the
+// historical CKMS summaries. simplified is the lock-free histogram path.
+enum class SummaryLatencyLevel { kNone, kSimplified, kVerbose };
+
+// histogram_latencies only enables the existing first-response histogram.
+// It does not change summary_latencies.
+struct LatencyMetricToggles {
+  SummaryLatencyLevel summary_level = SummaryLatencyLevel::kNone;
+  bool first_response_histogram = false;
+  // Set when summary_latencies is not one of the accepted values. The last
+  // accepted value still applies; this string is the rejected one.
+  std::string rejected_summary_latencies;
+};
+
+LatencyMetricToggles ResolveLatencyMetricToggles(
+    const std::vector<std::pair<std::string, std::string>>& settings);
+
+// Metric names published by summary_latencies=simplified. Custom metrics
+// cannot reuse them.
+struct LatencyHistogramName {
+  static constexpr const char* kRequest = "nv_inference_request_histogram_us";
+  static constexpr const char* kQueue = "nv_inference_queue_histogram_us";
+  static constexpr const char* kComputeInput =
+      "nv_inference_compute_input_histogram_us";
+  static constexpr const char* kComputeInfer =
+      "nv_inference_compute_infer_histogram_us";
+  static constexpr const char* kComputeOutput =
+      "nv_inference_compute_output_histogram_us";
+  static constexpr const char* kCacheHit = "nv_cache_hit_histogram_us";
+  static constexpr const char* kCacheMiss = "nv_cache_miss_histogram_us";
+};
+
+bool IsReservedLatencyHistogramName(const std::string& name);
+
+// Cumulative Prometheus histogram updated without a mutex. Each thread adds
+// into its own shard with relaxed atomics. Scrapes sum the shards.
+class ShardedLatencyHistogram {
+ public:
+  static constexpr size_t kShardCount = 32;
+
+  ShardedLatencyHistogram(
+      std::string name, std::string help,
+      std::map<std::string, std::string> labels,
+      std::vector<double> boundaries);
+
+  void Observe(uint64_t value_us) noexcept;
+
+  struct Snapshot {
+    std::vector<double> boundaries;
+    // cumulative[i] is the number of observations <= boundaries[i].
+    std::vector<uint64_t> cumulative;
+    uint64_t count = 0;
+    uint64_t sum = 0;
+  };
+  Snapshot Collect() const;
+
+  // Samples only. The registry writes one HELP and TYPE line per metric name.
+  void AppendSamples(std::string* out) const;
+  void AppendPrometheusText(std::string* out) const;
+
+  const std::string& Name() const { return name_; }
+  const std::string& Help() const { return help_; }
+
+ private:
+  size_t BucketIndex(uint64_t value_us) const;
+
+  std::string name_;
+  std::string help_;
+  std::map<std::string, std::string> labels_;
+  std::vector<double> boundaries_;
+
+  struct alignas(64) Shard {
+    std::atomic<uint64_t> sum{0};
+    std::unique_ptr<std::atomic<uint64_t>[]> buckets;
+  };
+  std::unique_ptr<Shard[]> shards_;
+  size_t bucket_count_ = 0;
+};
+
+// Histograms registered here are appended to the Prometheus text exposition
+// by Metrics::SerializedMetrics. Register and unregister happen on model load
+// and unload, not on the request path.
+class LatencyHistogramRegistry {
+ public:
+  static LatencyHistogramRegistry& Instance();
+
+  void Register(std::shared_ptr<ShardedLatencyHistogram> histogram);
+  void Unregister(const ShardedLatencyHistogram* histogram);
+  // Families whose names are already declared in already_exposed are left
+  // out, so the joined exposition still has one HELP and TYPE per name.
+  // Omitted names are appended to omitted when it is not null.
+  std::string Serialize(
+      const std::string& already_exposed = "",
+      std::vector<std::string>* omitted = nullptr) const;
+  void Clear();
+
+ private:
+  LatencyHistogramRegistry() = default;
+
+  mutable std::mutex mu_;
+  std::vector<std::shared_ptr<ShardedLatencyHistogram>> histograms_;
+};
+
+}}  // namespace triton::core

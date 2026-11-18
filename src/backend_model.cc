@@ -1,4 +1,4 @@
-// Copyright 2020-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -196,6 +196,14 @@ TritonModel::Create(
       batch_libpath = model_config.parameters()
                           .at("TRITON_BATCH_STRATEGY_PATH")
                           .string_value();
+      bool escapes{true};
+      RETURN_IF_ERROR(IsChildPathEscapingParentPath(
+          batch_libpath, localized_model_dir->Path(), &escapes));
+      if (escapes) {
+        return Status(
+            Status::Code::INVALID_ARG,
+            "Batching library path escapes model repository.");
+      }
       bool exists = false;
       RETURN_IF_ERROR(FileExists(batch_libpath, &exists));
       if (!exists) {
@@ -363,9 +371,12 @@ TritonModel::GetBackendLibraryProperties(
                                        model_config->name() +
                                        "', searched: " + search_paths_str);
   }
-  if (IsChildPathEscapingParentPath(
-          *backend_libpath /* child_path */,
-          *backend_libdir /* parent_path */)) {
+
+  bool is_escaped = false;
+  RETURN_IF_ERROR(IsChildPathEscapingParentPath(
+      *backend_libpath /* child_path */, *backend_libdir /* parent_path */,
+      &is_escaped));
+  if (is_escaped) {
     return Status(
         Status::Code::INVALID_ARG,
         "backend library name '" + cpp_backend_libname +
@@ -671,7 +682,7 @@ TritonModel::PrepareInstances(
 
         // Note that the local variables should be captured by value
         creation_results.emplace_back(
-            std::async(launch_policy, [=, &instance_mu]() {
+            std::async(launch_policy, [=, this, &instance_mu]() {
               // The requested instance did not match an existing instance.
               // Create a new instance.
               std::shared_ptr<TritonModelInstance> new_instance;
@@ -825,10 +836,14 @@ TritonModel::SetConfiguredScheduler(
   for (const auto& input : config_.input()) {
     if (input.is_shape_tensor()) {
       enforce_equal_shape_tensors.insert({input.name(), true});
-    } else if (
-        !input.allow_ragged_batch() &&
-        (triton::common::GetElementCount(input) == -1)) {
-      enforce_equal_shape_tensors.insert({input.name(), false});
+    } else {
+      int64_t element_count = 0;
+      RETURN_IF_ERROR(
+          GetElementCount(input.dims(), input.name(), &element_count));
+      if (!input.allow_ragged_batch() &&
+          (element_count == triton::common::WILDCARD_SIZE)) {
+        enforce_equal_shape_tensors.insert({input.name(), false});
+      }
     }
   }
 

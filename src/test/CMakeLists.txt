@@ -1,4 +1,4 @@
-# Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -75,13 +75,13 @@ set(
 set(
   MEMORY_SRCS
   ../buffer_attributes.cc
-  ../memory.cc
+  ../triton_memory.cc
 )
 
 set(
   MEMORY_HDRS
   ../buffer_attributes.h
-  ../memory.h
+  ../triton_memory.h
 )
 
 #
@@ -154,14 +154,12 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 
-  if (NOT WIN32)
-    target_link_libraries(
-      response_cache_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    response_cache_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS response_cache_test
@@ -266,14 +264,12 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 
-  if (NOT WIN32)
-    target_link_libraries(
-      memory_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    memory_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS memory_test
@@ -333,14 +329,12 @@ if(${TRITON_ENABLE_GPU})
       CUDA::cudart
   )
 
-  if (NOT WIN32)
-    target_link_libraries(
-      pinned_memory_manager_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    pinned_memory_manager_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS pinned_memory_manager_test
@@ -453,6 +447,8 @@ if(${TRITON_ENABLE_METRICS})
     ../metric_family.h
     ../metrics.cc
     ../metrics.h
+    ../latency_histogram.cc
+    ../latency_histogram.h
     ../infer_parameter.cc
     ../infer_parameter.h
   )
@@ -504,20 +500,56 @@ if(${TRITON_ENABLE_METRICS})
     )
   endif()
 
-  if (NOT WIN32)
-    target_link_libraries(
-      metrics_api_test
-      PRIVATE
-        dl
-        numa
-    )
-  endif()
+  target_link_libraries(
+    metrics_api_test
+    PRIVATE
+      dl
+      numa
+  )
 
   install(
     TARGETS metrics_api_test
     RUNTIME DESTINATION bin
   )
 endif() # TRITON_ENABLE_METRICS
+
+#
+# Lock-free latency histogram. Does not link libtritonserver.
+#
+add_executable(
+  latency_histogram_test
+  latency_histogram_test.cc
+  ../latency_histogram.cc
+  ../latency_histogram.h
+)
+
+set_target_properties(
+  latency_histogram_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  latency_histogram_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  latency_histogram_test
+  PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(
+  TARGETS latency_histogram_test
+  RUNTIME DESTINATION bin
+)
 
 #
 # Unit test for Model Repository Register API
@@ -556,6 +588,49 @@ target_link_libraries(
 
 install(
   TARGETS register_api_test
+  RUNTIME DESTINATION bin
+)
+
+#
+# Unit test for InstanceQueue
+#
+add_executable(
+  instance_queue_test
+  instance_queue_test.cc
+  ../instance_queue.cc
+)
+
+set_target_properties(
+  instance_queue_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  instance_queue_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  instance_queue_test
+  PRIVATE
+    triton-common-error        # from repo-common
+    triton-common-logging      # from repo-common
+    triton-common-model-config # from repo-common
+    proto-library              # from repo-common
+    GTest::gtest
+    GTest::gtest_main
+    protobuf::libprotobuf
+)
+
+install(
+  TARGETS instance_queue_test
   RUNTIME DESTINATION bin
 )
 
@@ -636,6 +711,46 @@ target_link_libraries(
 
 install(
   TARGETS request_cancellation_test
+  RUNTIME DESTINATION bin
+)
+
+#
+# Dynamic Batch Scheduler Unittest
+#
+add_executable(
+  dynamic_batch_scheduler_test
+  dynamic_batch_scheduler_test.cc
+)
+
+set_target_properties(
+  dynamic_batch_scheduler_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  dynamic_batch_scheduler_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  dynamic_batch_scheduler_test
+  PRIVATE
+    triton-common-error   # from repo-common
+    triton-common-logging # from repo-common
+    triton-core
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(
+  TARGETS dynamic_batch_scheduler_test
   RUNTIME DESTINATION bin
 )
 

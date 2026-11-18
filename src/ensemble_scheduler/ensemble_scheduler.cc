@@ -28,6 +28,7 @@
 
 #include "ensemble_scheduler.h"
 
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 
@@ -86,7 +87,23 @@ class RequestTracker {
   {
   }
 
+  // Accessed without additional synchronization while protected by
+  // EnsembleContext::mutex_.
   std::unique_ptr<InferenceRequest>& Request() { return request_; }
+
+  // Used from paths where request_ may be released concurrently.
+  bool IsCancelled()
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    return (request_ == nullptr) || request_->IsCancelled();
+  }
+
+  std::string LogRequest()
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    return (request_ != nullptr) ? request_->LogRequest()
+                                 : std::string("[request released] ");
+  }
 
   InferenceStatsAggregator* StatsAggregator() { return stats_aggregator_; }
 
@@ -140,6 +157,23 @@ class RequestTracker {
     status_ = status;
   }
 
+  void RespondIfError(const Status& status, FailureReason reason)
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (request_ != nullptr) {
+      InferenceRequest::RespondIfError(
+          request_, status, false /* release_request */, reason);
+    }
+  }
+
+  void SendFlags(const uint32_t flags)
+  {
+    std::lock_guard<std::mutex> lk(mtx_);
+    if (request_ != nullptr) {
+      request_->ResponseFactory()->SendFlags(flags);
+    }
+  }
+
  private:
   std::mutex mtx_;
   uint32_t inflight_request_counter_;
@@ -152,82 +186,7 @@ class RequestTracker {
   triton::common::ThreadPool* const callback_pool_;
 };
 
-// Limits concurrent inflight requests for a single ensemble step.
-// Tracks inflight requests count and blocks producers when limit is reached.
-class StepInflightRequestLimiter {
- public:
-  explicit StepInflightRequestLimiter(const size_t max_inflight)
-      : inflight_count_(0), max_inflight_(max_inflight)
-  {
-  }
-
-  // Wait until capacity is available or request is cancelled.
-  // No-op if limit not configured (max_inflight_ == 0).
-  void WaitForCapacity(
-      RequestTracker* request_tracker, const size_t step_idx,
-      const std::string& ensemble_name)
-  {
-    // No limit configured, no blocking
-    if (max_inflight_ == 0) {
-      return;
-    }
-
-    std::unique_lock<std::mutex> lk(mutex_);
-    auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
-
-    auto is_request_cancelled = [&]() {
-      auto& req = request_tracker->Request();
-      return (req == nullptr) || req->IsCancelled();
-    };
-
-    bool capacity_available = cv_.wait_for(lk, timeout, [&] {
-      return is_request_cancelled() || (inflight_count_ < max_inflight_);
-    });
-
-    // Log error if timeout occurred (not cancellation), but proceed anyway
-    // to avoid deadlock. Caller always continues after this call.
-    if (!capacity_available && !is_request_cancelled()) {
-      LOG_ERROR << "[Internal Error] Ensemble '" << ensemble_name
-                << "' unable to schedule step " << step_idx
-                << " (inflight: " << inflight_count_
-                << " >= limit: " << max_inflight_ << ") for "
-                << kMutexTimeoutSeconds
-                << " seconds. Proceeding to avoid deadlock.";
-    }
-  }
-
-  // Increment inflight count after successfully scheduling a request.
-  // No-op if limit not configured (max_inflight_ == 0).
-  void IncrementInflightCount()
-  {
-    // No limit configured, no tracking needed
-    if (max_inflight_ == 0) {
-      return;
-    }
-    std::lock_guard<std::mutex> lk(mutex_);
-    inflight_count_++;
-  }
-
-  // Decrement inflight count when a request completes, and notify waiting
-  // producers. No-op if limit not configured (max_inflight_ == 0).
-  void DecrementInflightCount()
-  {
-    // No limit configured, no tracking needed
-    if (max_inflight_ == 0) {
-      return;
-    }
-    std::lock_guard<std::mutex> lk(mutex_);
-    inflight_count_--;
-    cv_.notify_one();
-  }
-
- private:
-  size_t inflight_count_;
-  const size_t max_inflight_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
-};
-
+using RequestTrackerReference = std::shared_ptr<RequestTracker>;
 // Step is used as 'userp' and keeps ensemble context alive
 // until no more internal requests are inflight.
 // Step contains metadata, and status for the
@@ -263,6 +222,11 @@ struct Step {
   const bool preserve_responses_order_;
 
   size_t step_idx_;
+
+  // Heap allocation passed as the release-callback userp. The allocation
+  // stores a shared_ptr<RequestTracker> so the tracker stays alive until the
+  // release callback or local failure cleanup drops this reference.
+  RequestTrackerReference* callback_tracker_ref_{nullptr};
 };
 
 struct TensorData {
@@ -448,11 +412,6 @@ class EnsembleContext {
 
   size_t inflight_step_counter_;
 
-  // Inflight request limiters for each ensemble step.
-  // Only allocated when max_inflight_requests_ > 0.
-  std::vector<std::unique_ptr<StepInflightRequestLimiter>>
-      step_inflight_request_limiters_;
-
   // pointer that either points to 'pruned_tensor_to_step_' or to
   // 'info_->tensor_to_step_' if all ensemble outputs are requested
   std::unordered_map<std::string, std::set<size_t>>* tensor_to_step_;
@@ -476,7 +435,7 @@ class EnsembleContext {
 
   // Objects related to the ensemble infer request
   Status ensemble_status_;
-  RequestTracker* request_tracker_;
+  std::shared_ptr<RequestTracker> request_tracker_;
   // Use in conjunction with 'is_decoupled_' in EnsembleInfo to
   // better distinguish ensemble ending behavior (see annotation in
   // FinishEnsemble for details).
@@ -509,7 +468,7 @@ EnsembleContext::EnsembleContext(
 {
   uint64_t compute_start_ns = 0;
   INFER_STATS_SET_TIMESTAMP(compute_start_ns);
-  request_tracker_ = new RequestTracker(
+  request_tracker_ = std::make_shared<RequestTracker>(
       std::move(request), compute_start_ns, metric_reporter, stats_aggregator,
       callback_pool);
 
@@ -589,17 +548,6 @@ EnsembleContext::EnsembleContext(
       tensor_data_.emplace(pair.first, TensorData(pair.second.size() + 1));
     } else {
       tensor_data_.emplace(pair.first, TensorData(pair.second.size()));
-    }
-  }
-
-  // Initialize step inflight request limiters for each step.
-  if (info_->max_inflight_requests_ > 0) {
-    size_t num_steps = info_->steps_.size();
-    step_inflight_request_limiters_.reserve(num_steps);
-    for (size_t i = 0; i < num_steps; i++) {
-      step_inflight_request_limiters_.emplace_back(
-          std::make_unique<StepInflightRequestLimiter>(
-              info_->max_inflight_requests_));
     }
   }
 
@@ -737,16 +685,17 @@ void
 EnsembleContext::RequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  auto request_tracker = reinterpret_cast<RequestTracker*>(userp);
+  auto callback_tracker_ref = reinterpret_cast<RequestTrackerReference*>(userp);
+  auto request_tracker = *callback_tracker_ref;
   auto pool = request_tracker->CallbackPool();
-  auto fn = [request, flags, request_tracker]() {
+  auto fn = [request, flags, request_tracker, callback_tracker_ref]() {
     if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
+      std::unique_ptr<RequestTrackerReference> managed_callback_tracker_ref(
+          callback_tracker_ref);
       LOG_TRITONSERVER_ERROR(
           TRITONSERVER_InferenceRequestDelete(request),
           "deleting ensemble inference request");
-      if (request_tracker->DecrementCounter()) {
-        delete request_tracker;
-      }
+      request_tracker->DecrementCounter();
     }
   };
 
@@ -1016,9 +965,9 @@ EnsembleContext::UpdateEnsembleState(
     if (completed_step->response_flags_ &
         TRITONSERVER_RESPONSE_COMPLETE_FINAL) {
       inflight_step_counter_--;
-      if (!step_inflight_request_limiters_.empty()) {
-        step_inflight_request_limiters_[completed_step->step_idx_]
-            ->DecrementInflightCount();
+      if (!info_->step_inflight_request_limiters_.empty()) {
+        info_->step_inflight_request_limiters_[completed_step->step_idx_]
+            ->Release();
       }
     }
     RETURN_IF_ERROR(ConsumeResponse(completed_step));
@@ -1161,12 +1110,19 @@ EnsembleContext::InitStep(
   irequest->SetSecondaryStatsAggregator(
       &request_tracker_->ContextStatsAggregator());
 #endif
+  // Heap-allocate the release-callback userp because the C callback API only
+  // stores a raw void*. The heap object itself is single-owner here, while the
+  // object stored inside it is a shared_ptr<RequestTracker> that keeps the
+  // tracker alive until the callback or local cleanup drops this reference.
+  auto callback_tracker_ref =
+      std::make_unique<RequestTrackerReference>(request_tracker_);
   irequest->SetResponseCallback(
       reinterpret_cast<ResponseAllocator*>(allocator_.get()), step->get(),
       ResponseComplete, step->get());
-  irequest->SetReleaseCallback(RequestComplete, request_tracker_);
+  irequest->SetReleaseCallback(RequestComplete, callback_tracker_ref.get());
 
   RETURN_IF_ERROR(irequest->PrepareForInference());
+  (*step)->callback_tracker_ref_ = callback_tracker_ref.release();
 
 #ifdef TRITON_ENABLE_TRACING
   auto& parent_trace = request_tracker_->Request()->TraceProxy();
@@ -1311,16 +1267,14 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
         ensemble_status_ = Status(
             Status::Code::INVALID_ARG,
             "in ensemble '" + info_->ensemble_name_ + "', " +
-                request_tracker_->Request()->LogRequest() +
+                request_tracker_->LogRequest() +
                 "unexpected deadlock, at least one output is not set while no "
                 "more "
                 "ensemble steps can be made");
-        InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_,
-            false /* release_requests */, FailureReason::OTHER);
+        request_tracker_->RespondIfError(
+            ensemble_status_, FailureReason::OTHER);
       } else {
-        request_tracker_->Request()->ResponseFactory()->SendFlags(
-            TRITONSERVER_RESPONSE_COMPLETE_FINAL);
+        request_tracker_->SendFlags(TRITONSERVER_RESPONSE_COMPLETE_FINAL);
       }
     }
   } else {
@@ -1330,9 +1284,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
             std::move(response), TRITONSERVER_RESPONSE_COMPLETE_FINAL,
             ensemble_status_);
       } else {
-        InferenceRequest::RespondIfError(
-            request_tracker_->Request(), ensemble_status_,
-            false /* release_requests */, FailureReason::OTHER);
+        request_tracker_->RespondIfError(
+            ensemble_status_, FailureReason::OTHER);
       }
       error_response_sent_ = true;
     }
@@ -1342,10 +1295,8 @@ EnsembleContext::FinishEnsemble(std::unique_ptr<InferenceResponse>&& response)
     // Reach here when the ensemble execution comes to the end,
     // 'ensemble_status_' at this point is representative.
     request_tracker_->SetStatus(ensemble_status_);
-    if (request_tracker_->DecrementCounter()) {
-      delete request_tracker_;
-    }
-    request_tracker_ = nullptr;
+    request_tracker_->DecrementCounter();
+    request_tracker_.reset();
   }
   return ensemble_status_;
 }
@@ -1510,13 +1461,6 @@ EnsembleContext::ScheduleSteps(
     step->ctx_ = context;
     size_t this_step_idx = step->step_idx_;
 
-    // Apply step inflight request limiters if configured.
-    if (!context->step_inflight_request_limiters_.empty()) {
-      context->step_inflight_request_limiters_[this_step_idx]->WaitForCapacity(
-          context->request_tracker_, this_step_idx,
-          context->info_->ensemble_name_);
-    }
-
     bool should_schedule = false;
     // Must release lock before InferAsync to avoid deadlock, as the same thread
     // will be calling request/response callbacks on cache hits, which will
@@ -1534,8 +1478,16 @@ EnsembleContext::ScheduleSteps(
     if (should_schedule) {
       // If the ensemble request is cancelled, propagate the cancellation to the
       // next request step.
-      if (context->request_tracker_->Request()->IsCancelled()) {
+      if (context->request_tracker_->IsCancelled()) {
         step->request_->Cancel();
+      }
+      // Acquire a slot from the per-step shared limiter only for steps that
+      // will be dispatched, so that a failed ensemble does not hold capacity
+      // unnecessarily.
+      if (!context->info_->step_inflight_request_limiters_.empty()) {
+        context->info_->step_inflight_request_limiters_[this_step_idx]->Acquire(
+            context->request_tracker_->Request(), this_step_idx,
+            context->info_->ensemble_name_);
       }
       // On a successful call to InferAsync(), the step will be released by
       // the response callback. When the response callback is invoked, the
@@ -1546,13 +1498,6 @@ EnsembleContext::ScheduleSteps(
       std::unique_ptr<InferenceRequest> request = std::move(step->request_);
       auto step_status = context->is_->InferAsync(request);
       if (step_status.IsOk()) {
-        // Increment inflight counter AFTER successful scheduling. Always
-        // increment for ALL steps (including step 0) to ensure symmetry with
-        // decrement and prevent underflow when steps complete.
-        if (!context->step_inflight_request_limiters_.empty()) {
-          context->step_inflight_request_limiters_[this_step_idx]
-              ->IncrementInflightCount();
-        }
         step.release();
         continue;
       } else {
@@ -1565,10 +1510,24 @@ EnsembleContext::ScheduleSteps(
 
     // Reaching here means the step is not being scheduled, update corresponding
     // counters and attempt to finish ensemble if it is the last step.
+
+    // Release the limiter slot if one was acquired, and update counters.
+    if (should_schedule &&
+        !context->info_->step_inflight_request_limiters_.empty()) {
+      context->info_->step_inflight_request_limiters_[this_step_idx]->Release();
+    }
+
     std::lock_guard<std::mutex> lock(context->mutex_);
-    // The request is not sent to server properly, shouldn't expect its
-    // release function get called.
-    context->request_tracker_->DecrementCounter();
+    // The request never reaches the callback-owned release path, so drop the
+    // heap-allocated callback userp here.
+    delete step->callback_tracker_ref_;
+    step->callback_tracker_ref_ = nullptr;
+    // Only undo IncrementCounter() for steps that actually reached the
+    // scheduling path. Otherwise the counter can underflow and release the
+    // top-level request while FinishEnsemble is still using it.
+    if (should_schedule) {
+      context->request_tracker_->DecrementCounter();
+    }
     --context->inflight_step_counter_;
 
     if (context->inflight_step_counter_ == 0) {
@@ -1578,6 +1537,64 @@ EnsembleContext::ScheduleSteps(
 }
 
 }  // namespace
+
+StepInflightRequestLimiter::StepInflightRequestLimiter(
+    const size_t max_inflight)
+    : inflight_count_(0), max_inflight_(max_inflight)
+{
+}
+
+void
+StepInflightRequestLimiter::Acquire(
+    const std::unique_ptr<InferenceRequest>& request, const size_t step_idx,
+    const std::string& ensemble_name)
+{
+  // No limit is configured, so requests are not blocked.
+  if (max_inflight_ == 0) {
+    return;
+  }
+
+  std::unique_lock<std::mutex> lk(mutex_);
+  auto timeout = std::chrono::seconds(kMutexTimeoutSeconds);
+
+  auto is_request_cancelled = [&]() {
+    return (request == nullptr) || request->IsCancelled();
+  };
+
+  bool capacity_available = cv_.wait_for(lk, timeout, [&] {
+    return is_request_cancelled() || (inflight_count_ < max_inflight_);
+  });
+
+  if (!capacity_available && !is_request_cancelled()) {
+    LOG_ERROR << "[Internal Error] Ensemble '" << ensemble_name
+              << "' unable to schedule step " << step_idx
+              << " (inflight: " << inflight_count_
+              << " >= limit: " << max_inflight_ << ") for "
+              << kMutexTimeoutSeconds
+              << " seconds. Proceeding to avoid deadlock.";
+  }
+
+  // Increment while holding the lock to prevent transient oversubscription.
+  inflight_count_++;
+}
+
+void
+StepInflightRequestLimiter::Release()
+{
+  // No limit is configured, so requests are not blocked.
+  if (max_inflight_ == 0) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lk(mutex_);
+  if (inflight_count_ == 0) {
+    LOG_ERROR << "[Internal Error] step inflight request limiter underflow";
+    return;
+  }
+
+  inflight_count_--;
+  cv_.notify_one();
+}
 
 Status
 EnsembleScheduler::Create(
@@ -1736,7 +1753,7 @@ EnsembleScheduler::EnsembleScheduler(
   }
   callback_pool_ = is_->EnsembleCallbackPool();
 
-  // Parse the configuration for max_inflight_requests from the protobuf field.
+  // Parse the max_inflight_requests configuration from the protobuf field
   if (config.has_ensemble_scheduling()) {
     info_->max_inflight_requests_ =
         config.ensemble_scheduling().max_inflight_requests();
@@ -1744,6 +1761,16 @@ EnsembleScheduler::EnsembleScheduler(
       LOG_INFO << "Ensemble model '" << config.name()
                << "' configured with max_inflight_requests: "
                << info_->max_inflight_requests_;
+
+      // Allocate one limiter per step to ensure max_inflight_requests is
+      // enforced as a shared limit across all concurrent requests for this
+      // ensemble model.
+      info_->step_inflight_request_limiters_.reserve(info_->steps_.size());
+      for (size_t i = 0; i < info_->steps_.size(); ++i) {
+        info_->step_inflight_request_limiters_.emplace_back(
+            std::make_unique<StepInflightRequestLimiter>(
+                info_->max_inflight_requests_));
+      }
     }
   }
 }

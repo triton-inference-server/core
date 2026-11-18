@@ -1,4 +1,4 @@
-# Copyright 2019-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -104,6 +104,9 @@ endif()
 if(${TRITON_ENABLE_AZURE_STORAGE})
   find_package(azure-storage-blobs-cpp CONFIG REQUIRED)
   message(STATUS "Using Azure storage blobs ${azure-storage-blobs-cpp_VERSION}")
+
+  find_package(azure-identity-cpp CONFIG REQUIRED)
+  message(STATUS "Using Azure identity ${azure-identity-cpp_VERSION}")
 endif()
 
 configure_file(libtritonserver.ldscript libtritonserver.ldscript COPYONLY)
@@ -128,9 +131,10 @@ set(
   infer_response.cc
   infer_stats.cc
   infer_trace.cc
+  latency_histogram.cc
   instance_queue.cc
   label_provider.cc
-  memory.cc
+  triton_memory.cc
   metric_model_reporter.cc
   metrics.cc
   metric_family.cc
@@ -175,9 +179,10 @@ set(
   infer_response.h
   infer_stats.h
   infer_trace.h
+  latency_histogram.h
   instance_queue.h
   label_provider.h
-  memory.h
+  triton_memory.h
   metric_model_reporter.h
   metrics.h
   metric_family.h
@@ -243,28 +248,17 @@ add_library(
 )
 
 target_compile_features(triton-core PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  message("Using MSVC as compiler, default target on Windows 10. "
-		  "If the target system is not Windows 10, please update _WIN32_WINNT "
-		  "to corresponding value.")
-  target_compile_options(
-    triton-core
-    PRIVATE
-      /W1 /D_WIN32_WINNT=0x0A00 /EHsc /Zc:preprocessor
-  )
-else()
-  target_compile_options(
-    triton-core
-    PRIVATE
-      -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Wno-error=maybe-uninitialized -Werror
-  )
-  set_target_properties(
-    triton-core
-    PROPERTIES
-      LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtritonserver.ldscript
-      LINK_FLAGS "-Wl,--version-script libtritonserver.ldscript"
-  )
-endif()
+target_compile_options(
+  triton-core
+  PRIVATE
+    -Wall -Wextra -Wno-unused-parameter -Wno-deprecated-declarations -Wno-error=maybe-uninitialized -Werror
+)
+set_target_properties(
+  triton-core
+  PROPERTIES
+    LINK_DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/libtritonserver.ldscript
+    LINK_FLAGS "-Wl,--version-script libtritonserver.ldscript"
+)
 
 set_target_properties(
   triton-core
@@ -306,14 +300,11 @@ if(${TRITON_ENABLE_GCS})
     triton-core
     PRIVATE $<TARGET_PROPERTY:google-cloud-cpp::storage,INTERFACE_INCLUDE_DIRECTORIES>
   )
-  if (NOT WIN32)
-    # [WIP] still needed?
-    set_source_files_properties(
-      filesystem/api.cc
-      PROPERTIES
-        COMPILE_FLAGS -Wno-missing-field-initializers
-    )
-  endif() # NOT WIN32
+  set_source_files_properties(
+    filesystem/api.cc
+    PROPERTIES
+      COMPILE_FLAGS -Wno-missing-field-initializers
+  )
 endif() # TRITON_ENABLE_GCS
 
 if(${TRITON_ENABLE_S3})
@@ -327,6 +318,7 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
   target_include_directories(
     triton-core
     PRIVATE $<TARGET_PROPERTY:Azure::azure-storage-blobs,INTERFACE_INCLUDE_DIRECTORIES>
+    PRIVATE $<TARGET_PROPERTY:Azure::azure-identity,INTERFACE_INCLUDE_DIRECTORIES>
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
@@ -463,14 +455,12 @@ target_link_libraries(
     re2::re2
 )
 
-if (NOT WIN32)
-  target_link_libraries(
-    triton-core
-    PRIVATE
-      dl
-      numa
-  )
-endif()
+target_link_libraries(
+  triton-core
+  PRIVATE
+    dl
+    numa
+)
 
 if(${TRITON_ENABLE_METRICS})
   target_link_libraries(
@@ -500,6 +490,7 @@ if(${TRITON_ENABLE_AZURE_STORAGE})
     triton-core
     PRIVATE
       Azure::azure-storage-blobs
+      Azure::azure-identity
   )
 endif() # TRITON_ENABLE_AZURE_STORAGE
 
@@ -530,7 +521,4 @@ install(
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-# Currently unit tests do not build for windows...
-if (NOT WIN32)
-  add_subdirectory(test test)
-endif() # NOT WIN32
+add_subdirectory(test test)

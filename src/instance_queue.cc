@@ -1,4 +1,4 @@
-// Copyright 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -100,6 +100,19 @@ InstanceQueue::Dequeue(
         }
       } while (continue_merge);
     }
+  }
+
+  // Return one waiting-consumer credit per merged payload. Each payload was
+  // counted as claiming a waiting consumer when it was enqueued
+  // (RateLimiter::EnqueuePayload -> DecrementConsumerCount, once per payload),
+  // but this single Dequeue call serves the primary payload plus every merged
+  // payload while RateLimiter::DequeuePayload increments the count only once.
+  // Crediting back the surplus here keeps waiting_consumer_count_ from drifting
+  // monotonically negative and eventually starving the dynamic batcher. The
+  // credit lands on the same queue that was dequeued from, which is exactly the
+  // queue whose count gates dispatch for this batcher mode.
+  for (size_t i = 0; i < merged_payloads->size(); ++i) {
+    IncrementConsumerCount();
   }
 }
 
