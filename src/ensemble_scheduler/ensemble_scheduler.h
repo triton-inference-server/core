@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <unordered_map>
 
 #include "metric_model_reporter.h"
 #include "model.h"
@@ -122,6 +123,13 @@ struct EnsembleInfo {
   size_t max_inflight_requests_ = 0;
   std::vector<std::unique_ptr<StepInflightRequestLimiter>>
       step_inflight_request_limiters_;
+
+  // Lazy-built on first request; InferenceServer::GetModel() is unavailable
+  // during startup, which is when this scheduler is constructed.
+  std::once_flag cache_init_flag_;
+  std::unordered_map<
+      ModelIdentifier, std::unordered_map<int64_t, std::shared_ptr<Model>>>
+      cached_handles_;
 };
 
 // Scheduler that implements ensemble scheduling.
