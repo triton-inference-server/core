@@ -79,7 +79,6 @@ requires = [
     "hatchling==1.27.0",
     # For stubgen, run from the build hook:
     "mypy==1.11.0",
-    "numpy<2",
 ]
 build-backend = "hatchling.build"
 
