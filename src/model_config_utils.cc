@@ -1145,7 +1145,9 @@ AutoCompleteBackendFields(
   // TensorRT
   if (config->backend().empty()) {
     if ((config->platform() == kTensorRTPlanPlatform) ||
-        (config->default_model_filename() == kTensorRTPlanFilename)) {
+        (config->default_model_filename() == kTensorRTPlanFilename) ||
+        (config->platform() == kTensorRTMCPlatform) ||
+        (config->default_model_filename() == kTensorRTMCFilename)) {
       config->set_backend(kTensorRTBackend);
     } else if (
         config->platform().empty() &&
@@ -1157,16 +1159,34 @@ AutoCompleteBackendFields(
             JoinPath({version_path, kTensorRTPlanFilename}), &is_dir));
         if (!is_dir) {
           config->set_backend(kTensorRTBackend);
+          config->set_platform(kTensorRTPlanPlatform);
+        }
+      } else if (
+          version_dir_content.find(kTensorRTMCFilename) !=
+          version_dir_content.end()) {
+        RETURN_IF_ERROR(IsDirectory(
+            JoinPath({version_path, kTensorRTMCFilename}), &is_dir));
+        if (!is_dir) {
+          config->set_backend(kTensorRTBackend);
+          config->set_platform(kTensorRTMCPlatform);
         }
       }
     }
   }
   if (config->backend() == kTensorRTBackend) {
     if (config->platform().empty()) {
-      config->set_platform(kTensorRTPlanPlatform);
+      if (config->default_model_filename() == kTensorRTMCFilename) {
+        config->set_platform(kTensorRTMCPlatform);
+      } else {
+        config->set_platform(kTensorRTPlanPlatform);
+      }
     }
     if (config->default_model_filename().empty()) {
-      config->set_default_model_filename(kTensorRTPlanFilename);
+      if (config->platform() == kTensorRTMCPlatform) {
+        config->set_default_model_filename(kTensorRTMCFilename);
+      } else {
+        config->set_default_model_filename(kTensorRTPlanFilename);
+      }
     }
     return Status::Success;
   }
@@ -2424,7 +2444,8 @@ GetBackendTypeFromPlatform(const std::string& platform_name)
     return BackendType::BACKEND_TYPE_TENSORFLOW;
   }
 
-  if (platform_name == kTensorRTPlanPlatform) {
+  if ((platform_name == kTensorRTPlanPlatform) ||
+      (platform_name == kTensorRTMCPlatform)) {
     return BackendType::BACKEND_TYPE_TENSORRT;
   }
 
