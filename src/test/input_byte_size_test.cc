@@ -240,7 +240,7 @@ class InputByteSizeTest : public ::testing::Test {
 
   void TearDown() override
   {
-    DeleteRequest();
+    ASSERT_NO_FATAL_FAILURE(DeleteRequest());
     FAIL_TEST_IF_ERR(
         TRITONSERVER_ResponseAllocatorDelete(allocator_),
         "deleting response allocator");
@@ -354,7 +354,7 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, InputByteSizeMismatch)
@@ -400,7 +400,7 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
           std::string{model_name} + "'. Expected 64, got 68");
 
   // Need to manually delete request, otherwise server will not shut down.
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, InputByteSizeLarge)
@@ -451,7 +451,7 @@ TEST_F(InputByteSizeTest, InputByteSizeLarge)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, ValidStringInputByteSize)
@@ -507,7 +507,7 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, StringCountMismatch)
@@ -545,7 +545,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
           std::string{model_name} + "', got 2");
 
   // Need to manually delete request, otherwise server will not shut down.
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 
   // Create an inference request
   FAIL_TEST_IF_ERR(
@@ -578,7 +578,7 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
           std::string{model_name} + "', expecting 1");
 
   // Need to manually delete request, otherwise server will not shut down.
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, StringSizeMisalign)
@@ -625,7 +625,7 @@ TEST_F(InputByteSizeTest, StringSizeMisalign)
           "the string length indicator is in one buffer.");
 
   // Need to manually delete request, otherwise server will not shut down.
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 #ifdef TRITON_ENABLE_GPU
@@ -695,7 +695,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 
   // Create an inference request
   FAIL_TEST_IF_ERR(
@@ -747,7 +747,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 
   // Clean up CUDA resources
   FAIL_IF_CUDA_ERR(cudaFree(d_input_data), "releasing GPU memory");
@@ -799,7 +799,7 @@ TEST_F(InputByteSizeTest, BatchSizeOverflowInt32)
           std::string{model_name} + "'");
 
   // Need to manually delete request, otherwise server will not shut down.
-  DeleteRequest();
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 }  // namespace
 

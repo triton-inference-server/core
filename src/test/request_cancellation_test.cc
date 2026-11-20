@@ -169,7 +169,7 @@ class RequestCancellationTest : public ::testing::Test {
 
   void TearDown() override
   {
-    DeleteRequest();
+    ASSERT_NO_FATAL_FAILURE(DeleteRequest());
     FAIL_TEST_IF_ERR(TRITONSERVER_ResponseAllocatorDelete(allocator_));
   }
 
