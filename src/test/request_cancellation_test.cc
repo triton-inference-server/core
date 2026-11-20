@@ -1,4 +1,4 @@
-// Copyright 2023-2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -81,6 +81,12 @@ void
 InferRequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
+  if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
+    // Notify that the server has released the request.
+    std::promise<void>* p = reinterpret_cast<std::promise<void>*>(userp);
+    p->set_value();
+    delete p;
+  }
 }
 
 void
@@ -150,9 +156,6 @@ class RequestCancellationTest : public ::testing::Test {
     FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestNew(
         &irequest_, server_, "model", -1 /* model_version */));
 
-    FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestSetReleaseCallback(
-        irequest_, InferRequestComplete, nullptr /* request_release_userp */));
-
     std::vector<int64_t> input0_shape({1, 1000});
     FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestAddInput(
         irequest_, "INPUT0", TRITONSERVER_TYPE_INT32, input0_shape.data(),
@@ -166,14 +169,59 @@ class RequestCancellationTest : public ::testing::Test {
 
   void TearDown() override
   {
+    DeleteRequest();
     FAIL_TEST_IF_ERR(TRITONSERVER_ResponseAllocatorDelete(allocator_));
-    FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestDelete(irequest_));
+  }
+
+  // Submits 'irequest_' with a fresh release callback. The server owns the
+  // request until the callback runs, unless the submission fails.
+  TRITONSERVER_Error* InferAsync()
+  {
+    auto p = new std::promise<void>();
+    std::future<void> release_future = p->get_future();
+    TRITONSERVER_Error* err = TRITONSERVER_InferenceRequestSetReleaseCallback(
+        irequest_, InferRequestComplete, reinterpret_cast<void*>(p));
+    if (err == nullptr) {
+      err = TRITONSERVER_ServerInferAsync(
+          server_, irequest_, nullptr /* trace */);
+    }
+    if (err == nullptr) {
+      release_future_ = std::move(release_future);
+    } else {
+      delete p;
+    }
+    return err;
+  }
+
+  // Returns true once the server has released 'irequest_', after which the
+  // request may be reused or deleted.
+  bool WaitForRequestRelease()
+  {
+    return release_future_.valid() &&
+           (release_future_.wait_for(std::chrono::seconds(30)) ==
+            std::future_status::ready);
+  }
+
+  // Deletes 'irequest_', first waiting for the server to release it if it was
+  // submitted.
+  void DeleteRequest()
+  {
+    if (release_future_.valid()) {
+      ASSERT_TRUE(WaitForRequestRelease())
+          << "request was not released by the server";
+      release_future_ = std::future<void>();
+    }
+    if (irequest_ != nullptr) {
+      FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestDelete(irequest_));
+      irequest_ = nullptr;
+    }
   }
 
   static TRITONSERVER_Server* server_;
   TRITONSERVER_ResponseAllocator* allocator_ = nullptr;
   static std::vector<int32_t> input0_data_;
   TRITONSERVER_InferenceRequest* irequest_ = nullptr;
+  std::future<void> release_future_;
 };
 
 TRITONSERVER_Server* RequestCancellationTest::server_ = nullptr;
@@ -191,8 +239,7 @@ TEST_F(RequestCancellationTest, Cancellation)
   TRITONBACKEND_Request* backend_request =
       reinterpret_cast<TRITONBACKEND_Request*>(irequest_);
 
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */));
+  FAIL_TEST_IF_ERR(InferAsync());
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceRequestCancel(irequest_));
 
   TRITONBACKEND_ResponseFactory* response_factory;
@@ -213,10 +260,10 @@ TEST_F(RequestCancellationTest, Cancellation)
   FAIL_TEST_IF_ERR(TRITONSERVER_InferenceResponseDelete(response));
   FAIL_TEST_IF_ERR(TRITONBACKEND_ResponseFactoryDelete(response_factory));
 
-  // FIXME: Looks like there is an issue with internal request state management.
-  // If the backend send responses before releasing the requests the state may
-  // not be set to "RELEASED" which is allowed for converting to "INITIALIZED".
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  // The final response may be delivered before the request is released, so
+  // wait for the release before reusing the request.
+  ASSERT_TRUE(WaitForRequestRelease())
+      << "request was not released by the server";
 
   p = new std::promise<TRITONSERVER_InferenceResponse*>();
   future = p->get_future();
@@ -226,9 +273,7 @@ TEST_F(RequestCancellationTest, Cancellation)
       InferResponseComplete, reinterpret_cast<void*>(p)));
 
   // Sending another request and the request should not be cancelled.
-  FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
-      server_, irequest_, nullptr
-      /* trace */));
+  FAIL_TEST_IF_ERR(InferAsync());
   FAIL_TEST_IF_ERR(
       TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
 
@@ -256,17 +301,18 @@ TEST_F(RequestCancellationTest, CancellationAfterRelease)
       irequest_, allocator_, nullptr /* response_allocator_userp */,
       InferResponseComplete, reinterpret_cast<void*>(p)));
 
-  FAIL_TEST_IF_ERR(TRITONSERVER_ServerInferAsync(
-      server_, irequest_, nullptr
-      /* trace */));
+  FAIL_TEST_IF_ERR(InferAsync());
 
   TRITONBACKEND_Request* backend_request =
       reinterpret_cast<TRITONBACKEND_Request*>(irequest_);
   TRITONBACKEND_ResponseFactory* response_factory;
   FAIL_TEST_IF_ERR(
       TRITONBACKEND_ResponseFactoryNew(&response_factory, backend_request));
-  FAIL_TEST_IF_ERR(TRITONBACKEND_RequestRelease(
-      backend_request, TRITONSERVER_REQUEST_RELEASE_ALL));
+
+  // The server owns the request until it is released, so wait for the
+  // release rather than releasing the request from the test.
+  ASSERT_TRUE(WaitForRequestRelease())
+      << "request was not released by the server";
 
   bool is_cancelled = true;
   FAIL_TEST_IF_ERR(
