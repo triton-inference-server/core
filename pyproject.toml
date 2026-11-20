@@ -36,7 +36,7 @@ license = "BSD-3-Clause"
 license-files = ["LICENSE.txt"]
 requires-python = ">=3.12"
 dynamic = ["version"]
-dependencies = ["numpy<2"]
+dependencies = ["numpy"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -79,7 +79,7 @@ requires = [
     "hatchling==1.27.0",
     # For stubgen, run from the build hook:
     "mypy==1.11.0",
-    "numpy<2",
+    "numpy",
 ]
 build-backend = "hatchling.build"
 
