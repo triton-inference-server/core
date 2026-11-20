@@ -1,4 +1,4 @@
-// Copyright 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -118,9 +118,12 @@ void
 InferRequestComplete(
     TRITONSERVER_InferenceRequest* request, const uint32_t flags, void* userp)
 {
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestDelete(request),
-      "deleting inference request");
+  if ((flags & TRITONSERVER_REQUEST_RELEASE_ALL) != 0) {
+    // Notify that the server has released the request.
+    std::promise<void>* p = reinterpret_cast<std::promise<void>*>(userp);
+    p->set_value();
+    delete p;
+  }
 }
 
 void
@@ -237,9 +240,56 @@ class InputByteSizeTest : public ::testing::Test {
 
   void TearDown() override
   {
+    ASSERT_NO_FATAL_FAILURE(DeleteRequest());
     FAIL_TEST_IF_ERR(
         TRITONSERVER_ResponseAllocatorDelete(allocator_),
         "deleting response allocator");
+  }
+
+  // Submits 'irequest_' with a fresh release callback. The server owns the
+  // request until the callback runs, unless the submission fails.
+  TRITONSERVER_Error* InferAsync()
+  {
+    auto p = new std::promise<void>();
+    std::future<void> release_future = p->get_future();
+    TRITONSERVER_Error* err = TRITONSERVER_InferenceRequestSetReleaseCallback(
+        irequest_, InferRequestComplete, reinterpret_cast<void*>(p));
+    if (err == nullptr) {
+      err = TRITONSERVER_ServerInferAsync(
+          server_, irequest_, nullptr /* trace */);
+    }
+    if (err == nullptr) {
+      release_future_ = std::move(release_future);
+    } else {
+      delete p;
+    }
+    return err;
+  }
+
+  // Returns true once the server has released 'irequest_', after which the
+  // request may be reused or deleted.
+  bool WaitForRequestRelease()
+  {
+    return release_future_.valid() &&
+           (release_future_.wait_for(std::chrono::seconds(30)) ==
+            std::future_status::ready);
+  }
+
+  // Deletes 'irequest_', first waiting for the server to release it if it was
+  // submitted.
+  void DeleteRequest()
+  {
+    if (release_future_.valid()) {
+      ASSERT_TRUE(WaitForRequestRelease())
+          << "request was not released by the server";
+      release_future_ = std::future<void>();
+    }
+    if (irequest_ != nullptr) {
+      FAIL_TEST_IF_ERR(
+          TRITONSERVER_InferenceRequestDelete(irequest_),
+          "deleting inference request");
+      irequest_ = nullptr;
+    }
   }
 
   static TRITONSERVER_Server* server_;
@@ -248,6 +298,7 @@ class InputByteSizeTest : public ::testing::Test {
   static constexpr size_t kElementSizeIndicator_ = sizeof(uint32_t);
   static char input_data_string_[];
   TRITONSERVER_InferenceRequest* irequest_ = nullptr;
+  std::future<void> release_future_;
   TRITONSERVER_InferenceResponse* response_ = nullptr;
   std::promise<TRITONSERVER_Error*> completed_;
 };
@@ -264,10 +315,6 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Define input shape and data
   std::vector<int64_t> shape{1, 16};
@@ -297,9 +344,7 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       "setting response callback");
 
   // Run inference
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "running inference");
+  FAIL_TEST_IF_ERR(InferAsync(), "running inference");
 
   // Get the inference response
   response_ = future.get();
@@ -309,6 +354,7 @@ TEST_F(InputByteSizeTest, ValidInputByteSize)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, InputByteSizeMismatch)
@@ -319,10 +365,6 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Define input shape and data
   std::vector<int64_t> shape{1, 16};
@@ -353,15 +395,12 @@ TEST_F(InputByteSizeTest, InputByteSizeMismatch)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference request",
+      InferAsync(), "expect error with inference request",
       "input byte size mismatch for input 'INPUT0' for model '" +
           std::string{model_name} + "'. Expected 64, got 68");
 
   // Need to manually delete request, otherwise server will not shut down.
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestDelete(irequest_),
-      "deleting inference request");
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, InputByteSizeLarge)
@@ -372,10 +411,6 @@ TEST_F(InputByteSizeTest, InputByteSizeLarge)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Define input shape and data
   int64_t element_cnt = (1LL << 31) / sizeof(float);
@@ -406,9 +441,7 @@ TEST_F(InputByteSizeTest, InputByteSizeLarge)
       "setting response callback");
 
   // Run inference
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "running inference");
+  FAIL_TEST_IF_ERR(InferAsync(), "running inference");
 
   // Get the inference response
   response_ = future.get();
@@ -418,6 +451,7 @@ TEST_F(InputByteSizeTest, InputByteSizeLarge)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, ValidStringInputByteSize)
@@ -428,10 +462,6 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Define input shape
   std::vector<int64_t> shape({1, 3});
@@ -467,9 +497,7 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       "setting response callback");
 
   // Run inference
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "running inference");
+  FAIL_TEST_IF_ERR(InferAsync(), "running inference");
 
   // Get the inference response
   response_ = future.get();
@@ -479,6 +507,7 @@ TEST_F(InputByteSizeTest, ValidStringInputByteSize)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, StringCountMismatch)
@@ -489,10 +518,6 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Shape is larger than actual string count
   std::vector<int64_t> shape({1, 3});
@@ -515,25 +540,18 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference request",
+      InferAsync(), "expect error with inference request",
       "expected 3 string elements for inference input 'INPUT0' for model '" +
           std::string{model_name} + "', got 2");
 
   // Need to manually delete request, otherwise server will not shut down.
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestDelete(irequest_),
-      "deleting inference request");
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, "onnx_zero_1_object", -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Shape is smaller than actual string count
   shape = {1, 1};
@@ -554,16 +572,13 @@ TEST_F(InputByteSizeTest, StringCountMismatch)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference request",
+      InferAsync(), "expect error with inference request",
       "unexpected number of string elements 2 for inference input 'INPUT0' for "
       "model '" +
           std::string{model_name} + "', expecting 1");
 
   // Need to manually delete request, otherwise server will not shut down.
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestDelete(irequest_),
-      "deleting inference request");
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 TEST_F(InputByteSizeTest, StringSizeMisalign)
@@ -574,10 +589,6 @@ TEST_F(InputByteSizeTest, StringSizeMisalign)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Define input shape
   std::vector<int64_t> shape({1, 1});
@@ -606,8 +617,7 @@ TEST_F(InputByteSizeTest, StringSizeMisalign)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace*/),
-      "expect error with inference request",
+      InferAsync(), "expect error with inference request",
       "incomplete string length indicator for inference input 'INPUT0' for "
       "model '" +
           std::string{model_name} +
@@ -615,9 +625,7 @@ TEST_F(InputByteSizeTest, StringSizeMisalign)
           "the string length indicator is in one buffer.");
 
   // Need to manually delete request, otherwise server will not shut down.
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestDelete(irequest_),
-      "deleting inference request");
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 
 #ifdef TRITON_ENABLE_GPU
@@ -643,10 +651,6 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, "onnx_zero_1_object", -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Shape is larger than actual string count
   std::vector<int64_t> shape({1, 3});
@@ -678,9 +682,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       "setting response callback");
 
   // Run inference
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "running inference");
+  FAIL_TEST_IF_ERR(InferAsync(), "running inference");
 
   // Currently byte_size check for string input is skipped at core level thus
   // should not receive the above error message. See details in
@@ -693,16 +695,13 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 
   // Create an inference request
   FAIL_TEST_IF_ERR(
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, "onnx_zero_1_object", -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Shape is smaller than actual string count
   shape = {1, 1};
@@ -734,9 +733,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       "setting response callback");
 
   // Run inference
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "running inference");
+  FAIL_TEST_IF_ERR(InferAsync(), "running inference");
 
   // Currently byte_size check for string input is skipped at core level thus
   // should not receive the above error message. See details in
@@ -750,6 +747,7 @@ TEST_F(InputByteSizeTest, StringCountMismatchGPU)
       TRITONSERVER_InferenceResponseDelete(response_),
       "deleting inference response");
   ASSERT_TRUE(response_ != nullptr) << "Expect successful inference";
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 
   // Clean up CUDA resources
   FAIL_IF_CUDA_ERR(cudaFree(d_input_data), "releasing GPU memory");
@@ -765,10 +763,6 @@ TEST_F(InputByteSizeTest, BatchSizeOverflowInt32)
       TRITONSERVER_InferenceRequestNew(
           &irequest_, server_, model_name, -1 /* model_version */),
       "creating inference request");
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestSetReleaseCallback(
-          irequest_, InferRequestComplete, nullptr /* request_release_userp */),
-      "setting request release callback");
 
   // Define input shape and data
   int64_t batch_size = 1LL << 31;
@@ -800,15 +794,12 @@ TEST_F(InputByteSizeTest, BatchSizeOverflowInt32)
 
   // Run inference
   FAIL_TEST_IF_SUCCESS(
-      TRITONSERVER_ServerInferAsync(server_, irequest_, nullptr /* trace */),
-      "expect error with inference request",
+      InferAsync(), "expect error with inference request",
       "inference request batch-size must be <= 8 for '" +
           std::string{model_name} + "'");
 
   // Need to manually delete request, otherwise server will not shut down.
-  FAIL_TEST_IF_ERR(
-      TRITONSERVER_InferenceRequestDelete(irequest_),
-      "deleting inference request");
+  ASSERT_NO_FATAL_FAILURE(DeleteRequest());
 }
 }  // namespace
 
