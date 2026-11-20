@@ -32,6 +32,38 @@ cmake_minimum_required(VERSION 3.31.8)
 find_package(GTest REQUIRED)
 
 #
+# Test-only view of the server.
+#
+# Built from the same objects as libtritonserver.so but without a version
+# script, so every internal C++ symbol is visible to the unit tests. It is
+# built only when a test asks for it. The shipped library keeps exporting the
+# C API only; this library is installed next to it because the tests
+# themselves are installed and must be able to start.
+#
+add_library(
+  triton-core-test SHARED EXCLUDE_FROM_ALL
+  $<TARGET_OBJECTS:triton-core-objects>
+)
+set_target_properties(
+  triton-core-test
+  PROPERTIES
+    OUTPUT_NAME tritonserver_test
+)
+target_link_directories(
+  triton-core-test
+  PRIVATE $<TARGET_PROPERTY:triton-core,LINK_DIRECTORIES>
+)
+target_link_libraries(
+  triton-core-test
+  PUBLIC $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>
+)
+
+install(
+  TARGETS triton-core-test
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+#
 # CudaMemoryManger
 #
 set(
@@ -637,26 +669,10 @@ install(
 #
 # Unit test for Payload
 #
-# Internal C++ symbols are hidden by triton-core's export script, so compile
-# the server sources into the test and reuse triton-core's build settings.
-get_target_property(payload_test_sources triton-core SOURCES)
-get_target_property(payload_test_source_dir triton-core SOURCE_DIR)
-list(TRANSFORM payload_test_sources PREPEND "${payload_test_source_dir}/")
 add_executable(
   payload_test
   payload_test.cc
-  ${payload_test_sources}
 )
-target_compile_features(
-  payload_test PRIVATE cxx_std_${TRITON_MIN_CXX_STANDARD})
-target_compile_options(
-  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_OPTIONS>)
-target_compile_definitions(
-  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,COMPILE_DEFINITIONS>)
-target_include_directories(
-  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,INCLUDE_DIRECTORIES>)
-target_link_directories(
-  payload_test PRIVATE $<TARGET_PROPERTY:triton-core,LINK_DIRECTORIES>)
 
 set_target_properties(
   payload_test
@@ -667,10 +683,18 @@ set_target_properties(
     INSTALL_RPATH ""
 )
 
+target_include_directories(
+  payload_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
 target_link_libraries(
   payload_test
   PRIVATE
-    $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>
+    triton-core-test
     GTest::gtest
     GTest::gtest_main
 )
