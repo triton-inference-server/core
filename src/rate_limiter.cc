@@ -120,9 +120,12 @@ RateLimiter::UnregisterModelInstance(TritonModelInstance* triton_model_instance)
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
     auto p_it = payload_queues_.find(model);
     if (p_it != payload_queues_.end()) {
-      auto s_it = p_it->second->specific_queues_.find(triton_model_instance);
-      if (s_it != p_it->second->specific_queues_.end()) {
-        p_it->second->specific_queues_.erase(s_it);
+      std::lock_guard<std::mutex> lk(p_it->second->mu_);
+      auto& queues = p_it->second->specific_queues_;
+      auto s_it = queues.find(triton_model_instance);
+      if (s_it != queues.end()) {
+        s_it->second->Close();
+        queues.erase(s_it);
       }
     }
   }
@@ -152,32 +155,44 @@ RateLimiter::UnregisterModel(const TritonModel* model)
 
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
-    if (payload_queues_.find(model) != payload_queues_.end()) {
-      payload_queues_.erase(model);
+    auto p_it = payload_queues_.find(model);
+    if (p_it != payload_queues_.end()) {
+      {
+        std::lock_guard<std::mutex> lk(p_it->second->mu_);
+        p_it->second->queue_->Close();
+        for (auto& queue : p_it->second->specific_queues_) {
+          queue.second->Close();
+        }
+      }
+      payload_queues_.erase(p_it);
     }
   }
 }
 
-void
+bool
 RateLimiter::WaitForConsumer(
     const TritonModel* model, const TritonModelInstance* model_instance)
 {
-  PayloadQueue* payload_queue = nullptr;
+  std::shared_ptr<InstanceQueue> queue;
   {
     std::lock_guard<std::mutex> lk(payload_queues_mu_);
-    if (payload_queues_.find(model) == payload_queues_.end()) {
-      LOG_ERROR << "Unable to find the payload queue for the model "
-                << model->Name();
-      return;
+    auto p_it = payload_queues_.find(model);
+    if (p_it == payload_queues_.end()) {
+      return false;
     }
-    payload_queue = payload_queues_[model].get();
+    auto* payload_queue = p_it->second.get();
+    if (model_instance == nullptr) {
+      queue = payload_queue->queue_;
+    } else {
+      std::lock_guard<std::mutex> lk(payload_queue->mu_);
+      auto s_it = payload_queue->specific_queues_.find(model_instance);
+      if (s_it == payload_queue->specific_queues_.end()) {
+        return false;
+      }
+      queue = s_it->second;
+    }
   }
-
-  if (model_instance == nullptr) {
-    payload_queue->queue_->WaitForConsumer();
-  } else {
-    payload_queue->specific_queues_[model_instance]->WaitForConsumer();
-  }
+  return queue->WaitForConsumer();
 }
 
 
@@ -199,8 +214,11 @@ RateLimiter::WaitingConsumerCount(
   if (model_instance == nullptr) {
     return payload_queue->queue_->WaitingConsumerCount();
   } else {
-    return payload_queue->specific_queues_[model_instance]
-        ->WaitingConsumerCount();
+    std::lock_guard<std::mutex> lk(payload_queue->mu_);
+    auto s_it = payload_queue->specific_queues_.find(model_instance);
+    return (s_it == payload_queue->specific_queues_.end())
+               ? 0
+               : s_it->second->WaitingConsumerCount();
   }
 }
 
@@ -232,7 +250,7 @@ RateLimiter::PayloadSlotAvailable(
     if (force_non_blocking) {
       result = (WaitingConsumerCount(model, model_instance) > 0);
     } else {
-      WaitForConsumer(model, model_instance);
+      result = WaitForConsumer(model, model_instance);
     }
   }
   return result;
@@ -254,15 +272,15 @@ RateLimiter::EnqueuePayload(
     payload_queue = payload_queues_[model].get();
   }
 
-  // Update the pending consumer counts to prevent additional
-  // requests from getting enqueued.
-  if (pinstance != nullptr) {
-    payload_queue->specific_queues_[pinstance]->DecrementConsumerCount();
-  }
-  payload_queue->queue_->DecrementConsumerCount();
-
   {
     std::lock_guard<std::mutex> lk(payload_queue->mu_);
+    // Update the pending consumer counts to prevent additional
+    // requests from getting enqueued.
+    if (pinstance != nullptr) {
+      payload_queue->specific_queues_[pinstance]->DecrementConsumerCount();
+    }
+    payload_queue->queue_->DecrementConsumerCount();
+
     payload->SetState(Payload::State::REQUESTED);
     if (ignore_resources_and_priority_) {
       SchedulePayload(pinstance, payload_queue, payload);
@@ -312,17 +330,17 @@ RateLimiter::DequeuePayload(
     payload_queue = payload_queues_[model].get();
   }
 
-  // Update the queue to reflect availability of a waiting
-  // consumer.
-  payload_queue->queue_->IncrementConsumerCount();
-  for (const auto instance : instances) {
-    payload_queue->specific_queues_[instance]->IncrementConsumerCount();
-  }
-
   std::vector<std::shared_ptr<Payload>> merged_payloads;
   size_t instance_index = std::numeric_limits<std::size_t>::max();
   {
     std::unique_lock<std::mutex> lk(payload_queue->mu_);
+    // Update the queue to reflect availability of a waiting
+    // consumer.
+    payload_queue->queue_->IncrementConsumerCount();
+    for (const auto instance : instances) {
+      payload_queue->specific_queues_[instance]->IncrementConsumerCount();
+    }
+
     payload_queue->cv_.wait(lk, [&instances, &instance_index, payload_queue]() {
       bool empty = payload_queue->queue_->Empty();
       if (empty) {
@@ -347,6 +365,25 @@ RateLimiter::DequeuePayload(
     } else {
       payload_queue->queue_->Dequeue(payload, &merged_payloads);
     }
+
+    // Decrement the counts for instances that were not claimed at enqueue.
+    // An unassigned payload claims no specific instance at enqueue.
+    // FIXME: DLIS-5238 For more accurate handling, the
+    // consumer count for the instances that were not
+    // requested should be decremented upon the
+    // EnqueuePayload too. This will need instance
+    // association to be derived via instances fed into
+    // DequeuePayload call.
+    // However, as multiple instances are provided to
+    // DequeuePayload call only when using device-blocking
+    // and a single consumer thread, we are decrementing the
+    // specific instance consumer count as an approximation.
+    for (size_t idx = 0; idx < instances.size(); ++idx) {
+      if (((*payload)->GetInstance() == nullptr) || (idx != instance_index)) {
+        payload_queue->specific_queues_[instances[idx]]
+            ->DecrementConsumerCount();
+      }
+    }
   }
   for (auto& merge_payload : merged_payloads) {
     PayloadRelease(merge_payload);
@@ -355,32 +392,9 @@ RateLimiter::DequeuePayload(
   (*payload)->Callback();
   if ((*payload)->GetInstance() == nullptr) {
     (*payload)->SetInstance(instances.front());
-    // Enqueue did not specify the specific instance to
-    // run with the payload. Hence, need to explicitly
-    // decrement the consumer count for the instance
-    // which got allocated.
-    payload_queue->specific_queues_[instances.front()]
-        ->DecrementConsumerCount();
     instances.pop_front();
   } else {
     instances.erase(instances.begin() + instance_index);
-  }
-
-  // Decrement the counts from the remaining specific
-  // instance handling as there will be no consumer for
-  // these queues.
-  // FIXME: DLIS-5238 For more accurate handling, the
-  // consumer count for the instances that were not
-  // requested should be decremented upon the
-  // EnqueuePayload too. This will need instance
-  // association to be derived via instances fed into
-  // DequeuePayload call.
-  // However, as multiple instances are provided to
-  // DequeuePayload call only when using device-blocking
-  // and a single consumer thread, we are decrementing the
-  // specific instance consumer count as an approximation.
-  for (const auto instance : instances) {
-    payload_queue->specific_queues_[instance]->DecrementConsumerCount();
   }
 }
 
@@ -502,7 +516,7 @@ RateLimiter::InitializePayloadQueues(const TritonModelInstance* instance)
         payload_queue->specific_queues_.end()) {
       payload_queue->specific_queues_.emplace(
           instance,
-          new InstanceQueue(
+          std::make_shared<InstanceQueue>(
               config.max_batch_size(), max_queue_delay_microseconds * 1000));
     }
   }
