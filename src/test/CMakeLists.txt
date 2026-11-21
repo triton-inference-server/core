@@ -32,56 +32,35 @@ cmake_minimum_required(VERSION 3.31.8)
 find_package(GTest REQUIRED)
 
 #
-# CudaMemoryManger
+# Test-only view of the server.
 #
-set(
-  CUDA_MEMORY_MANAGER_SRCS
-  ../cuda_block_manager.cc
-  ../cuda_memory_manager.cc
-  ../cuda_utils.cc
-  ../status.cc
+# Built from the same objects as libtritonserver.so but without a version
+# script, so every internal C++ symbol is visible to the unit tests. It is
+# built only when a test asks for it. The shipped library keeps exporting the
+# C API only; this library is installed next to it because the tests
+# themselves are installed and must be able to start.
+#
+add_library(
+  triton-core-test SHARED EXCLUDE_FROM_ALL
+  $<TARGET_OBJECTS:triton-core-objects>
+)
+set_target_properties(
+  triton-core-test
+  PROPERTIES
+    OUTPUT_NAME tritonserver_test
+)
+target_link_directories(
+  triton-core-test
+  PRIVATE $<TARGET_PROPERTY:triton-core,LINK_DIRECTORIES>
+)
+target_link_libraries(
+  triton-core-test
+  PUBLIC $<TARGET_PROPERTY:triton-core,LINK_LIBRARIES>
 )
 
-set(
-  CUDA_MEMORY_MANAGER_HDRS
-  ../cuda_block_manager.h
-  ../cuda_memory_manager.h
-  ../cuda_utils.h
-  ../status.h
-)
-
-#
-# PinnedMemoryManger
-#
-set(
-  PINNED_MEMORY_MANAGER_SRCS
-  ../cuda_utils.cc
-  ../numa_utils.cc
-  ../pinned_memory_manager.cc
-  ../status.cc
-)
-
-set(
-  PINNED_MEMORY_MANAGER_HDRS
-  ../cuda_utils.h
-  ../numa_utils.h
-  ../pinned_memory_manager.h
-  ../status.h
-)
-
-#
-# Memory
-#
-set(
-  MEMORY_SRCS
-  ../buffer_attributes.cc
-  ../triton_memory.cc
-)
-
-set(
-  MEMORY_HDRS
-  ../buffer_attributes.h
-  ../triton_memory.h
+install(
+  TARGETS triton-core-test
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 #
@@ -91,23 +70,6 @@ if(${TRITON_ENABLE_GPU})
   add_executable(
     response_cache_test
     response_cache_test.cc
-    ../cache_manager.cc
-    ../cache_manager.h
-    ../cache_entry.cc
-    ../cache_entry.h
-    ../filesystem/api.cc
-    ../filesystem/api.h
-    ../shared_library.cc
-    ../shared_library.h
-    ../status.cc
-    ../status.h
-    ../constants.h
-    ${MEMORY_SRCS}
-    ${CUDA_MEMORY_MANAGER_SRCS}
-    ${PINNED_MEMORY_MANAGER_SRCS}
-    ${MEMORY_HDRS}
-    ${CUDA_MEMORY_MANAGER_HDRS}
-    ${PINNED_MEMORY_MANAGER_HDRS}
   )
 
   set_target_properties(
@@ -146,7 +108,7 @@ if(${TRITON_ENABLE_GPU})
       triton-common-logging      # from repo-common
       triton-common-model-config # from repo-common
       proto-library              # from repo-common
-      triton-core
+      triton-core-test
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf
@@ -214,13 +176,6 @@ if(${TRITON_ENABLE_GPU})
   add_executable(
     memory_test
     memory_test.cc
-    ../constants.h
-    ${MEMORY_SRCS}
-    ${CUDA_MEMORY_MANAGER_SRCS}
-    ${PINNED_MEMORY_MANAGER_SRCS}
-    ${MEMORY_HDRS}
-    ${CUDA_MEMORY_MANAGER_HDRS}
-    ${PINNED_MEMORY_MANAGER_HDRS}
   )
 
   set_target_properties(
@@ -257,6 +212,7 @@ if(${TRITON_ENABLE_GPU})
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
       proto-library              # from repo-common
+      triton-core-test
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf
@@ -284,8 +240,6 @@ if(${TRITON_ENABLE_GPU})
   add_executable(
     pinned_memory_manager_test
     pinned_memory_manager_test.cc
-    ${PINNED_MEMORY_MANAGER_SRCS}
-    ${PINNED_MEMORY_MANAGER_HDRS}
   )
 
   set_target_properties(
@@ -322,6 +276,7 @@ if(${TRITON_ENABLE_GPU})
       triton-common-error        # from repo-common
       triton-common-logging      # from repo-common
       proto-library              # from repo-common
+      triton-core-test
       GTest::gtest
       GTest::gtest_main
       protobuf::libprotobuf
@@ -386,15 +341,6 @@ install(
 add_executable(
   repo_agent_test
   repo_agent_test.cc
-  ../repo_agent.cc
-  ../status.cc
-  ../filesystem/api.cc
-  ../model_config_utils.cc
-  ../repo_agent.h
-  ../shared_library.h
-  ../status.h
-  ../filesystem/api.h
-  ../model_config_utils.h
 )
 
 set_target_properties(
@@ -423,6 +369,7 @@ target_link_libraries(
     triton-common-json         # from repo-common
     triton-common-logging      # from repo-common
     proto-library              # from repo-common
+    triton-core-test
     GTest::gtest
     GTest::gtest_main
     protobuf::libprotobuf
@@ -441,16 +388,6 @@ if(${TRITON_ENABLE_METRICS})
   add_executable(
     metrics_api_test
     metrics_api_test.cc
-    ${PINNED_MEMORY_MANAGER_SRCS}
-    ${PINNED_MEMORY_MANAGER_HDRS}
-    ../metric_family.cc
-    ../metric_family.h
-    ../metrics.cc
-    ../metrics.h
-    ../latency_histogram.cc
-    ../latency_histogram.h
-    ../infer_parameter.cc
-    ../infer_parameter.h
   )
 
   set_target_properties(
@@ -483,7 +420,7 @@ if(${TRITON_ENABLE_METRICS})
       triton-common-error   # from repo-common
       triton-common-logging # from repo-common
       proto-library         # from repo-common
-      triton-core
+      triton-core-test
       GTest::gtest
       GTest::gtest_main
       GTest::gmock
@@ -635,6 +572,44 @@ install(
 )
 
 #
+# Unit test for Payload
+#
+add_executable(
+  payload_test
+  payload_test.cc
+)
+
+set_target_properties(
+  payload_test
+  PROPERTIES
+    SKIP_BUILD_RPATH TRUE
+    BUILD_WITH_INSTALL_RPATH TRUE
+    INSTALL_RPATH_USE_LINK_PATH FALSE
+    INSTALL_RPATH ""
+)
+
+target_include_directories(
+  payload_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/..
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${GTEST_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  payload_test
+  PRIVATE
+    triton-core-test
+    GTest::gtest
+    GTest::gtest_main
+)
+
+install(
+  TARGETS payload_test
+  RUNTIME DESTINATION bin
+)
+
+#
 # Backend Output Detail Unittest
 #
 add_executable(
@@ -761,9 +736,6 @@ if(${TRITON_ENABLE_GPU})
   add_executable(
     input_byte_size_test
     input_byte_size_test.cc
-    ../constants.h
-    ${CUDA_MEMORY_MANAGER_SRCS}
-    ${CUDA_MEMORY_MANAGER_HDRS}
   )
   target_include_directories(
     input_byte_size_test
@@ -789,7 +761,7 @@ if(${TRITON_ENABLE_GPU})
     PRIVATE
       dl
       triton-common-error        # from repo-common
-      triton-core
+      triton-core-test
       triton-common-logging      # from repo-common
       proto-library              # from repo-common
       GTest::gtest
@@ -815,7 +787,7 @@ else()
     input_byte_size_test
     PRIVATE
       triton-common-error # from repo-common
-      triton-core
+      triton-core-test
       GTest::gtest
       GTest::gtest_main
       GTest::gmock

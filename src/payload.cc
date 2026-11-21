@@ -1,4 +1,4 @@
-// Copyright 2021-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -89,7 +89,13 @@ Payload::Reset(const Operation op_type, TritonModelInstance* instance)
   release_callbacks_.clear();
   instance_ = instance;
   state_ = State::UNINITIALIZED;
-  status_.reset(new std::promise<Status>());
+  // The completion promise only backs Payload::Wait(), which is used for
+  // INIT/WARM_UP payloads. Skip the allocation on the INFER_RUN hot path.
+  if (op_type == Operation::INFER_RUN) {
+    status_.reset();
+  } else {
+    status_.reset(new std::promise<Status>());
+  }
   required_equal_inputs_ = RequiredEqualInputs();
   batcher_start_ns_ = 0;
   saturated_ = false;
@@ -170,6 +176,11 @@ Payload::SetState(Payload::State state)
 Status
 Payload::Wait()
 {
+  if (status_ == nullptr) {
+    return Status(
+        Status::Code::INTERNAL,
+        "Payload::Wait() is not supported for INFER_RUN payloads");
+  }
   return status_->get_future().get();
 }
 
@@ -211,7 +222,9 @@ Payload::Execute(bool* should_exit)
       *should_exit = true;
   }
 
-  status_->set_value(status);
+  if (status_ != nullptr) {
+    status_->set_value(status);
+  }
   // Call specified callback, notifying that execution has completed.
   Callback();
 }
