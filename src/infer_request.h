@@ -575,9 +575,11 @@ class InferenceRequest {
 
   void SetResponseFactory()
   {
-    response_factory_.reset(new InferenceResponseFactory(
+    // make_shared combines the object + shared_ptr control block into a single
+    // allocation, saving one heap allocation per request vs reset(new X).
+    response_factory_ = std::make_shared<InferenceResponseFactory>(
         model_shared_, id_, response_allocator_, alloc_userp_,
-        response_callback_, response_userp_, response_delegator_));
+        response_callback_, response_userp_, response_delegator_);
   }
 
   const std::shared_ptr<SequenceStates>& GetSequenceStates() const
