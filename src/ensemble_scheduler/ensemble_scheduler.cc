@@ -474,25 +474,47 @@ EnsembleContext::EnsembleContext(
 
   auto& lrequest = request_tracker_->Request();
 
-  // Obtain model handles of all models in ensemble request such that
-  // they have the same lifetime as the ensemble request to avoid unloading
-  // while the ensemble is executing.
-  for (const auto& step_info : info_->steps_) {
-    auto it = handles_.find(step_info.model_id_);
-    if (it == handles_.end()) {
-      it = handles_.emplace(std::make_pair(step_info.model_id_, VersionMap()))
-               .first;
-    }
-    auto ver_it = it->second.find(step_info.model_version_);
-    if (ver_it == it->second.end()) {
-      std::shared_ptr<Model> model = nullptr;
-      ensemble_status_ =
-          is_->GetModel(step_info.model_id_, step_info.model_version_, &model);
-      if (!ensemble_status_.IsOk()) {
-        break;
+  // Hold model handles for the ensemble request's lifetime so composing
+  // models cannot unload mid-execution.
+  std::call_once(info_->cache_init_flag_, [this]() {
+    for (const auto& step_info : info_->steps_) {
+      auto& ver_map = info_->cached_handles_[step_info.model_id_];
+      if (ver_map.find(step_info.model_version_) != ver_map.end()) {
+        continue;
       }
+      std::shared_ptr<Model> model = nullptr;
+      auto status =
+          is_->GetModel(step_info.model_id_, step_info.model_version_, &model);
+      if (!status.IsOk()) {
+        info_->cached_handles_.clear();
+        return;
+      }
+      ver_map.emplace(step_info.model_version_, std::move(model));
+    }
+  });
 
-      it->second.emplace(std::make_pair(step_info.model_version_, model));
+  if (!info_->cached_handles_.empty()) {
+    for (const auto& ver_map : info_->cached_handles_) {
+      handles_[ver_map.first] = ver_map.second;
+    }
+  } else {
+    for (const auto& step_info : info_->steps_) {
+      auto it = handles_.find(step_info.model_id_);
+      if (it == handles_.end()) {
+        it = handles_.emplace(std::make_pair(step_info.model_id_, VersionMap()))
+                 .first;
+      }
+      auto ver_it = it->second.find(step_info.model_version_);
+      if (ver_it == it->second.end()) {
+        std::shared_ptr<Model> model = nullptr;
+        ensemble_status_ = is_->GetModel(
+            step_info.model_id_, step_info.model_version_, &model);
+        if (!ensemble_status_.IsOk()) {
+          break;
+        }
+
+        it->second.emplace(std::make_pair(step_info.model_version_, model));
+      }
     }
   }
 

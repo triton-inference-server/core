@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -26,6 +26,7 @@
 
 #include "cache_manager.h"
 
+#include <algorithm>
 #include <boost/functional/hash.hpp>
 
 #include "cache_entry.h"
@@ -286,6 +287,8 @@ Status
 TritonCache::HashInputBuffers(
     const InferenceRequest::Input* input, size_t* seed)
 {
+  // Delimit the tensor data independently of how it is split across buffers.
+  boost::hash_combine(*seed, input->Data()->TotalByteSize());
   // Iterate over each data buffer in input in case of non-contiguous memory
   for (size_t idx = 0; idx < input->DataBufferCount(); ++idx) {
     const void* src_buffer;
@@ -319,18 +322,81 @@ Status
 TritonCache::HashInputs(const InferenceRequest& request, size_t* seed)
 {
   const auto& inputs = request.ImmutableInputs();
-  // Convert inputs to ordered map for consistency in hashing
-  // inputs sorted by key (input) name
-  std::map<std::string, InferenceRequest::Input*> ordered_inputs(
-      inputs.begin(), inputs.end());
-  for (const auto& input : ordered_inputs) {
-    // Add input name to hash
-    boost::hash_combine(*seed, input.second->Name());
-    // Fetch input buffer for hashing raw data
-    RETURN_IF_ERROR(HashInputBuffers(input.second, seed));
+  boost::hash_combine(*seed, inputs.size());
+  auto hash_input = [this, seed](const InferenceRequest::Input* input) {
+    boost::hash_combine(*seed, input->Name());
+    boost::hash_combine(*seed, static_cast<int>(input->DType()));
+    // OriginalShape includes the batch dimension, when present.
+    const auto& shape = input->OriginalShape();
+    boost::hash_combine(*seed, shape.size());
+    for (const auto dim : shape) {
+      boost::hash_combine(*seed, dim);
+    }
+    return HashInputBuffers(input, seed);
+  };
+  if (inputs.size() == 1) {
+    return hash_input(inputs.begin()->second);
+  }
+
+  // Sort pointers instead of copying names or allocating one map node per
+  // input.
+  std::vector<const InferenceRequest::Input*> ordered_inputs;
+  ordered_inputs.reserve(inputs.size());
+  for (const auto& input : inputs) {
+    ordered_inputs.push_back(input.second);
+  }
+  std::sort(
+      ordered_inputs.begin(), ordered_inputs.end(),
+      [](const InferenceRequest::Input* lhs,
+         const InferenceRequest::Input* rhs) {
+        return lhs->Name() < rhs->Name();
+      });
+  for (const auto* input : ordered_inputs) {
+    RETURN_IF_ERROR(hash_input(input));
   }
 
   return Status::Success;
+}
+
+
+void
+TritonCache::HashParameters(const InferenceRequest& request, size_t* seed)
+{
+  const auto& parameters = request.Parameters();
+  boost::hash_combine(*seed, parameters.size());
+  auto hash_parameter = [seed](const InferenceParameter& parameter) {
+    boost::hash_combine(*seed, parameter.Name());
+    boost::hash_combine(*seed, static_cast<int>(parameter.Type()));
+    const auto byte_size = parameter.ValueByteSize();
+    boost::hash_combine(*seed, byte_size);
+    const auto* value =
+        static_cast<const unsigned char*>(parameter.ValuePointer());
+    for (uint64_t byte = 0; byte < byte_size; ++byte) {
+      boost::hash_combine(*seed, value[byte]);
+    }
+  };
+  // The common zero/one-parameter cases need no allocation or sorting.
+  if (parameters.size() <= 1) {
+    if (!parameters.empty()) {
+      hash_parameter(parameters.front());
+    }
+    return;
+  }
+  std::vector<const InferenceParameter*> ordered_parameters;
+  ordered_parameters.reserve(parameters.size());
+  for (const auto& parameter : parameters) {
+    ordered_parameters.push_back(&parameter);
+  }
+  // Ignore ordering of distinct names, retaining the relative order of any
+  // duplicate names supplied through the C API.
+  std::stable_sort(
+      ordered_parameters.begin(), ordered_parameters.end(),
+      [](const InferenceParameter* lhs, const InferenceParameter* rhs) {
+        return lhs->Name() < rhs->Name();
+      });
+  for (const auto* parameter : ordered_parameters) {
+    hash_parameter(*parameter);
+  }
 }
 
 
@@ -338,12 +404,20 @@ Status
 TritonCache::Hash(const InferenceRequest& request, std::string* key)
 {
   std::size_t seed = 0;
+  boost::hash_combine(seed, request.ModelNamespace());
   // Add request model name to hash
   boost::hash_combine(seed, request.ModelName());
   // Add request model version to hash
   boost::hash_combine(seed, request.ActualModelVersion());
   RETURN_IF_ERROR(HashInputs(request, &seed));
-  // NOTE: Could prepend model name/version in key for readability/debugging
+  HashParameters(request, &seed);
+  // The normalized output set is ordered and includes all model outputs when
+  // the client does not explicitly request a subset.
+  const auto& outputs = request.ImmutableRequestedOutputs();
+  boost::hash_combine(seed, outputs.size());
+  for (const auto& output : outputs) {
+    boost::hash_combine(seed, output);
+  }
   *key = std::to_string(seed);
   return Status::Success;
 }
