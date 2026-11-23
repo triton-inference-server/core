@@ -95,6 +95,7 @@ if(${TRITON_ENABLE_GPU})
     ../cache_manager.h
     ../cache_entry.cc
     ../cache_entry.h
+    ../infer_parameter.cc
     ../filesystem/api.cc
     ../filesystem/api.h
     ../shared_library.cc
