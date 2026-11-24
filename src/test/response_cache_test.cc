@@ -29,6 +29,7 @@
 #include "cache_manager.h"
 #include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
+#include "model.h"
 #include "triton/common/logging.h"
 #include "triton_memory.h"
 
@@ -81,14 +82,36 @@ InferenceRequest::Input::Input(
 {
 }
 
-// Use const global var as locals can't be returned in ModelName(),
-// and we don't care about the model for the unit test
+// These tests use a fixed model name and vary the namespace separately.
 const std::string MODEL = "model";
 
 const std::string&
 InferenceRequest::ModelName() const
 {
   return MODEL;
+}
+
+const std::string&
+InferenceRequest::ModelNamespace() const
+{
+  static const std::string no_namespace;
+  return (model_raw_ == nullptr) ? no_namespace
+                                 : model_raw_->ModelId().namespace_;
+}
+
+Status
+InferenceRequest::SetParameters(
+    const std::deque<InferenceParameter>& parameters)
+{
+  parameters_ = parameters;
+  return Status::Success;
+}
+
+Status
+InferenceRequest::AddOriginalRequestedOutput(const std::string& name)
+{
+  original_requested_outputs_.insert(name);
+  return Status::Success;
 }
 
 int64_t
@@ -1102,6 +1125,118 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheHashing)
   ASSERT_NE(cache, nullptr);
   tests::HashLogic(cache, request0, request1, request2, request3, request4);
   tests::HashUnique(cache, unique_requests);
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheHashInputMetadata)
+{
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  const std::vector<int32_t> data{1, 2, 3, 4};
+  auto hash = [&](const std::vector<int64_t>& shape, inference::DataType dtype,
+                  bool split = false) {
+    tc::InferenceRequest request(nullptr, 1);
+    tc::InferenceRequest::Input* input = nullptr;
+    helpers::CheckStatus(
+        request.AddOriginalInput("INPUT", dtype, shape, &input));
+    if (split) {
+      helpers::CheckStatus(input->AppendData(
+          data.data(), 2 * sizeof(int32_t), TRITONSERVER_MEMORY_CPU, 0));
+      helpers::CheckStatus(input->AppendData(
+          data.data() + 2, 2 * sizeof(int32_t), TRITONSERVER_MEMORY_CPU, 0));
+    } else {
+      helpers::CheckStatus(input->AppendData(
+          data.data(), data.size() * sizeof(int32_t), TRITONSERVER_MEMORY_CPU,
+          0));
+    }
+    helpers::CheckStatus(request.PrepareForInference());
+    std::string key;
+    helpers::CheckStatus(cache->Hash(request, &key));
+    return key;
+  };
+
+  const auto key = hash({2, 2}, inference::TYPE_INT32);
+  EXPECT_EQ(key, hash({2, 2}, inference::TYPE_INT32));
+  EXPECT_EQ(key, hash({2, 2}, inference::TYPE_INT32, true));
+  EXPECT_NE(key, hash({1, 4}, inference::TYPE_INT32));
+  EXPECT_NE(key, hash({4, 1}, inference::TYPE_INT32));
+  EXPECT_NE(key, hash({4}, inference::TYPE_INT32));
+  EXPECT_NE(key, hash({2, 2}, inference::TYPE_FP32));
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheHashModelNamespace)
+{
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  inference::ModelConfig config;
+  config.set_name("model");
+  tc::Model model_a(0.0, "", tc::ModelIdentifier("repoA", "model"), 1, config);
+  tc::Model model_b(0.0, "", tc::ModelIdentifier("repoB", "model"), 1, config);
+  tc::Model same_namespace(
+      0.0, "", tc::ModelIdentifier("repoA", "model"), 1, config);
+  tc::Model no_namespace(0.0, "", tc::ModelIdentifier("", "model"), 1, config);
+  const std::vector<helpers::Tensor> inputs{{"INPUT", {1, 2, 3, 4}}};
+  auto hash = [&](tc::Model* model) {
+    std::unique_ptr<tc::InferenceRequest> request(helpers::GenerateRequest(
+        model, 1, inference::TYPE_INT32, TRITONSERVER_MEMORY_CPU, 0, inputs,
+        "namespace-test"));
+    std::string key;
+    helpers::CheckStatus(cache->Hash(*request, &key));
+    return key;
+  };
+
+  const auto key = hash(&model_a);
+  EXPECT_NE(key, hash(&model_b));
+  EXPECT_EQ(key, hash(&same_namespace));
+  EXPECT_NE(key, hash(&no_namespace));
+}
+
+TEST_F(RequestResponseCacheTest, TestLocalCacheHashRequestMetadata)
+{
+  auto cache = helpers::CreateLocalCache(1024);
+  ASSERT_NE(cache, nullptr);
+  auto hash = [&](const std::deque<tc::InferenceParameter>& parameters,
+                  const std::vector<std::string>& outputs) {
+    tc::InferenceRequest request(nullptr, 1);
+    helpers::CheckStatus(request.SetParameters(parameters));
+    for (const auto& output : outputs) {
+      helpers::CheckStatus(request.AddOriginalRequestedOutput(output));
+    }
+    std::string key;
+    helpers::CheckStatus(cache->Hash(request, &key));
+    return key;
+  };
+
+  const tc::InferenceParameter scale("scale", int64_t{1});
+  const tc::InferenceParameter label("label", "test");
+  const auto key = hash({scale, label}, {"SUM", "MAX"});
+  EXPECT_EQ(key, hash({label, scale}, {"MAX", "SUM"}));
+  EXPECT_NE(key, hash({scale, label}, {"MAX"}));
+  EXPECT_NE(key, hash({scale, label}, {"SUM"}));
+  EXPECT_NE(key, hash({scale}, {"SUM", "MAX"}));
+  EXPECT_NE(
+      key, hash(
+               {tc::InferenceParameter("scale", int64_t{2}), label},
+               {"SUM", "MAX"}));
+
+  const int64_t bytes = 1;
+  const std::vector<tc::InferenceParameter> typed_values{
+      scale, tc::InferenceParameter("scale", true),
+      tc::InferenceParameter("scale", "1"),
+      tc::InferenceParameter("scale", 1.0),
+      tc::InferenceParameter("scale", &bytes, sizeof(bytes))};
+  for (size_t i = 0; i < typed_values.size(); ++i) {
+    for (size_t j = i + 1; j < typed_values.size(); ++j) {
+      EXPECT_NE(hash({typed_values[i]}, {}), hash({typed_values[j]}, {}));
+    }
+  }
+  const int64_t same_bytes = bytes;
+  EXPECT_EQ(
+      hash({tc::InferenceParameter("scale", &bytes, sizeof(bytes))}, {}),
+      hash(
+          {tc::InferenceParameter("scale", &same_bytes, sizeof(same_bytes))},
+          {}));
+  const tc::InferenceParameter other_scale("scale", int64_t{2});
+  EXPECT_NE(hash({scale, other_scale}, {}), hash({other_scale, scale}, {}));
 }
 
 TEST_F(RequestResponseCacheTest, TestLocalCacheParallelInsert)

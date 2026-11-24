@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -127,6 +127,7 @@ class TritonCache {
   Status HashInputBuffers(const InferenceRequest::Input* input, size_t* seed);
   // Helper function to hash each input in "request"
   Status HashInputs(const InferenceRequest& request, size_t* seed);
+  void HashParameters(const InferenceRequest& request, size_t* seed);
 
   // The name of the cache.
   const std::string name_;

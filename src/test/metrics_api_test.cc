@@ -715,6 +715,70 @@ TEST_F(MetricsApiTest, TestDupeMetricFamily)
   ASSERT_EQ(NumMetricMatches(server_, metric_key), 0);
 }
 
+// Test that metrics with the same labels created from duplicate metric family
+// objects share the underlying metric, and that it stays valid until the last
+// reference across all family objects is deleted
+TEST_F(MetricsApiTest, TestDupeMetricFamilySameLabels)
+{
+  TRITONSERVER_MetricKind kind = TRITONSERVER_METRIC_KIND_COUNTER;
+  const char* name = "dupe_metric_family_same_labels_test";
+  const char* description = "dupe metric family same labels description";
+  TRITONSERVER_MetricFamily* family1 = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family1, kind, name, description),
+      "Creating new metric family1");
+  TRITONSERVER_MetricFamily* family2 = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricFamilyNew(&family2, kind, name, description),
+      "Creating new metric family2");
+
+  const char* metric_key = "dupe_family_same_labels_key";
+  std::vector<const TRITONSERVER_Parameter*> labels;
+  labels.emplace_back(TRITONSERVER_ParameterNew(
+      metric_key, TRITONSERVER_PARAMETER_STRING, "label"));
+  TRITONSERVER_Metric* metric1 = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric1, family1, labels.data(), labels.size()),
+      "Creating new metric1");
+  TRITONSERVER_Metric* metric2 = nullptr;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricNew(&metric2, family2, labels.data(), labels.size()),
+      "Creating new metric2");
+  for (const auto label : labels) {
+    TRITONSERVER_ParameterDelete(const_cast<TRITONSERVER_Parameter*>(label));
+  }
+
+  // Assert both metrics refer to the same series
+  ASSERT_EQ(NumMetricMatches(server_, metric_key), 1);
+  double inc = 3.0;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricIncrement(metric1, inc), "increase metric1 value");
+  double value = -1;
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric2, &value), "query metric2 value");
+  ASSERT_EQ(value, inc);
+
+  // Delete the first metric and its family object
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric1), "delete metric1");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family1), "delete family1");
+
+  // Assert the shared series is still reported and usable through metric2
+  ASSERT_EQ(NumMetricMatches(server_, description), 1);
+  ASSERT_EQ(NumMetricMatches(server_, metric_key), 1);
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricIncrement(metric2, inc), "increase metric2 value");
+  FAIL_TEST_IF_ERR(
+      TRITONSERVER_MetricValue(metric2, &value),
+      "query metric2 value after increment");
+  ASSERT_EQ(value, 2 * inc);
+
+  // Assert the series is removed after the last reference is deleted
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricDelete(metric2), "delete metric2");
+  FAIL_TEST_IF_ERR(TRITONSERVER_MetricFamilyDelete(family2), "delete family2");
+  ASSERT_EQ(NumMetricMatches(server_, description), 0);
+  ASSERT_EQ(NumMetricMatches(server_, metric_key), 0);
+}
+
 // Test that adding a duplicate metric will refer to the same
 // underlying metric, and all instances will be updated
 TEST_F(MetricsApiTest, TestDupeMetricLabels)
