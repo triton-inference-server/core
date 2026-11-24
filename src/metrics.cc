@@ -55,6 +55,9 @@ MetricsStorage::Add(
     std::map<std::string, std::string> label_map,
     const TritonServerMetricArgs* args)
 {
+  // Held across the Prometheus call so a concurrent Remove cannot free the
+  // metric between it being returned and its reference being counted.
+  std::lock_guard<std::mutex> lk(metric_mtx_);
   void* prom_metric = nullptr;
   switch (kind) {
     case TRITONSERVER_METRIC_KIND_COUNTER: {
@@ -99,7 +102,6 @@ MetricsStorage::Add(
           "Unsupported family kind passed to Metric constructor.");
   }
 
-  std::lock_guard<std::mutex> lk(metric_mtx_);
   ++prom_metric_ref_cnt_[prom_metric];
 
   return prom_metric;
@@ -109,17 +111,17 @@ void
 MetricsStorage::Remove(
     TRITONSERVER_MetricKind kind, void* family, void* prom_metric)
 {
-  {
-    std::lock_guard<std::mutex> lk(metric_mtx_);
-    const auto it = prom_metric_ref_cnt_.find(prom_metric);
-    if (it != prom_metric_ref_cnt_.end()) {
-      --it->second;
-      if (it->second == 0) {
-        prom_metric_ref_cnt_.erase(it);
-      } else {
-        // Done as it is not the last reference
-        return;
-      }
+  // Held across the Prometheus call so a concurrent Add cannot pick up the
+  // metric after its last reference is dropped but before it is freed.
+  std::lock_guard<std::mutex> lk(metric_mtx_);
+  const auto it = prom_metric_ref_cnt_.find(prom_metric);
+  if (it != prom_metric_ref_cnt_.end()) {
+    --it->second;
+    if (it->second == 0) {
+      prom_metric_ref_cnt_.erase(it);
+    } else {
+      // Done as it is not the last reference
+      return;
     }
   }
 
