@@ -1393,12 +1393,16 @@ EnsembleContext::CheckAndSetEnsembleOutput(
     tensor.data_->Data()->BufferAt(
         0, &content_size, &dst_memory_type, &dst_memory_type_id);
 
+    // Size from the total, not just the first buffer -- every buffer gets
+    // copied into this below.
+    const size_t total_content_size = tensor.data_->Data()->TotalByteSize();
+
     void* buffer;
     RETURN_IF_ERROR(output->AllocateDataBuffer(
-        &buffer, content_size, &dst_memory_type, &dst_memory_type_id));
+        &buffer, total_content_size, &dst_memory_type, &dst_memory_type_id));
 
     // Done with this output if 'expected_byte_size' is 0
-    if (content_size == 0) {
+    if (total_content_size == 0) {
       continue;
     } else if (buffer == nullptr) {
       return Status(
