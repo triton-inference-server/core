@@ -762,8 +762,10 @@ GetNormalizedModelConfig(
   // TextFormat::PrintToString for stable, parseable output.
   if (LOG_VERBOSE_IS_ON(1)) {
     std::string auto_completed_config;
-    google::protobuf::TextFormat::PrintToString(
-        *config, &auto_completed_config);
+    if (!google::protobuf::TextFormat::PrintToString(
+            *config, &auto_completed_config)) {
+      auto_completed_config = "<failed to serialize model config>";
+    }
     triton::common::LogMessage(
         __FILE__, __LINE__, triton::common::Logger::Level::kINFO,
         "Server side auto-completed config: ", false)
