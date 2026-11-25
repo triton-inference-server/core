@@ -264,6 +264,16 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
     set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH}
       ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib/cmake
       ${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/lib)
+    # find_package(AWSSDK) re-runs aws-c-cal's Findcrypto, which prefers the
+    # static libcrypto.a. That duplicates the shared libcrypto.so already
+    # linked into libtritonserver.so, and on Ubuntu 26.04 the archive also
+    # needs libjitterentropy.a, which is not installed. Match third_party's
+    # aws-sdk-cpp build and resolve it to the shared library.
+    find_library(TRITON_LIBCRYPTO_SHARED NAMES libcrypto.so)
+    if(TRITON_LIBCRYPTO_SHARED)
+      set(_CMAKE_ARGS_AWS_CRYPTO
+          "-Dcrypto_STATIC_LIBRARY:FILEPATH=${TRITON_LIBCRYPTO_SHARED}")
+    endif()
   endif() # TRITON_ENABLE_S3
   if(${TRITON_ENABLE_AZURE_STORAGE})
     set(TRITON_DEPENDS ${TRITON_DEPENDS} azure-sdk)
@@ -319,6 +329,7 @@ if(NOT TRITON_CORE_HEADERS_ONLY)
       -Daws-c-compression_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-compression/cmake
       -Daws-c-mqtt_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-mqtt/cmake
       -Daws-c-sdkutils_DIR:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/aws-sdk-cpp/${LIB_DIR}/aws-c-sdkutils/cmake
+      ${_CMAKE_ARGS_AWS_CRYPTO}
       -DCMAKE_PREFIX_PATH:PATH=${CMAKE_PREFIX_PATH}
       -DCNMEM_PATH:PATH=${TRITON_THIRD_PARTY_INSTALL_PREFIX}/cnmem
       -DTRITON_REPO_ORGANIZATION:STRING=${TRITON_REPO_ORGANIZATION}
