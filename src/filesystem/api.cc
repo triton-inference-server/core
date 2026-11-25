@@ -213,20 +213,27 @@ FileSystemManager::GetFileSystem(
   const Status& cred_status = LoadCredentials();
   if (cred_status.IsOk() ||
       cred_status.StatusCode() == Status::Code::ALREADY_EXISTS) {
-    // Find credential
-    size_t idx;
-    const Status& match_status = GetLongestMatchingNameIndex(cache, path, idx);
+    std::shared_ptr<FileSystemType> fs;
+    Status match_status;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      // Find credential
+      size_t idx;
+      match_status = GetLongestMatchingNameIndex(cache, path, idx);
+      if (match_status.IsOk()) {
+        // Find or lazy load file system
+        fs = std::get<2>(cache[idx]);
+        if (fs == nullptr) {
+          std::string cred_name = std::get<0>(cache[idx]);
+          CredentialType cred = std::get<1>(cache[idx]);
+          fs = std::make_shared<FileSystemType>(path, cred);
+          cache[idx] = std::make_tuple(cred_name, cred, fs);
+        }
+      }
+    }
     if (!match_status.IsOk()) {
       return ReturnErrorOrReload<CacheType, CredentialType, FileSystemType>(
           cred_status, match_status, path, cache, file_system);
-    }
-    // Find or lazy load file system
-    std::shared_ptr<FileSystemType> fs = std::get<2>(cache[idx]);
-    if (fs == nullptr) {
-      std::string cred_name = std::get<0>(cache[idx]);
-      CredentialType cred = std::get<1>(cache[idx]);
-      fs = std::make_shared<FileSystemType>(path, cred);
-      cache[idx] = std::make_tuple(cred_name, cred, fs);
     }
     // Check client
     const Status& client_status = fs->CheckClient(path);
