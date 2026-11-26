@@ -1086,6 +1086,11 @@ ModelRepositoryManager::PollModels(
         const auto& config = info.second->model_config_;
         if (config.has_ensemble_scheduling()) {
           for (const auto& step : config.ensemble_scheduling().step()) {
+            // Composing model names are joined onto the repository path and
+            // passed to the filesystem during polling, so they must be
+            // validated for path-traversal characters just like the
+            // top-level model name in LoadUnloadModel().
+            RETURN_IF_ERROR(ValidateModelName(step.model_name()));
             next_models.emplace(step.model_name());
           }
         }
