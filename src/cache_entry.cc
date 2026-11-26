@@ -1,4 +1,4 @@
-// Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+// Copyright 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions
@@ -27,6 +27,25 @@
 #include "cache_entry.h"
 
 #include <iostream>
+
+namespace {
+
+constexpr const char* kCacheEntryPastEnd =
+    "cache entry extends past the end of its buffer";
+
+// Success when reading `count` bytes at `offset` stays inside a buffer of
+// `limit` bytes.
+inline triton::core::Status
+ReadFits(uint64_t offset, uint64_t count, uint64_t limit)
+{
+  if (count <= limit && offset <= limit - count) {
+    return triton::core::Status::Success;
+  }
+  return triton::core::Status(
+      triton::core::Status::Code::INTERNAL, kCacheEntryPastEnd);
+}
+
+}  // namespace
 
 namespace triton { namespace core {
 
@@ -318,24 +337,33 @@ CacheEntry::DeserializeBuffer(InferenceResponse* response, const Buffer& buffer)
     return Status(Status::Code::INTERNAL, "buffer was nullptr");
   }
 
+  // Length fields in the buffer are not trusted. Every read has to land
+  // inside the bytes this entry holds.
+  const uint64_t buffer_size = buffer.second;
   uint64_t position = 0;
   // Number of response outputs serialized in buffer
   uint32_t num_outputs = 0;
-  std::memcpy(&num_outputs, base, sizeof(num_outputs));
+  RETURN_IF_ERROR(ReadFits(position, sizeof(num_outputs), buffer_size));
+  std::memcpy(&num_outputs, base + position, sizeof(num_outputs));
   position += sizeof(num_outputs);
 
 
   for (size_t i = 0; i < num_outputs; i++) {
     // Get size of packed output
     uint64_t packed_output_size = 0;
+    RETURN_IF_ERROR(
+        ReadFits(position, sizeof(packed_output_size), buffer_size));
     std::memcpy(
         &packed_output_size, base + position, sizeof(packed_output_size));
     position += sizeof(packed_output_size);
 
+    RETURN_IF_ERROR(ReadFits(position, packed_output_size, buffer_size));
+
     // Parse packed output
     auto cache_output = CacheOutput();
     RETURN_IF_ERROR(DeserializeResponseOutput(
-        {base + position, packed_output_size}, &cache_output));
+        {base + position, static_cast<size_t>(packed_output_size)},
+        &cache_output));
     position += packed_output_size;
 
     InferenceResponse::Output* response_output = nullptr;
@@ -372,6 +400,11 @@ CacheEntry::DeserializeBuffer(InferenceResponse* response, const Buffer& buffer)
     }
     // COPY: cached output buffer to allocated response output buffer
     memcpy(output_buffer, cache_output.buffer_, cache_output.byte_size_);
+  }
+
+  if (position != buffer_size) {
+    return triton::core::Status(
+        triton::core::Status::Code::INTERNAL, kCacheEntryPastEnd);
   }
 
   return Status::Success;
@@ -449,52 +482,66 @@ CacheEntry::DeserializeResponseOutput(
   }
 
   // Name
-  size_t position = 0;
+  const uint64_t limit = packed_bytes.size();
+  uint64_t position = 0;
+
   uint32_t name_byte_size = 0;
-  memcpy(&name_byte_size, packed_bytes.begin() + position, sizeof(uint32_t));
+  RETURN_IF_ERROR(ReadFits(position, sizeof(uint32_t), limit));
+  memcpy(&name_byte_size, packed_bytes.data() + position, sizeof(uint32_t));
   position += sizeof(uint32_t);
 
-  auto name_start = packed_bytes.begin() + position;
+  RETURN_IF_ERROR(ReadFits(position, name_byte_size, limit));
+  auto name_start = packed_bytes.data() + position;
   std::string name(name_start, name_start + name_byte_size);
   position += name_byte_size;
 
   // Dtype
   uint32_t dtype_byte_size = 0;
-  memcpy(&dtype_byte_size, packed_bytes.begin() + position, sizeof(uint32_t));
+  RETURN_IF_ERROR(ReadFits(position, sizeof(uint32_t), limit));
+  memcpy(&dtype_byte_size, packed_bytes.data() + position, sizeof(uint32_t));
   position += sizeof(uint32_t);
 
-  auto dtype_start = packed_bytes.begin() + position;
+  RETURN_IF_ERROR(ReadFits(position, dtype_byte_size, limit));
+  auto dtype_start = packed_bytes.data() + position;
   std::string dtype(dtype_start, dtype_start + dtype_byte_size);
   position += dtype_byte_size;
 
   // Shape
   uint32_t shape_byte_size = 0;
-  memcpy(&shape_byte_size, packed_bytes.begin() + position, sizeof(uint32_t));
+  RETURN_IF_ERROR(ReadFits(position, sizeof(uint32_t), limit));
+  memcpy(&shape_byte_size, packed_bytes.data() + position, sizeof(uint32_t));
   position += sizeof(uint32_t);
 
+  if (shape_byte_size % sizeof(int64_t) != 0) {
+    return triton::core::Status(
+        triton::core::Status::Code::INTERNAL, kCacheEntryPastEnd);
+  }
+  RETURN_IF_ERROR(ReadFits(position, shape_byte_size, limit));
   std::vector<int64_t> shape(shape_byte_size / sizeof(int64_t), 0);
-  memcpy(shape.data(), packed_bytes.begin() + position, shape_byte_size);
+  if (shape_byte_size != 0) {
+    memcpy(shape.data(), packed_bytes.data() + position, shape_byte_size);
+  }
   position += shape_byte_size;
 
   // Output Buffer
   uint64_t output_byte_size = 0;
-  memcpy(&output_byte_size, packed_bytes.begin() + position, sizeof(uint64_t));
+  RETURN_IF_ERROR(ReadFits(position, sizeof(uint64_t), limit));
+  memcpy(&output_byte_size, packed_bytes.data() + position, sizeof(uint64_t));
   position += sizeof(uint64_t);
 
-  // NOTE: Reference buffer section of packed bytes directly, DO NOT copy here.
-  // We will copy this buffer into the response object in BufferToResponse, so
-  // the buffer must remain valid until then. They should remain valid until the
-  // CacheEntry is destructed.
+  RETURN_IF_ERROR(ReadFits(position, output_byte_size, limit));
+  // Reference this section of packed bytes directly. The caller copies it into
+  // the response, so these bytes must stay valid until that copy finishes.
   const void* output_buffer =
       static_cast<const void*>(packed_bytes.data() + position);
   position += output_byte_size;
 
   // Verify packed bytes matched expected size before allocating output_buffer
-  if (packed_bytes.begin() + position != packed_bytes.end()) {
+  if (position != limit) {
     return Status(
-        Status::Code::INTERNAL, "Unexpected number of bytes received: " +
-                                    std::to_string(packed_bytes.size()) +
-                                    ", expected: " + std::to_string(position));
+        Status::Code::INTERNAL,
+        "Unexpected number of bytes received: " + std::to_string(limit) +
+            ", expected: " + std::to_string(position));
   }
 
   output->name_ = name;
