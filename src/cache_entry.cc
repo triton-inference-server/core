@@ -172,7 +172,7 @@ CacheEntry::SerializeResponse(InferenceResponse* response, Buffer& buffer)
   position += sizeof(uint32_t);
 
   for (const auto& output : response->Outputs()) {
-    uint64_t packed_output_byte_size = 0;
+    size_t packed_output_byte_size = 0;
     RETURN_IF_ERROR(SerializeResponseOutput(
         output, base + position, &packed_output_byte_size));
     // 2. Then the packed buffer will hold pairs of (output_size, output_bytes)
@@ -255,7 +255,7 @@ CacheEntry::SerializeResponseOutput(
   // Pack everything into provided buffer
   uint64_t position = 0;
   // Total serialized output size
-  memcpy(buffer + position, &total_byte_size, sizeof(uint64_t));
+  memcpy(buffer + position, &total_byte_size, sizeof(size_t));
   position += sizeof(uint64_t);
 
   // Name
@@ -327,7 +327,7 @@ CacheEntry::DeserializeBuffer(InferenceResponse* response, const Buffer& buffer)
 
   for (size_t i = 0; i < num_outputs; i++) {
     // Get size of packed output
-    uint64_t packed_output_size = 0;
+    size_t packed_output_size = 0;
     std::memcpy(
         &packed_output_size, base + position, sizeof(packed_output_size));
     position += sizeof(packed_output_size);
