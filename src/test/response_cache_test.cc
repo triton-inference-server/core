@@ -1274,97 +1274,200 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
   tests::EndToEnd(cache, request0, response0, outputs0);
 }
 
-// A cache entry whose recorded output length runs past the bytes it holds is
-// rejected instead of being copied into the response.
-TEST_F(RequestResponseCacheTest, TestDeserializeRejectsOutputPastBuffer)
+// One serialized cache buffer and the offsets of the lengths tests rewrite.
+struct SerializedEntry {
+  std::vector<char> bytes;
+  size_t payload_bytes = 0;
+  size_t packed_size_offset = 0;
+  size_t name_len_offset = 0;
+  size_t dtype_len_offset = 0;
+  size_t shape_len_offset = 0;
+  size_t output_byte_size_offset = 0;
+  uint64_t packed_output_size = 0;
+};
+
+void
+SerializeOutput(tc::InferenceRequest* request, SerializedEntry* entry)
 {
-  // Serialize one cached response.
-  tc::InferenceRequest request(nullptr, 1);
   const std::vector<int> data{1, 2, 3, 4};
   auto response = helpers::GenerateResponse(
-      &request, inference::DataType::TYPE_INT32, TRITONSERVER_MEMORY_CPU, 0,
+      request, inference::DataType::TYPE_INT32, TRITONSERVER_MEMORY_CPU, 0,
       {helpers::Tensor{"OUTPUT0", data}});
   ASSERT_NE(response, nullptr);
 
-  tc::CacheEntry entry;
+  tc::CacheEntry cache_entry;
   tc::InferenceResponse* response_ptr = response.get();
   boost::span<tc::InferenceResponse*> responses(&response_ptr, 1);
-  helpers::CheckStatus(entry.SetBufferSizes(responses));
-  auto& buffers = entry.MutableBuffers();
+  helpers::CheckStatus(cache_entry.SetBufferSizes(responses));
+  auto& buffers = cache_entry.MutableBuffers();
   ASSERT_EQ(buffers.size(), 1);
-  std::vector<char> storage(buffers[0].second, '\0');
-  buffers[0].first = storage.data();
-  helpers::CheckStatus(entry.SerializeResponses(responses));
+  entry->bytes.assign(buffers[0].second, '\0');
+  buffers[0].first = entry->bytes.data();
+  helpers::CheckStatus(cache_entry.SerializeResponses(responses));
 
-  // Read the lengths this test rewrites.
-  const size_t payload_bytes = data.size() * sizeof(data[0]);
-  ASSERT_GT(storage.size(), sizeof(uint64_t) + payload_bytes);
-
+  entry->payload_bytes = data.size() * sizeof(data[0]);
   uint32_t num_outputs = 0;
-  std::memcpy(&num_outputs, storage.data(), sizeof(num_outputs));
+  std::memcpy(&num_outputs, entry->bytes.data(), sizeof(num_outputs));
   ASSERT_EQ(num_outputs, 1);
-  uint64_t packed_output_size = 0;
+  entry->packed_size_offset = sizeof(num_outputs);
   std::memcpy(
-      &packed_output_size, storage.data() + sizeof(num_outputs),
-      sizeof(packed_output_size));
+      &entry->packed_output_size,
+      entry->bytes.data() + entry->packed_size_offset,
+      sizeof(entry->packed_output_size));
+
+  entry->output_byte_size_offset =
+      entry->bytes.size() - entry->payload_bytes - sizeof(uint64_t);
   uint64_t output_byte_size = 0;
-  const size_t output_byte_size_offset =
-      storage.size() - payload_bytes - sizeof(output_byte_size);
   std::memcpy(
-      &output_byte_size, storage.data() + output_byte_size_offset,
+      &output_byte_size, entry->bytes.data() + entry->output_byte_size_offset,
       sizeof(output_byte_size));
-  ASSERT_EQ(output_byte_size, payload_bytes);
+  ASSERT_EQ(output_byte_size, entry->payload_bytes);
 
-  // Deserialize a buffer into a fresh response.
-  auto deserialize = [&](std::vector<char>& bytes) {
-    tc::CacheEntry lookup;
-    lookup.AddBuffer(bytes.data(), bytes.size());
-    std::unique_ptr<tc::InferenceResponse> out;
-    helpers::CheckStatus(request.ResponseFactory()->CreateResponse(&out));
-    tc::InferenceResponse* out_ptr = out.get();
-    tc::Status status = lookup.DeserializeBuffers(
-        boost::span<tc::InferenceResponse*>(&out_ptr, 1));
-    return std::make_pair(status, std::move(out));
-  };
+  // [u32 name_len][name][u32 dtype_len][dtype][u32 shape_len][shape]
+  size_t field = entry->packed_size_offset + sizeof(uint64_t);
+  uint32_t name_len = 0;
+  entry->name_len_offset = field;
+  std::memcpy(&name_len, entry->bytes.data() + field, sizeof(name_len));
+  field += sizeof(name_len);
+  ASSERT_EQ(name_len, 7);
+  ASSERT_EQ(std::memcmp(entry->bytes.data() + field, "OUTPUT0", name_len), 0);
+  field += name_len;
 
-  // The serialized entry comes back as the same bytes.
-  {
-    auto [status, out] = deserialize(storage);
-    ASSERT_TRUE(status.IsOk()) << status.Message();
-    ASSERT_EQ(out->Outputs().size(), 1);
-    const void* buffer = nullptr;
-    size_t byte_size = 0;
-    TRITONSERVER_MemoryType memory_type;
-    int64_t memory_type_id = 0;
-    void* userp = nullptr;
-    ASSERT_TRUE(
-        out->Outputs()
-            .front()
-            .DataBuffer(
-                &buffer, &byte_size, &memory_type, &memory_type_id, &userp)
-            .IsOk());
-    EXPECT_EQ(byte_size, payload_bytes);
-    EXPECT_EQ(std::memcmp(buffer, data.data(), payload_bytes), 0);
-  }
+  uint32_t dtype_len = 0;
+  entry->dtype_len_offset = field;
+  std::memcpy(&dtype_len, entry->bytes.data() + field, sizeof(dtype_len));
+  field += sizeof(dtype_len);
+  ASSERT_EQ(dtype_len, 5);
+  ASSERT_EQ(std::memcmp(entry->bytes.data() + field, "INT32", dtype_len), 0);
+  field += dtype_len;
 
-  // Grow the packed-output length and the output length together. The packed
-  // span no longer fits in the buffer.
-  auto tampered = storage;
+  uint32_t shape_len = 0;
+  entry->shape_len_offset = field;
+  std::memcpy(&shape_len, entry->bytes.data() + field, sizeof(shape_len));
+  field += sizeof(shape_len) + shape_len;
+  ASSERT_EQ(shape_len % sizeof(int64_t), 0);
+  ASSERT_EQ(field, entry->output_byte_size_offset);
+}
+
+std::pair<tc::Status, std::unique_ptr<tc::InferenceResponse>>
+DeserializeOutput(tc::InferenceRequest* request, std::vector<char>& bytes)
+{
+  tc::CacheEntry lookup;
+  lookup.AddBuffer(bytes.data(), bytes.size());
+  std::unique_ptr<tc::InferenceResponse> out;
+  helpers::CheckStatus(request->ResponseFactory()->CreateResponse(&out));
+  tc::InferenceResponse* out_ptr = out.get();
+  tc::Status status = lookup.DeserializeBuffers(
+      boost::span<tc::InferenceResponse*>(&out_ptr, 1));
+  return {status, std::move(out)};
+}
+
+TEST_F(RequestResponseCacheTest, TestDeserializeAcceptsEntry)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  auto [status, out] = DeserializeOutput(&request, entry.bytes);
+  ASSERT_TRUE(status.IsOk()) << status.Message();
+  ASSERT_EQ(out->Outputs().size(), 1);
+  const void* buffer = nullptr;
+  size_t byte_size = 0;
+  TRITONSERVER_MemoryType memory_type;
+  int64_t memory_type_id = 0;
+  void* userp = nullptr;
+  ASSERT_TRUE(
+      out->Outputs()
+          .front()
+          .DataBuffer(
+              &buffer, &byte_size, &memory_type, &memory_type_id, &userp)
+          .IsOk());
+  EXPECT_EQ(byte_size, entry.payload_bytes);
+  const std::vector<int> data{1, 2, 3, 4};
+  EXPECT_EQ(std::memcmp(buffer, data.data(), data.size() * sizeof(data[0])), 0);
+}
+
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsPackedSpan)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  // The packed length and the output length grow together, past the buffer.
   const uint64_t extra = 64;
-  output_byte_size += extra;
-  packed_output_size += extra;
+  uint64_t packed_output_size = entry.packed_output_size + extra;
+  uint64_t output_byte_size = entry.payload_bytes + extra;
   std::memcpy(
-      tampered.data() + sizeof(num_outputs), &packed_output_size,
+      entry.bytes.data() + entry.packed_size_offset, &packed_output_size,
       sizeof(packed_output_size));
   std::memcpy(
-      tampered.data() + output_byte_size_offset, &output_byte_size,
+      entry.bytes.data() + entry.output_byte_size_offset, &output_byte_size,
       sizeof(output_byte_size));
-  EXPECT_FALSE(deserialize(tampered).first.IsOk());
+  EXPECT_FALSE(DeserializeOutput(&request, entry.bytes).first.IsOk());
+}
 
-  // Drop the last byte. The packed length still describes the original span.
-  auto truncated = storage;
-  truncated.pop_back();
-  EXPECT_FALSE(deserialize(truncated).first.IsOk());
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsTruncatedBuffer)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  // The packed length still describes the original span.
+  entry.bytes.pop_back();
+  EXPECT_FALSE(DeserializeOutput(&request, entry.bytes).first.IsOk());
+}
+
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsOutputLength)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  // The packed span still fits. Only the output length runs past it.
+  uint64_t claimed = entry.payload_bytes + 64;
+  std::memcpy(
+      entry.bytes.data() + entry.output_byte_size_offset, &claimed,
+      sizeof(claimed));
+  EXPECT_FALSE(DeserializeOutput(&request, entry.bytes).first.IsOk());
+}
+
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsNameLength)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  // The packed span still fits. Only the name length runs past it.
+  uint32_t claimed = 100000;
+  std::memcpy(
+      entry.bytes.data() + entry.name_len_offset, &claimed, sizeof(claimed));
+  EXPECT_FALSE(DeserializeOutput(&request, entry.bytes).first.IsOk());
+}
+
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsDtypeLength)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  // The packed span still fits. Only the dtype length runs past it.
+  uint32_t claimed = 100000;
+  std::memcpy(
+      entry.bytes.data() + entry.dtype_len_offset, &claimed, sizeof(claimed));
+  EXPECT_FALSE(DeserializeOutput(&request, entry.bytes).first.IsOk());
+}
+
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsShapeLength)
+{
+  tc::InferenceRequest request(nullptr, 1);
+  SerializedEntry entry;
+  SerializeOutput(&request, &entry);
+
+  // Four bytes fit in the span, and 4 is not a whole number of int64s.
+  uint32_t claimed = 4;
+  std::memcpy(
+      entry.bytes.data() + entry.shape_len_offset, &claimed, sizeof(claimed));
+  EXPECT_FALSE(DeserializeOutput(&request, entry.bytes).first.IsOk());
 }
 
 
