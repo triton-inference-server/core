@@ -1274,6 +1274,99 @@ TEST_F(RequestResponseCacheTest, TestLocalCacheEndToEnd)
   tests::EndToEnd(cache, request0, response0, outputs0);
 }
 
+// A cache entry whose recorded output length runs past the bytes it holds is
+// rejected instead of being copied into the response.
+TEST_F(RequestResponseCacheTest, TestDeserializeRejectsOutputPastBuffer)
+{
+  // Serialize one cached response.
+  tc::InferenceRequest request(nullptr, 1);
+  const std::vector<int> data{1, 2, 3, 4};
+  auto response = helpers::GenerateResponse(
+      &request, inference::DataType::TYPE_INT32, TRITONSERVER_MEMORY_CPU, 0,
+      {helpers::Tensor{"OUTPUT0", data}});
+  ASSERT_NE(response, nullptr);
+
+  tc::CacheEntry entry;
+  tc::InferenceResponse* response_ptr = response.get();
+  boost::span<tc::InferenceResponse*> responses(&response_ptr, 1);
+  helpers::CheckStatus(entry.SetBufferSizes(responses));
+  auto& buffers = entry.MutableBuffers();
+  ASSERT_EQ(buffers.size(), 1);
+  std::vector<char> storage(buffers[0].second, '\0');
+  buffers[0].first = storage.data();
+  helpers::CheckStatus(entry.SerializeResponses(responses));
+
+  // Read the lengths this test rewrites.
+  const size_t payload_bytes = data.size() * sizeof(data[0]);
+  ASSERT_GT(storage.size(), sizeof(uint64_t) + payload_bytes);
+
+  uint32_t num_outputs = 0;
+  std::memcpy(&num_outputs, storage.data(), sizeof(num_outputs));
+  ASSERT_EQ(num_outputs, 1);
+  uint64_t packed_output_size = 0;
+  std::memcpy(
+      &packed_output_size, storage.data() + sizeof(num_outputs),
+      sizeof(packed_output_size));
+  uint64_t output_byte_size = 0;
+  const size_t output_byte_size_offset =
+      storage.size() - payload_bytes - sizeof(output_byte_size);
+  std::memcpy(
+      &output_byte_size, storage.data() + output_byte_size_offset,
+      sizeof(output_byte_size));
+  ASSERT_EQ(output_byte_size, payload_bytes);
+
+  // Deserialize a buffer into a fresh response.
+  auto deserialize = [&](std::vector<char>& bytes) {
+    tc::CacheEntry lookup;
+    lookup.AddBuffer(bytes.data(), bytes.size());
+    std::unique_ptr<tc::InferenceResponse> out;
+    helpers::CheckStatus(request.ResponseFactory()->CreateResponse(&out));
+    tc::InferenceResponse* out_ptr = out.get();
+    tc::Status status = lookup.DeserializeBuffers(
+        boost::span<tc::InferenceResponse*>(&out_ptr, 1));
+    return std::make_pair(status, std::move(out));
+  };
+
+  // The serialized entry comes back as the same bytes.
+  {
+    auto [status, out] = deserialize(storage);
+    ASSERT_TRUE(status.IsOk()) << status.Message();
+    ASSERT_EQ(out->Outputs().size(), 1);
+    const void* buffer = nullptr;
+    size_t byte_size = 0;
+    TRITONSERVER_MemoryType memory_type;
+    int64_t memory_type_id = 0;
+    void* userp = nullptr;
+    ASSERT_TRUE(
+        out->Outputs()
+            .front()
+            .DataBuffer(
+                &buffer, &byte_size, &memory_type, &memory_type_id, &userp)
+            .IsOk());
+    EXPECT_EQ(byte_size, payload_bytes);
+    EXPECT_EQ(std::memcmp(buffer, data.data(), payload_bytes), 0);
+  }
+
+  // Grow the packed-output length and the output length together. The packed
+  // span no longer fits in the buffer.
+  auto tampered = storage;
+  const uint64_t extra = 64;
+  output_byte_size += extra;
+  packed_output_size += extra;
+  std::memcpy(
+      tampered.data() + sizeof(num_outputs), &packed_output_size,
+      sizeof(packed_output_size));
+  std::memcpy(
+      tampered.data() + output_byte_size_offset, &output_byte_size,
+      sizeof(output_byte_size));
+  EXPECT_FALSE(deserialize(tampered).first.IsOk());
+
+  // Drop the last byte. The packed length still describes the original span.
+  auto truncated = storage;
+  truncated.pop_back();
+  EXPECT_FALSE(deserialize(truncated).first.IsOk());
+}
+
 
 //
 // Redis Cache Testing
